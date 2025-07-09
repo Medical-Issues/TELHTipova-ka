@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <title>Registrace – Tipovačka</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+    <link rel="icon" href="/images/logo.png">
+</head>
+<header class="header">
+    <div class="logo_title"><img class="image_logo" src="/images/logo.png" alt="Logo"><h1 id="title">Tipovačka</h1></div>
+</header>
+<body class="login_body">
+<h1>Registrace</h1>
+<form class="login_form" method="POST" action="/auth/register">
+    <label><input class="login_input" type="text" name="username" placeholder="Uživatelské jméno" required></label>
+    <label><input class="login_input" type="password" name="password" placeholder="Heslo" required></label>
+    <button class="login_button" type="submit">Registrovat</button>
+</form>
+<p id="error-msg">Uživatel už existuje.</p>
+<a href="/auth/login">Už mám účet</a>
+
+<script>
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('error') === '1') {
+        document.getElementById('error-msg').style.display = 'block';
+    }
+</script>
+</body>
+</html>

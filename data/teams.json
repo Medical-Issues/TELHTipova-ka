@@ -1,0 +1,401 @@
+[
+  {
+    "id": 1,
+    "name": "HC Sparta Praha",
+    "liga": "TELH",
+    "active": true,
+    "stats": {
+      "24/25": {
+        "points": 0,
+        "wins": 0,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 0
+      }
+    }
+  },
+  {
+    "id": 2,
+    "name": "Rytíři Kladno",
+    "liga": "TELH",
+    "active": true,
+    "stats": {
+      "24/25": {
+        "points": 0,
+        "wins": 0,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 0
+      }
+    }
+  },
+  {
+    "id": 3,
+    "name": "HC Oceláři Třinec",
+    "liga": "TELH",
+    "active": true,
+    "stats": {
+      "25/26": {
+        "points": 0,
+        "wins": 0,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 0
+      }
+    }
+  },
+  {
+    "id": 4,
+    "name": "BK Mladá Boleslav",
+    "liga": "TELH",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 5,
+    "name": "HC Verva Litvínov",
+    "liga": "TELH",
+    "active": true,
+    "stats": {
+      "24/25": {
+        "points": 0,
+        "wins": 0,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 0
+      },
+      "25/26": {
+        "points": 0,
+        "wins": 0,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 0
+      }
+    }
+  },
+  {
+    "id": 6,
+    "name": "HC Škoda Plzeň",
+    "liga": "TELH",
+    "active": true,
+    "stats": {
+      "24/25": {
+        "points": 0,
+        "wins": 0,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 0
+      }
+    }
+  },
+  {
+    "id": 7,
+    "name": "Bílí Tygři Liberec",
+    "liga": "TELH",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 8,
+    "name": "HC Olomouc",
+    "liga": "TELH",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 9,
+    "name": "HC Kometa Brno",
+    "liga": "TELH",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 10,
+    "name": "HC Energie Karlovy Vary",
+    "liga": "TELH",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 11,
+    "name": "HC Dynamo Pardubice",
+    "liga": "TELH",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 12,
+    "name": "HC Vítkovice Ridera",
+    "liga": "TELH",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 13,
+    "name": "Banes Motor České Budějovice",
+    "liga": "TELH",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 14,
+    "name": "Mountfield HK",
+    "liga": "TELH",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 15,
+    "name": "VHK ROBE Vsetín",
+    "liga": "MAXA",
+    "active": true,
+    "stats": {
+      "24/25": {
+        "points": 0,
+        "wins": 0,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 0
+      }
+    }
+  },
+  {
+    "id": 16,
+    "name": "RI Okna Berani Zlín",
+    "liga": "MAXA",
+    "active": true,
+    "stats": {
+      "24/25": {
+        "points": 0,
+        "wins": 0,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 0
+      }
+    }
+  },
+  {
+    "id": 17,
+    "name": "SK Horácká Třebíč",
+    "liga": "MAXA",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 18,
+    "name": "HC RT TORAX Poruba 2011",
+    "liga": "MAXA",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 19,
+    "name": "HC Stadion Litoměřice",
+    "liga": "MAXA",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 20,
+    "name": "HC Dukla Jihlava",
+    "liga": "MAXA",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 21,
+    "name": "HC Baník Sokolov",
+    "liga": "MAXA",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 22,
+    "name": "HC ZUBR Přerov",
+    "liga": "MAXA",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 23,
+    "name": "Piráti Chomutov",
+    "liga": "MAXA",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 24,
+    "name": "HC Dynamo Pardubice B",
+    "liga": "MAXA",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 25,
+    "name": "SC Marimex Kolín",
+    "liga": "MAXA",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 26,
+    "name": "HC Frýdek-Místek",
+    "liga": "MAXA",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 27,
+    "name": "HC Tábor",
+    "liga": "MAXA",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 28,
+    "name": "HC Slavia Praha",
+    "liga": "MAXA",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 29,
+    "name": "Švédsko",
+    "liga": "REPREA",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 30,
+    "name": "Kanada",
+    "liga": "REPREA",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 31,
+    "name": "Finsko",
+    "liga": "REPREA",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 32,
+    "name": "Slovensko",
+    "liga": "REPREA",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 33,
+    "name": "Lotyšsko",
+    "liga": "REPREA",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 34,
+    "name": "Rakousko",
+    "liga": "REPREA",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 35,
+    "name": "Francie",
+    "liga": "REPREA",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 36,
+    "name": "Slovinsko",
+    "liga": "REPREA",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 37,
+    "name": "Německo",
+    "liga": "REPREB",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 38,
+    "name": "Švýcarsko",
+    "liga": "REPREB",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 39,
+    "name": "Česko",
+    "liga": "REPREB",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 40,
+    "name": "USA",
+    "liga": "REPREB",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 41,
+    "name": "Dánsko",
+    "liga": "REPREB",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 42,
+    "name": "Maďarsko",
+    "liga": "REPREB",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 43,
+    "name": "Kazachstán",
+    "liga": "REPREB",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 44,
+    "name": "Norsko",
+    "liga": "REPREB",
+    "active": true,
+    "stats": {}
+  },
+  {
+    "id": 45,
+    "name": "Rusko",
+    "liga": "REPREA",
+    "active": false,
+    "stats": {}
+  },
+  {
+    "id": 46,
+    "name": "Bělorusko",
+    "liga": "REPREA",
+    "active": false,
+    "stats": {}
+  },
+  {
+    "id": 47,
+    "name": "LHK Jestřábi Prostějov",
+    "liga": "MAXA",
+    "active": false,
+    "stats": {}
+  },
+  {
+    "id": 48,
+    "name": "Itálie",
+    "liga": "Olympiáda A",
+    "active": true,
+    "stats": {}
+  }
+]

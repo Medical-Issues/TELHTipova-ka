@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8"><title>Login</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tipovačka</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+    <link rel="icon" href="/images/logo.png">
+</head>
+<body class="login_body">
+<header class="header">
+    <div class="logo_title"><img class="image_logo" src="/images/logo.png" alt="Logo"><h1 id="title">Tipovačka</h1></div>
+</header>
+<h1>Přihlášení</h1>
+<form class="login_form" method="POST" action="/auth/login">
+    <label><input class="login_input" name="username" placeholder="Uživatelské jméno" required /></label>
+    <label><input class="login_input" name="password" type="password" placeholder="Heslo" required /></label>
+    <button class="login_button" type="submit">Přihlásit se</button>
+</form>
+<p id="error-msg">Špatné přihlašovací údaje.</p>
+<a href="/auth/register">Ještě nemám účet</a>
+
+<script>
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('error') === '1') {
+        document.getElementById('error-msg').style.display = 'block';
+    }
+</script>
+</body>
+</html>
