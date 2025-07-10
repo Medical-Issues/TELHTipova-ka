@@ -6,6 +6,9 @@ const FileStore = require('session-file-store')(session);
 const userRoutes = require('./routes/user');
 const adminRoutes = require('./routes/admin');
 const authRoutes = require('./routes/auth');
+require('dotenv').config();
+const { backupJsonFilesToGitHub } = require('./utils/githubBackup');
+const { loadJsonFilesFromGitHub } = require('./utils/githubLoadBackup');
 
 const app = express();
 app.use(express.static(path.join(__dirname, 'public')));
@@ -24,6 +27,18 @@ app.use('/auth', authRoutes);
 app.use('/', userRoutes)
 app.use('/admin', adminRoutes);
 
-app.listen(3000, () => {
-    console.log('Server běží na http://localhost:3000');
-});
+async function startServer() {
+    await loadJsonFilesFromGitHub();
+    await backupJsonFilesToGitHub();
+
+    app.listen(3000, () => {
+        console.log('Server běží.');
+    });
+
+    setInterval(() => {
+        console.log('⏰ Spouštím automatickou zálohu...');
+        backupJsonFilesToGitHub();
+    }, 30* 1000);
+}
+
+startServer();
