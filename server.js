@@ -38,7 +38,7 @@ async function startServer() {
     setInterval(() => {
         console.log('⏰ Spouštím automatickou zálohu...');
         backupJsonFilesToGitHub();
-    }, 30* 1000);
+    }, 60*5*1000);
 }
 
 startServer();
