@@ -3,6 +3,162 @@
     "username": "Admin",
     "password": "$2b$10$5w3cq7soxLvHNq.XfZShxOmjAAD4p3i.kXpn2qFoWdLUKuqjfNxHO",
     "correct": 0,
-    "total": 0
+    "total": 0,
+    "stats": {
+      "25/26": {
+        "TELH": {
+          "correct": 0,
+          "totalRegular": 0,
+          "totalPlayoff": 0
+        }
+      }
+    }
+  },
+  {
+    "username": "Ondra1893",
+    "password": "$2b$10$IXmBLvaIe0L.Lu9FY6q5meb33ddmw97605zXs4aXl4uSSDcgyY9am",
+    "correct": 0,
+    "total": 0,
+    "stats": {
+      "25/26": {
+        "TELH": {
+          "correct": 4,
+          "totalRegular": 7,
+          "totalPlayoff": 0
+        }
+      }
+    },
+    "tips": {
+      "25/26": {
+        "TELH": [
+          {
+            "matchId": 1,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 2,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 3,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 4,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 5,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 6,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 7,
+            "winner": "home",
+            "loserWins": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "username": "Jan Veselský",
+    "password": "$2b$10$lfQb3cWXaNFUTSVx06vIWOUfjcvEefOxOi1i.puT37pnEqwTQvGWe",
+    "correct": 0,
+    "total": 0,
+    "tips": {
+      "25/26": {
+        "TELH": [
+          {
+            "matchId": 1,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 2,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 3,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 4,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 5,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 6,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 7,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 8,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 9,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 10,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 11,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 12,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 14,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 13,
+            "winner": "away",
+            "loserWins": 0
+          }
+        ]
+      }
+    },
+    "stats": {
+      "25/26": {
+        "TELH": {
+          "correct": 6,
+          "totalRegular": 7,
+          "totalPlayoff": 0
+        }
+      }
+    }
   }
 ]

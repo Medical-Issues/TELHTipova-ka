@@ -11,6 +11,13 @@
         "otWins": 0,
         "otLosses": 0,
         "losses": 0
+      },
+      "25/26": {
+        "points": 3,
+        "wins": 1,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 0
       }
     }
   },
@@ -26,6 +33,13 @@
         "otWins": 0,
         "otLosses": 0,
         "losses": 0
+      },
+      "25/26": {
+        "points": 3,
+        "wins": 1,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 0
       }
     }
   },
@@ -36,8 +50,8 @@
     "active": true,
     "stats": {
       "25/26": {
-        "points": 0,
-        "wins": 0,
+        "points": 3,
+        "wins": 1,
         "otWins": 0,
         "otLosses": 0,
         "losses": 0
@@ -49,7 +63,15 @@
     "name": "BK Mladá Boleslav",
     "liga": "TELH",
     "active": true,
-    "stats": {}
+    "stats": {
+      "25/26": {
+        "points": 0,
+        "wins": 0,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 1
+      }
+    }
   },
   {
     "id": 5,
@@ -69,7 +91,7 @@
         "wins": 0,
         "otWins": 0,
         "otLosses": 0,
-        "losses": 0
+        "losses": 1
       }
     }
   },
@@ -85,6 +107,13 @@
         "otWins": 0,
         "otLosses": 0,
         "losses": 0
+      },
+      "25/26": {
+        "points": 0,
+        "wins": 0,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 1
       }
     }
   },
@@ -93,56 +122,120 @@
     "name": "Bílí Tygři Liberec",
     "liga": "TELH",
     "active": true,
-    "stats": {}
+    "stats": {
+      "25/26": {
+        "points": 3,
+        "wins": 1,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 0
+      }
+    }
   },
   {
     "id": 8,
     "name": "HC Olomouc",
     "liga": "TELH",
     "active": true,
-    "stats": {}
+    "stats": {
+      "25/26": {
+        "points": 0,
+        "wins": 0,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 1
+      }
+    }
   },
   {
     "id": 9,
     "name": "HC Kometa Brno",
     "liga": "TELH",
     "active": true,
-    "stats": {}
+    "stats": {
+      "25/26": {
+        "points": 3,
+        "wins": 1,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 0
+      }
+    }
   },
   {
     "id": 10,
     "name": "HC Energie Karlovy Vary",
     "liga": "TELH",
     "active": true,
-    "stats": {}
+    "stats": {
+      "25/26": {
+        "points": 2,
+        "wins": 0,
+        "otWins": 1,
+        "otLosses": 0,
+        "losses": 0
+      }
+    }
   },
   {
     "id": 11,
     "name": "HC Dynamo Pardubice",
     "liga": "TELH",
     "active": true,
-    "stats": {}
+    "stats": {
+      "25/26": {
+        "points": 0,
+        "wins": 0,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 1
+      }
+    }
   },
   {
     "id": 12,
     "name": "HC Vítkovice Ridera",
     "liga": "TELH",
     "active": true,
-    "stats": {}
+    "stats": {
+      "25/26": {
+        "points": 1,
+        "wins": 0,
+        "otWins": 0,
+        "otLosses": 1,
+        "losses": 0
+      }
+    }
   },
   {
     "id": 13,
     "name": "Banes Motor České Budějovice",
     "liga": "TELH",
     "active": true,
-    "stats": {}
+    "stats": {
+      "25/26": {
+        "points": 0,
+        "wins": 0,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 1
+      }
+    }
   },
   {
     "id": 14,
     "name": "Mountfield HK",
     "liga": "TELH",
     "active": true,
-    "stats": {}
+    "stats": {
+      "25/26": {
+        "points": 3,
+        "wins": 1,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 0
+      }
+    }
   },
   {
     "id": 15,
