@@ -530,7 +530,8 @@ router.get('/history/a', requireLogin, (req, res) => {
         const usersData = fs.readFileSync('./data/users.json', 'utf-8');
         const allUsers = JSON.parse(usersData);
         userStats = allUsers
-            .filter(u => u.stats && u.stats[selectedSeason][selectedLiga] && u.stats[selectedSeason][selectedLiga].total > 0)
+            .filter(u => u.stats && u.stats[selectedSeason] && u.stats[selectedSeason][selectedLiga] &&
+                (u.stats[selectedSeason][selectedLiga].totalRegular > 0 || u.stats[selectedSeason][selectedLiga].totalPlayoff > 0))
             .map(u => ({
                 username: u.username,
                 correct: (u.stats[selectedSeason][selectedLiga]?.correct) || 0,
