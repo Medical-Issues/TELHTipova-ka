@@ -22,8 +22,8 @@
     "stats": {
       "25/26": {
         "TELH": {
-          "correct": 4,
-          "totalRegular": 7,
+          "correct": 9,
+          "totalRegular": 13,
           "totalPlayoff": 0
         }
       }
@@ -64,6 +64,41 @@
           {
             "matchId": 7,
             "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 8,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 9,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 10,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 11,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 12,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 14,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 13,
+            "winner": "away",
             "loserWins": 0
           }
         ]
@@ -154,8 +189,8 @@
     "stats": {
       "25/26": {
         "TELH": {
-          "correct": 6,
-          "totalRegular": 7,
+          "correct": 11,
+          "totalRegular": 13,
           "totalPlayoff": 0
         }
       }

@@ -432,6 +432,22 @@ router.get('/', requireLogin, (req, res) => {
       sel.addEventListener('change', () => sel.form.submit());
     });
   });
+    document.addEventListener("DOMContentLoaded", () => {
+    const allForms = document.querySelectorAll("form");
+
+    allForms.forEach(form => {
+      form.addEventListener("submit", () => {
+        localStorage.setItem("scrollTop", window.scrollY);
+      });
+    });
+
+    const savedScroll = localStorage.getItem("scrollTop");
+    if (savedScroll !== null) {
+      window.scrollTo(0, parseInt(savedScroll));
+      localStorage.removeItem("scrollTop");
+    }
+  });
+
 </script>
 </html>`
         res.send(html);
