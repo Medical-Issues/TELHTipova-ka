@@ -307,6 +307,21 @@ router.get('/', requireLogin, (req, res) => {
         html += `
         </tbody>
     </table>
+    <br>
+    <table class="points-table">
+        <tr>
+            <td colspan="3">Za správný tip zápasu v základní části</td>
+            <td colspan="3">1 bod</td>
+        </tr>
+        <tr>
+            <td colspan="3">Za správný tip vítěze dané série v playoff</td>
+            <td colspan="3">1 bod</td>
+        </tr>
+        <tr>
+            <td colspan="3">Za správný tip vítěze dané série v playoff + počet vyhraných zápasů týmů který prohrál</td>
+            <td colspan="3">3 body</td>
+        </tr>
+    </table>
 </section>
 </section>
 <section class="matches-container">
@@ -748,6 +763,21 @@ router.get('/history/a', requireLogin, (req, res) => {
             });
         html += `
         </tbody>
+    </table>
+    <br>
+    <table class="points-table">
+        <tr>
+            <td colspan="3">Za správný tip zápasu v základní části</td>
+            <td colspan="3">1 bod</td>
+        </tr>
+        <tr>
+            <td colspan="3">Za správný tip vítěze dané série v playoff</td>
+            <td colspan="3">1 bod</td>
+        </tr>
+        <tr>
+            <td colspan="3">Za správný tip vítěze dané série v playoff + počet vyhraných zápasů týmů který prohrál</td>
+            <td colspan="3">3 body</td>
+        </tr>
     </table>
 </section>
 </section>

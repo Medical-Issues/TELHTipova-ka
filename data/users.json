@@ -12,6 +12,9 @@
           "totalPlayoff": 0
         }
       }
+    },
+    "tips": {
+
     }
   },
   {
@@ -22,8 +25,8 @@
     "stats": {
       "25/26": {
         "TELH": {
-          "correct": 9,
-          "totalRegular": 13,
+          "correct": 2,
+          "totalRegular": 2,
           "totalPlayoff": 0
         }
       }
@@ -189,8 +192,8 @@
     "stats": {
       "25/26": {
         "TELH": {
-          "correct": 11,
-          "totalRegular": 13,
+          "correct": 2,
+          "totalRegular": 2,
           "totalPlayoff": 0
         }
       }

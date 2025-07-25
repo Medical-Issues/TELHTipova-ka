@@ -17,7 +17,7 @@
         "wins": 1,
         "otWins": 0,
         "otLosses": 0,
-        "losses": 1
+        "losses": 0
       }
     }
   },
@@ -35,8 +35,8 @@
         "losses": 0
       },
       "25/26": {
-        "points": 6,
-        "wins": 2,
+        "points": 0,
+        "wins": 0,
         "otWins": 0,
         "otLosses": 0,
         "losses": 0
@@ -50,8 +50,8 @@
     "active": true,
     "stats": {
       "25/26": {
-        "points": 6,
-        "wins": 2,
+        "points": 3,
+        "wins": 1,
         "otWins": 0,
         "otLosses": 0,
         "losses": 0
@@ -69,7 +69,7 @@
         "wins": 0,
         "otWins": 0,
         "otLosses": 0,
-        "losses": 2
+        "losses": 0
       }
     }
   },
@@ -87,11 +87,11 @@
         "losses": 0
       },
       "25/26": {
-        "points": 3,
-        "wins": 1,
+        "points": 0,
+        "wins": 0,
         "otWins": 0,
         "otLosses": 0,
-        "losses": 1
+        "losses": 0
       }
     }
   },
@@ -109,11 +109,11 @@
         "losses": 0
       },
       "25/26": {
-        "points": 2,
+        "points": 0,
         "wins": 0,
-        "otWins": 1,
+        "otWins": 0,
         "otLosses": 0,
-        "losses": 1
+        "losses": 0
       }
     }
   },
@@ -124,8 +124,8 @@
     "active": true,
     "stats": {
       "25/26": {
-        "points": 3,
-        "wins": 1,
+        "points": 0,
+        "wins": 0,
         "otWins": 0,
         "otLosses": 0,
         "losses": 0
@@ -139,10 +139,10 @@
     "active": true,
     "stats": {
       "25/26": {
-        "points": 1,
+        "points": 0,
         "wins": 0,
         "otWins": 0,
-        "otLosses": 1,
+        "otLosses": 0,
         "losses": 1
       }
     }
@@ -154,8 +154,8 @@
     "active": true,
     "stats": {
       "25/26": {
-        "points": 6,
-        "wins": 2,
+        "points": 0,
+        "wins": 0,
         "otWins": 0,
         "otLosses": 0,
         "losses": 0
@@ -169,11 +169,11 @@
     "active": true,
     "stats": {
       "25/26": {
-        "points": 2,
+        "points": 0,
         "wins": 0,
-        "otWins": 1,
+        "otWins": 0,
         "otLosses": 0,
-        "losses": 1
+        "losses": 0
       }
     }
   },
@@ -188,7 +188,7 @@
         "wins": 0,
         "otWins": 0,
         "otLosses": 0,
-        "losses": 1
+        "losses": 0
       }
     }
   },
@@ -199,11 +199,11 @@
     "active": true,
     "stats": {
       "25/26": {
-        "points": 1,
+        "points": 0,
         "wins": 0,
         "otWins": 0,
-        "otLosses": 1,
-        "losses": 1
+        "otLosses": 0,
+        "losses": 0
       }
     }
   },
@@ -218,7 +218,7 @@
         "wins": 0,
         "otWins": 0,
         "otLosses": 0,
-        "losses": 2
+        "losses": 1
       }
     }
   },
@@ -229,8 +229,8 @@
     "active": true,
     "stats": {
       "25/26": {
-        "points": 6,
-        "wins": 2,
+        "points": 0,
+        "wins": 0,
         "otWins": 0,
         "otLosses": 0,
         "losses": 0
@@ -488,7 +488,7 @@
     "id": 48,
     "name": "Itálie",
     "liga": "Olympiáda A",
-    "active": true,
+    "active": false,
     "stats": {}
   }
 ]
