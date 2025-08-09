@@ -13,9 +13,7 @@
         }
       }
     },
-    "tips": {
-
-    }
+    "tips": {}
   },
   {
     "username": "Ondra1893",
@@ -25,8 +23,8 @@
     "stats": {
       "25/26": {
         "TELH": {
-          "correct": 2,
-          "totalRegular": 2,
+          "correct": 0,
+          "totalRegular": 0,
           "totalPlayoff": 0
         }
       }
@@ -192,8 +190,8 @@
     "stats": {
       "25/26": {
         "TELH": {
-          "correct": 2,
-          "totalRegular": 2,
+          "correct": 0,
+          "totalRegular": 0,
           "totalPlayoff": 0
         }
       }

@@ -6,13 +6,7 @@
     "datetime": "2025-09-09T17:30",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false,
-    "result": {
-      "scoreHome": 2,
-      "scoreAway": 4,
-      "ot": false,
-      "winner": "away"
-    }
+    "isPlayoff": false
   },
   {
     "id": 2,
@@ -21,13 +15,7 @@
     "datetime": "2025-09-10T17:00",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false,
-    "result": {
-      "scoreHome": 3,
-      "scoreAway": 1,
-      "ot": false,
-      "winner": "home"
-    }
+    "isPlayoff": false
   },
   {
     "id": 3,

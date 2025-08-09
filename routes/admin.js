@@ -223,7 +223,7 @@ router.get('/teams/edit/:id', requireAdmin, (req, res) => {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Upravit tým #${team.id}</title>
+  <title>Upravit tým ID ${team.id} ${team.name}</title>
   <link rel="stylesheet" href="/css/styles.css" />
   <link rel="icon" href="/images/logo.png" />
 </head>
@@ -235,24 +235,24 @@ router.get('/teams/edit/:id', requireAdmin, (req, res) => {
   </div>
 </header>
 <main>
-  <h1>Upravit tým #${team.id}</h1>
-  <form action="/admin/teams/edit/${team.id}" method="POST">
-    <label for="name">Název týmu:
-      <input autocomplete="off" type="text" id="name" name="name" value="${team.name}" required />
+  <h1>Upravit tým ${team.name} ID ${team.id}</h1>
+  <form style="display: flex; flex-direction: row; gap: 10px; margin-bottom: 10px" action="/admin/teams/edit/${team.id}" method="POST">
+    <label style="display: flex; flex-direction: column" for="name">Název týmu
+      <input autocomplete="off" style="width: 220px" class="league-select" type="text" id="name" name="name" value="${team.name}" required />
     </label>
-    <label for="liga">Liga:
-      <select id="liga" name="liga" required>
+    <label style="display: flex; flex-direction: column" for="liga">Liga
+      <select class="league-select" id="liga" name="liga" required>
         ${allLeagues.map(l => `<option value="${l}" ${l === team.liga ? 'selected' : ''}>${l}</option>`).join('')}
       </select>
     </label>
-    <label for="active">
+    <label style="display: flex; flex-direction: row; align-items: center" for="active">
+        Aktivní tým
       <input type="checkbox" id="active" name="active" ${team.active ? 'checked' : ''} />
-      Aktivní tým
     </label>
-    <button type="submit">Uložit změny</button>
+    <button class="action-btn edit-btn" type="submit">Uložit změny</button>
   </form>
   <form action="/admin/teams/delete/${team.id}" method="POST" style="display:inline;" onsubmit="return confirm('Opravdu smazat tým?');">
-            <button type="submit" class="action-btn delete-btn">Smazat</button>
+            <button type="submit" class="action-btn delete-btn">Smazat tým</button>
           </form>
   <a href="/admin" class="back-link">← Zpět na seznam týmů</a>
 </main>
@@ -418,7 +418,7 @@ router.get('/new/team', requireAdmin, (req, res) => {
     <form style="display: flex; flex-direction: row; gap: 10px" method="POST" action="">
       <label style="display: flex; flex-direction: column;">Název týmu <input style="width: 220px" class="league-select" autocomplete="off" type="text" name="name" required></label>
       <label style="display: flex; flex-direction: column;">Liga <input class="league-select" type="text" name="liga" required></label>
-      <label style="display: flex; flex-direction: row; align-items: center">Aktivní <input type="checkbox" name="active" checked></label>
+      <label style="display: flex; flex-direction: row; align-items: center">Aktivní tým <input type="checkbox" name="active" checked></label>
       <button class="action-btn btn" type="submit">Vytvořit tým</button>
     </form>
     <a href="/admin" class="back-link">← Zpět na správu zápasů</a>
@@ -499,28 +499,31 @@ router.get('/edit/:id', requireAdmin, (req, res) => {
   <div class="logo_title"><img height="50" src="/images/logo.png" alt="Logo"><h1 id="title">Tipovačka</h1></div>
 </header>
 <main>
-  <h1>Upravit zápas #${match.id}</h1>
+  <h1>Upravit zápas ID ${match.id}</h1>
   <form class="login_form" action="/admin/edit/${match.id}" method="POST">
-    <label for="homeTeamId">Domácí tým:
-      <select id="homeTeamId" name="homeTeamId" required>
+    <label for="homeTeamId">Domácí tým
+      <select class="league-select" style="width: 220px" id="homeTeamId" name="homeTeamId" required>
         ${teams.map(t => `<option value="${t.id}" ${t.id === match.homeTeamId ? 'selected' : ''}>${t.name}</option>`).join('')}
       </select>
     </label>
-    <label for="awayTeamId">Hostující tým:
-      <select id="awayTeamId" name="awayTeamId" required>
+    
+    <label for="awayTeamId">Hostující tým
+      <select class="league-select" style="width: 220px" id="awayTeamId" name="awayTeamId" required>
         ${teams.map(t => `<option value="${t.id}" ${t.id === match.awayTeamId ? 'selected' : ''}>${t.name}</option>`).join('')}
       </select>
     </label>
-    <label for="datetime">Datum a čas:
-      <input type="datetime-local" id="datetime" name="datetime" value="${match.datetime.slice(0, 16)}" required />
+    
+    <label for="datetime">Datum a čas
+      <input class="league-select" style="width: 200px" type="datetime-local" id="datetime" name="datetime" value="${match.datetime.slice(0, 16)}" required />
     </label>
-    <label for="season">Sezóna:
-      <select id="season" name="season" required>
+    
+    <label for="season">Sezóna
+      <select class="league-select" id="season" name="season" required>
         ${allSeasons.map(sez => `<option value="${sez}" ${sez === selectedSeason ? 'selected' : ''}>${sez}</option>`).join('')}
       </select>
     </label>
 
-    <label for="isPlayoff" style="margin-top: 1rem;">
+    <label style="display: flex; flex-direction: row; align-items: center" for="isPlayoff" style="margin-top: 1rem;">
       <input type="checkbox" id="isPlayoff" name="isPlayoff" ${match.isPlayoff ? 'checked' : ''} onchange="toggleBOInput()" />
       Tento zápas je součástí playoff
     </label>
@@ -533,19 +536,19 @@ router.get('/edit/:id', requireAdmin, (req, res) => {
 
     <fieldset class="edit-score">
       <legend>Výsledek (pokud je vyhodnocen)</legend>
-      <label for="scoreHome">Skóre domácích:
-        <input type="number" id="scoreHome" name="scoreHome" value="${resultHome}" min="0" />
+      <label for="scoreHome">Skóre domácích
+        <input class="league-select" type="number" id="scoreHome" name="scoreHome" value="${resultHome}" min="0" />
       </label>
       <label for="scoreAway">Skóre hostů:
-        <input type="number" id="scoreAway" name="scoreAway" value="${resultAway}" min="0" />
+        <input class="league-select" type="number" id="scoreAway" name="scoreAway" value="${resultAway}" min="0" />
       </label>
-      <label for="overtime">
+      <label style="display: flex; flex-direction: row; align-items: center" for="overtime">
         <input type="checkbox" id="overtime" name="overtime" ${match.result?.ot ? 'checked' : ''} />
         Rozhodnuto v prodloužení?
       </label>
     </fieldset>
 
-    <button class="edit-btn" type="submit">Uložit změny</button>
+    <button class="action-btn edit-btn" type="submit">Uložit změny</button>
   </form>
   <a href="/admin" class="back-link">← Zpět na správu zápasů</a>
 </main>

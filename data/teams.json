@@ -13,8 +13,8 @@
         "losses": 0
       },
       "25/26": {
-        "points": 3,
-        "wins": 1,
+        "points": 0,
+        "wins": 0,
         "otWins": 0,
         "otLosses": 0,
         "losses": 0
@@ -50,8 +50,8 @@
     "active": true,
     "stats": {
       "25/26": {
-        "points": 3,
-        "wins": 1,
+        "points": 0,
+        "wins": 0,
         "otWins": 0,
         "otLosses": 0,
         "losses": 0
@@ -143,7 +143,7 @@
         "wins": 0,
         "otWins": 0,
         "otLosses": 0,
-        "losses": 1
+        "losses": 0
       }
     }
   },
@@ -218,7 +218,7 @@
         "wins": 0,
         "otWins": 0,
         "otLosses": 0,
-        "losses": 1
+        "losses": 0
       }
     }
   },
