@@ -153,9 +153,9 @@ router.get('/', requireLogin, (req, res) => {
 <main class="main_page">
     <section class="stats-container">
         <div class="left-panel">
-        <div style="margin:20px 0; text-align:center;">
-            <button onclick="showTable('regular')">Základní část</button>
-            <button onclick="showTable('playoff')">Playoff</button>
+        <div style="display: flex; flex-direction: row; justify-content: space-around; margin:20px 0; text-align:center;">
+            <button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('regular')">Základní část</button>
+            <button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('playoff')">Playoff</button>
         </div>
         <div id="regularTable">
             <table class="points-table">
@@ -611,9 +611,9 @@ router.get('/history/a', requireLogin, (req, res) => {
 <main class="main_page">
     <section class="stats-container">
         <div class="left-panel">
-        <div style="margin:20px 0; text-align:center;">
-            <button onclick="showTable('regular')">Základní část</button>
-            <button onclick="showTable('playoff')">Playoff</button>
+        <div style="display: flex; flex-direction: row; justify-content: space-around; margin:20px 0; text-align:center;">
+            <button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('regular')">Základní část</button>
+            <button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('playoff')">Playoff</button>
         </div>
         <div id="regularTable">
             <table class="points-table">

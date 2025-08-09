@@ -353,6 +353,15 @@ button:disabled {
     text-align: center;
     border: transparent;
 }
+.league-select {
+    color: orangered;
+    background-color: black;
+    outline: 1px solid orangered;
+    width: 100px;
+    height: 30px;
+    text-align: center;
+    border: transparent;
+}
 .league-select-name {
     display: flex;
     flex-direction: row;
@@ -408,7 +417,7 @@ button:disabled {
 }.season-choose {
     display: flex;
     flex-direction: column;
-    gap: 100px
+    gap: 10px
  }
  .league-dropdown {
      display: flex;
@@ -479,6 +488,34 @@ button:disabled {
     margin-top: 20px;
 }
 
+input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    background-color: black;
+    width: 20px;
+    height: 20px;
+    border: 1px solid orangered;
+    cursor: pointer;
+    position: relative;
+}
+
+input[type="checkbox"]:checked {
+    background-color: orangered;
+    border-color: orangered;
+}
+
+input[type="checkbox"]:checked::after {
+    content: "";
+    position: absolute;
+    top: 3.8px;
+    left: 6.62px;
+    width: 5px;
+    height: 10px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
 .playoff-cell {
     width: 20px;
     height: 20px;
@@ -498,6 +535,7 @@ button:disabled {
         height: 40px;
     }
     #league-select {
+        font-size: 10px;
         font-size: 10px;
         width: 60px;
     }

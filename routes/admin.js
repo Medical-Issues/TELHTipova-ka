@@ -72,7 +72,7 @@ router.get('/', requireAdmin, (req, res) => {
         ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected' : ''}>${l}</option>`).join('')}
     </select>
     Sezóna:
-    <select name="season" onchange="this.form.submit()">
+    <select class="league-select" name="season" onchange="this.form.submit()">
         ${seasons.map(s => `<option value="${s}" ${s === selectedSeason ? 'selected' : ''}>${s}</option>`).join('')}
     </select>
   </form>
@@ -114,7 +114,7 @@ router.get('/', requireAdmin, (req, res) => {
         <td>
           <a href="/admin/edit/${m.id}" class="action-btn edit-btn">Upravit</a>
           <form action="/admin/delete/${m.id}" method="POST" style="display:inline;" onsubmit="return confirm('Opravdu smazat zápas?');">
-            <button type="submit" class="action-btn delete-btn">Smazat</button>
+            <button type="submit" style="font-family: Segoe UI,serif" class="action-btn delete-btn">Smazat</button>
           </form>
         </td>
       </tr>
@@ -129,10 +129,10 @@ router.get('/', requireAdmin, (req, res) => {
     <form method="POST" action="/admin/season">
       <label for="season-select">Sezóna:</label>
       <div class="season-choose">
-        <select id="season-select" name="season">
+        <select id="season-select" class="league-select" style="width: 100%" name="season">
           ${seasons.map(s => `<option value="${s}" ${s === chosenSeason ? 'selected' : ''}>${s}</option>`).join('')}
         </select>
-        <button type="submit" style="margin-top: 10px;">Vybrat sezónu</button>
+        <button type="submit" class="action-btn edit-btn" style="margin-top: 10px;">Vybrat sezónu</button>
       </div>
     </form>
   </div>
@@ -145,7 +145,7 @@ router.get('/', requireAdmin, (req, res) => {
     for (const l of allLeagues) {
         const checked = allowedLeagues.includes(l) ? 'checked' : '';
         html += `
-        <label>
+        <label style="display: flex; align-items: center">
           <input type="checkbox" name="leagues" value="${l}" ${checked}/>
           ${l}
         </label>
@@ -154,7 +154,7 @@ router.get('/', requireAdmin, (req, res) => {
 
     html += `
       </div>
-      <button type="submit" style="margin-top: 10px;">Uložit viditelnost lig</button>
+      <button type="submit" class="action-btn edit-btn" style="margin-top: 10px;">Uložit viditelnost lig</button>
     </form>
   </div>
   </section>
@@ -198,7 +198,16 @@ router.get('/', requireAdmin, (req, res) => {
 
     res.send(html);
 });
+router.post('/leagues', express.urlencoded({ extended: true }), requireAdmin, (req, res) => {
+    const selectedLeagues = Array.isArray(req.body.leagues)
+        ? req.body.leagues
+        : req.body.leagues ? [req.body.leagues] : [];
 
+    const finalLeagues = [...new Set([...selectedLeagues])];
+
+    fs.writeFileSync('./data/allowedLeagues.json', JSON.stringify(finalLeagues, null, 2), 'utf-8');
+    res.redirect('/admin');
+});
 
 router.get('/teams/edit/:id', requireAdmin, (req, res) => {
     const teamId = parseInt(req.params.id);
@@ -299,7 +308,7 @@ router.get('/new/match', requireAdmin, (req, res) => {
             function toggleBOOptions() {
                 const checkbox = document.getElementById('isPlayoff');
                 const boOptions = document.getElementById('boOptions');
-                boOptions.style.display = checkbox.checked ? 'block' : 'none';
+                boOptions.style.display = checkbox.checked ? 'flex' : 'none';
             }
         </script>
         </head>
@@ -309,40 +318,40 @@ router.get('/new/match', requireAdmin, (req, res) => {
         </header>
         <main>
             <h1>Vytvořit nový zápas</h1>
-            <form action="/admin/new/match" method="POST">
-                <label for="homeTeamId">Domácí tým
-                    <select id="homeTeamId" name="homeTeamId" required>
+            <form style="display: flex; flex-direction: row; gap: 10px" action="/admin/new/match" method="POST">
+                <label style="display: flex; flex-direction: column" for="homeTeamId">Domácí tým
+                    <select class="league-select" style="width: 220px" id="homeTeamId" name="homeTeamId" required>
                         ${teams.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
                     </select>
                 </label>
-                <label for="awayTeamId">Hostující tým
-                    <select id="awayTeamId" name="awayTeamId" required>
+                <label style="display: flex; flex-direction: column" for="awayTeamId">Hostující tým
+                    <select class="league-select" style="width: 220px" id="awayTeamId" name="awayTeamId" required>
                         ${teams.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
                     </select>
                 </label>
-                <label for="datetime">Datum a čas
-                    <input type="datetime-local" id="datetime" name="datetime" required />
-                </label>Sezóna
-                    <select name="season" id="seasonSelect" required>
+                <label style="display: flex; flex-direction: column" for="datetime">Datum a čas
+                    <input class="league-select" style="width: 150px" type="datetime-local" id="datetime" name="datetime" required />
+                </label>
+                <label style="display: flex; flex-direction: column">Sezóna
+                    <select class="league-select" name="season" id="seasonSelect" required>
                         ${allSeasons.map(s => `<option value="${s}">${s}</option>`).join('')}
                     </select>
-
-                <label>
-                    <input type="checkbox" name="isPlayoff" id="isPlayoff" onchange="toggleBOOptions()" />
-                    Playoff série
                 </label>
-                <button type="submit">Vytvořit zápas</button>
-                <div id="boOptions" style="display:none;">
-                    <label for="bo">Typ série (BO)
-                        <select name="bo" id="bo">
+                <label style="display: flex; align-items: center; flex-direction: row">
+                    Playoff série
+                    <input type="checkbox" name="isPlayoff" id="isPlayoff" onchange="toggleBOOptions()" />
+                </label>
+                <div style="display: none; flex-direction: column; align-items: center" id="boOptions">
+                        Typ série (BO)
+                        <select class="league-select" name="bo" id="bo">
                             <option value="1">BO1</option>
                             <option value="3">BO3</option>
                             <option value="5">BO5</option>
                             <option value="7">BO7</option>
                             <option value="9">BO9</option>
                         </select>
-                    </label>
                 </div>
+                <button class="action-btn btn" type="submit">Vytvořit zápas</button>
 
             </form>
             <a href="/admin" class="back-link">← Zpět na správu zápasů</a>
@@ -406,13 +415,13 @@ router.get('/new/team', requireAdmin, (req, res) => {
     <body>
     <main>
     <h1>Vytvořit nový tým</h1>
-    <form method="POST" action="">
-      <label>Název týmu: <input autocomplete="off" type="text" name="name" required></label>
-      <label>Liga: <input type="text" name="liga" required></label>
-      <label>Aktivní: <input type="checkbox" name="active" checked></label>
-      <button type="submit">Vytvořit</button>
-      <a href="/admin" class="back-link">← Zpět na správu zápasů</a>
+    <form style="display: flex; flex-direction: row; gap: 10px" method="POST" action="">
+      <label style="display: flex; flex-direction: column;">Název týmu <input style="width: 220px" class="league-select" autocomplete="off" type="text" name="name" required></label>
+      <label style="display: flex; flex-direction: column;">Liga <input class="league-select" type="text" name="liga" required></label>
+      <label style="display: flex; flex-direction: row; align-items: center">Aktivní <input type="checkbox" name="active" checked></label>
+      <button class="action-btn btn" type="submit">Vytvořit tým</button>
     </form>
+    <a href="/admin" class="back-link">← Zpět na správu zápasů</a>
     </main>
     </body>
 </html>
@@ -688,7 +697,7 @@ router.get('/playoff',requireAdmin ,(req, res) => {
   <h1>Playoff tabulka - sezóna: ${SEASON}</h1>
   <form id="leagueForm" method="GET" action="/admin/playoff">
     <label for="leagueSelect">Vyber ligu:</label>
-    <select name="league" id="leagueSelect" onchange="this.form.submit()">
+    <select name="league" class="league-select" onchange="this.form.submit()">
       ${leagueOptions}
     </select>
   </form>
@@ -715,12 +724,12 @@ router.get('/playoff',requireAdmin ,(req, res) => {
         html += `
   </table>
   <div style="display: flex; align-items: center;">
-  <button type="submit" style="margin-top:10px; margin-bottom: 10px; padding:5px 10px;">Uložit</button>
+  <button type="submit" class="action-btn edit-btn" style="margin-top:10px; margin-bottom: 10px; padding:5px 10px;">Uložit</button>
 </form>
   <form action="/admin/playoff/delete" method="POST" onsubmit="return confirm('Opravdu chceš smazat celou playoff tabulku? Tohle nelze vrátit zpět!');">
   <input type="hidden" name="season" value="${SEASON}">
   <input type="hidden" name="league" value="${selectedLeague}">
-  <button type="submit" style="margin-left: 20px; padding:5px 10px;">Smazat celou tabulku</button>
+  <button type="submit" class="action-btn delete-btn" style="margin-left: 20px; padding:5px 10px;">Smazat celou tabulku</button>
   </form>
   <label for="colorPicker" style="margin-left: 20px; color: orangered; font-weight: 600;">Vyber barvu:</label>
   <input type="color" id="colorPicker" value="#FF0000" style="vertical-align: middle; margin-left: 5px;">
