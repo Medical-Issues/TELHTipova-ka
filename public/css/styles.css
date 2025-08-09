@@ -536,7 +536,6 @@ input[type="checkbox"]:checked::after {
     }
     #league-select {
         font-size: 10px;
-        font-size: 10px;
         width: 60px;
     }
     .history-btn {
