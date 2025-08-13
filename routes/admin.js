@@ -717,7 +717,7 @@ router.get('/playoff',requireAdmin ,(req, res) => {
             html += '<tr>';
             for (let j = 0; j < 20; j++) {
                 const cell = tableData[i][j] || { text: '', bgColor: '' };
-                const style = cell.bgColor ? `style="background-color:${cell.bgColor}"` : '';
+                const style = `style="background-color:${cell.bgColor || '#333'};color:${cell.textColor || 'lightgrey'}"`;
                 const content = cell.text || '';
                 html += `<td contenteditable="true" data-placeholder="…" ${style}>${content}</td>`;
             }
@@ -736,51 +736,75 @@ router.get('/playoff',requireAdmin ,(req, res) => {
   </form>
   <label for="colorPicker" style="margin-left: 20px; color: orangered; font-weight: 600;">Vyber barvu:</label>
   <input type="color" id="colorPicker" value="#FF0000" style="vertical-align: middle; margin-left: 5px;">
+  <label for="textColorPicker" style="margin-left: 20px; color: orangered; font-weight: 600;">Barva textu:</label>
+  <input type="color" id="textColorPicker" value="#FFFFFF" style="vertical-align: middle; margin-left: 5px;">
   </div>
   <div style="margin-left: 10px">
   <div>Pravé tlačítko myši = Aplikování barvy z výběru do buňky</div>
   <div>CTRL + Pravé tlačítko myši = Zrušení obarvení pole</div>
+  <div>SHIFT + Pravé tlačítko myši = Aplikování barvy z výběru do textu</div>
+  <div>CTRL + SHIFT + Pravé tlačítko myši = Zrušení obarvení textu</div>
   <p><a href="/admin">Zpět na hlavní stránku</a></p>
   </div>
 
 <script>
 
-  let selectedColor = colorPicker.value;
-  colorPicker.addEventListener('input', e => selectedColor = e.target.value);
+  let selectedBgColor = colorPicker.value;
+let selectedTextColor = textColorPicker.value;
 
-  document.querySelectorAll('td').forEach(cell => {
-    cell.addEventListener('keydown', e => {
-      if ((e.key === 'Backspace' || e.key === 'Delete') && cell.innerText.trim() === '') {
-        e.preventDefault();
-        cell.innerText = '';
+colorPicker.addEventListener('input', e => selectedBgColor = e.target.value);
+textColorPicker.addEventListener('input', e => selectedTextColor = e.target.value);
+
+document.querySelectorAll('td').forEach(cell => {
+  cell.addEventListener('keydown', e => {
+    if ((e.key === 'Backspace' || e.key === 'Delete') && cell.innerText.trim() === '') {
+      e.preventDefault();
+      cell.innerText = '';
+    }
+    if (e.key === 'Enter') e.preventDefault();
+  });
+
+  cell.addEventListener('paste', e => {
+    e.preventDefault();
+    const text = (e.clipboardData || window.clipboardData).getData('text');
+    document.execCommand('insertText', false, text);
+  });
+
+  cell.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    if (e.shiftKey) {
+      // SHIFT + Pravý klik → mění barvu textu
+      if (e.ctrlKey || e.metaKey) {
+        cell.style.color = 'lightgrey'; // reset textu
+      } else {
+        cell.style.color = selectedTextColor;
       }
-      if (e.key === 'Enter') e.preventDefault();
-    });
-    cell.addEventListener('paste', e => {
-      e.preventDefault();
-      const text = (e.clipboardData || window.clipboardData).getData('text');
-      document.execCommand('insertText', false, text);
-    });
-    cell.addEventListener('contextmenu', e => {
-      e.preventDefault();
+    } else {
+      // normální pravý klik → mění pozadí
       if (e.ctrlKey || e.metaKey) {
         cell.style.backgroundColor = '#333';
       } else {
-        cell.style.backgroundColor = selectedColor;
+        cell.style.backgroundColor = selectedBgColor;
       }
-    });
+    }
   });
+});
+
 
   document.getElementById('saveForm').addEventListener('submit', () => {
     const table = document.getElementById('playoffTable');
     const data = [];
     for (let row of table.rows) {
-      const rowData = [];
-      for (let cell of row.cells) {
-        rowData.push({ text: cell.innerText.trim(), bgColor: cell.style.backgroundColor || '' });
-      }
-      data.push(rowData);
+    const rowData = [];
+    for (let cell of row.cells) {
+    rowData.push({
+        text: cell.innerText.trim(),
+        bgColor: cell.style.backgroundColor || '',
+        textColor: cell.style.color || ''
+        });
     }
+  data.push(rowData);
+}
     document.getElementById('tableData').value = JSON.stringify(data);
   });
   

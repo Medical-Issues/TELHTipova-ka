@@ -1,1 +1,3688 @@
-{}
+{
+  "25/26": {
+    "TELH": [
+      [
+        {
+          "text": "Předkolo",
+          "bgColor": "rgb(0, 0, 255)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "Čtvrtfinále",
+          "bgColor": "rgb(0, 0, 255)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "Semifinále",
+          "bgColor": "rgb(0, 0, 255)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "Fínále",
+          "bgColor": "rgb(0, 0, 255)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        }
+      ],
+      [
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        }
+      ],
+      [
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "1. místo",
+          "bgColor": "rgb(255, 255, 0)",
+          "textColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        }
+      ],
+      [
+        {
+          "text": "5. místo",
+          "bgColor": "rgb(255, 255, 0)",
+          "textColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 60, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        }
+      ],
+      [
+        {
+          "text": "",
+          "bgColor": "rgb(255, 60, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "8-12. místo",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "rgb(255, 255, 255)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        }
+      ],
+      [
+        {
+          "text": "12. místo",
+          "bgColor": "rgb(255, 255, 0)",
+          "textColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 60, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        }
+      ],
+      [
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "2. místo",
+          "bgColor": "rgb(255, 255, 0)",
+          "textColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        }
+      ],
+      [
+        {
+          "text": "6. místo",
+          "bgColor": "rgb(255, 255, 0)",
+          "textColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 60, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        }
+      ],
+      [
+        {
+          "text": "",
+          "bgColor": "rgb(255, 60, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "7-11. místo",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "rgb(255, 255, 255)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        }
+      ],
+      [
+        {
+          "text": "11. místo",
+          "bgColor": "rgb(255, 255, 0)",
+          "textColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 60, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 60, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        }
+      ],
+      [
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "3. místo",
+          "bgColor": "rgb(255, 255, 0)",
+          "textColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        }
+      ],
+      [
+        {
+          "text": "7. místo",
+          "bgColor": "rgb(255, 255, 0)",
+          "textColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 60, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        }
+      ],
+      [
+        {
+          "text": "",
+          "bgColor": "rgb(255, 60, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "6-10. místo",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "rgb(255, 255, 255)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        }
+      ],
+      [
+        {
+          "text": "10. místo",
+          "bgColor": "rgb(255, 255, 0)",
+          "textColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 60, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        }
+      ],
+      [
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "4. místo",
+          "bgColor": "rgb(255, 255, 0)",
+          "textColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        }
+      ],
+      [
+        {
+          "text": "8. místo",
+          "bgColor": "rgb(255, 255, 0)",
+          "textColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 60, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        }
+      ],
+      [
+        {
+          "text": "",
+          "bgColor": "rgb(255, 60, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "5-9. místo",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "rgb(255, 255, 255)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "rgb(255, 255, 255)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        }
+      ],
+      [
+        {
+          "text": "9. místo",
+          "bgColor": "rgb(255, 255, 0)",
+          "textColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "TELH",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "rgb(255, 255, 255)"
+        },
+        {
+          "text": "Baráž",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "rgb(255, 255, 255)"
+        },
+        {
+          "text": "MAXA",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "rgb(255, 255, 255)"
+        }
+      ],
+      [
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "14. místo",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "rgb(255, 255, 255)"
+        },
+        {
+          "text": "BO7",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "rgb(255, 255, 255)"
+        },
+        {
+          "text": "Vítěz playoff",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "rgb(255, 255, 255)"
+        }
+      ],
+      [
+        {
+          "text": "Předkolo",
+          "bgColor": "rgb(0, 0, 255)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "Čtvrtfinále",
+          "bgColor": "rgb(0, 0, 255)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "Semifinále",
+          "bgColor": "rgb(0, 0, 255)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "Finále",
+          "bgColor": "rgb(0, 0, 255)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)",
+          "textColor": "lightgrey"
+        }
+      ]
+    ],
+    "MAXA": [
+      [
+        {
+          "text": "Předkolo",
+          "bgColor": "rgb(0, 0, 255)"
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "Čtvrtfinále",
+          "bgColor": "rgb(0, 0, 255)"
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "Semifinále",
+          "bgColor": "rgb(0, 0, 255)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)"
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "Finále",
+          "bgColor": "rgb(0, 0, 255)"
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        }
+      ],
+      [
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "1. místo",
+          "bgColor": "rgb(255, 255, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        }
+      ],
+      [
+        {
+          "text": "7. místo",
+          "bgColor": "rgb(255, 255, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 60, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        }
+      ],
+      [
+        {
+          "text": "",
+          "bgColor": "rgb(255, 60, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)"
+        },
+        {
+          "text": "8-10. místo",
+          "bgColor": "rgb(255, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        }
+      ],
+      [
+        {
+          "text": "10. místo",
+          "bgColor": "rgb(255, 255, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)"
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 60, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        }
+      ],
+      [
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "2. místo",
+          "bgColor": "rgb(255, 255, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        }
+      ],
+      [
+        {
+          "text": "8. místo",
+          "bgColor": "rgb(255, 255, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 60, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        }
+      ],
+      [
+        {
+          "text": "",
+          "bgColor": "rgb(255, 60, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)"
+        },
+        {
+          "text": "7-9. místo",
+          "bgColor": "rgb(255, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        }
+      ],
+      [
+        {
+          "text": "9. místo",
+          "bgColor": "rgb(255, 255, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        }
+      ],
+      [
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 60, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 60, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        }
+      ],
+      [
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        }
+      ],
+      [
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "3. místo",
+          "bgColor": "rgb(255, 255, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        }
+      ],
+      [
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 60, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        }
+      ],
+      [
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "6. místo",
+          "bgColor": "rgb(255, 255, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        }
+      ],
+      [
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 60, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        }
+      ],
+      [
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)"
+        },
+        {
+          "text": "4. místo",
+          "bgColor": "rgb(255, 255, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        }
+      ],
+      [
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 60, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        }
+      ],
+      [
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "5. místo",
+          "bgColor": "rgb(255, 255, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "MAXA",
+          "bgColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "Přímý postup/sestup",
+          "bgColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "2. liga",
+          "bgColor": "rgb(0, 0, 0)"
+        }
+      ],
+      [
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)"
+        },
+        {
+          "text": "<-",
+          "bgColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)"
+        }
+      ],
+      [
+        {
+          "text": "Předkolo",
+          "bgColor": "rgb(0, 0, 255)"
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "Čtvrtfinále",
+          "bgColor": "rgb(0, 0, 255)"
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "Semifinále",
+          "bgColor": "rgb(0, 0, 255)"
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "Finále",
+          "bgColor": "rgb(0, 0, 255)"
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": ""
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)"
+        },
+        {
+          "text": "->",
+          "bgColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 0, 0)"
+        }
+      ]
+    ]
+  }
+}

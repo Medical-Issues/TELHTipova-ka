@@ -230,12 +230,19 @@ router.get('/', requireLogin, (req, res) => {
     playoffData.forEach((row) => {
         html += '<tr>';
         row.forEach(cell => {
-            const bg = cell.bgColor ? ` style="background-color:${cell.bgColor}"` : '';
+            const bgColor = cell.bgColor || '';
+            const textColor = cell.textColor || '';
+            const styleParts = [];
+            if (bgColor) styleParts.push(`background-color:${bgColor}`);
+            if (textColor) styleParts.push(`color:${textColor}`);
+            const styleAttr = styleParts.length ? ` style="${styleParts.join(';')}"` : '';
+
             const txt = cell.text || '';
-            html += `<td${bg}>${txt}</td>`;
+            html += `<td${styleAttr}>${txt}</td>`;
         });
         html += '</tr>';
     });
+
 
     html += `
       </table>
