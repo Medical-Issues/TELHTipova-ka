@@ -373,9 +373,15 @@ router.get('/', requireLogin, (req, res) => {
                 const selectedLoserWins = existingTip?.loserWins || 0;
 
                 function parseLocalDate(datetimeString) {
-                    const local = new Date(datetimeString);
-                    return new Date(local.getTime() + local.getTimezoneOffset() * 60000);
+                    // "2025-09-09T17:30"
+                    const [datePart, timePart] = datetimeString.split("T");
+                    const [year, month, day] = datePart.split("-").map(Number);
+                    const [hour, minute] = timePart.split(":").map(Number);
+
+                    // Tohle vytvoří čas jako "našeho času", bez ohledu na serverové pásmo
+                    return new Date(year, month - 1, day, hour, minute);
                 }
+
 
                 const matchTime = parseLocalDate(match.datetime);
                 const now = new Date();
@@ -385,9 +391,9 @@ router.get('/', requireLogin, (req, res) => {
                 const maxWins = Math.ceil(bo / 2);
 
                 if (!isPlayoff) {
-                    console.log(matchStarted)
-                    console.log(matchTime)
-                    console.log(now)
+                    console.log("matchTime", matchTime);
+                    console.log("now", now);
+                    console.log("started?", matchStarted);
                     html += `
             <tr class="match-row">
                 <td>
