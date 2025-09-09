@@ -423,7 +423,7 @@
         {
           "text": "8-12. místo",
           "bgColor": "rgb(255, 0, 0)",
-          "textColor": "rgb(255, 255, 255)"
+          "textColor": "lightgrey"
         },
         {
           "text": "",
@@ -831,7 +831,7 @@
         {
           "text": "7-11. místo",
           "bgColor": "rgb(255, 0, 0)",
-          "textColor": "rgb(255, 255, 255)"
+          "textColor": "lightgrey"
         },
         {
           "text": "",
@@ -1239,7 +1239,7 @@
         {
           "text": "6-10. místo",
           "bgColor": "rgb(255, 0, 0)",
-          "textColor": "rgb(255, 255, 255)"
+          "textColor": "lightgrey"
         },
         {
           "text": "",
@@ -1647,7 +1647,7 @@
         {
           "text": "5-9. místo",
           "bgColor": "rgb(255, 0, 0)",
-          "textColor": "rgb(255, 255, 255)"
+          "textColor": "lightgrey"
         },
         {
           "text": "",
@@ -1722,7 +1722,7 @@
         {
           "text": "",
           "bgColor": "rgb(51, 51, 51)",
-          "textColor": "rgb(255, 255, 255)"
+          "textColor": "lightgrey"
         },
         {
           "text": "",
@@ -1824,17 +1824,17 @@
         {
           "text": "TELH",
           "bgColor": "rgb(0, 0, 0)",
-          "textColor": "rgb(255, 255, 255)"
+          "textColor": "lightgrey"
         },
         {
           "text": "Baráž",
           "bgColor": "rgb(0, 0, 0)",
-          "textColor": "rgb(255, 255, 255)"
+          "textColor": "lightgrey"
         },
         {
           "text": "MAXA",
           "bgColor": "rgb(0, 0, 0)",
-          "textColor": "rgb(255, 255, 255)"
+          "textColor": "lightgrey"
         }
       ],
       [
@@ -1926,17 +1926,17 @@
         {
           "text": "14. místo",
           "bgColor": "rgb(255, 0, 0)",
-          "textColor": "rgb(255, 255, 255)"
+          "textColor": "lightgrey"
         },
         {
           "text": "BO7",
           "bgColor": "rgb(0, 0, 0)",
-          "textColor": "rgb(255, 255, 255)"
+          "textColor": "lightgrey"
         },
         {
           "text": "Vítěz playoff",
           "bgColor": "rgb(255, 0, 0)",
-          "textColor": "rgb(255, 255, 255)"
+          "textColor": "lightgrey"
         }
       ],
       [

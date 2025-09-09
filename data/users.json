@@ -116,7 +116,7 @@
         "TELH": [
           {
             "matchId": 1,
-            "winner": "away",
+            "winner": "home",
             "loserWins": 0
           },
           {
@@ -126,7 +126,7 @@
           },
           {
             "matchId": 3,
-            "winner": "home",
+            "winner": "away",
             "loserWins": 0
           },
           {
@@ -136,7 +136,7 @@
           },
           {
             "matchId": 5,
-            "winner": "away",
+            "winner": "home",
             "loserWins": 0
           },
           {
@@ -151,7 +151,7 @@
           },
           {
             "matchId": 8,
-            "winner": "home",
+            "winner": "away",
             "loserWins": 0
           },
           {
@@ -183,6 +183,41 @@
             "matchId": 13,
             "winner": "away",
             "loserWins": 0
+          },
+          {
+            "matchId": 15,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 16,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 17,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 18,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 19,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 20,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 21,
+            "winner": "away",
+            "loserWins": 0
           }
         ]
       }
@@ -194,6 +229,23 @@
           "totalRegular": 0,
           "totalPlayoff": 0
         }
+      }
+    }
+  },
+  {
+    "username": "Actros001",
+    "password": "$2b$10$.qVLUv09UjWV/jsGAiDlvuQTa6t8IvvqlttfP7g5W6NlWAZNKLZN.",
+    "correct": 0,
+    "total": 0,
+    "tips": {
+      "25/26": {
+        "TELH": [
+          {
+            "matchId": 1,
+            "winner": "away",
+            "loserWins": 0
+          }
+        ]
       }
     }
   }

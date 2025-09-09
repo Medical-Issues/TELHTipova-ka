@@ -372,7 +372,9 @@ router.get('/', requireLogin, (req, res) => {
                 const selectedWinner = existingTip?.winner;
                 const selectedLoserWins = existingTip?.loserWins || 0;
 
-                const matchStarted = new Date(match.datetime) <= new Date();
+                const now = new Date();
+                const matchTime = new Date(match.datetime);
+                const matchStarted = matchTime.getTime() <= now.getTime();
                 const isPlayoff = match.isPlayoff;
                 const bo = match.bo || 5;
                 const maxWins = Math.ceil(bo / 2);
