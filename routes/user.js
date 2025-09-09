@@ -378,7 +378,7 @@ router.get('/', requireLogin, (req, res) => {
                     const [hour, minute] = timePart.split(":").map(Number);
 
                     const date = new Date(Date.UTC(year, month - 1, day, hour, minute));
-                    date.setHours(date.getHours());
+                    date.setHours(date.getHours()-2);
                     return date;
                 }
 
