@@ -372,17 +372,21 @@ router.get('/', requireLogin, (req, res) => {
                 const selectedWinner = existingTip?.winner;
                 const selectedLoserWins = existingTip?.loserWins || 0;
 
-                function parseLocalDate(datetimeString) {
+                function parseCETDate(datetimeString) {
                     const [datePart, timePart] = datetimeString.split("T");
                     const [year, month, day] = datePart.split("-").map(Number);
                     const [hour, minute] = timePart.split(":").map(Number);
-                    return new Date(year, month - 1, day, hour, minute);
+
+                    // Posun pro český čas (CEST/UTC+2 v létě, CET/UTC+1 v zimě)
+                    const date = new Date(Date.UTC(year, month - 1, day, hour, minute));
+                    date.setHours(date.getHours() + 2); // +2 hodiny pro CEST
+                    return date;
                 }
 
-
-                const matchTime = parseLocalDate(match.datetime);
+                const matchTime = parseCETDate(match.datetime);
                 const now = new Date();
                 const matchStarted = matchTime <= now;
+
                 const isPlayoff = match.isPlayoff;
                 const bo = match.bo || 5;
                 const maxWins = Math.ceil(bo / 2);
