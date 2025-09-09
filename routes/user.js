@@ -373,12 +373,9 @@ router.get('/', requireLogin, (req, res) => {
                 const selectedLoserWins = existingTip?.loserWins || 0;
 
                 function parseLocalDate(datetimeString) {
-                    // "2025-09-09T17:30"
                     const [datePart, timePart] = datetimeString.split("T");
                     const [year, month, day] = datePart.split("-").map(Number);
                     const [hour, minute] = timePart.split(":").map(Number);
-
-                    // Tohle vytvoří čas jako "našeho času", bez ohledu na serverové pásmo
                     return new Date(year, month - 1, day, hour, minute);
                 }
 
