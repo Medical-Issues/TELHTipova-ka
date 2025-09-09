@@ -380,6 +380,9 @@ router.get('/', requireLogin, (req, res) => {
                 const maxWins = Math.ceil(bo / 2);
 
                 if (!isPlayoff) {
+                    console.log(matchStarted)
+                    console.log(matchTime)
+                    console.log(now)
                     html += `
             <tr class="match-row">
                 <td>
