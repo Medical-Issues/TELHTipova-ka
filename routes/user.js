@@ -377,9 +377,8 @@ router.get('/', requireLogin, (req, res) => {
                     const [year, month, day] = datePart.split("-").map(Number);
                     const [hour, minute] = timePart.split(":").map(Number);
 
-                    // Posun pro český čas (CEST/UTC+2 v létě, CET/UTC+1 v zimě)
                     const date = new Date(Date.UTC(year, month - 1, day, hour, minute));
-                    date.setHours(date.getHours() - 2); // +2 hodiny pro CEST
+                    date.setHours(date.getHours());
                     return date;
                 }
 
