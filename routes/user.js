@@ -372,9 +372,14 @@ router.get('/', requireLogin, (req, res) => {
                 const selectedWinner = existingTip?.winner;
                 const selectedLoserWins = existingTip?.loserWins || 0;
 
+                function parseLocalDate(datetimeString) {
+                    const local = new Date(datetimeString);
+                    return new Date(local.getTime() + local.getTimezoneOffset() * 60000);
+                }
+
+                const matchTime = parseLocalDate(match.datetime);
                 const now = new Date();
-                const matchTime = new Date(match.datetime);
-                const matchStarted = matchTime.getTime() <= now.getTime();
+                const matchStarted = matchTime <= now;
                 const isPlayoff = match.isPlayoff;
                 const bo = match.bo || 5;
                 const maxWins = Math.ceil(bo / 2);
