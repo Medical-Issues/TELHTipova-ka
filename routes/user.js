@@ -823,7 +823,7 @@ router.get('/history/a', requireLogin, (req, res) => {
             });
             html += `<h3>${formattedDateTime}</h3>`;
             html += `<table class="matches-table">`;
-            html += `<thead class="matches-table-header"><tr><th colSpan="5">Zápasy</th></tr></thead>`;
+            html += `<thead class="matches-table-header"><tr><th colSpan="6">Zápasy</th></tr></thead>`;
             html += `<tbody>`;
             for (const match of matchesAtSameTime) {
                 const homeTeam = teams.find(t => t.id === match.homeTeamId)?.name || '???';
@@ -837,25 +837,25 @@ router.get('/history/a', requireLogin, (req, res) => {
 
                 if (!isPlayoff) {
                     html += `
-    <tr class="match-row">
+<tr class="match-row">
     <td class="match-row">
         <form action="/tip" method="POST" style="display:inline">
-        <input type="hidden" name="matchId" value="${match.id}">
-        <input type="hidden" name="winner" value="home">
-        <div class="team-link-history ${selectedWinner === "home" ? match.result.winner === "home" ? "right-selected" : "wrong-selected" : ""}" >${homeTeam}</div>
+            <input type="hidden" name="matchId" value="${match.id}">
+            <input type="hidden" name="winner" value="home">
+            <div class="team-link-history ${selectedWinner === "home" ? match.result.winner === "home" ? "right-selected" : "wrong-selected" : ""}">${homeTeam}</div>
         </form>
     </td>
     <td class="vs">${match.result.scoreHome}</td>
-    <td class="vs">vs</td>
+    <td class="vs">${match.result.ot === true ? "pp/sn": ":"}</td>
     <td class="vs">${match.result.scoreAway}</td>
     <td class="match-row">
         <form action="/tip" method="POST" style="display:inline">
-        <input type="hidden" name="matchId" value="${match.id}">
-        <input type="hidden" name="winner" value="away">
-        <div class="team-link-history ${selectedWinner === "away" ? match.result.winner === "away" ? "right-selected" : "wrong-selected" : ""}">${awayTeam}</div>
+            <input type="hidden" name="matchId" value="${match.id}">
+            <input type="hidden" name="winner" value="away">
+            <div class="team-link-history ${selectedWinner === "away" ? match.result.winner === "away" ? "right-selected" : "wrong-selected" : ""}">${awayTeam}</div>
         </form>
     </td>
-    </tr>`;
+</tr>`;
                 } else {
                     html += `
            <tr class="match-row">
@@ -866,7 +866,9 @@ router.get('/history/a', requireLogin, (req, res) => {
             <div class="team-link-history ${selectedWinner === "home" ? match.result.winner === "home" ? "right-selected" : "wrong-selected" : ""}" >${homeTeam}</div>
         </td>
     </form>
+        <td class="vs">${match.result.scoreHome}</td>
         <td class="vs">vs</td>
+        <td class="vs">${match.result.scoreAway}</td>
     <form action="/tip" method="POST">
         <td>
             <input type="hidden" name="matchId" value="${match.id}">

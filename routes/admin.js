@@ -149,7 +149,7 @@ router.get('/', requireAdmin, (req, res) => {
     for (const m of finishedMatches) {
         const homeTeam = teams.find(t => t.id === m.homeTeamId)?.name || '???';
         const awayTeam = teams.find(t => t.id === m.awayTeamId)?.name || '???';
-        const result = `${m.result.scoreHome} : ${m.result.scoreAway}`;
+        const result = `${m.result.scoreHome} : ${m.result.scoreAway} ${m.result.ot === true ? "pp/sn" : ""}`;
         const dateObj = new Date(m.datetime);
         const formattedDate = dateObj.toLocaleString('cs-CZ', {
             year: 'numeric',
