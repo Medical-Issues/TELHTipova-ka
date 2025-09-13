@@ -43,6 +43,10 @@ router.get('/', requireAdmin, (req, res) => {
     const filteredMatches = matches.filter(m =>
         m.liga === selectedLiga && (m.season || 'Neurčeno') === selectedSeason
     );
+
+    const pendingMatches = filteredMatches.filter(m => !m.result);
+    const finishedMatches = filteredMatches.filter(m => m.result);
+
     let html = `
 <!DOCTYPE html>
 <html lang="cs">
@@ -77,8 +81,10 @@ router.get('/', requireAdmin, (req, res) => {
     </select>
   </form>
   <section class="all-match-table-and-leagues">
+  <div style="display: flex; flex-direction: column; border: 1px solid orangered; padding: 10px">
   <table>
     <thead>
+    <h2>Nevyhodnocené zápasy</h2>
       <tr>
         <th>ID</th>
         <th>Domácí</th>
@@ -91,10 +97,10 @@ router.get('/', requireAdmin, (req, res) => {
     <tbody>
 `;
 
-    for (const m of filteredMatches) {
+    for (const m of pendingMatches) {
         const homeTeam = teams.find(t => t.id === m.homeTeamId)?.name || '???';
         const awayTeam = teams.find(t => t.id === m.awayTeamId)?.name || '???';
-        const result = m.result ? `${m.result.scoreHome} : ${m.result.scoreAway}` : '-';
+        const result = '-';
         const dateObj = new Date(m.datetime);
         const formattedDate = dateObj.toLocaleString('cs-CZ', {
             year: 'numeric',
@@ -122,8 +128,59 @@ router.get('/', requireAdmin, (req, res) => {
     }
 
     html += `
-    </tbody>
-  </table>
+    </table>
+    <details style="margin-top:20px;">
+      <summary><h2 style="display: inline">Vyhodnocené zápasy (${finishedMatches.length})</h2></summary>
+      <table style="margin-top:10px;">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Domácí</th>
+            <th>Hosté</th>
+            <th>Datum a čas</th>
+            <th>Výsledek</th>
+            <th>Akce</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+
+    // Finished zápasy
+    for (const m of finishedMatches) {
+        const homeTeam = teams.find(t => t.id === m.homeTeamId)?.name || '???';
+        const awayTeam = teams.find(t => t.id === m.awayTeamId)?.name || '???';
+        const result = `${m.result.scoreHome} : ${m.result.scoreAway}`;
+        const dateObj = new Date(m.datetime);
+        const formattedDate = dateObj.toLocaleString('cs-CZ', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+        });
+
+        html += `
+        <tr class="${m.isPlayoff ? 'playoff-row' : ''}">
+          <td>${m.id}</td>
+          <td>${homeTeam}</td>
+          <td>${awayTeam}</td>
+          <td>${formattedDate}</td>
+          <td>${result}</td>
+          <td>
+            <a href="/admin/edit/${m.id}" class="action-btn edit-btn">Upravit</a>
+            <form action="/admin/delete/${m.id}" method="POST" style="display:inline;" onsubmit="return confirm('Opravdu smazat zápas?');">
+              <button type="submit" class="action-btn delete-btn">Smazat</button>
+            </form>
+          </td>
+        </tr>
+      `;
+    }
+
+    html += `
+        </tbody>
+      </table>
+    </details>
+    </div>
   <div class="select-leagues">
     <h2>Vybraná sezóna</h2>
     <form method="POST" action="/admin/season">

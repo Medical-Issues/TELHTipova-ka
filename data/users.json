@@ -23,8 +23,8 @@
     "stats": {
       "25/26": {
         "TELH": {
-          "correct": 0,
-          "totalRegular": 0,
+          "correct": 10,
+          "totalRegular": 14,
           "totalPlayoff": 0
         }
       }
@@ -79,7 +79,7 @@
           },
           {
             "matchId": 10,
-            "winner": "away",
+            "winner": "home",
             "loserWins": 0
           },
           {
@@ -99,6 +99,41 @@
           },
           {
             "matchId": 13,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 15,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 16,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 17,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 19,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 18,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 20,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 21,
             "winner": "away",
             "loserWins": 0
           }
@@ -166,7 +201,7 @@
           },
           {
             "matchId": 11,
-            "winner": "home",
+            "winner": "away",
             "loserWins": 0
           },
           {
@@ -206,7 +241,7 @@
           },
           {
             "matchId": 19,
-            "winner": "home",
+            "winner": "away",
             "loserWins": 0
           },
           {
@@ -225,8 +260,8 @@
     "stats": {
       "25/26": {
         "TELH": {
-          "correct": 0,
-          "totalRegular": 0,
+          "correct": 8,
+          "totalRegular": 14,
           "totalPlayoff": 0
         }
       }
@@ -244,8 +279,117 @@
             "matchId": 1,
             "winner": "away",
             "loserWins": 0
+          },
+          {
+            "matchId": 2,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 3,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 4,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 5,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 6,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 7,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 8,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 9,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 10,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 11,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 12,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 14,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 13,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 15,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 16,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 17,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 18,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 19,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 20,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 21,
+            "winner": "away",
+            "loserWins": 0
           }
         ]
+      }
+    },
+    "stats": {
+      "25/26": {
+        "TELH": {
+          "correct": 6,
+          "totalRegular": 14,
+          "totalPlayoff": 0
+        }
       }
     }
   }
