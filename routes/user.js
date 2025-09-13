@@ -823,7 +823,7 @@ router.get('/history/a', requireLogin, (req, res) => {
             });
             html += `<h3>${formattedDateTime}</h3>`;
             html += `<table class="matches-table">`;
-            html += `<thead class="matches-table-header"><tr><th colSpan="3">Zápasy</th></tr></thead>`;
+            html += `<thead class="matches-table-header"><tr><th colSpan="5">Zápasy</th></tr></thead>`;
             html += `<tbody>`;
             for (const match of matchesAtSameTime) {
                 const homeTeam = teams.find(t => t.id === match.homeTeamId)?.name || '???';
@@ -845,8 +845,9 @@ router.get('/history/a', requireLogin, (req, res) => {
         <div class="team-link-history ${selectedWinner === "home" ? match.result.winner === "home" ? "right-selected" : "wrong-selected" : ""}" >${homeTeam}</div>
         </form>
     </td>
-    
+    <td class="vs">${match.result.scoreHome}</td>
     <td class="vs">vs</td>
+    <td class="vs">${match.result.scoreAway}</td>
     <td class="match-row">
         <form action="/tip" method="POST" style="display:inline">
         <input type="hidden" name="matchId" value="${match.id}">
