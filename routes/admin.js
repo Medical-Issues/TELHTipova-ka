@@ -81,10 +81,10 @@ router.get('/', requireAdmin, (req, res) => {
     </select>
   </form>
   <section class="all-match-table-and-leagues">
-  <div style="display: flex; flex-direction: column; border: 1px solid orangered; padding: 10px">
+  <div style="display: flex; flex-direction: column; border: 1px solid orangered; padding: 10px; flex: 5;">
   <table>
     <thead>
-    <h2>Nevyhodnocené zápasy</h2>
+    <h2>Nevyhodnocené zápasy (${pendingMatches.length})</h2>
       <tr>
         <th>ID</th>
         <th>Domácí</th>
@@ -131,7 +131,7 @@ router.get('/', requireAdmin, (req, res) => {
     </table>
     <details style="margin-top:20px;">
       <summary><h2 style="display: inline">Vyhodnocené zápasy (${finishedMatches.length})</h2></summary>
-      <table style="margin-top:10px;">
+      <table style="margin-top:10px; width: 100%">
         <thead>
           <tr>
             <th>ID</th>
@@ -192,8 +192,6 @@ router.get('/', requireAdmin, (req, res) => {
         <button type="submit" class="action-btn edit-btn" style="margin-top: 10px;">Vybrat sezónu</button>
       </div>
     </form>
-  </div>
-  <div class="select-leagues">
     <h2>Veřejné ligy</h2>
     <form method="POST" action="/admin/leagues">
       <div class="leagues-allow">

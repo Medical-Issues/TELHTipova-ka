@@ -400,14 +400,16 @@ button:disabled {
 
 .all-match-table-and-leagues {
     display: flex;
+    flex-wrap: wrap;
     flex-direction: row;
-    justify-content: space-between;
+    gap: 10px;
 }
 .select-leagues {
     display: flex;
     flex-direction: column;
     border: 1px solid orangered;
     padding: 10px;
+    flex: 1;
 }
 .admin-header {
     display: flex;
@@ -562,4 +564,10 @@ input::-webkit-inner-spin-button {
 
 input[type=number] {
     -moz-appearance: textfield;
+}
+details {
+    display: block;
+    width: 100%;
+    padding: 0;
+    margin: 0;
 }
