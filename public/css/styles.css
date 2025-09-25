@@ -571,3 +571,13 @@ details {
     padding: 0;
     margin: 0;
 }
+tr.postponed {
+    background-color: #000000;
+    font-weight: bold;
+    text-align: center;
+}
+.action-btn.postponed {
+    background-color: #00ff00;
+    color: #fff;
+}
+

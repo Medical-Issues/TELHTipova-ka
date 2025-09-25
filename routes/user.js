@@ -344,17 +344,32 @@ router.get('/', requireLogin, (req, res) => {
         const currentUser = users.find(u => u.username === username);
         const userTips = currentUser?.tips?.[selectedSeason]?.[selectedLiga] || [];
 
-        const groupedMatches = matches.reduce((groups, match) => {
+        const postponedMatches = matches.filter(m => m.postponed);
+        const normalMatches = matches.filter(m => !m.postponed)
+            .sort((a, b) => new Date(a.datetime) - new Date(b.datetime));
+
+        const groupedMatches = {};
+
+        if (postponedMatches.length) {
+            groupedMatches["Odložené zápasy"] = postponedMatches;
+        }
+
+        normalMatches.forEach(match => {
             const dateTime = match.datetime || match.date || "Neznámý čas";
-            if (!groups[dateTime]) groups[dateTime] = [];
-            groups[dateTime].push(match);
-            return groups;
-        }, {});
+            if (!groupedMatches[dateTime]) groupedMatches[dateTime] = [];
+            groupedMatches[dateTime].push(match);
+        });
 
         for (const [dateTime, matchesAtSameTime] of Object.entries(groupedMatches)) {
-            const formattedDateTime = new Date(dateTime).toLocaleString('cs-CZ', {
-                day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
-            });
+            let formattedDateTime;
+
+            if (matchesAtSameTime.some(m => m.postponed)) {
+                formattedDateTime = "Odložené zápasy";
+            } else {
+                formattedDateTime = new Date(dateTime).toLocaleString('cs-CZ', {
+                    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                });
+            }
 
             html += `
     <h3>${formattedDateTime}</h3>
@@ -373,6 +388,7 @@ router.get('/', requireLogin, (req, res) => {
                 const selectedLoserWins = existingTip?.loserWins || 0;
 
                 function parseCETDate(datetimeString) {
+                    if (datetimeString != null) {
                     const [datePart, timePart] = datetimeString.split("T");
                     const [year, month, day] = datePart.split("-").map(Number);
                     const [hour, minute] = timePart.split(":").map(Number);
@@ -380,39 +396,48 @@ router.get('/', requireLogin, (req, res) => {
                     const date = new Date(Date.UTC(year, month - 1, day, hour, minute));
                     date.setHours(date.getHours()-2);
                     return date;
+                } else {
+                        return null;
+                    }
                 }
 
                 const matchTime = parseCETDate(match.datetime);
                 const now = new Date();
-                const matchStarted = matchTime <= now;
+                const matchStarted = match.postponed ? true : matchTime <= now;
 
                 const isPlayoff = match.isPlayoff;
                 const bo = match.bo || 5;
                 const maxWins = Math.ceil(bo / 2);
 
-                if (!isPlayoff) {
+                if (match.postponed) {
                     html += `
-            <tr class="match-row">
-                <td>
-                    <form action="/tip" method="POST" style="display:inline">
-                        <input type="hidden" name="matchId" value="${match.id}">
-                        <input type="hidden" name="winner" value="home">
-                        <button type="submit" class="team-link ${selectedWinner === "home" ? "selected" : ""}" ${matchStarted ? 'disabled' : ''}>${homeTeam}</button>
-                    </form>
-                </td>
-                <td class="vs">vs</td>
-                <td>
-                    <form action="/tip" method="POST" style="display:inline">
-                        <input type="hidden" name="matchId" value="${match.id}">
-                        <input type="hidden" name="winner" value="away">
-                        <button type="submit" class="team-link ${selectedWinner === "away" ? "selected" : ""}" ${matchStarted ? 'disabled' : ''}>${awayTeam}</button>
-                    </form>
-                </td>
-            </tr>
-            `;
+<tr class="match-row postponed">
+    <td colspan="3"><strong>${homeTeam} vs ${awayTeam}</strong></td>
+</tr>
+`;
+                } else if (!isPlayoff) {
+                    html += `
+<tr class="match-row">
+    <td>
+        <form action="/tip" method="POST" style="display:inline">
+            <input type="hidden" name="matchId" value="${match.id}">
+            <input type="hidden" name="winner" value="home">
+            <button type="submit" class="team-link ${selectedWinner === "home" ? "selected" : ""}" ${matchStarted ? 'disabled' : ''}>${homeTeam}</button>
+        </form>
+    </td>
+    <td class="vs">vs</td>
+    <td>
+        <form action="/tip" method="POST" style="display:inline">
+            <input type="hidden" name="matchId" value="${match.id}">
+            <input type="hidden" name="winner" value="away">
+            <button type="submit" class="team-link ${selectedWinner === "away" ? "selected" : ""}" ${matchStarted ? 'disabled' : ''}>${awayTeam}</button>
+        </form>
+    </td>
+</tr>
+`;
                 } else {
                     html += `
-           <tr class="match-row">
+<tr class="match-row">
     <form action="/tip" method="POST">
         <input type="hidden" name="matchId" value="${match.id}">
         <td>
@@ -430,28 +455,9 @@ router.get('/', requireLogin, (req, res) => {
                 ${awayTeam}
             </button>
         </td>
-        </form>
-</tr>
-
-<tr>
-    <form action="/tip" method="POST">
-        <input type="hidden" name="matchId" value="${match.id}">
-        <td colspan="3">
-            <div>
-                Série - BO${bo}<br>
-                <label>
-                    Kolik zápasů vyhraje tým, který prohraje:
-                    <select name="loserWins">
-                        ${[...Array(maxWins).keys()].map(i => `
-                            <option value="${i}" ${i === selectedLoserWins ? 'selected' : ''} ${matchStarted ? 'disabled' : ''}>${i}</option>
-                        `).join('')}
-                    </select>
-                </label>
-            </div>
-        </td>
     </form>
 </tr>
-            `;
+`;
                 }
             }
 

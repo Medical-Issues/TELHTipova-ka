@@ -122,6 +122,10 @@ router.get('/', requireAdmin, (req, res) => {
           <form action="/admin/delete/${m.id}" method="POST" style="display:inline;" onsubmit="return confirm('Opravdu smazat zápas?');">
             <button type="submit" style="font-family: Segoe UI,serif" class="action-btn delete-btn">Smazat</button>
           </form>
+            <a href="/admin/togglePostponed/${m.id}" 
+                class="action-btn ${m.postponed ? 'postponed' : 'delete-btn'}">
+                ${m.postponed ? 'Odložený' : 'Odložit'}
+            </a>
         </td>
       </tr>
     `;
@@ -628,6 +632,7 @@ router.post('/edit/:id', requireAdmin, (req, res) => {
     match.datetime = datetime;
     match.season = season;
     match.isPlayoff = req.body.isPlayoff === 'on';
+    match.postponed = req.body.postponed === 'on';
 
     if (match.isPlayoff && req.body.bo && !isNaN(parseInt(req.body.bo))) {
         match.bo = parseInt(req.body.bo);
@@ -957,6 +962,19 @@ router.post('/playoff/delete', requireAdmin, (req, res) => {
         });
     });
 });
+
+router.get('/togglePostponed/:id', requireAdmin, (req, res) => {
+    const matchId = parseInt(req.params.id);
+    const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'));
+    const match = matches.find(m => m.id === matchId);
+    if (!match) return res.status(404).send("Zápas nenalezen");
+
+    match.postponed = !match.postponed;
+
+    fs.writeFileSync('./data/matches.json', JSON.stringify(matches, null, 2));
+    res.redirect('/admin');
+});
+
 
 
 module.exports = router;
