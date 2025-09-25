@@ -44,8 +44,14 @@ router.get('/', requireAdmin, (req, res) => {
         m.liga === selectedLiga && (m.season || 'Neurčeno') === selectedSeason
     );
 
-    const pendingMatches = filteredMatches.filter(m => !m.result);
-    const finishedMatches = filteredMatches.filter(m => m.result);
+    const pendingMatches = filteredMatches
+        .filter(m => !m.result)
+        .sort((a, b) => new Date(a.datetime) - new Date(b.datetime));
+
+    const finishedMatches = filteredMatches
+        .filter(m => m.result)
+        .sort((a, b) => new Date(a.datetime) - new Date(b.datetime));
+
 
     let html = `
 <!DOCTYPE html>
