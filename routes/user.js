@@ -385,8 +385,6 @@ router.get('/', requireLogin, (req, res) => {
                 const awayTeam = teams.find(t => t.id === match.awayTeamId)?.name || '???';
                 const existingTip = userTips.find(t => t.matchId === match.id);
                 const selectedWinner = existingTip?.winner;
-                const selectedLoserWins = existingTip?.loserWins || 0;
-
                 function parseCETDate(datetimeString) {
                     if (datetimeString != null) {
                     const [datePart, timePart] = datetimeString.split("T");
@@ -407,8 +405,7 @@ router.get('/', requireLogin, (req, res) => {
 
                 const isPlayoff = match.isPlayoff;
                 const bo = match.bo || 5;
-                const maxWins = Math.ceil(bo / 2);
-
+                Math.ceil(bo / 2);
                 if (match.postponed) {
                     html += `
 <tr class="match-row postponed">
