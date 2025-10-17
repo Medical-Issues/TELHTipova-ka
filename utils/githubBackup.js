@@ -9,7 +9,7 @@ const DATA_FOLDER = path.join(__dirname, '..', 'data');
 
 async function backupJsonFilesToGitHub() {
     const { Octokit } = await import('@octokit/rest');
-    const octokit = new Octokit({ auth: GITHUB_TOKEN });
+    const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
 
     const files = fs.readdirSync(DATA_FOLDER).filter(file => file.endsWith('.json'));
 

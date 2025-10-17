@@ -13,11 +13,11 @@
         "losses": 0
       },
       "25/26": {
-        "points": 11,
-        "wins": 3,
+        "points": 17,
+        "wins": 5,
         "otWins": 1,
         "otLosses": 0,
-        "losses": 3
+        "losses": 8
       }
     }
   },
@@ -35,11 +35,11 @@
         "losses": 0
       },
       "25/26": {
-        "points": 4,
-        "wins": 1,
-        "otWins": 0,
-        "otLosses": 1,
-        "losses": 5
+        "points": 17,
+        "wins": 4,
+        "otWins": 1,
+        "otLosses": 3,
+        "losses": 7
       }
     }
   },
@@ -50,10 +50,10 @@
     "active": true,
     "stats": {
       "25/26": {
-        "points": 11,
-        "wins": 3,
-        "otWins": 1,
-        "otLosses": 0,
+        "points": 29,
+        "wins": 8,
+        "otWins": 2,
+        "otLosses": 1,
         "losses": 2
       }
     }
@@ -65,11 +65,11 @@
     "active": true,
     "stats": {
       "25/26": {
-        "points": 9,
-        "wins": 3,
-        "otWins": 0,
-        "otLosses": 0,
-        "losses": 4
+        "points": 18,
+        "wins": 5,
+        "otWins": 1,
+        "otLosses": 1,
+        "losses": 8
       }
     }
   },
@@ -87,11 +87,11 @@
         "losses": 0
       },
       "25/26": {
-        "points": 6,
+        "points": 7,
         "wins": 2,
         "otWins": 0,
-        "otLosses": 0,
-        "losses": 4
+        "otLosses": 1,
+        "losses": 12
       }
     }
   },
@@ -109,11 +109,11 @@
         "losses": 0
       },
       "25/26": {
-        "points": 11,
-        "wins": 3,
-        "otWins": 0,
+        "points": 25,
+        "wins": 7,
+        "otWins": 1,
         "otLosses": 2,
-        "losses": 2
+        "losses": 4
       }
     }
   },
@@ -124,11 +124,11 @@
     "active": true,
     "stats": {
       "25/26": {
-        "points": 9,
-        "wins": 3,
+        "points": 25,
+        "wins": 8,
         "otWins": 0,
-        "otLosses": 0,
-        "losses": 4
+        "otLosses": 1,
+        "losses": 6
       }
     }
   },
@@ -139,11 +139,11 @@
     "active": true,
     "stats": {
       "25/26": {
-        "points": 9,
-        "wins": 3,
+        "points": 22,
+        "wins": 7,
         "otWins": 0,
-        "otLosses": 0,
-        "losses": 3
+        "otLosses": 1,
+        "losses": 6
       }
     }
   },
@@ -154,11 +154,11 @@
     "active": true,
     "stats": {
       "25/26": {
-        "points": 18,
-        "wins": 6,
+        "points": 29,
+        "wins": 9,
         "otWins": 0,
-        "otLosses": 0,
-        "losses": 1
+        "otLosses": 2,
+        "losses": 4
       }
     }
   },
@@ -169,11 +169,11 @@
     "active": true,
     "stats": {
       "25/26": {
-        "points": 15,
-        "wins": 5,
+        "points": 22,
+        "wins": 7,
         "otWins": 0,
-        "otLosses": 0,
-        "losses": 2
+        "otLosses": 1,
+        "losses": 7
       }
     }
   },
@@ -184,11 +184,11 @@
     "active": true,
     "stats": {
       "25/26": {
-        "points": 12,
-        "wins": 4,
-        "otWins": 0,
-        "otLosses": 0,
-        "losses": 3
+        "points": 23,
+        "wins": 6,
+        "otWins": 2,
+        "otLosses": 1,
+        "losses": 6
       }
     }
   },
@@ -199,11 +199,11 @@
     "active": true,
     "stats": {
       "25/26": {
-        "points": 12,
-        "wins": 3,
-        "otWins": 1,
+        "points": 25,
+        "wins": 6,
+        "otWins": 3,
         "otLosses": 1,
-        "losses": 2
+        "losses": 5
       }
     }
   },
@@ -214,11 +214,11 @@
     "active": true,
     "stats": {
       "25/26": {
-        "points": 12,
-        "wins": 4,
+        "points": 27,
+        "wins": 9,
         "otWins": 0,
         "otLosses": 0,
-        "losses": 3
+        "losses": 5
       }
     }
   },
@@ -229,11 +229,11 @@
     "active": true,
     "stats": {
       "25/26": {
-        "points": 2,
-        "wins": 0,
-        "otWins": 1,
+        "points": 17,
+        "wins": 3,
+        "otWins": 4,
         "otLosses": 0,
-        "losses": 5
+        "losses": 6
       }
     }
   },

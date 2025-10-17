@@ -10,6 +10,15 @@ const {
     generateSeasonRange,
     removeTipsForDeletedMatch,
 } = require("../utils/fileUtils");
+router.post('/backup', async (req, res) => {
+    try {
+        await backupJsonFilesToGitHub();
+        res.json({ success: true, message: '✅ Záloha provedena' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: '❌ Chyba při záloze' });
+    }
+});
 
 router.get('/', requireAdmin, (req, res) => {
     const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'))
@@ -74,6 +83,7 @@ router.get('/', requireAdmin, (req, res) => {
         <a href="/admin/new/match" class="btn new-btn-admin">Vytvořit nový zápas</a>
         <a href="/admin/new/team" class="btn new-btn-admin">Vytvořit nový tým</a>
         <a href="/admin/playoff" class="btn new-btn-admin">Playoff Tabulky</a>
+        <a id="backupBtn" class="btn new-btn-admin">Uložit data uživatelům (pouze pro administrativní účely)</a>
     </div>
   </div>
   <form class="league-dropdown" method="GET" action="/admin/">
@@ -258,6 +268,13 @@ router.get('/', requireAdmin, (req, res) => {
   <p><a href="/" style="margin-top: 20px; display: inline-block;">Zpět na hlavní stránku</a></p>
 </main>
 </body>
+<script>
+document.getElementById('backupBtn').addEventListener('click', async () => {
+  const res = await fetch('/admin/backup', { method: 'POST' });
+  const data = await res.json();
+  alert(data.message);
+});
+</script>
 </html>
 `;
 
@@ -692,6 +709,7 @@ router.post('/delete/:id', requireAdmin, (req, res) => {
 });
 
 const {getAllSeasons} = require('../utils/fileUtils');
+const {backupJsonFilesToGitHub} = require("../utils/githubBackup");
 
 router.get('/api/seasons', requireAdmin, (req, res) => {
     const seasons = getAllSeasons();

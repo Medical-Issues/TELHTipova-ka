@@ -13,7 +13,11 @@
         }
       }
     },
-    "tips": {}
+    "tips": {
+      "25/26": {
+        "TELH": []
+      }
+    }
   },
   {
     "username": "Ondra1893",
@@ -23,8 +27,8 @@
     "stats": {
       "25/26": {
         "TELH": {
-          "correct": 32,
-          "totalRegular": 47,
+          "correct": 51,
+          "totalRegular": 93,
           "totalPlayoff": 0
         }
       }
@@ -300,6 +304,201 @@
           {
             "matchId": 54,
             "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 55,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 56,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 57,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 58,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 59,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 60,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 61,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 63,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 64,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 65,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 66,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 67,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 68,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 69,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 77,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 78,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 79,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 80,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 81,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 82,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 83,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 84,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 87,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 88,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 85,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 89,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 86,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 91,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 90,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 92,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 93,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 94,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 95,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 97,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 98,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 99,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 100,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 101,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 102,
+            "winner": "home",
             "loserWins": 0
           }
         ]
@@ -586,7 +785,7 @@
           },
           {
             "matchId": 55,
-            "winner": "home",
+            "winner": "away",
             "loserWins": 0
           },
           {
@@ -606,7 +805,7 @@
           },
           {
             "matchId": 59,
-            "winner": "away",
+            "winner": "home",
             "loserWins": 0
           },
           {
@@ -618,6 +817,276 @@
             "matchId": 61,
             "winner": "away",
             "loserWins": 0
+          },
+          {
+            "matchId": 63,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 64,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 65,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 66,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 67,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 68,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 69,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 70,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 71,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 72,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 73,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 74,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 75,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 76,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 77,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 78,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 79,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 80,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 81,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 82,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 83,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 84,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 85,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 86,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 87,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 88,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 89,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 90,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 91,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 92,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 93,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 94,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 95,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 96,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 97,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 98,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 99,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 100,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 101,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 102,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 103,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 104,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 105,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 106,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 107,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 108,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 110,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 109,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 111,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 112,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 113,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 114,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 115,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 116,
+            "winner": "home",
+            "loserWins": 0
           }
         ]
       }
@@ -625,8 +1094,8 @@
     "stats": {
       "25/26": {
         "TELH": {
-          "correct": 27,
-          "totalRegular": 47,
+          "correct": 53,
+          "totalRegular": 101,
           "totalPlayoff": 0
         }
       }
@@ -909,6 +1378,201 @@
             "matchId": 54,
             "winner": "away",
             "loserWins": 0
+          },
+          {
+            "matchId": 55,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 56,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 57,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 58,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 59,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 60,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 61,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 63,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 64,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 65,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 66,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 67,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 68,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 69,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 77,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 78,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 79,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 80,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 81,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 82,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 83,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 84,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 85,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 86,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 87,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 88,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 89,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 90,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 91,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 92,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 93,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 94,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 95,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 97,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 98,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 99,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 100,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 101,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 102,
+            "winner": "home",
+            "loserWins": 0
           }
         ]
       }
@@ -916,8 +1580,8 @@
     "stats": {
       "25/26": {
         "TELH": {
-          "correct": 23,
-          "totalRegular": 47,
+          "correct": 47,
+          "totalRegular": 89,
           "totalPlayoff": 0
         }
       }
