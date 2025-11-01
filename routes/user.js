@@ -59,7 +59,7 @@ router.post("/tip", requireLogin, (req, res) => {
     } else {
         user.tips[season][league].push({
             matchId,
-            ...(typeof winner !== 'undefined' ? { winner } : {}),
+            ...(typeof winner !== 'undefined' ? {winner} : {}),
             loserWins: isNaN(loserWins) ? 0 : loserWins
         });
     }
@@ -81,6 +81,7 @@ router.get('/', requireLogin, (req, res) => {
     const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf-8'));
     const allowedLeagues = JSON.parse(fs.readFileSync('./data/allowedLeagues.json', 'utf-8'));
     const selectedSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
+    const leagues = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf-8'));
 
     const leaguesFromTeams = [...new Set(teams.map(t => t.liga))];
     const leaguesFromMatches = [...new Set(matches.map(m => m.liga))];
@@ -126,6 +127,16 @@ router.get('/', requireLogin, (req, res) => {
         console.error("Chyba při načítání playoff dat:", e);
     }
 
+    const teamsByGroup = {};
+    teamsInSelectedLiga.forEach(team => {
+        const group = team.group ? String.fromCharCode(team.group + 64) : 'X';
+        if (!teamsByGroup[group]) teamsByGroup[group] = [];
+        teamsByGroup[group].push(team);
+    });
+
+    const leagueObj = leagues.find(l => l.name === selectedLiga);
+    const sortedGroups = Object.keys(teamsByGroup).sort();
+
     let html = `
     <!DOCTYPE html>
 <html lang="cs">
@@ -158,9 +169,13 @@ router.get('/', requireLogin, (req, res) => {
             <button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('playoff')">Playoff</button>
         </div>
         <div id="regularTable">
+        `
+    for (const group of sortedGroups) {
+        const teamsInGroup = teamsByGroup[group];
+        html += `
             <table class="points-table">
                 <thead>
-                    <tr><th scope="col" id="points-table-header" colspan="10"><h2>Týmy - ${selectedLiga} ${selectedSeason} - Základní Část</h2></th></tr>
+                    <tr><th scope="col" id="points-table-header" colspan="10"><h2>Týmy - ${selectedLiga} ${selectedSeason} - Základní část ${leagueObj?.isMultigroup ? `(Skupina ${group})` : ''}</h2></th></tr>
                     <tr>
                         <th class="position" scope="col">Místo</th>
                         <th scope="col">Tým</th>
@@ -177,36 +192,28 @@ router.get('/', requireLogin, (req, res) => {
                 <tbody>
                     <tr>
                          `;
-    teamsInSelectedLiga.sort((a, b) => {
-        const aStats = a.stats?.[selectedSeason] || {};
-        const bStats = b.stats?.[selectedSeason] || {};
+        teamsInGroup.sort((a, b) => {
+            const aStats = a.stats?.[selectedSeason] || {};
+            const bStats = b.stats?.[selectedSeason] || {};
+            const aPoints = aStats.points || 0;
+            const bPoints = bStats.points || 0;
+            const aScore = scores[a.id] || {gf: 0, ga: 0};
+            const bScore = scores[b.id] || {gf: 0, ga: 0};
+            const aDiff = aScore.gf - aScore.ga;
+            const bDiff = bScore.gf - bScore.ga;
+            const aMatches = (aStats.wins || 0) + (aStats.otWins || 0) + (aStats.otLosses || 0) + (aStats.losses || 0);
+            const bMatches = (bStats.wins || 0) + (bStats.otWins || 0) + (bStats.otLosses || 0) + (bStats.losses || 0);
+            if (bPoints !== aPoints) return bPoints - aPoints;
+            if (bDiff !== aDiff) return bDiff - aDiff;
+            return aMatches - bMatches;
+        });
 
-        const aPoints = aStats.points || 0;
-        const bPoints = bStats.points || 0;
+        teamsInGroup.forEach((team, index) => {
+            const teamStats = scores[team.id] || {gf: 0, ga: 0};
+            const goalDiff = teamStats.gf - teamStats.ga;
+            const numberMatches = team.stats?.[selectedSeason]?.wins + team.stats?.[selectedSeason]?.otWins + team.stats?.[selectedSeason]?.otLosses + team.stats?.[selectedSeason]?.losses || 0;
 
-        const aScore = scores[a.id] || {gf: 0, ga: 0};
-        const bScore = scores[b.id] || {gf: 0, ga: 0};
-
-        const aDiff = aScore.gf - aScore.ga;
-        const bDiff = bScore.gf - bScore.ga;
-
-        const aMatches = (aStats.wins || 0) + (aStats.otWins || 0) + (aStats.otLosses || 0) + (aStats.losses || 0);
-        const bMatches = (bStats.wins || 0) + (bStats.otWins || 0) + (bStats.otLosses || 0) + (bStats.losses || 0);
-
-        if (bPoints !== aPoints) return bPoints - aPoints;
-
-        if (bDiff !== aDiff) return bDiff - aDiff;
-
-        return aMatches - bMatches;
-    });
-
-
-    teamsInSelectedLiga.forEach((team, index) => {
-        const teamStats = scores[team.id] || {gf: 0, ga: 0};
-        const goalDiff = teamStats.gf - teamStats.ga;
-
-        const numberMatches = team.stats?.[selectedSeason]?.wins + team.stats?.[selectedSeason]?.otWins + team.stats?.[selectedSeason]?.otLosses + team.stats?.[selectedSeason]?.losses
-        html += `
+            html += `
     <tr>
         <td>${index + 1}.</td>
         <td>${team.name}</td>
@@ -219,10 +226,13 @@ router.get('/', requireLogin, (req, res) => {
         <td class="numbers">${team.stats?.[selectedSeason]?.otLosses || 0}</td>
         <td class="numbers">${team.stats?.[selectedSeason]?.losses || 0}</td>
     </tr>`;
-    });
-    html += `
+        });
+        html += `
                 </tbody>
             </table>
+            <br>`;
+    }
+    html += `
             </div>
             <div id="playoffTablePreview" style="display:none; overflow:auto; max-width:100%;">
       <table class="points-table"><tr><th scope="col" id="points-table-header" colspan="20"><h2>Týmy - ${selectedLiga} ${selectedSeason} - Playoff</h2></th></tr>`;
@@ -433,26 +443,39 @@ router.get('/', requireLogin, (req, res) => {
 </tr>
 `;
                 } else {
+                    const existingLoserWins = existingTip?.loserWins || 0;
+                    const bo = match.bo || 7;
+                    const maxLoserWins = Math.floor(bo / 2);
+
                     html += `
 <tr class="match-row">
-    <form action="/tip" method="POST">
-        <input type="hidden" name="matchId" value="${match.id}">
-        <td>
-            <button type="submit" name="winner" value="home"
-                class="team-link ${selectedWinner === "home" ? "selected" : ""}"
-                ${matchStarted ? 'disabled' : ''}>
-                ${homeTeam}
-            </button>
-        </td>
-        <td class="vs">vs</td>
-        <td>
-            <button type="submit" name="winner" value="away"
-                class="team-link ${selectedWinner === "away" ? "selected" : ""}"
-                ${matchStarted ? 'disabled' : ''}>
-                ${awayTeam}
-            </button>
-        </td>
+  <form class="playoff-form" action="/tip" method="POST">
+    <input type="hidden" name="matchId" value="${match.id}">
+    <input type="hidden" name="winner" value="">
+    <td>
+      <button type="button" class="team-link home-btn ${selectedWinner === "home" ? "selected" : ""}" ${matchStarted ? 'disabled' : ''}>
+        ${homeTeam}
+      </button>
+    </td>
+    <td class="vs">vs</td>
+    <td>
+      <button type="button" class="team-link away-btn ${selectedWinner === "away" ? "selected" : ""}" ${matchStarted ? 'disabled' : ''}>
+        ${awayTeam}
+      </button>
+    </td>
+  </form>
+</tr>
+<tr class="match-row loser-row" style="display:${selectedWinner ? 'table-row' : 'none'}">
+  <td colspan="3">
+    <form class="loserwins-form" action="/tip" method="POST">
+      <input type="hidden" name="matchId" value="${match.id}">
+      <input type="hidden" name="winner" value="">
+      Kolik zápasů vyhrál poražený:
+      <select name="loserWins">
+        ${Array.from({length: maxLoserWins+1}, (_, i) => `<option value="${i}" ${i===existingLoserWins?'selected':''}>${i}</option>`).join('')}
+      </select>
     </form>
+  </td>
 </tr>
 `;
                 }
@@ -465,27 +488,36 @@ router.get('/', requireLogin, (req, res) => {
         }
 
         html += `</section></main></body><script>
-  document.addEventListener('DOMContentLoaded', () => {
-    document.querySelectorAll('select[name="loserWins"]').forEach(sel => {
-      sel.addEventListener('change', () => sel.form.submit());
-    });
-  });
-    document.addEventListener("DOMContentLoaded", () => {
-    const allForms = document.querySelectorAll("form");
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.playoff-form').forEach(form => {
+    const row = form.closest('tr.match-row');
+    const nextRow = row.nextElementSibling;
+    const select = nextRow.querySelector('select[name="loserWins"]');
+    const loserForm = nextRow.querySelector('.loserwins-form');
+    const winnerInput = loserForm.querySelector('input[name="winner"]');
 
-    allForms.forEach(form => {
-      form.addEventListener("submit", () => {
-        localStorage.setItem("scrollTop", window.scrollY);
-      });
-    });
+    const homeBtn = row.querySelector('.home-btn');
+    const awayBtn = row.querySelector('.away-btn');
 
-    const savedScroll = localStorage.getItem("scrollTop");
-    if (savedScroll !== null) {
-      window.scrollTo(0, parseInt(savedScroll));
-      localStorage.removeItem("scrollTop");
+    function selectWinner(winner) {
+      winnerInput.value = winner;
+      nextRow.style.display = 'table-row';
+      homeBtn.classList.toggle('selected', winner === 'home');
+      awayBtn.classList.toggle('selected', winner === 'away');
+      loserForm.submit();
     }
-  });
 
+    if (!winnerInput.value) {
+      homeBtn.addEventListener('click', () => selectWinner('home'));
+      awayBtn.addEventListener('click', () => selectWinner('away'));
+    }
+
+    select.addEventListener('change', () => {
+      winnerInput.value = homeBtn.classList.contains('selected') ? 'home' : 'away';
+      loserForm.submit();
+    });
+  });
+});
 </script>
 </html>`
         res.send(html);
@@ -566,6 +598,7 @@ router.get('/history/a', requireLogin, (req, res) => {
     const selectedSeason = req.query.sezona;
     const teams = loadTeams().filter(t => t.stats[selectedSeason]).filter(t => t.stats[selectedSeason].wins + t.stats[selectedSeason].otWins + t.stats[selectedSeason].otLosses + t.stats[selectedSeason].losses > 0);
     const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf-8'));
+    const leagues = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf-8'));
 
     const leaguesFromTeams = [...new Set(teams.map(t => t.liga))];
     const leaguesFromMatches = [...new Set(matches.map(m => m.liga))];
@@ -607,12 +640,24 @@ router.get('/history/a', requireLogin, (req, res) => {
         if (allPlayoffs[selectedSeason] && allPlayoffs[selectedSeason][selectedLiga]) {
             playoffData = allPlayoffs[selectedSeason][selectedLiga];
         } else {
-            console.warn('Playoff data pro danou sezónu a ligu nebyla nalezena.');
+            console.warn('Playoff data v tabulce pro danou sezónu a ligu nebyla nalezena.');
         }
 
     } catch (e) {
         console.error("Chyba při načítání playoff dat:", e);
     }
+
+    const leagueObj = leagues.find(l => l.name === selectedLiga);
+    const isMultigroup = leagueObj?.isMultigroup || false;
+
+    const teamsByGroup = {};
+    teamsInSelectedLiga.forEach(team => {
+        const groupLetter = String.fromCharCode(64 + team.group);
+        if (!teamsByGroup[groupLetter]) teamsByGroup[groupLetter] = [];
+        teamsByGroup[groupLetter].push(team);
+    });
+
+    const sortedGroups = Object.keys(teamsByGroup).sort();
 
     let html = `
     <!DOCTYPE html>
@@ -639,70 +684,79 @@ router.get('/history/a', requireLogin, (req, res) => {
             <button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('playoff')">Playoff</button>
         </div>
         <div id="regularTable">
-            <table class="points-table">
-                <thead>
-                    <tr><th scope="col" id="points-table-header" colspan="10"><h2>Týmy - ${selectedLiga} - ZČ</h2></th></tr>
-                    <tr>
-                        <th class="position" scope="col">Místo</th>
-                        <th scope="col">Tým</th>
-                        <th class="points" scope="col">Body</th>
-                        <th scope="col">Skóre</th>
-                        <th scope="col">Rozdíl</th>
-                        <th scope="col">Z</th>
-                        <th scope="col">V</th>
-                        <th scope="col">Vpp</th>
-                        <th scope="col">Ppp</th>
-                        <th scope="col">P</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                         `;
-    teamsInSelectedLiga.sort((a, b) => {
-        const aStats = a.stats?.[selectedSeason] || {};
-        const bStats = b.stats?.[selectedSeason] || {};
+        `;
+    for (const groupLetter of sortedGroups) {
+        const teamsInGroup = teamsByGroup[groupLetter];
 
-        const aPoints = aStats.points || 0;
-        const bPoints = bStats.points || 0;
-
-        const aScore = scores[a.id] || { gf: 0, ga: 0 };
-        const bScore = scores[b.id] || { gf: 0, ga: 0 };
-
-        const aDiff = aScore.gf - aScore.ga;
-        const bDiff = bScore.gf - bScore.ga;
-
-        const aMatches = (aStats.wins || 0) + (aStats.otWins || 0) + (aStats.otLosses || 0) + (aStats.losses || 0);
-        const bMatches = (bStats.wins || 0) + (bStats.otWins || 0) + (bStats.otLosses || 0) + (bStats.losses || 0);
-
-        if (bPoints !== aPoints) return bPoints - aPoints;
-
-        if (bDiff !== aDiff) return bDiff - aDiff;
-
-        return aMatches - bMatches;
-    });
-
-    teamsInSelectedLiga.forEach((team, index) => {
-        const teamStats = scores[team.id] || { gf: 0, ga: 0 };
-        const goalDiff = teamStats.gf - teamStats.ga;
-
-        const numberMatches = team.stats?.[selectedSeason]?.wins + team.stats?.[selectedSeason]?.otWins + team.stats?.[selectedSeason]?.otLosses + team.stats?.[selectedSeason]?.losses
         html += `
-    <tr>
+  <table class="points-table">
+    <thead>
+      <tr>
+        <th scope="col" id="points-table-header" colspan="10">
+          <h2>Týmy - ${selectedLiga} ${selectedSeason} - Základní část
+          ${isMultigroup ? ` - Skupina ${groupLetter}` : ''}</h2>
+        </th>
+      </tr>
+      <tr>
+        <th class="position">Místo</th>
+        <th>Tým</th>
+        <th class="points">Body</th>
+        <th>Skóre</th>
+        <th>Rozdíl</th>
+        <th>Z</th>
+        <th>V</th>
+        <th>Vpp</th>
+        <th>Ppp</th>
+        <th>P</th>
+      </tr>
+    </thead>
+    <tbody>`;
+        
+        teamsInGroup.sort((a, b) => {
+            const aStats = a.stats?.[selectedSeason] || {};
+            const bStats = b.stats?.[selectedSeason] || {};
+            const aPoints = aStats.points || 0;
+            const bPoints = bStats.points || 0;
+            const aScore = scores[a.id] || { gf: 0, ga: 0 };
+            const bScore = scores[b.id] || { gf: 0, ga: 0 };
+            const aDiff = aScore.gf - aScore.ga;
+            const bDiff = bScore.gf - bScore.ga;
+            const aMatches = (aStats.wins || 0) + (aStats.otWins || 0) + (aStats.otLosses || 0) + (aStats.losses || 0);
+            const bMatches = (bStats.wins || 0) + (bStats.otWins || 0) + (bStats.otLosses || 0) + (bStats.losses || 0);
+
+            if (bPoints !== aPoints) return bPoints - aPoints;
+            if (bDiff !== aDiff) return bDiff - aDiff;
+            return aMatches - bMatches;
+        });
+        
+        teamsInGroup.forEach((team, index) => {
+            const teamStats = scores[team.id] || { gf: 0, ga: 0 };
+            const goalDiff = teamStats.gf - teamStats.ga;
+            const numberMatches = (team.stats?.[selectedSeason]?.wins || 0)
+                + (team.stats?.[selectedSeason]?.otWins || 0)
+                + (team.stats?.[selectedSeason]?.otLosses || 0)
+                + (team.stats?.[selectedSeason]?.losses || 0);
+
+            html += `
+      <tr>
         <td>${index + 1}.</td>
         <td>${team.name}</td>
         <td class="points numbers">${team.stats?.[selectedSeason]?.points || 0}</td>
         <td class="numbers">${teamStats.gf}:${teamStats.ga}</td>
         <td class="numbers">${goalDiff > 0 ? '+' + goalDiff : goalDiff}</td>
-        <td class="numbers">${numberMatches || 0}</td>
+        <td class="numbers">${numberMatches}</td>
         <td class="numbers">${team.stats?.[selectedSeason]?.wins || 0}</td>
         <td class="numbers">${team.stats?.[selectedSeason]?.otWins || 0}</td>
         <td class="numbers">${team.stats?.[selectedSeason]?.otLosses || 0}</td>
         <td class="numbers">${team.stats?.[selectedSeason]?.losses || 0}</td>
-    </tr>`;
-    });
+      </tr>`;
+        });
+
+        html += `
+    </tbody>
+  </table><br>`;
+    }
     html += `
-                </tbody>
-            </table>
         </div>
         <div id="playoffTablePreview" style="display:none; overflow:auto; max-width:100%;">
       <table class="points-table"><tr><th scope="col" id="points-table-header" colspan="20"><h2>Týmy - ${selectedLiga} ${selectedSeason} - Playoff</h2></th></tr>`;

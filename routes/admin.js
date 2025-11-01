@@ -21,22 +21,33 @@ router.post('/backup', async (req, res) => {
 });
 
 router.get('/', requireAdmin, (req, res) => {
-    const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'))
-    const teams = loadTeams()
+    const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'));
+    const teams = loadTeams();
     const allowedLeagues = JSON.parse(fs.readFileSync('./data/allowedLeagues.json', 'utf-8'));
+    const leagues = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf8'));
     const chosenSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
+
     const leaguesFromMatches = [...new Set(matches.map(m => m.liga))];
     const leaguesFromTeams = [...new Set(teams.map(t => t.liga))];
-    const allLeagues = [...new Set([...leaguesFromTeams, ...leaguesFromMatches])];
-    const uniqueLeagues = allLeagues.filter(l => allowedLeagues.includes(l));
-    const selectedLiga = req.query.liga && uniqueLeagues.includes(req.query.liga) ? req.query.liga : uniqueLeagues[0];
+    const leaguesFromLeagues = [... new Set(leagues.map(t => t.name))];
+    const allLeagues = [...new Set([...leaguesFromTeams, ...leaguesFromMatches, ...leaguesFromLeagues])];
 
+    const uniqueLeagues = allLeagues.filter(l => leaguesFromLeagues.includes(l));
+
+    const selectedLiga = req.query.liga && uniqueLeagues.includes(req.query.liga)
+        ? req.query.liga
+        : uniqueLeagues[0] || allLeagues[0];
     const teamsByLeague = {};
     teams.forEach(team => {
-        if (!teamsByLeague[team.liga]) {
-            teamsByLeague[team.liga] = [];
-        }
+        if (!teamsByLeague[team.liga]) teamsByLeague[team.liga] = [];
         teamsByLeague[team.liga].push(team);
+    });
+    const teamsByGroup = {};
+    teams.forEach(team => {
+        if (team.liga === selectedLiga) {
+            if (!teamsByGroup[team.group]) teamsByGroup[team.group] = [];
+            teamsByGroup[team.group].push(team);
+        }
     });
 
     const seasons = [...new Set(
@@ -61,7 +72,6 @@ router.get('/', requireAdmin, (req, res) => {
         .filter(m => m.result)
         .sort((a, b) => new Date(a.datetime) - new Date(b.datetime));
 
-
     let html = `
 <!DOCTYPE html>
 <html lang="cs">
@@ -83,6 +93,7 @@ router.get('/', requireAdmin, (req, res) => {
         <a href="/admin/new/match" class="btn new-btn-admin">Vytvořit nový zápas</a>
         <a href="/admin/new/team" class="btn new-btn-admin">Vytvořit nový tým</a>
         <a href="/admin/playoff" class="btn new-btn-admin">Playoff Tabulky</a>
+        <a href="/admin/leagues/manage" class="btn new-btn-admin">Správa lig</a>
         <a id="backupBtn" class="btn new-btn-admin">Uložit data uživatelům (pouze pro administrativní účely)</a>
     </div>
   </div>
@@ -165,7 +176,6 @@ router.get('/', requireAdmin, (req, res) => {
         <tbody>
     `;
 
-    // Finished zápasy
     for (const m of finishedMatches) {
         const homeTeam = teams.find(t => t.id === m.homeTeamId)?.name || '???';
         const awayTeam = teams.find(t => t.id === m.awayTeamId)?.name || '???';
@@ -213,7 +223,7 @@ router.get('/', requireAdmin, (req, res) => {
       </div>
     </form>
     <h2>Veřejné ligy</h2>
-    <form method="POST" action="/admin/leagues">
+    <form method="POST" action="/admin/leagues/visibility">
       <div class="leagues-allow">
 `;
 
@@ -221,7 +231,7 @@ router.get('/', requireAdmin, (req, res) => {
         const checked = allowedLeagues.includes(l) ? 'checked' : '';
         html += `
         <label style="display: flex; align-items: center">
-          <input type="checkbox" name="leagues" value="${l}" ${checked}/>
+          <input type="checkbox" name="allowedLeagues" value="${l}" ${checked}/>
           ${l}
         </label>
       `;
@@ -239,27 +249,45 @@ router.get('/', requireAdmin, (req, res) => {
     <div class="teams-allow">
 `;
 
-    for (const liga in teamsByLeague) {
-        const activeTeams = teamsByLeague[liga].filter(team => team.active);
-        const inactiveTeams = teamsByLeague[liga].filter(team => !team.active);
+    leaguesFromLeagues.forEach(liga => {
+        const leagueTeams = teamsByLeague[liga] || [];
+        const activeTeams = leagueTeams.filter(team => team.active);
+        const inactiveTeams = leagueTeams.filter(team => !team.active);
+        const leagueObj = leagues.find(l => l.name === liga);
+
+        const sortTeams = arr => arr.sort((a, b) => {
+            if (a.group !== b.group) return a.group - b.group;
+            return a.name.localeCompare(b.name, 'cs', { sensitivity: 'base' });
+        });
+
+        sortTeams(activeTeams);
+        sortTeams(inactiveTeams);
 
         html += `<div class="league-column"><h3>${liga}</h3>`;
         if (activeTeams.length > 0) {
             html += `<strong>Aktivní</strong>`;
             activeTeams.forEach(team => {
-                html += `<a href="/admin/teams/edit/${team.id}">${team.name}</a>`;
+                if (leagueObj?.isMultigroup === true){
+                    html += `<a href="/admin/teams/edit/${team.id}">${String.fromCharCode(team.group+64)} - ${team.name}</a>`;
+                } else {
+                    html += `<a href="/admin/teams/edit/${team.id}">${team.name}</a>`;
+                }
             });
             html += `<br>`;
         }
         if (inactiveTeams.length > 0) {
             html += `<strong>Neaktivní</strong>`;
             inactiveTeams.forEach(team => {
-                html += `<a href="/admin/teams/edit/${team.id}" class="inactive">${team.name}</a>`;
+                if (leagueObj?.isMultigroup === true){
+                    html += `<a href="/admin/teams/edit/${team.id}" class="inactive">${String.fromCharCode(team.group+64)} - ${team.name}</a>`;
+                } else {
+                    html += `<a href="/admin/teams/edit/${team.id}" class="inactive">${team.name}</a>`;
+                }
             });
         }
 
         html += `</div>`;
-    }
+    })
 
     html += `
     </div>
@@ -281,15 +309,36 @@ document.getElementById('backupBtn').addEventListener('click', async () => {
     res.send(html);
 });
 router.post('/leagues', express.urlencoded({ extended: true }), requireAdmin, (req, res) => {
-    const selectedLeagues = Array.isArray(req.body.leagues)
-        ? req.body.leagues
-        : req.body.leagues ? [req.body.leagues] : [];
+    const ligaName = req.body.name?.trim();
+    if (!ligaName) return res.send('<p style="color:red;">Název ligy je povinný. <a href="/admin/leagues/manage">Zpět</a></p>');
 
-    const finalLeagues = [...new Set([...selectedLeagues])];
+    const leagues = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf-8'));
+    const exists = leagues.some(l => l.name.toLowerCase() === ligaName.toLowerCase());
+    if (exists) return res.send(`<p style="color:red;">Liga <strong>${ligaName}</strong> už existuje. <a href="/admin/leagues/manage">Zpět</a></p>`);
 
-    fs.writeFileSync('./data/allowedLeagues.json', JSON.stringify(finalLeagues, null, 2), 'utf-8');
-    res.redirect('/admin');
+    const multiGroup = req.body.multiGroup === 'on';
+    const groupCount = multiGroup ? parseInt(req.body.groupCount) || 1 : 1;
+
+    const newLeague = {
+        name: ligaName,
+        isMultigroup: multiGroup,
+        groupCount: groupCount
+    };
+
+    leagues.push(newLeague);
+    fs.writeFileSync('./data/leagues.json', JSON.stringify(leagues, null, 2), 'utf-8');
 });
+
+router.post('/leagues/visibility', requireAdmin, (req, res) => {
+    let ligaNames = req.body.allowedLeagues || [];
+    if (!Array.isArray(ligaNames)) ligaNames = [ligaNames];
+
+    const allowedLeagues = JSON.parse(fs.readFileSync('./data/allowedLeagues.json', 'utf-8'));
+    allowedLeagues.push(ligaNames);
+    fs.writeFileSync('./data/allowedLeagues.json', JSON.stringify([...new Set(ligaNames)], null, 2), 'utf-8');
+
+    res.redirect('/admin');
+})
 
 router.get('/teams/edit/:id', requireAdmin, (req, res) => {
     const teamId = parseInt(req.params.id);
@@ -297,7 +346,15 @@ router.get('/teams/edit/:id', requireAdmin, (req, res) => {
 
     const team = teams.find(t => t.id === teamId);
     if (!team) return res.status(404).send("Tým nenalezen");
-    const allLeagues = [...new Set(teams.map(t => t.liga))].sort();
+    const leagues = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf-8'));
+    const leaguesFromLeagues = [... new Set(leagues.map(t => t.name))];
+
+    const teamLeagueObj = leagues.find(l => l.name === team.liga);
+    const groupCount = teamLeagueObj?.isMultigroup ? teamLeagueObj.groupCount : 1;
+
+    const groupOptions = [...Array(groupCount).keys()]
+        .map(i => `<option value="${i+1}" ${team.group === i+1 ? 'selected' : ''}>Skupina ${String.fromCharCode(65+i)}</option>`)
+        .join('');
 
     const html = `
 <!DOCTYPE html>
@@ -324,9 +381,15 @@ router.get('/teams/edit/:id', requireAdmin, (req, res) => {
     </label>
     <label style="display: flex; flex-direction: column" for="liga">Liga
       <select class="league-select" id="liga" name="liga" required>
-        ${allLeagues.map(l => `<option value="${l}" ${l === team.liga ? 'selected' : ''}>${l}</option>`).join('')}
+        ${leaguesFromLeagues.map(l => `<option value="${l}" ${l === team.liga ? 'selected' : ''}>${l}</option>`).join('')}
       </select>
     </label>
+    ${teamLeagueObj?.isMultigroup ? `
+    <label style="display: flex; flex-direction: column" for="group">Skupina
+      <select class="league-select" id="group" name="group" required>
+        ${groupOptions}
+      </select>
+    </label>` : ''}
     <label style="display: flex; flex-direction: row; align-items: center" for="active">
         Aktivní tým
       <input type="checkbox" id="active" name="active" ${team.active ? 'checked' : ''} />
@@ -335,7 +398,7 @@ router.get('/teams/edit/:id', requireAdmin, (req, res) => {
   </form>
   <form action="/admin/teams/delete/${team.id}" method="POST" style="display:inline;" onsubmit="return confirm('Opravdu smazat tým?');">
             <button type="submit" class="action-btn delete-btn">Smazat tým</button>
-          </form>
+  </form>
   <a href="/admin" class="back-link">← Zpět na seznam týmů</a>
 </main>
 </body>
@@ -481,32 +544,67 @@ router.post('/new/match', requireAdmin, (req, res) => {
 
 
 router.get('/new/team', requireAdmin, (req, res) => {
+    const leagues = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf8'));
+    const leagueOptions = leagues.map(l => `<option value="${l.name}">${l.name}</option>`).join('');
+
+    const groupOptions = '';
+
     res.send(`
     <!DOCTYPE html>
     <html lang="cs">
-        <head>
+    <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Vytvořit nový zápas</title>
-    <link rel="stylesheet" href="/css/styles.css" />
-    <link rel="icon" href="/images/logo.png">
+        <title>Vytvořit nový tým</title>
+        <link rel="stylesheet" href="/css/styles.css" />
+        <link rel="icon" href="/images/logo.png">
     </head>
+    <body>
     <header class="header">
         <div class="logo_title"><img class="image_logo" src="/images/logo.png" alt="Logo"><h1 id="title">Tipovačka</h1></div>
     </header>
-    <body>
     <main>
     <h1>Vytvořit nový tým</h1>
     <form style="display: flex; flex-direction: row; gap: 10px" method="POST" action="">
-      <label style="display: flex; flex-direction: column;">Název týmu <input style="width: 220px" class="league-select" autocomplete="off" type="text" name="name" required></label>
-      <label style="display: flex; flex-direction: column;">Liga <input class="league-select" type="text" name="liga" required></label>
-      <label style="display: flex; flex-direction: row; align-items: center">Aktivní tým <input type="checkbox" name="active" checked></label>
-      <button class="action-btn btn" type="submit">Vytvořit tým</button>
+      <label style="display: flex; flex-direction: column;">Název týmu: <input style="width: 220px" class="league-select" autocomplete="off" type="text" name="name" required></label>
+      <label style="display: flex; flex-direction: column;">Liga:
+        <select class="league-select" style="width: 220px" name="liga" id="ligaSelect" required>
+            ${leagueOptions}
+        </select>
+     </label>
+     <label style="display: flex; flex-direction: column;">Skupina:
+        <select class="league-select" style="width: 220px" name="group" id="groupSelect">
+            ${groupOptions}
+        </select>
+    </label>
+    <label style="display: flex; flex-direction: row; align-items: center">Aktivní tým <input type="checkbox" name="active" checked></label>
+    <button class="action-btn btn" type="submit">Vytvořit tým</button>
     </form>
     <a href="/admin" class="back-link">← Zpět na správu zápasů</a>
     </main>
     </body>
-</html>
+    <script>
+    const leagues = ${JSON.stringify(leagues)};
+    const ligaSelect = document.getElementById('ligaSelect');
+    const groupSelect = document.getElementById('groupSelect');
+
+    function updateGroups() {
+        const selectedName = ligaSelect.value;
+        const selectedLeague = leagues.find(l => l.name === selectedName);
+        const count = selectedLeague?.groupCount || 1;
+
+        groupSelect.innerHTML = '';
+        for (let i = 0; i < count; i++) {
+            const option = document.createElement('option');
+            option.value = i+1;
+            option.textContent = 'Skupina ' + String.fromCharCode(65+i);
+            groupSelect.appendChild(option);
+        }
+    }
+    updateGroups();
+    ligaSelect.addEventListener('change', updateGroups);
+    </script>
+    </html>
   `);
 });
 
@@ -532,6 +630,7 @@ router.post('/new/team', requireAdmin, express.urlencoded({extended: true}), (re
         name: name.trim(),
         liga: liga.trim(),
         active,
+        group: parseInt(req.body.group),
         stats: {}
     };
 
@@ -705,6 +804,7 @@ router.post('/delete/:id', requireAdmin, (req, res) => {
 
     fs.writeFileSync('./data/matches.json', JSON.stringify(matches, null, 2));
     removeTipsForDeletedMatch(matchId);
+    evaluateAndAssignPoints(matches[matchIndex].liga, matches[matchIndex].season);
     res.redirect('/admin');
 });
 
@@ -727,8 +827,9 @@ const teams = loadTeams();
 const SEASON = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
 const leaguesFromMatches = [...new Set(matches.map(m => m.liga))];
 const leaguesFromTeams = [...new Set(teams.map(t => t.liga))];
-const allLeagues = [...new Set([...leaguesFromTeams, ...leaguesFromMatches])];
-
+const leagues = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf8'));
+const leaguesFromLeagues = [... new Set(leagues.map(t => t.name))];
+const allLeagues = [...new Set([...leaguesFromTeams, ...leaguesFromMatches, ...leaguesFromLeagues])];
 router.get('/playoff',requireAdmin ,(req, res) => {
     const selectedLeague = req.query.league || allLeagues[0];
 
@@ -999,6 +1100,84 @@ router.get('/togglePostponed/:id', requireAdmin, (req, res) => {
     res.redirect('/admin');
 });
 
+router.get('/leagues/manage', requireAdmin, (req, res) => {
+    const leagues = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf8'));
 
+    const html = `
+    <!DOCTYPE html>
+    <html lang="cs">
+    <head>
+        <meta charset="UTF-8">
+        <title>Správa lig</title>
+        <link rel="stylesheet" href="/css/styles.css">
+    </head>
+    <body>
+        <h1>Správa lig</h1>
+        <form method="POST" action="/admin/leagues/manage">
+            <label>Nová liga:
+                <input type="text" class="league-select" name="newLeague[ligaName]" required>
+            </label>
+            <label style="display: flex; align-items: center; gap: 10px;">
+                Více skupin/tabulek:
+                <input type="checkbox" id="multiGroupCheckbox" name="newLeague[multigroup]" onchange="toggleGroupInput()">
+            </label>
+            <label id="groupCountLabel" style="display:none; gap: 10px; flex-direction: row;">
+                Počet skupin:
+            <input type="number" class="league-select" min="1" max="10" id="groupCount" name="newLeague[groupCount]" value="2">
+            </label>
+
+            <button class="action-btn edit-btn" type="submit">Přidat</button>
+        </form>
+        <h2>Seznam lig</h2>
+        <ul>
+            ${leagues.map(l => `
+                <li>
+                    ${l.name} 
+                    <form method="POST" action="/admin/leagues/delete" style="display:inline;">
+                        <input type="hidden" name="league" value="${l.name}">
+                        <button class="action-btn delete-btn" type="submit">Smazat</button>
+                    </form>
+                </li>`).join('')}
+        </ul>
+        <a href="/admin">← Zpět na hlavní stránku</a>
+    </body>
+    <script>
+        function toggleGroupInput() {
+            const checkbox = document.getElementById('multiGroupCheckbox');
+            const label = document.getElementById('groupCountLabel');
+            label.style.display = checkbox.checked ? 'flex' : 'none';
+        }
+    </script>
+    </html>
+    `;
+    res.send(html);
+});
+
+router.post('/leagues/manage', requireAdmin, express.urlencoded({ extended: true }), (req, res) => {
+    const {ligaName, multigroup, groupCount} = req.body.newLeague;
+    let leagues = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf8'));
+    if (!leagues.some(l => l.name === ligaName)) {
+        leagues.push({ name: ligaName, isMultigroup: multigroup === 'on' || false, groupCount: Number(groupCount) || 1});
+        fs.writeFileSync('./data/leagues.json', JSON.stringify(leagues, null, 2));
+    }
+    res.redirect('/admin/leagues/manage');
+});
+
+
+router.post('/leagues/delete', requireAdmin, express.urlencoded({ extended: true }), (req, res) => {
+    const leagueToDelete = req.body.league?.name || req.body.league;
+    let leagues = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf8'));
+    leagues = leagues.filter(l => l.name !== leagueToDelete);
+    fs.writeFileSync('./data/leagues.json', JSON.stringify(leagues, null, 2));
+
+    const playoffPath = './data/playoff.json';
+    let playoffData = JSON.parse(fs.readFileSync(playoffPath, 'utf8'));
+    if (playoffData[SEASON] && playoffData[SEASON][leagueToDelete]) {
+        delete playoffData[SEASON][leagueToDelete];
+        fs.writeFileSync(playoffPath, JSON.stringify(playoffData, null, 2));
+    }
+
+    res.redirect('/admin/leagues/manage');
+});
 
 module.exports = router;

@@ -1,0 +1,17 @@
+[
+  {
+    "name": "TELH",
+    "isMultigroup": false,
+    "groupCount": 1
+  },
+  {
+    "name": "MAXA",
+    "isMultigroup": false,
+    "groupCount": 1
+  },
+  {
+    "name": "MS",
+    "isMultigroup": true,
+    "groupCount": 2
+  }
+]

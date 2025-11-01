@@ -932,11 +932,11 @@
     "id": 62,
     "homeTeamId": 3,
     "awayTeamId": 14,
-    "datetime": "2025-09-23T18:00",
+    "datetime": "2025-12-03T17:00",
     "liga": "TELH",
     "season": "25/26",
     "isPlayoff": false,
-    "postponed": true
+    "postponed": false
   },
   {
     "id": 63,
@@ -1585,7 +1585,14 @@
     "datetime": "2025-10-19T16:00",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 0,
+      "scoreAway": 1,
+      "ot": false,
+      "winner": "away"
+    }
   },
   {
     "id": 104,
@@ -1594,7 +1601,14 @@
     "datetime": "2025-10-19T16:00",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 0,
+      "scoreAway": 2,
+      "ot": false,
+      "winner": "away"
+    }
   },
   {
     "id": 105,
@@ -1603,7 +1617,14 @@
     "datetime": "2025-10-19T16:00",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 4,
+      "scoreAway": 1,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 106,
@@ -1612,7 +1633,14 @@
     "datetime": "2025-10-19T16:00",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 4,
+      "scoreAway": 1,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 107,
@@ -1621,7 +1649,14 @@
     "datetime": "2025-10-19T17:00",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 0,
+      "scoreAway": 3,
+      "ot": false,
+      "winner": "away"
+    }
   },
   {
     "id": 108,
@@ -1630,7 +1665,14 @@
     "datetime": "2025-10-19T17:00",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 5,
+      "scoreAway": 3,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 109,
@@ -1639,7 +1681,14 @@
     "datetime": "2025-10-21T18:00",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 3,
+      "scoreAway": 2,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 110,
@@ -1648,7 +1697,14 @@
     "datetime": "2025-10-21T17:30",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 0,
+      "scoreAway": 3,
+      "ot": false,
+      "winner": "away"
+    }
   },
   {
     "id": 111,
@@ -1657,7 +1713,14 @@
     "datetime": "2025-10-21T18:30",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 1,
+      "scoreAway": 4,
+      "ot": false,
+      "winner": "away"
+    }
   },
   {
     "id": 112,
@@ -1666,7 +1729,14 @@
     "datetime": "2025-10-22T18:30",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 5,
+      "scoreAway": 4,
+      "ot": true,
+      "winner": "home"
+    }
   },
   {
     "id": 113,
@@ -1675,7 +1745,14 @@
     "datetime": "2025-10-23T18:00",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 5,
+      "scoreAway": 2,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 114,
@@ -1684,7 +1761,14 @@
     "datetime": "2025-10-24T17:00",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 2,
+      "scoreAway": 1,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 115,
@@ -1693,7 +1777,14 @@
     "datetime": "2025-10-24T17:30",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 4,
+      "scoreAway": 3,
+      "ot": true,
+      "winner": "home"
+    }
   },
   {
     "id": 116,
@@ -1702,7 +1793,14 @@
     "datetime": "2025-10-24T17:30",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 2,
+      "scoreAway": 3,
+      "ot": false,
+      "winner": "away"
+    }
   },
   {
     "id": 117,
@@ -1711,7 +1809,14 @@
     "datetime": "2025-10-24T18:00",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 4,
+      "scoreAway": 3,
+      "ot": true,
+      "winner": "home"
+    }
   },
   {
     "id": 118,
@@ -1720,7 +1825,14 @@
     "datetime": "2025-10-24T18:00",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 3,
+      "scoreAway": 2,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 119,
@@ -1729,7 +1841,14 @@
     "datetime": "2025-10-24T18:00",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 4,
+      "scoreAway": 1,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 120,
@@ -1738,7 +1857,14 @@
     "datetime": "2025-10-26T14:00",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 1,
+      "scoreAway": 2,
+      "ot": true,
+      "winner": "away"
+    }
   },
   {
     "id": 121,
@@ -1747,7 +1873,14 @@
     "datetime": "2025-10-26T16:00",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 4,
+      "scoreAway": 3,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 122,
@@ -1756,7 +1889,14 @@
     "datetime": "2025-10-26T16:00",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 1,
+      "scoreAway": 2,
+      "ot": false,
+      "winner": "away"
+    }
   },
   {
     "id": 123,
@@ -1765,7 +1905,14 @@
     "datetime": "2025-10-26T16:00",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 4,
+      "scoreAway": 5,
+      "ot": false,
+      "winner": "away"
+    }
   },
   {
     "id": 124,
@@ -1775,7 +1922,13 @@
     "liga": "TELH",
     "season": "25/26",
     "isPlayoff": false,
-    "postponed": false
+    "postponed": false,
+    "result": {
+      "scoreHome": 4,
+      "scoreAway": 3,
+      "ot": true,
+      "winner": "home"
+    }
   },
   {
     "id": 125,
@@ -1784,13 +1937,305 @@
     "datetime": "2025-10-26T17:00",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 2,
+      "scoreAway": 1,
+      "ot": true,
+      "winner": "home"
+    }
   },
   {
     "id": 126,
     "homeTeamId": 1,
     "awayTeamId": 5,
     "datetime": "2025-10-26T18:30",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 2,
+      "scoreAway": 1,
+      "ot": false,
+      "winner": "home"
+    }
+  },
+  {
+    "id": 127,
+    "homeTeamId": 5,
+    "awayTeamId": 8,
+    "datetime": "2025-10-28T15:30",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 1,
+      "scoreAway": 0,
+      "ot": false,
+      "winner": "home"
+    }
+  },
+  {
+    "id": 128,
+    "homeTeamId": 10,
+    "awayTeamId": 4,
+    "datetime": "2025-10-28T16:00",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 4,
+      "scoreAway": 5,
+      "ot": true,
+      "winner": "away"
+    }
+  },
+  {
+    "id": 129,
+    "homeTeamId": 2,
+    "awayTeamId": 7,
+    "datetime": "2025-10-28T16:00",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 4,
+      "scoreAway": 3,
+      "ot": true,
+      "winner": "home"
+    }
+  },
+  {
+    "id": 130,
+    "homeTeamId": 9,
+    "awayTeamId": 14,
+    "datetime": "2025-10-28T17:00",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 1,
+      "scoreAway": 2,
+      "ot": false,
+      "winner": "away"
+    }
+  },
+  {
+    "id": 131,
+    "homeTeamId": 11,
+    "awayTeamId": 6,
+    "datetime": "2025-10-28T17:00",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 1,
+      "scoreAway": 3,
+      "ot": false,
+      "winner": "away"
+    }
+  },
+  {
+    "id": 132,
+    "homeTeamId": 3,
+    "awayTeamId": 13,
+    "datetime": "2025-10-28T17:00",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 6,
+      "scoreAway": 3,
+      "ot": false,
+      "winner": "home"
+    }
+  },
+  {
+    "id": 133,
+    "homeTeamId": 12,
+    "awayTeamId": 1,
+    "datetime": "2025-10-29T17:30",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 1,
+      "scoreAway": 4,
+      "ot": false,
+      "winner": "away"
+    }
+  },
+  {
+    "id": 134,
+    "homeTeamId": 13,
+    "awayTeamId": 10,
+    "datetime": "2025-10-31T17:30",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 3,
+      "scoreAway": 2,
+      "ot": false,
+      "winner": "home"
+    }
+  },
+  {
+    "id": 135,
+    "homeTeamId": 4,
+    "awayTeamId": 5,
+    "datetime": "2025-10-31T17:30",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 3,
+      "scoreAway": 2,
+      "ot": false,
+      "winner": "home"
+    }
+  },
+  {
+    "id": 136,
+    "homeTeamId": 6,
+    "awayTeamId": 9,
+    "datetime": "2025-10-31T17:30",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 4,
+      "scoreAway": 3,
+      "ot": true,
+      "winner": "home"
+    }
+  },
+  {
+    "id": 137,
+    "homeTeamId": 7,
+    "awayTeamId": 12,
+    "datetime": "2025-10-31T18:00",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 2,
+      "scoreAway": 3,
+      "ot": false,
+      "winner": "away"
+    }
+  },
+  {
+    "id": 138,
+    "homeTeamId": 14,
+    "awayTeamId": 3,
+    "datetime": "2025-10-31T18:00",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 4,
+      "scoreAway": 1,
+      "ot": false,
+      "winner": "home"
+    }
+  },
+  {
+    "id": 139,
+    "homeTeamId": 8,
+    "awayTeamId": 1,
+    "datetime": "2025-10-31T18:00",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 1,
+      "scoreAway": 4,
+      "ot": false,
+      "winner": "away"
+    }
+  },
+  {
+    "id": 140,
+    "homeTeamId": 11,
+    "awayTeamId": 2,
+    "datetime": "2025-10-31T18:00",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 8,
+      "scoreAway": 3,
+      "ot": false,
+      "winner": "home"
+    }
+  },
+  {
+    "id": 141,
+    "homeTeamId": 3,
+    "awayTeamId": 11,
+    "datetime": "2025-11-02T15:00",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false
+  },
+  {
+    "id": 142,
+    "homeTeamId": 5,
+    "awayTeamId": 14,
+    "datetime": "2025-11-02T15:30",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false
+  },
+  {
+    "id": 143,
+    "homeTeamId": 2,
+    "awayTeamId": 6,
+    "datetime": "2025-11-02T16:00",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false
+  },
+  {
+    "id": 144,
+    "homeTeamId": 1,
+    "awayTeamId": 4,
+    "datetime": "2025-11-02T16:00",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false
+  },
+  {
+    "id": 145,
+    "homeTeamId": 12,
+    "awayTeamId": 8,
+    "datetime": "2025-11-02T16:00",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false
+  },
+  {
+    "id": 146,
+    "homeTeamId": 9,
+    "awayTeamId": 13,
+    "datetime": "2025-11-02T17:00",
     "liga": "TELH",
     "season": "25/26",
     "isPlayoff": false

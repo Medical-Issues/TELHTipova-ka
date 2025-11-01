@@ -4,20 +4,14 @@
     "name": "HC Sparta Praha",
     "liga": "TELH",
     "active": true,
+    "group": 1,
     "stats": {
-      "24/25": {
-        "points": 0,
-        "wins": 0,
-        "otWins": 0,
-        "otLosses": 0,
-        "losses": 0
-      },
       "25/26": {
-        "points": 17,
-        "wins": 5,
-        "otWins": 1,
-        "otLosses": 0,
-        "losses": 8
+        "points": 32,
+        "wins": 9,
+        "otWins": 2,
+        "otLosses": 1,
+        "losses": 9
       }
     }
   },
@@ -26,20 +20,14 @@
     "name": "Rytíři Kladno",
     "liga": "TELH",
     "active": true,
+    "group": 1,
     "stats": {
-      "24/25": {
-        "points": 0,
-        "wins": 0,
-        "otWins": 0,
-        "otLosses": 0,
-        "losses": 0
-      },
       "25/26": {
-        "points": 17,
-        "wins": 4,
-        "otWins": 1,
-        "otLosses": 3,
-        "losses": 7
+        "points": 23,
+        "wins": 5,
+        "otWins": 2,
+        "otLosses": 4,
+        "losses": 9
       }
     }
   },
@@ -48,13 +36,14 @@
     "name": "HC Oceláři Třinec",
     "liga": "TELH",
     "active": true,
+    "group": 1,
     "stats": {
       "25/26": {
-        "points": 29,
-        "wins": 8,
-        "otWins": 2,
+        "points": 43,
+        "wins": 12,
+        "otWins": 3,
         "otLosses": 1,
-        "losses": 2
+        "losses": 3
       }
     }
   },
@@ -63,13 +52,14 @@
     "name": "BK Mladá Boleslav",
     "liga": "TELH",
     "active": true,
+    "group": 1,
     "stats": {
       "25/26": {
-        "points": 18,
-        "wins": 5,
-        "otWins": 1,
+        "points": 23,
+        "wins": 6,
+        "otWins": 2,
         "otLosses": 1,
-        "losses": 8
+        "losses": 11
       }
     }
   },
@@ -78,20 +68,14 @@
     "name": "HC Verva Litvínov",
     "liga": "TELH",
     "active": true,
+    "group": 1,
     "stats": {
-      "24/25": {
-        "points": 0,
-        "wins": 0,
-        "otWins": 0,
-        "otLosses": 0,
-        "losses": 0
-      },
       "25/26": {
-        "points": 7,
-        "wins": 2,
-        "otWins": 0,
+        "points": 12,
+        "wins": 3,
+        "otWins": 1,
         "otLosses": 1,
-        "losses": 12
+        "losses": 15
       }
     }
   },
@@ -100,20 +84,14 @@
     "name": "HC Škoda Plzeň",
     "liga": "TELH",
     "active": true,
+    "group": 1,
     "stats": {
-      "24/25": {
-        "points": 0,
-        "wins": 0,
-        "otWins": 0,
-        "otLosses": 0,
-        "losses": 0
-      },
       "25/26": {
-        "points": 25,
-        "wins": 7,
-        "otWins": 1,
-        "otLosses": 2,
-        "losses": 4
+        "points": 34,
+        "wins": 9,
+        "otWins": 2,
+        "otLosses": 3,
+        "losses": 5
       }
     }
   },
@@ -122,13 +100,14 @@
     "name": "Bílí Tygři Liberec",
     "liga": "TELH",
     "active": true,
+    "group": 1,
     "stats": {
       "25/26": {
-        "points": 25,
-        "wins": 8,
+        "points": 30,
+        "wins": 9,
         "otWins": 0,
-        "otLosses": 1,
-        "losses": 6
+        "otLosses": 3,
+        "losses": 8
       }
     }
   },
@@ -137,13 +116,14 @@
     "name": "HC Olomouc",
     "liga": "TELH",
     "active": true,
+    "group": 1,
     "stats": {
       "25/26": {
-        "points": 22,
-        "wins": 7,
-        "otWins": 0,
+        "points": 30,
+        "wins": 9,
+        "otWins": 1,
         "otLosses": 1,
-        "losses": 6
+        "losses": 9
       }
     }
   },
@@ -152,13 +132,14 @@
     "name": "HC Kometa Brno",
     "liga": "TELH",
     "active": true,
+    "group": 1,
     "stats": {
       "25/26": {
-        "points": 29,
-        "wins": 9,
+        "points": 33,
+        "wins": 10,
         "otWins": 0,
-        "otLosses": 2,
-        "losses": 4
+        "otLosses": 3,
+        "losses": 7
       }
     }
   },
@@ -167,13 +148,14 @@
     "name": "HC Energie Karlovy Vary",
     "liga": "TELH",
     "active": true,
+    "group": 1,
     "stats": {
       "25/26": {
-        "points": 22,
-        "wins": 7,
-        "otWins": 0,
-        "otLosses": 1,
-        "losses": 7
+        "points": 28,
+        "wins": 8,
+        "otWins": 1,
+        "otLosses": 2,
+        "losses": 9
       }
     }
   },
@@ -182,13 +164,14 @@
     "name": "HC Dynamo Pardubice",
     "liga": "TELH",
     "active": true,
+    "group": 1,
     "stats": {
       "25/26": {
-        "points": 23,
-        "wins": 6,
+        "points": 33,
+        "wins": 9,
         "otWins": 2,
-        "otLosses": 1,
-        "losses": 6
+        "otLosses": 2,
+        "losses": 7
       }
     }
   },
@@ -197,13 +180,14 @@
     "name": "HC Vítkovice Ridera",
     "liga": "TELH",
     "active": true,
+    "group": 1,
     "stats": {
       "25/26": {
-        "points": 25,
-        "wins": 6,
+        "points": 32,
+        "wins": 8,
         "otWins": 3,
-        "otLosses": 1,
-        "losses": 5
+        "otLosses": 2,
+        "losses": 7
       }
     }
   },
@@ -212,13 +196,14 @@
     "name": "Banes Motor České Budějovice",
     "liga": "TELH",
     "active": true,
+    "group": 1,
     "stats": {
       "25/26": {
-        "points": 27,
-        "wins": 9,
-        "otWins": 0,
+        "points": 32,
+        "wins": 10,
+        "otWins": 1,
         "otLosses": 0,
-        "losses": 5
+        "losses": 9
       }
     }
   },
@@ -227,13 +212,14 @@
     "name": "Mountfield HK",
     "liga": "TELH",
     "active": true,
+    "group": 1,
     "stats": {
       "25/26": {
-        "points": 17,
-        "wins": 3,
+        "points": 32,
+        "wins": 8,
         "otWins": 4,
         "otLosses": 0,
-        "losses": 6
+        "losses": 7
       }
     }
   },
@@ -242,36 +228,23 @@
     "name": "VHK ROBE Vsetín",
     "liga": "MAXA",
     "active": true,
-    "stats": {
-      "24/25": {
-        "points": 0,
-        "wins": 0,
-        "otWins": 0,
-        "otLosses": 0,
-        "losses": 0
-      }
-    }
+    "group": 1,
+    "stats": {}
   },
   {
     "id": 16,
     "name": "RI Okna Berani Zlín",
     "liga": "MAXA",
     "active": true,
-    "stats": {
-      "24/25": {
-        "points": 0,
-        "wins": 0,
-        "otWins": 0,
-        "otLosses": 0,
-        "losses": 0
-      }
-    }
+    "group": 1,
+    "stats": {}
   },
   {
     "id": 17,
     "name": "SK Horácká Třebíč",
     "liga": "MAXA",
     "active": true,
+    "group": 1,
     "stats": {}
   },
   {
@@ -279,6 +252,7 @@
     "name": "HC RT TORAX Poruba 2011",
     "liga": "MAXA",
     "active": true,
+    "group": 1,
     "stats": {}
   },
   {
@@ -286,6 +260,7 @@
     "name": "HC Stadion Litoměřice",
     "liga": "MAXA",
     "active": true,
+    "group": 1,
     "stats": {}
   },
   {
@@ -293,6 +268,7 @@
     "name": "HC Dukla Jihlava",
     "liga": "MAXA",
     "active": true,
+    "group": 1,
     "stats": {}
   },
   {
@@ -300,6 +276,7 @@
     "name": "HC Baník Sokolov",
     "liga": "MAXA",
     "active": true,
+    "group": 1,
     "stats": {}
   },
   {
@@ -307,6 +284,7 @@
     "name": "HC ZUBR Přerov",
     "liga": "MAXA",
     "active": true,
+    "group": 1,
     "stats": {}
   },
   {
@@ -314,6 +292,7 @@
     "name": "Piráti Chomutov",
     "liga": "MAXA",
     "active": true,
+    "group": 1,
     "stats": {}
   },
   {
@@ -321,6 +300,7 @@
     "name": "HC Dynamo Pardubice B",
     "liga": "MAXA",
     "active": true,
+    "group": 1,
     "stats": {}
   },
   {
@@ -328,6 +308,7 @@
     "name": "SC Marimex Kolín",
     "liga": "MAXA",
     "active": true,
+    "group": 1,
     "stats": {}
   },
   {
@@ -335,6 +316,7 @@
     "name": "HC Frýdek-Místek",
     "liga": "MAXA",
     "active": true,
+    "group": 1,
     "stats": {}
   },
   {
@@ -342,6 +324,7 @@
     "name": "HC Tábor",
     "liga": "MAXA",
     "active": true,
+    "group": 1,
     "stats": {}
   },
   {
@@ -349,132 +332,175 @@
     "name": "HC Slavia Praha",
     "liga": "MAXA",
     "active": true,
+    "group": 1,
     "stats": {}
   },
   {
     "id": 29,
     "name": "Švédsko",
-    "liga": "REPREA",
+    "liga": "MS",
     "active": true,
-    "stats": {}
+    "group": 2,
+    "stats": {
+      "25/26": {
+        "points": 0,
+        "wins": 0,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 0
+      }
+    }
   },
   {
     "id": 30,
     "name": "Kanada",
-    "liga": "REPREA",
+    "liga": "MS",
     "active": true,
+    "group": 2,
     "stats": {}
   },
   {
     "id": 31,
     "name": "Finsko",
-    "liga": "REPREA",
+    "liga": "MS",
     "active": true,
-    "stats": {}
+    "group": 1,
+    "stats": {
+      "25/26": {
+        "points": 0,
+        "wins": 0,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 0
+      }
+    }
   },
   {
     "id": 32,
     "name": "Slovensko",
-    "liga": "REPREA",
+    "liga": "MS",
     "active": true,
+    "group": 2,
     "stats": {}
   },
   {
     "id": 33,
     "name": "Lotyšsko",
-    "liga": "REPREA",
+    "liga": "MS",
     "active": true,
+    "group": 1,
     "stats": {}
   },
   {
     "id": 34,
     "name": "Rakousko",
-    "liga": "REPREA",
+    "liga": "MS",
     "active": true,
+    "group": 1,
     "stats": {}
   },
   {
     "id": 35,
     "name": "Francie",
-    "liga": "REPREA",
-    "active": true,
+    "liga": "MS",
+    "active": false,
+    "group": 1,
     "stats": {}
   },
   {
     "id": 36,
     "name": "Slovinsko",
-    "liga": "REPREA",
+    "liga": "MS",
     "active": true,
+    "group": 2,
     "stats": {}
   },
   {
     "id": 37,
     "name": "Německo",
-    "liga": "REPREB",
+    "liga": "MS",
     "active": true,
+    "group": 1,
     "stats": {}
   },
   {
     "id": 38,
     "name": "Švýcarsko",
-    "liga": "REPREB",
+    "liga": "MS",
     "active": true,
+    "group": 1,
     "stats": {}
   },
   {
     "id": 39,
     "name": "Česko",
-    "liga": "REPREB",
+    "liga": "MS",
     "active": true,
+    "group": 2,
     "stats": {}
   },
   {
     "id": 40,
     "name": "USA",
-    "liga": "REPREB",
+    "liga": "MS",
     "active": true,
-    "stats": {}
+    "group": 1,
+    "stats": {
+      "25/26": {
+        "points": 0,
+        "wins": 0,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 0
+      }
+    }
   },
   {
     "id": 41,
     "name": "Dánsko",
-    "liga": "REPREB",
+    "liga": "MS",
     "active": true,
+    "group": 2,
     "stats": {}
   },
   {
     "id": 42,
     "name": "Maďarsko",
-    "liga": "REPREB",
+    "liga": "MS",
     "active": true,
+    "group": 1,
     "stats": {}
   },
   {
     "id": 43,
     "name": "Kazachstán",
-    "liga": "REPREB",
-    "active": true,
+    "liga": "MS",
+    "active": false,
+    "group": 1,
     "stats": {}
   },
   {
     "id": 44,
     "name": "Norsko",
-    "liga": "REPREB",
+    "liga": "MS",
     "active": true,
+    "group": 2,
     "stats": {}
   },
   {
     "id": 45,
     "name": "Rusko",
-    "liga": "REPREA",
+    "liga": "MS",
     "active": false,
+    "group": 1,
     "stats": {}
   },
   {
     "id": 46,
     "name": "Bělorusko",
-    "liga": "REPREA",
+    "liga": "MS",
     "active": false,
+    "group": 1,
     "stats": {}
   },
   {
@@ -482,13 +508,23 @@
     "name": "LHK Jestřábi Prostějov",
     "liga": "MAXA",
     "active": false,
+    "group": 1,
     "stats": {}
   },
   {
-    "id": 48,
+    "id": 50,
+    "name": "Velká Británie",
+    "liga": "MS",
+    "active": true,
+    "group": 1,
+    "stats": {}
+  },
+  {
+    "id": 51,
     "name": "Itálie",
-    "liga": "Olympiáda A",
-    "active": false,
+    "liga": "MS",
+    "active": true,
+    "group": 2,
     "stats": {}
   }
 ]
