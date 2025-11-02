@@ -4,8 +4,32 @@
     "password": "$2b$10$5w3cq7soxLvHNq.XfZShxOmjAAD4p3i.kXpn2qFoWdLUKuqjfNxHO",
     "correct": 0,
     "total": 0,
-    "stats": {},
-    "tips": {}
+    "stats": {
+      "25/26": {
+        "MS": {
+          "correct": 6,
+          "totalRegular": 0,
+          "totalPlayoff": 2
+        }
+      }
+    },
+    "tips": {
+      "25/26": {
+        "MS": [
+          {
+            "matchId": 147,
+            "winner": "away",
+            "scoreHome": 2,
+            "scoreAway": 4
+          },
+          {
+            "matchId": 148,
+            "winner": "away",
+            "loserWins": 1
+          }
+        ]
+      }
+    }
   },
   {
     "username": "Ondra1893",
@@ -681,6 +705,36 @@
           },
           {
             "matchId": 140,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 141,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 142,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 143,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 144,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 145,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 146,
             "winner": "home",
             "loserWins": 0
           }
@@ -2104,6 +2158,36 @@
           },
           {
             "matchId": 140,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 141,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 142,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 143,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 144,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 145,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 146,
             "winner": "home",
             "loserWins": 0
           }

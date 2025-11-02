@@ -109,40 +109,57 @@ function evaluateAndAssignPoints(liga, season) {
             const match = matches.find(m => m.id === tip.matchId);
             if (!match?.result || !match.result.winner) continue;
 
-            const realWinner = match.result.winner;
-            const tipWinner = tip.winner;
-
-            if (match.isPlayoff) {
-                const scoreHome = match.result.scoreHome ?? 0;
-                const scoreAway = match.result.scoreAway ?? 0;
-                const realLoserWins = realWinner === "home" ? scoreAway : scoreHome;
-                const userLoserWins = tip.loserWins ?? -1;
-                console.log(realLoserWins)
-                console.log(userLoserWins)
-
+            if (match.isPlayoff && Number(match.bo) === 1) {
                 totalPlayoff++;
 
-                if (tipWinner === realWinner) {
-                    correctPoints += 1;
+                const realHome = Number(match.result.scoreHome ?? 0);
+                const realAway = Number(match.result.scoreAway ?? 0);
 
-                    if (userLoserWins === realLoserWins) {
-                        correctPoints = correctPoints + 2;
-                    }
+                const tipHome = Number(tip.scoreHome ?? tip.scoreH ?? tip.homeGoals ?? 0);
+                const tipAway = Number(tip.scoreAway ?? tip.scoreA ?? tip.awayGoals ?? 0);
+
+                if (Number.isNaN(tipHome) || Number.isNaN(tipAway)) {
+                    continue;
                 }
-            } else {
+
+                if (tipHome === realHome && tipAway === realAway) {
+                    correctPoints += 5;
+                } else {
+                    const delta = Math.abs(tipHome - realHome) + Math.abs(tipAway - realAway);
+
+                    if (delta === 1) correctPoints += 4;
+                    else if (delta === 2) correctPoints += 3;
+                    else correctPoints += 1;
+                }
+
+                continue;
+            }
+
+            if (match.isPlayoff && Number(match.bo) > 1) {
+                totalPlayoff++;
+
+                const realWinner = match.result.winner;
+                const tipWinner = tip.winner;
+                const realLoserWins = realWinner === "home"
+                    ? Number(match.result.scoreAway ?? 0)
+                    : Number(match.result.scoreHome ?? 0);
+                const tipLoserWins = Number.isFinite(Number(tip.loserWins)) ? Number(tip.loserWins) : -1;
+
+                if (tipWinner === realWinner) correctPoints += 1;
+                if (tipWinner === realWinner && tipLoserWins === realLoserWins) correctPoints += 2;
+
+                continue;
+            }
+
+            if (!match.isPlayoff) {
                 totalRegular++;
-
-                if (tipWinner === realWinner) {
-                    correctPoints += 1;
-                }
+                if (tip.winner === match.result.winner) correctPoints += 1;
             }
         }
 
         if (!user.stats) user.stats = {};
         if (!user.stats[season]) user.stats[season] = {};
-        if (!user.stats[season][liga]) {
-            user.stats[season][liga] = {};
-        }
+        if (!user.stats[season][liga]) user.stats[season][liga] = {};
 
         user.stats[season][liga].correct = correctPoints;
         user.stats[season][liga].totalRegular = totalRegular;
@@ -151,7 +168,6 @@ function evaluateAndAssignPoints(liga, season) {
 
     fs.writeFileSync('./data/users.json', JSON.stringify(users, null, 2));
 }
-
 
 function generateSeasonRange(startYear, numberOfSeasons) {
     const seasons = [];

@@ -9,6 +9,8 @@ router.post("/tip", requireLogin, (req, res) => {
     const matchId = parseInt(req.body.matchId);
     const winner = req.body.winner;
     const loserWins = parseInt(req.body.loserWins);
+    const scoreHome = req.body.scoreHome ? parseInt(req.body.scoreHome) : null;
+    const scoreAway = req.body.scoreAway ? parseInt(req.body.scoreAway) : null;
 
     let matches;
     try {
@@ -34,8 +36,7 @@ router.post("/tip", requireLogin, (req, res) => {
 
     let users;
     try {
-        const data = fs.readFileSync('./data/users.json', 'utf8');
-        users = JSON.parse(data);
+        users = JSON.parse(fs.readFileSync('./data/users.json', 'utf8'));
     } catch (err) {
         console.error("Chyba při čtení users.json:", err);
         return res.status(500).send("Nastala chyba při čtení dat uživatelů.");
@@ -49,31 +50,49 @@ router.post("/tip", requireLogin, (req, res) => {
     if (!user.tips[season][league]) user.tips[season][league] = [];
 
     const existing = user.tips[season][league].find(t => t.matchId === matchId);
+
     if (existing) {
-        if (typeof winner !== 'undefined') {
-            existing.winner = winner;
-        }
-        if (!isNaN(loserWins)) {
-            existing.loserWins = loserWins;
+        if (typeof winner !== 'undefined') existing.winner = winner;
+
+        if (match.bo === 1) {
+            if (scoreHome !== null && scoreAway !== null) {
+                existing.scoreHome = scoreHome;
+                existing.scoreAway = scoreAway;
+            }
+            delete existing.loserWins;
+        } else {
+            if (!isNaN(loserWins)) existing.loserWins = loserWins;
+            delete existing.scoreHome;
+            delete existing.scoreAway;
         }
     } else {
-        user.tips[season][league].push({
-            matchId,
-            ...(typeof winner !== 'undefined' ? {winner} : {}),
-            loserWins: isNaN(loserWins) ? 0 : loserWins
-        });
+        const newTip = { matchId };
+        if (typeof winner !== 'undefined') newTip.winner = winner;
+
+        if (match.bo === 1) {
+            newTip.scoreHome = scoreHome ?? null;
+            newTip.scoreAway = scoreAway ?? null;
+        } else {
+            newTip.loserWins = isNaN(loserWins) ? 0 : loserWins;
+        }
+
+        user.tips[season][league].push(newTip);
     }
 
     fs.writeFileSync('./data/users.json', JSON.stringify(users, null, 2));
+
     req.session.save(err => {
         if (err) {
             console.error("Chyba při ukládání session:", err);
             return res.status(500).send("Chyba session.");
         }
+
+        if (req.headers['x-requested-with'] === 'fetch') {
+            return res.status(200).send("Tip uložen");
+        }
         res.redirect(`/?liga=${encodeURIComponent(league)}&sezona=${encodeURIComponent(season)}`);
     });
 });
-
 
 router.get('/', requireLogin, (req, res) => {
     const username = req.session.user;
@@ -103,7 +122,23 @@ router.get('/', requireLogin, (req, res) => {
             .map(u => ({
                 username: u.username,
                 correct: u.stats?.[selectedSeason]?.[selectedLiga]?.correct || 0,
-                total: u.stats?.[selectedSeason]?.[selectedLiga]?.totalRegular + u.stats?.[selectedSeason]?.[selectedLiga]?.totalPlayoff * 3 || 0,
+                total: (() => {
+                    const stats = u.stats?.[selectedSeason]?.[selectedLiga];
+                    if (!stats) return 0;
+
+                    const userTips = u.tips?.[selectedSeason]?.[selectedLiga] || [];
+
+                    let maxPlayoffPoints = 0;
+                    userTips.forEach(tip => {
+                        if (tip.scoreHome !== undefined && tip.scoreAway !== undefined) {
+                            maxPlayoffPoints += 5;
+                        } else if (tip.loserWins !== undefined) {
+                            maxPlayoffPoints += 3;
+                        }
+                    });
+
+                    return (stats.totalRegular || 0) + maxPlayoffPoints;
+                })(),
                 totalRegular: u.stats?.[selectedSeason]?.[selectedLiga]?.totalRegular,
                 totalPlayoff: u.stats?.[selectedSeason]?.[selectedLiga]?.totalPlayoff,
             }));
@@ -325,18 +360,34 @@ router.get('/', requireLogin, (req, res) => {
         </tbody>
     </table>
     <br>
-    <table class="points-table">
-        <tr>
+    <table style="color: black" class="points-table">
+        <tr style="background-color: #00FF00">
             <td colspan="3">Za správný tip zápasu v základní části</td>
             <td colspan="3">1 bod</td>
         </tr>
-        <tr>
-            <td colspan="3">Za správný tip vítěze dané série v playoff</td>
+        <tr style="background-color: #FF0000">
+            <td colspan="3">Za správný tip vítěze dané série v playoff ale špatný tip počtu vyhraných zápasů týmu který prohrál</td>
             <td colspan="3">1 bod</td>
         </tr>
-        <tr>
+        <tr style="background-color: #00FF00">
             <td colspan="3">Za správný tip vítěze dané série v playoff + počet vyhraných zápasů týmů který prohrál</td>
             <td colspan="3">3 body</td>
+        </tr>
+        <tr style="background-color: #00FF00">
+            <td colspan="3">Za správný tip vítěze daného zápasu v playoff + správné skóre</td>
+            <td colspan="3">5 bodů</td>
+        </tr>
+        <tr style="background-color: #FFFF00">
+            <td colspan="3">Za správný tip vítěze daného zápasu v playoff + chyba ve skóre o 1 gól</td>
+            <td colspan="3">4 body</td>
+        </tr>
+        <tr style="background-color: #FF6600">
+            <td colspan="3">Za správný tip vítěze daného zápasu v playoff + chyba ve skóre o 2 góly</td>
+            <td colspan="3">3 body</td>
+        </tr>
+        <tr style="background-color: #FF0000">
+            <td colspan="3">Za správný tip vítěze daného zápasu v playoff + chyba ve skóre o 3+ gólů</td>
+            <td colspan="3">1 bod</td>
         </tr>
     </table>
 </section>
@@ -465,15 +516,22 @@ router.get('/', requireLogin, (req, res) => {
     </td>
   </form>
 </tr>
-<tr class="match-row loser-row" style="display:${selectedWinner ? 'table-row' : 'none'}">
+
+<tr class="match-row loser-row" style="display:${existingTip ? 'table-row' : 'none'}">
   <td colspan="3">
-    <form class="loserwins-form" action="/tip" method="POST">
+    <form class="loserwins-form" action="/tip" method="POST" data-bo="${match.bo}">
       <input type="hidden" name="matchId" value="${match.id}">
-      <input type="hidden" name="winner" value="">
-      Kolik zápasů vyhrál poražený:
-      <select name="loserWins">
-        ${Array.from({length: maxLoserWins+1}, (_, i) => `<option value="${i}" ${i===existingLoserWins?'selected':''}>${i}</option>`).join('')}
-      </select>
+      <input type="hidden" name="winner" value="${existingTip?.winner ?? ''}">
+      
+      ${match.bo === 1
+                        ? `Skóre: 
+          <input type="number" name="scoreHome" value="${existingTip?.scoreHome ?? ''}" min="0" style="width:50px"> :
+          <input type="number" name="scoreAway" value="${existingTip?.scoreAway ?? ''}" min="0" style="width:50px">`
+                        : `Kolik zápasů vyhrál poražený:
+          <select name="loserWins">
+            ${Array.from({length: maxLoserWins+1}, (_, i) => `<option value="${i}" ${i===existingLoserWins?'selected':''}>${i}</option>`).join('')}
+          </select>`
+                    }
     </form>
   </td>
 </tr>
@@ -489,34 +547,102 @@ router.get('/', requireLogin, (req, res) => {
 
         html += `</section></main></body><script>
 document.addEventListener('DOMContentLoaded', () => {
-  document.querySelectorAll('.playoff-form').forEach(form => {
-    const row = form.closest('tr.match-row');
-    const nextRow = row.nextElementSibling;
-    const select = nextRow.querySelector('select[name="loserWins"]');
-    const loserForm = nextRow.querySelector('.loserwins-form');
+  document.querySelectorAll('.loserwins-form').forEach(loserForm => {
+    const row = loserForm.closest('tr').previousElementSibling;
+    const loserRow = loserForm.closest('tr');
+    const bo = parseInt(loserForm.dataset.bo, 10);
     const winnerInput = loserForm.querySelector('input[name="winner"]');
-
     const homeBtn = row.querySelector('.home-btn');
     const awayBtn = row.querySelector('.away-btn');
 
-    function selectWinner(winner) {
+    function saveWinner(winner) {
       winnerInput.value = winner;
-      nextRow.style.display = 'table-row';
       homeBtn.classList.toggle('selected', winner === 'home');
       awayBtn.classList.toggle('selected', winner === 'away');
-      loserForm.submit();
+
+      loserRow.style.display = 'table-row';
+
+      const formData = new URLSearchParams();
+      formData.append('matchId', loserForm.querySelector('input[name="matchId"]').value);
+      formData.append('winner', winner);
+
+      fetch('/tip', {
+        method: 'POST',
+        headers: { 'x-requested-with': 'fetch' },
+        body: formData
+      })
+        .then(() => {
+          console.log('Tip vítěze uložen');
+          localStorage.setItem('scrollPos', window.scrollY);
+          location.reload();
+        })
+        .catch(err => console.error(err));
     }
 
-    if (!winnerInput.value) {
-      homeBtn.addEventListener('click', () => selectWinner('home'));
-      awayBtn.addEventListener('click', () => selectWinner('away'));
-    }
+    homeBtn.addEventListener('click', () => saveWinner('home'));
+    awayBtn.addEventListener('click', () => saveWinner('away'));
 
-    select.addEventListener('change', () => {
-      winnerInput.value = homeBtn.classList.contains('selected') ? 'home' : 'away';
-      loserForm.submit();
-    });
+    if (bo === 1) {
+      const scoreHomeInput = loserForm.querySelector('input[name="scoreHome"]');
+      const scoreAwayInput = loserForm.querySelector('input[name="scoreAway"]');
+
+      [scoreHomeInput, scoreAwayInput].forEach(input => {
+        input.addEventListener('keydown', e => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            if (!winnerInput.value) {
+              alert('Nejdřív vyber vítěze!');
+              return;
+            }
+
+            const formData = new URLSearchParams();
+            formData.append('matchId', loserForm.querySelector('input[name="matchId"]').value);
+            formData.append('winner', winnerInput.value);
+            formData.append('scoreHome', scoreHomeInput.value.trim());
+            formData.append('scoreAway', scoreAwayInput.value.trim());
+
+            fetch('/tip', {
+              method: 'POST',
+              headers: { 'x-requested-with': 'fetch' },
+              body: formData
+            })
+              .then(() => {
+                console.log('Skóre uložené');
+                localStorage.setItem('scrollPos', window.scrollY);
+                location.reload();
+              })
+              .catch(err => console.error(err));
+          }
+        });
+      });
+    } else {
+      const select = loserForm.querySelector('select[name="loserWins"]');
+      select.addEventListener('change', () => {
+        const formData = new URLSearchParams();
+        formData.append('matchId', loserForm.querySelector('input[name="matchId"]').value);
+        formData.append('winner', winnerInput.value);
+        formData.append('loserWins', select.value);
+
+        fetch('/tip', {
+          method: 'POST',
+          headers: { 'x-requested-with': 'fetch' },
+          body: formData
+        })
+          .then(() => {
+            console.log('Tip uložen');
+            localStorage.setItem('scrollPos', window.scrollY);
+            location.reload();
+          })
+          .catch(err => console.error(err));
+      });
+    }
   });
+
+  const savedPos = localStorage.getItem('scrollPos');
+  if (savedPos) {
+    window.scrollTo(0, parseInt(savedPos));
+    localStorage.removeItem('scrollPos');
+  }
 });
 </script>
 </html>`
@@ -622,7 +748,23 @@ router.get('/history/a', requireLogin, (req, res) => {
             .map(u => ({
                 username: u.username,
                 correct: (u.stats[selectedSeason][selectedLiga]?.correct) || 0,
-                total: (u.stats[selectedSeason][selectedLiga]?.totalRegular+u.stats[selectedSeason][selectedLiga]?.totalPlayoff*3) || 0,
+                total: (() => {
+                    const stats = u.stats?.[selectedSeason]?.[selectedLiga];
+                    if (!stats) return 0;
+
+                    const userTips = u.tips?.[selectedSeason]?.[selectedLiga] || [];
+
+                    let maxPlayoffPoints = 0;
+                    userTips.forEach(tip => {
+                        if (tip.scoreHome !== undefined && tip.scoreAway !== undefined) {
+                            maxPlayoffPoints += 5;
+                        } else if (tip.loserWins !== undefined) {
+                            maxPlayoffPoints += 3;
+                        }
+                    });
+
+                    return (stats.totalRegular || 0) + maxPlayoffPoints;
+                })(),
                 totalRegular: u.stats[selectedSeason][selectedLiga].totalRegular,
                 totalPlayoff: u.stats[selectedSeason][selectedLiga].totalPlayoff,
             }));
@@ -842,18 +984,34 @@ router.get('/history/a', requireLogin, (req, res) => {
         </tbody>
     </table>
     <br>
-    <table class="points-table">
-        <tr>
+    <table style="color: black" class="points-table">
+        <tr style="background-color: #00FF00">
             <td colspan="3">Za správný tip zápasu v základní části</td>
             <td colspan="3">1 bod</td>
         </tr>
-        <tr>
-            <td colspan="3">Za správný tip vítěze dané série v playoff</td>
+        <tr style="background-color: #FF0000">
+            <td colspan="3">Za správný tip vítěze dané série v playoff ale špatný tip počtu vyhraných zápasů týmu který prohrál</td>
             <td colspan="3">1 bod</td>
         </tr>
-        <tr>
+        <tr style="background-color: #00FF00">
             <td colspan="3">Za správný tip vítěze dané série v playoff + počet vyhraných zápasů týmů který prohrál</td>
             <td colspan="3">3 body</td>
+        </tr>
+        <tr style="background-color: #00FF00">
+            <td colspan="3">Za správný tip vítěze daného zápasu v playoff + správné skóre</td>
+            <td colspan="3">5 bodů</td>
+        </tr>
+        <tr style="background-color: #FFFF00">
+            <td colspan="3">Za správný tip vítěze daného zápasu v playoff + chyba ve skóre o 1 gól</td>
+            <td colspan="3">4 body</td>
+        </tr>
+        <tr style="background-color: #FF6600">
+            <td colspan="3">Za správný tip vítěze daného zápasu v playoff + chyba ve skóre o 2 góly</td>
+            <td colspan="3">3 body</td>
+        </tr>
+        <tr style="background-color: #FF0000">
+            <td colspan="3">Za správný tip vítěze daného zápasu v playoff + chyba ve skóre o 3+ gólů</td>
+            <td colspan="3">1 bod</td>
         </tr>
     </table>
 </section>
@@ -887,85 +1045,67 @@ router.get('/history/a', requireLogin, (req, res) => {
                 const awayTeam = teams.find(t => t.id === match.awayTeamId)?.name || '???';
                 const existingTip = userTips.find(t => t.matchId === match.id);
                 const selectedWinner = existingTip?.winner;
-                const selectedLoserWins = existingTip?.loserWins || 0;
+
 
                 const isPlayoff = match.isPlayoff;
-                const bo = match.bo || 5;
-
-                if (!isPlayoff) {
+                if (isPlayoff) {
+                    const bo = match.bo || 5;
                     html += `
 <tr class="match-row">
-    <td class="match-row">
-        <form action="/tip" method="POST" style="display:inline">
-            <input type="hidden" name="matchId" value="${match.id}">
-            <input type="hidden" name="winner" value="home">
-            <div class="team-link-history ${selectedWinner === "home" ? match.result.winner === "home" ? "right-selected" : "wrong-selected" : ""}">${homeTeam}</div>
-        </form>
-    </td>
-    <td class="vs">${match.result.scoreHome}</td>
-    <td class="vs">${match.result.ot === true ? "pp/sn": ":"}</td>
-    <td class="vs">${match.result.scoreAway}</td>
-    <td class="match-row">
-        <form action="/tip" method="POST" style="display:inline">
-            <input type="hidden" name="matchId" value="${match.id}">
-            <input type="hidden" name="winner" value="away">
-            <div class="team-link-history ${selectedWinner === "away" ? match.result.winner === "away" ? "right-selected" : "wrong-selected" : ""}">${awayTeam}</div>
-        </form>
-    </td>
-</tr>`;
-                } else {
-                    html += `
-           <tr class="match-row">
     <form action="/tip" method="POST">
         <input type="hidden" name="matchId" value="${match.id}">
         <input type="hidden" name="winner" value="home">
         <td>
-            <div class="team-link-history ${selectedWinner === "home" ? match.result.winner === "home" ? "right-selected" : "wrong-selected" : ""}" >${homeTeam}</div>
+            <div class="team-link-history ${selectedWinner === "home" ? match.result.winner === "home" ? "right-selected" : "wrong-selected" : ""}">${homeTeam}</div>
         </td>
     </form>
-        <td class="vs">${match.result.scoreHome}</td>
-        <td class="vs">vs</td>
-        <td class="vs">${match.result.scoreAway}</td>
+    <td class="vs">${match.result.scoreHome}</td>
+    <td class="vs">vs</td>
+    <td class="vs">${match.result.scoreAway}</td>
     <form action="/tip" method="POST">
+        <input type="hidden" name="matchId" value="${match.id}">
+        <input type="hidden" name="winner" value="away">
         <td>
-            <input type="hidden" name="matchId" value="${match.id}">
-            <input type="hidden" name="winner" value="away">
             <div class="team-link-history ${selectedWinner === "away" ? match.result.winner === "away" ? "right-selected" : "wrong-selected" : ""}">${awayTeam}</div>
         </td>
     </form>
-</tr>
-
-<tr>
-  <form action="/tip" method="POST">
-    <input type="hidden" name="matchId" value="${match.id}">
-    <td colspan="3">
-      <div>
-        Série - BO${bo}<br>
-          <div class="team-link-history ${
-                        typeof selectedLoserWins !== "undefined" && match.result
-                            ? (
-                                selectedLoserWins === (
-                                    match.result.winner === "home"
-                                        ? match.result.scoreAway
-                                        : match.result.scoreHome
-                                )
-                                    ? "right-selected"
-                                    : "wrong-selected"
-                            )
-                            : ""
-                    }">
-            ${selectedLoserWins ?? '-'}
-          </div>
-      </div>
-    </td>
-  </form>
-</tr> `;
-                }
-            }
+</tr>`;
             html += `
+<tr class="match-row">
+  <td style="color: black" colspan="5">
+${
+                selectedWinner === "home" || selectedWinner === "away"
+                    ? (() => {
+                        if (bo === 1) {
+                            const tipScoreHome = existingTip?.scoreHome ?? 0;
+                            const tipScoreAway = existingTip?.scoreAway ?? 0;
+                            const actualScoreHome = match.result.scoreHome;
+                            const actualScoreAway = match.result.scoreAway;
+
+                            const diff = Math.abs(tipScoreHome - actualScoreHome) + Math.abs(tipScoreAway - actualScoreAway);
+
+                            let scoreClass = '';
+                            if (diff === 0) scoreClass = 'exact-score';
+                            else if (diff === 1) scoreClass = 'diff-1';
+                            else if (diff === 2) scoreClass = 'diff-2';
+                            else scoreClass = 'diff-3plus';
+
+                            return `<div class="team-link-history ${scoreClass}">${tipScoreHome} : ${tipScoreAway}</div>`;
+                        } else {
+                            const correct = existingTip?.loserWins !== undefined && existingTip.loserWins ===
+                                (match.result.winner === "home" ? match.result.scoreAway : match.result.scoreHome);
+                            const scoreClass = correct ? "right-selected" : "wrong-selected";
+                            return `<div class="team-link-history ${scoreClass}">${existingTip?.loserWins ?? '-'}</div>`;
+                        }
+                    })()
+                    : ''
+            }
+    </td>
+</tr>
         </tbody>
     </table>
-    `;
+    `;}
+            }
         }
         html += `</section></main></body></html>`
         res.send(html);

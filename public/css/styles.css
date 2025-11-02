@@ -580,4 +580,19 @@ tr.postponed {
     background-color: #00ff00;
     color: #fff;
 }
-
+.exact-score {
+    background-color: #00ff00;
+    font-weight: bold;
+}
+.diff-1 {
+    background-color: #FFFF00;
+    font-weight: bold;
+}
+.diff-2 {
+    background-color: #FF6600;
+    font-weight: bold;
+}
+.diff-3plus {
+    background-color: #FF0000;
+    font-weight: bold;
+}

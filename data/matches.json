@@ -2239,5 +2239,39 @@
     "liga": "TELH",
     "season": "25/26",
     "isPlayoff": false
+  },
+  {
+    "id": 147,
+    "homeTeamId": 39,
+    "awayTeamId": 40,
+    "datetime": "2026-06-05T17:00",
+    "liga": "MS",
+    "season": "25/26",
+    "isPlayoff": true,
+    "bo": 1,
+    "postponed": false,
+    "result": {
+      "scoreHome": 0,
+      "scoreAway": 4,
+      "ot": false,
+      "winner": "away"
+    }
+  },
+  {
+    "id": 148,
+    "homeTeamId": 41,
+    "awayTeamId": 44,
+    "datetime": "2026-06-08T19:00",
+    "liga": "MS",
+    "season": "25/26",
+    "isPlayoff": true,
+    "bo": 3,
+    "postponed": false,
+    "result": {
+      "scoreHome": 1,
+      "scoreAway": 3,
+      "ot": false,
+      "winner": "away"
+    }
   }
 ]
