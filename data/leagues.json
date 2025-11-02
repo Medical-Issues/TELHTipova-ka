@@ -13,5 +13,10 @@
     "name": "MS",
     "isMultigroup": true,
     "groupCount": 2
+  },
+  {
+    "name": "Euro Hockey Tour",
+    "isMultigroup": true,
+    "groupCount": 4
   }
 ]

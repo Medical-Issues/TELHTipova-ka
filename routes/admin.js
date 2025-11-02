@@ -415,11 +415,12 @@ router.post('/teams/edit/:id', requireAdmin, (req, res) => {
     const teamIndex = teams.findIndex(t => t.id === teamId);
     if (teamIndex === -1) return res.status(404).send("Tým nenalezen");
 
-    const {name, liga, active} = req.body;
+    const {name, liga, active, group} = req.body;
 
     teams[teamIndex].name = name.trim();
     teams[teamIndex].liga = liga;
     teams[teamIndex].active = active === 'on';
+    teams[teamIndex].group = Number(group);
 
     fs.writeFileSync('./data/teams.json', JSON.stringify(teams, null, 2));
 
@@ -1123,7 +1124,7 @@ router.get('/leagues/manage', requireAdmin, (req, res) => {
             </label>
             <label id="groupCountLabel" style="display:none; gap: 10px; flex-direction: row;">
                 Počet skupin:
-            <input type="number" class="league-select" min="1" max="10" id="groupCount" name="newLeague[groupCount]" value="2">
+            <input type="number" class="league-select" min="1" max="10" id="groupCount" name="newLeague[groupCount]">
             </label>
 
             <button class="action-btn edit-btn" type="submit">Přidat</button>

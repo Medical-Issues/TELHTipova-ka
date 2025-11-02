@@ -853,14 +853,14 @@ router.get('/history/a', requireLogin, (req, res) => {
       </tr>
     </thead>
     <tbody>`;
-        
+
         teamsInGroup.sort((a, b) => {
             const aStats = a.stats?.[selectedSeason] || {};
             const bStats = b.stats?.[selectedSeason] || {};
             const aPoints = aStats.points || 0;
             const bPoints = bStats.points || 0;
-            const aScore = scores[a.id] || { gf: 0, ga: 0 };
-            const bScore = scores[b.id] || { gf: 0, ga: 0 };
+            const aScore = scores[a.id] || {gf: 0, ga: 0};
+            const bScore = scores[b.id] || {gf: 0, ga: 0};
             const aDiff = aScore.gf - aScore.ga;
             const bDiff = bScore.gf - bScore.ga;
             const aMatches = (aStats.wins || 0) + (aStats.otWins || 0) + (aStats.otLosses || 0) + (aStats.losses || 0);
@@ -870,9 +870,9 @@ router.get('/history/a', requireLogin, (req, res) => {
             if (bDiff !== aDiff) return bDiff - aDiff;
             return aMatches - bMatches;
         });
-        
+
         teamsInGroup.forEach((team, index) => {
-            const teamStats = scores[team.id] || { gf: 0, ga: 0 };
+            const teamStats = scores[team.id] || {gf: 0, ga: 0};
             const goalDiff = teamStats.gf - teamStats.ga;
             const numberMatches = (team.stats?.[selectedSeason]?.wins || 0)
                 + (team.stats?.[selectedSeason]?.otWins || 0)
@@ -1045,18 +1045,38 @@ router.get('/history/a', requireLogin, (req, res) => {
                 const awayTeam = teams.find(t => t.id === match.awayTeamId)?.name || '???';
                 const existingTip = userTips.find(t => t.matchId === match.id);
                 const selectedWinner = existingTip?.winner;
-
-
                 const isPlayoff = match.isPlayoff;
-                if (isPlayoff) {
-                    const bo = match.bo || 5;
-                    html += `
+                const bo = match.bo || 5;
+
+                    if (!isPlayoff) {
+                        html += `
+                        <tr class="match-row">
+    <td class="match-row">
+        <form action="/tip" method="POST" style="display:inline">
+            <input type="hidden" name="matchId" value="${match.id}">
+            <input type="hidden" name="winner" value="home">
+            <div class="team-link-history ${selectedWinner === "home" ? match.result.winner === "home" ? "right-selected" : "wrong-selected" : ""}">${homeTeam}</div>
+        </form>
+    </td>
+    <td class="vs">${match.result.scoreHome}</td>
+    <td class="vs">${match.result.ot === true ? "pp/sn": ":"}</td>
+    <td class="vs">${match.result.scoreAway}</td>
+    <td class="match-row">
+        <form action="/tip" method="POST" style="display:inline">
+            <input type="hidden" name="matchId" value="${match.id}">
+            <input type="hidden" name="winner" value="away">
+            <div class="team-link-history ${selectedWinner === "away" ? match.result.winner === "away" ? "right-selected" : "wrong-selected" : ""}">${awayTeam}</div>
+        </form>
+    </td>
+</tr>`;
+                    } else {
+                        html += `
 <tr class="match-row">
     <form action="/tip" method="POST">
         <input type="hidden" name="matchId" value="${match.id}">
         <input type="hidden" name="winner" value="home">
         <td>
-            <div class="team-link-history ${selectedWinner === "home" ? match.result.winner === "home" ? "right-selected" : "wrong-selected" : ""}">${homeTeam}</div>
+            <div class="team-link-history ${selectedWinner === "home" ? match.result?.winner === "home" ? "right-selected" : "wrong-selected" : ""}">${homeTeam}</div>
         </td>
     </form>
     <td class="vs">${match.result.scoreHome}</td>
@@ -1066,50 +1086,55 @@ router.get('/history/a', requireLogin, (req, res) => {
         <input type="hidden" name="matchId" value="${match.id}">
         <input type="hidden" name="winner" value="away">
         <td>
-            <div class="team-link-history ${selectedWinner === "away" ? match.result.winner === "away" ? "right-selected" : "wrong-selected" : ""}">${awayTeam}</div>
+            <div class="team-link-history ${selectedWinner === "away" ? match.result?.winner === "away" ? "right-selected" : "wrong-selected" : ""}">${awayTeam}</div>
         </td>
     </form>
 </tr>`;
-            html += `
+                        html += `
 <tr class="match-row">
   <td style="color: black" colspan="5">
 ${
-                selectedWinner === "home" || selectedWinner === "away"
-                    ? (() => {
-                        if (bo === 1) {
-                            const tipScoreHome = existingTip?.scoreHome ?? 0;
-                            const tipScoreAway = existingTip?.scoreAway ?? 0;
-                            const actualScoreHome = match.result.scoreHome;
-                            const actualScoreAway = match.result.scoreAway;
+                            selectedWinner === "home" || selectedWinner === "away"
+                                ? (() => {
+                                    if (bo === 1) {
+                                        const tipScoreHome = existingTip?.scoreHome ?? 0;
+                                        const tipScoreAway = existingTip?.scoreAway ?? 0;
+                                        const actualScoreHome = match.result.scoreHome;
+                                        const actualScoreAway = match.result.scoreAway;
 
-                            const diff = Math.abs(tipScoreHome - actualScoreHome) + Math.abs(tipScoreAway - actualScoreAway);
+                                        const diff = Math.abs(tipScoreHome - actualScoreHome) + Math.abs(tipScoreAway - actualScoreAway);
 
-                            let scoreClass = '';
-                            if (diff === 0) scoreClass = 'exact-score';
-                            else if (diff === 1) scoreClass = 'diff-1';
-                            else if (diff === 2) scoreClass = 'diff-2';
-                            else scoreClass = 'diff-3plus';
+                                        let scoreClass;
+                                        if (diff === 0) scoreClass = 'exact-score';
+                                        else if (diff === 1) scoreClass = 'diff-1';
+                                        else if (diff === 2) scoreClass = 'diff-2';
+                                        else scoreClass = 'diff-3plus';
 
-                            return `<div class="team-link-history ${scoreClass}">${tipScoreHome} : ${tipScoreAway}</div>`;
-                        } else {
-                            const correct = existingTip?.loserWins !== undefined && existingTip.loserWins ===
-                                (match.result.winner === "home" ? match.result.scoreAway : match.result.scoreHome);
-                            const scoreClass = correct ? "right-selected" : "wrong-selected";
-                            return `<div class="team-link-history ${scoreClass}">${existingTip?.loserWins ?? '-'}</div>`;
+                                        return `<div class="team-link-history ${scoreClass}">${tipScoreHome} : ${tipScoreAway}</div>`;
+                                    } else {
+                                        const correct = existingTip?.loserWins !== undefined && existingTip.loserWins ===
+                                            (match.result.winner === "home" ? match.result.scoreAway : match.result.scoreHome);
+                                        const scoreClass = correct ? "right-selected" : "wrong-selected";
+                                        return `<div class="team-link-history ${scoreClass}">${existingTip?.loserWins ?? '-'}</div>`;
+                                    }
+                                })()
+                                : ''
                         }
-                    })()
-                    : ''
-            }
     </td>
 </tr>
+`;
+                    }
+                }
+                html += `
+                        
         </tbody>
     </table>
-    `;}
+    `;
             }
-        }
-        html += `</section></main></body></html>`
+        `
+        html += </section></main></body></html>`
         res.send(html);
-    }
-});
+        }
+    })
 
 module.exports = router;
