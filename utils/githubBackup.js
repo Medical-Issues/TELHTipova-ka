@@ -1,7 +1,6 @@
 const fs = require('fs');
 const path = require('path');
 
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const REPO_OWNER = 'Medical-Issues';
 const REPO_NAME = 'TELHTipovackaZaloha';
 const BRANCH = 'main';
