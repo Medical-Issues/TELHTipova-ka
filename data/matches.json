@@ -2450,5 +2450,251 @@
     "liga": "TELH",
     "season": "25/26",
     "isPlayoff": false
+  },
+  {
+    "id": 164,
+    "homeTeamId": 64,
+    "awayTeamId": 56,
+    "datetime": "2025-11-06T17:30",
+    "liga": "Euro Hockey Tour",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 3,
+      "scoreAway": 1,
+      "ot": false,
+      "winner": "home"
+    }
+  },
+  {
+    "id": 165,
+    "homeTeamId": 60,
+    "awayTeamId": 52,
+    "datetime": "2025-11-06T19:00",
+    "liga": "Euro Hockey Tour",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 3,
+      "scoreAway": 1,
+      "ot": false,
+      "winner": "home"
+    }
+  },
+  {
+    "id": 166,
+    "homeTeamId": 60,
+    "awayTeamId": 64,
+    "datetime": "2025-11-08T12:00",
+    "liga": "Euro Hockey Tour",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 8,
+      "scoreAway": 3,
+      "ot": false,
+      "winner": "home"
+    }
+  },
+  {
+    "id": 167,
+    "homeTeamId": 56,
+    "awayTeamId": 52,
+    "datetime": "2025-11-08T16:00",
+    "liga": "Euro Hockey Tour",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 4,
+      "scoreAway": 2,
+      "ot": false,
+      "winner": "home"
+    }
+  },
+  {
+    "id": 168,
+    "homeTeamId": 52,
+    "awayTeamId": 64,
+    "datetime": "2025-11-09T12:00",
+    "liga": "Euro Hockey Tour",
+    "season": "25/26",
+    "isPlayoff": false
+  },
+  {
+    "id": 169,
+    "homeTeamId": 56,
+    "awayTeamId": 60,
+    "datetime": "2025-11-09T16:00",
+    "liga": "Euro Hockey Tour",
+    "season": "25/26",
+    "isPlayoff": false
+  },
+  {
+    "id": 170,
+    "homeTeamId": 53,
+    "awayTeamId": 57,
+    "datetime": "2025-12-11T18:30",
+    "liga": "Euro Hockey Tour",
+    "season": "25/26",
+    "isPlayoff": false
+  },
+  {
+    "id": 171,
+    "homeTeamId": 61,
+    "awayTeamId": 65,
+    "datetime": "2025-12-11T19:45",
+    "liga": "Euro Hockey Tour",
+    "season": "25/26",
+    "isPlayoff": false
+  },
+  {
+    "id": 172,
+    "homeTeamId": 57,
+    "awayTeamId": 61,
+    "datetime": "2025-12-13T14:00",
+    "liga": "Euro Hockey Tour",
+    "season": "25/26",
+    "isPlayoff": false
+  },
+  {
+    "id": 173,
+    "homeTeamId": 65,
+    "awayTeamId": 53,
+    "datetime": "2025-12-13T18:00",
+    "liga": "Euro Hockey Tour",
+    "season": "25/26",
+    "isPlayoff": false
+  },
+  {
+    "id": 174,
+    "homeTeamId": 53,
+    "awayTeamId": 61,
+    "datetime": "2025-12-14T11:45",
+    "liga": "Euro Hockey Tour",
+    "season": "25/26",
+    "isPlayoff": false
+  },
+  {
+    "id": 175,
+    "homeTeamId": 65,
+    "awayTeamId": 57,
+    "datetime": "2025-12-14T15:45",
+    "liga": "Euro Hockey Tour",
+    "season": "25/26",
+    "isPlayoff": false
+  },
+  {
+    "id": 176,
+    "homeTeamId": 55,
+    "awayTeamId": 59,
+    "datetime": "2026-04-30T18:00",
+    "liga": "Euro Hockey Tour",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false
+  },
+  {
+    "id": 177,
+    "homeTeamId": 67,
+    "awayTeamId": 63,
+    "datetime": "2026-04-30T19:45",
+    "liga": "Euro Hockey Tour",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false
+  },
+  {
+    "id": 178,
+    "homeTeamId": 67,
+    "awayTeamId": 59,
+    "datetime": "2026-05-02T12:00",
+    "liga": "Euro Hockey Tour",
+    "season": "25/26",
+    "isPlayoff": false
+  },
+  {
+    "id": 179,
+    "homeTeamId": 55,
+    "awayTeamId": 63,
+    "datetime": "2026-05-02T16:00",
+    "liga": "Euro Hockey Tour",
+    "season": "25/26",
+    "isPlayoff": false
+  },
+  {
+    "id": 180,
+    "homeTeamId": 63,
+    "awayTeamId": 59,
+    "datetime": "2026-05-03T12:00",
+    "liga": "Euro Hockey Tour",
+    "season": "25/26",
+    "isPlayoff": false
+  },
+  {
+    "id": 181,
+    "homeTeamId": 55,
+    "awayTeamId": 67,
+    "datetime": "2026-05-03T16:00",
+    "liga": "Euro Hockey Tour",
+    "season": "25/26",
+    "isPlayoff": false
+  },
+  {
+    "id": 182,
+    "homeTeamId": 54,
+    "awayTeamId": 62,
+    "datetime": "2026-05-07T17:00",
+    "liga": "Euro Hockey Tour",
+    "season": "25/26",
+    "isPlayoff": false
+  },
+  {
+    "id": 183,
+    "homeTeamId": 66,
+    "awayTeamId": 58,
+    "datetime": "2026-05-07T19:00",
+    "liga": "Euro Hockey Tour",
+    "season": "25/26",
+    "isPlayoff": false
+  },
+  {
+    "id": 184,
+    "homeTeamId": 58,
+    "awayTeamId": 54,
+    "datetime": "2026-05-09T12:00",
+    "liga": "Euro Hockey Tour",
+    "season": "25/26",
+    "isPlayoff": false
+  },
+  {
+    "id": 185,
+    "homeTeamId": 62,
+    "awayTeamId": 66,
+    "datetime": "2026-05-09T16:00",
+    "liga": "Euro Hockey Tour",
+    "season": "25/26",
+    "isPlayoff": false
+  },
+  {
+    "id": 186,
+    "homeTeamId": 66,
+    "awayTeamId": 54,
+    "datetime": "2026-05-10T12:00",
+    "liga": "Euro Hockey Tour",
+    "season": "25/26",
+    "isPlayoff": false
+  },
+  {
+    "id": 187,
+    "homeTeamId": 62,
+    "awayTeamId": 58,
+    "datetime": "2026-05-10T16:00",
+    "liga": "Euro Hockey Tour",
+    "season": "25/26",
+    "isPlayoff": false
   }
 ]

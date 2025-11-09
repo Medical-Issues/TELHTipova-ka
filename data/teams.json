@@ -533,14 +533,158 @@
     "liga": "Euro Hockey Tour",
     "active": true,
     "group": 1,
-    "stats": {}
+    "stats": {
+      "25/26": {
+        "points": 0,
+        "wins": 0,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 2
+      }
+    }
   },
   {
     "id": 53,
     "name": "Česko - Swiss",
     "liga": "Euro Hockey Tour",
     "active": true,
-    "group": 66,
+    "group": 2,
+    "stats": {}
+  },
+  {
+    "id": 54,
+    "name": "Česko - Beijer",
+    "liga": "Euro Hockey Tour",
+    "active": true,
+    "group": 3,
+    "stats": {}
+  },
+  {
+    "id": 55,
+    "name": "Česko - Czech",
+    "liga": "Euro Hockey Tour",
+    "active": true,
+    "group": 4,
+    "stats": {}
+  },
+  {
+    "id": 56,
+    "name": "Finsko - Karjala",
+    "liga": "Euro Hockey Tour",
+    "active": true,
+    "group": 1,
+    "stats": {
+      "25/26": {
+        "points": 3,
+        "wins": 1,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 1
+      }
+    }
+  },
+  {
+    "id": 57,
+    "name": "Finsko - Swiss",
+    "liga": "Euro Hockey Tour",
+    "active": true,
+    "group": 2,
+    "stats": {}
+  },
+  {
+    "id": 58,
+    "name": "Finsko - Beijer",
+    "liga": "Euro Hockey Tour",
+    "active": true,
+    "group": 3,
+    "stats": {}
+  },
+  {
+    "id": 59,
+    "name": "Finsko - Czech",
+    "liga": "Euro Hockey Tour",
+    "active": true,
+    "group": 4,
+    "stats": {}
+  },
+  {
+    "id": 60,
+    "name": "Švédsko - Karjala",
+    "liga": "Euro Hockey Tour",
+    "active": true,
+    "group": 1,
+    "stats": {
+      "25/26": {
+        "points": 6,
+        "wins": 2,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 0
+      }
+    }
+  },
+  {
+    "id": 61,
+    "name": "Švédsko - Swiss",
+    "liga": "Euro Hockey Tour",
+    "active": true,
+    "group": 2,
+    "stats": {}
+  },
+  {
+    "id": 62,
+    "name": "Švédsko - Beijer",
+    "liga": "Euro Hockey Tour",
+    "active": true,
+    "group": 3,
+    "stats": {}
+  },
+  {
+    "id": 63,
+    "name": "Švédsko - Czech",
+    "liga": "Euro Hockey Tour",
+    "active": true,
+    "group": 4,
+    "stats": {}
+  },
+  {
+    "id": 64,
+    "name": "Švýcarsko - Karjala",
+    "liga": "Euro Hockey Tour",
+    "active": true,
+    "group": 1,
+    "stats": {
+      "25/26": {
+        "points": 3,
+        "wins": 1,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 1
+      }
+    }
+  },
+  {
+    "id": 65,
+    "name": "Švýcarsko - Swiss",
+    "liga": "Euro Hockey Tour",
+    "active": true,
+    "group": 2,
+    "stats": {}
+  },
+  {
+    "id": 66,
+    "name": "Švýcarsko - Beijer",
+    "liga": "Euro Hockey Tour",
+    "active": true,
+    "group": 3,
+    "stats": {}
+  },
+  {
+    "id": 67,
+    "name": "Švýcarsko - Czech",
+    "liga": "Euro Hockey Tour",
+    "active": true,
+    "group": 4,
     "stats": {}
   }
 ]

@@ -116,35 +116,47 @@ router.get('/', requireLogin, (req, res) => {
     try {
         const usersData = fs.readFileSync('./data/users.json', 'utf-8');
         const allUsers = JSON.parse(usersData);
+        const matchesInLiga = matches.filter(m => m.season === selectedSeason && m.liga === selectedLiga);
+
         userStats = allUsers
-            .filter(u => u.stats && u.stats[selectedSeason] && u.stats[selectedSeason][selectedLiga] &&
-                (u.stats[selectedSeason][selectedLiga].totalRegular > 0 || u.stats[selectedSeason][selectedLiga].totalPlayoff > 0))
-            .map(u => ({
-                username: u.username,
-                correct: u.stats?.[selectedSeason]?.[selectedLiga]?.correct || 0,
-                total: (() => {
-                    const stats = u.stats?.[selectedSeason]?.[selectedLiga];
-                    if (!stats) return 0;
+            .filter(u => {
+                const tips = u.tips?.[selectedSeason]?.[selectedLiga] || [];
+                return tips.length > 0; // jen uživatelé co tipovali
+            })
+            .map(u => {
+                const stats = u.stats?.[selectedSeason]?.[selectedLiga] || {};
+                const userTips = u.tips?.[selectedSeason]?.[selectedLiga] || [];
 
-                    const userTips = u.tips?.[selectedSeason]?.[selectedLiga] || [];
+                // max bodů jen z tipovaných zápasů (vyhodnocené)
+                const maxFromTips = userTips.reduce((sum, tip) => {
+                    const match = matchesInLiga.find(m => Number(m.id) === Number(tip.matchId));
+                    if (!match || !match.result) return sum; // ignorovat nevyhodnocené
+                    if (!match.isPlayoff) return sum + 1;
+                    if (match.bo === 1) return sum + 5;
+                    return sum + 3;
+                }, 0);
 
-                    let maxPlayoffPoints = 0;
-                    userTips.forEach(tip => {
-                        if (tip.scoreHome !== undefined && tip.scoreAway !== undefined) {
-                            maxPlayoffPoints += 5;
-                        } else if (tip.loserWins !== undefined) {
-                            maxPlayoffPoints += 3;
-                        }
-                    });
+                // max bodů z celé ligy (vyhodnocené)
+                const totalPoints = matchesInLiga.reduce((sum, match) => {
+                    if (!match.result) return sum;
+                    if (!match.isPlayoff) return sum + 1;
+                    if (match.bo === 1) return sum + 5;
+                    return sum + 3;
+                }, 0);
 
-                    return (stats.totalRegular || 0) + maxPlayoffPoints;
-                })(),
-                totalRegular: u.stats?.[selectedSeason]?.[selectedLiga]?.totalRegular,
-                totalPlayoff: u.stats?.[selectedSeason]?.[selectedLiga]?.totalPlayoff,
-            }));
+                return {
+                    username: u.username,
+                    correct: stats.correct || 0,
+                    total: totalPoints,       // max body z celé ligy
+                    maxFromTips: maxFromTips, // max body jen z tipovaných zápasů
+                    totalRegular: stats.totalRegular || 0,
+                    totalPlayoff: stats.totalPlayoff || 0
+                };
+            });
     } catch (err) {
         console.error("Chyba při načítání statistik uživatelů:", err);
     }
+
     const currentUserStats = userStats.find(u => u.username === username);
 
     const playoffPath = path.join(__dirname, '../data/playoff.json');
@@ -305,21 +317,20 @@ router.get('/', requireLogin, (req, res) => {
 
     if (username) {
         html += `
-            <section class="user_stats">
-                <h2>Tvoje statistiky</h2>
-             `;
-
-        if (currentUserStats) {
-            const percent = (currentUserStats.correct / currentUserStats.total * 100).toFixed(2);
-            html += `
-            <p>Správně tipnuto z maximálního počtu všech možných bodů: <strong>${currentUserStats.correct}</strong> z <strong>${currentUserStats.total}</strong> (${percent} %)</p>
-        `;
-        } else {
-            html += `<p>Nemáš ještě žádné tipy nebo není vyhodnoceno.</p>`;
-        }
-
-        html += `
-        </section>
+<section class="user_stats">
+    <h2>Tvoje statistiky</h2>
+    ${currentUserStats ? `
+        <p>Správně tipnuto z maximálního počtu všech vyhodnocených zápasů: 
+            <strong>${currentUserStats.correct}</strong> z <strong>${currentUserStats.total}</strong> 
+            (${(currentUserStats.correct / currentUserStats.total * 100).toFixed(2)} %)
+        </p>
+        ${currentUserStats.total !== currentUserStats.maxFromTips ? `
+        <p>Správně tipnuto z tipovaných zápasů: 
+            <strong>${currentUserStats.correct}</strong> z <strong>${currentUserStats.maxFromTips}</strong> 
+            (${(currentUserStats.correct / currentUserStats.maxFromTips * 100).toFixed(2)} %)
+        </p>` : ''}
+    ` : `<p>Nemáš ještě žádné tipy nebo není vyhodnoceno.</p>`}
+</section>
 
 <section class="global_stats">
     <table class="points-table">
@@ -343,14 +354,14 @@ router.get('/', requireLogin, (req, res) => {
                 return b.total - a.total;
             })
             .forEach((user, index) => {
-                const correct = user.correct || 0;
-                const total = user.total || 0;
-                const successRate = total > 0 ? ((correct / total) * 100).toFixed(2) : '0.00';
+                const successRate = user.total > 0 ? ((user.correct / user.total) * 100).toFixed(2) : '0.00';
+                const successRateOverall = user.maxFromTips > 0 ? ((user.correct / user.maxFromTips) * 100).toFixed(2) : '0.00';
+
                 html += `
         <tr>
             <td>${index + 1}.</td>
             <td>${user.username}</td>
-            <td>${successRate}%</td>
+            <td>${successRateOverall}%${currentUserStats && currentUserStats.total !== user.maxFromTips ? ` (${successRate}%)` : ''}</td>
             <td>${user.correct}</td>
             <td>${user.totalRegular}</td>
             <td>${user.totalPlayoff}</td>
@@ -448,14 +459,14 @@ router.get('/', requireLogin, (req, res) => {
                 const selectedWinner = existingTip?.winner;
                 function parseCETDate(datetimeString) {
                     if (datetimeString != null) {
-                    const [datePart, timePart] = datetimeString.split("T");
-                    const [year, month, day] = datePart.split("-").map(Number);
-                    const [hour, minute] = timePart.split(":").map(Number);
+                        const [datePart, timePart] = datetimeString.split("T");
+                        const [year, month, day] = datePart.split("-").map(Number);
+                        const [hour, minute] = timePart.split(":").map(Number);
 
-                    const date = new Date(Date.UTC(year, month - 1, day, hour, minute));
-                    date.setHours(date.getHours()-2);
-                    return date;
-                } else {
+                        const date = new Date(Date.UTC(year, month - 1, day, hour, minute));
+                        date.setHours(date.getHours()-2);
+                        return date;
+                    } else {
                         return null;
                     }
                 }
@@ -1048,8 +1059,8 @@ router.get('/history/a', requireLogin, (req, res) => {
                 const isPlayoff = match.isPlayoff;
                 const bo = match.bo || 5;
 
-                    if (!isPlayoff) {
-                        html += `
+                if (!isPlayoff) {
+                    html += `
                         <tr class="match-row">
     <td class="match-row">
         <form action="/tip" method="POST" style="display:inline">
@@ -1069,8 +1080,8 @@ router.get('/history/a', requireLogin, (req, res) => {
         </form>
     </td>
 </tr>`;
-                    } else {
-                        html += `
+                } else {
+                    html += `
 <tr class="match-row">
     <form action="/tip" method="POST">
         <input type="hidden" name="matchId" value="${match.id}">
@@ -1090,51 +1101,51 @@ router.get('/history/a', requireLogin, (req, res) => {
         </td>
     </form>
 </tr>`;
-                        html += `
+                    html += `
 <tr class="match-row">
   <td style="color: black" colspan="5">
 ${
-                            selectedWinner === "home" || selectedWinner === "away"
-                                ? (() => {
-                                    if (bo === 1) {
-                                        const tipScoreHome = existingTip?.scoreHome ?? 0;
-                                        const tipScoreAway = existingTip?.scoreAway ?? 0;
-                                        const actualScoreHome = match.result.scoreHome;
-                                        const actualScoreAway = match.result.scoreAway;
+                        selectedWinner === "home" || selectedWinner === "away"
+                            ? (() => {
+                                if (bo === 1) {
+                                    const tipScoreHome = existingTip?.scoreHome ?? 0;
+                                    const tipScoreAway = existingTip?.scoreAway ?? 0;
+                                    const actualScoreHome = match.result.scoreHome;
+                                    const actualScoreAway = match.result.scoreAway;
 
-                                        const diff = Math.abs(tipScoreHome - actualScoreHome) + Math.abs(tipScoreAway - actualScoreAway);
+                                    const diff = Math.abs(tipScoreHome - actualScoreHome) + Math.abs(tipScoreAway - actualScoreAway);
 
-                                        let scoreClass;
-                                        if (diff === 0) scoreClass = 'exact-score';
-                                        else if (diff === 1) scoreClass = 'diff-1';
-                                        else if (diff === 2) scoreClass = 'diff-2';
-                                        else scoreClass = 'diff-3plus';
+                                    let scoreClass;
+                                    if (diff === 0) scoreClass = 'exact-score';
+                                    else if (diff === 1) scoreClass = 'diff-1';
+                                    else if (diff === 2) scoreClass = 'diff-2';
+                                    else scoreClass = 'diff-3plus';
 
-                                        return `<div class="team-link-history ${scoreClass}">${tipScoreHome} : ${tipScoreAway}</div>`;
-                                    } else {
-                                        const correct = existingTip?.loserWins !== undefined && existingTip.loserWins ===
-                                            (match.result.winner === "home" ? match.result.scoreAway : match.result.scoreHome);
-                                        const scoreClass = correct ? "right-selected" : "wrong-selected";
-                                        return `<div class="team-link-history ${scoreClass}">${existingTip?.loserWins ?? '-'}</div>`;
-                                    }
-                                })()
-                                : ''
-                        }
+                                    return `<div class="team-link-history ${scoreClass}">${tipScoreHome} : ${tipScoreAway}</div>`;
+                                } else {
+                                    const correct = existingTip?.loserWins !== undefined && existingTip.loserWins ===
+                                        (match.result.winner === "home" ? match.result.scoreAway : match.result.scoreHome);
+                                    const scoreClass = correct ? "right-selected" : "wrong-selected";
+                                    return `<div class="team-link-history ${scoreClass}">${existingTip?.loserWins ?? '-'}</div>`;
+                                }
+                            })()
+                            : ''
+                    }
     </td>
 </tr>
 `;
-                    }
                 }
-                html += `
+            }
+            html += `
                         
         </tbody>
     </table>
     `;
-            }
+        }
         `
         html += </section></main></body></html>`
         res.send(html);
-        }
-    })
+    }
+})
 
 module.exports = router;
