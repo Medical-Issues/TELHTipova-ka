@@ -423,7 +423,9 @@ router.get('/', requireLogin, (req, res) => {
         const groupedMatches = {};
 
         if (postponedMatches.length) {
-            groupedMatches["Odložené zápasy"] = postponedMatches;
+            const POSTPONED_LABEL = "Odložené zápasy";
+            groupedMatches[POSTPONED_LABEL] = postponedMatches;
+
         }
 
         normalMatches.forEach(match => {
