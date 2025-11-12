@@ -49,8 +49,8 @@
     "stats": {
       "25/26": {
         "TELH": {
-          "correct": 82,
-          "totalRegular": 138,
+          "correct": 83,
+          "totalRegular": 140,
           "totalPlayoff": 0
         },
         "MS": {
@@ -1675,8 +1675,8 @@
     "stats": {
       "25/26": {
         "TELH": {
-          "correct": 78,
-          "totalRegular": 146,
+          "correct": 80,
+          "totalRegular": 148,
           "totalPlayoff": 0
         },
         "MS": {
@@ -2468,8 +2468,8 @@
     "stats": {
       "25/26": {
         "TELH": {
-          "correct": 74,
-          "totalRegular": 138,
+          "correct": 75,
+          "totalRegular": 140,
           "totalPlayoff": 0
         },
         "MS": {

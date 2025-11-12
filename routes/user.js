@@ -298,14 +298,14 @@ router.get('/', requireLogin, (req, res) => {
         html += '</tr>';
     });
     const totalMatches = leagueObj.maxMatches
-    const filledMatches = matches.filter(m => m.result && m.liga === selectedLiga && m.season === selectedSeason).length;
+    const filledMatches = matches.filter(m => m.result && m.liga === selectedLiga && m.season === selectedSeason && m.isPlayoff !== true).length;
     const percentage = totalMatches > 0 ? Math.round((filledMatches / totalMatches) * 100) : 0;
 
     html += `
       </table>
     </div>
     <section class="progress-section">
-        <h3>Odehráno zápasů</h3>
+        <h3>Odehráno zápasů v základní části</h3>
         <div class="progress-container">
             <div class="progress-bar" style="width:${percentage}%;">${percentage}%</div>
         </div>
