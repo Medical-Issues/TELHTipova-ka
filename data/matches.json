@@ -2323,7 +2323,14 @@
     "datetime": "2025-11-09T18:30",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 4,
+      "scoreAway": 3,
+      "ot": true,
+      "winner": "home"
+    }
   },
   {
     "id": 150,
@@ -2355,11 +2362,12 @@
   {
     "id": 153,
     "homeTeamId": 13,
-    "awayTeamId": 12,
+    "awayTeamId": 5,
     "datetime": "2025-11-14T17:30",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false
   },
   {
     "id": 154,
@@ -2522,7 +2530,14 @@
     "datetime": "2025-11-09T12:00",
     "liga": "Euro Hockey Tour",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 4,
+      "scoreAway": 0,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 169,
@@ -2531,7 +2546,14 @@
     "datetime": "2025-11-09T16:00",
     "liga": "Euro Hockey Tour",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 2,
+      "scoreAway": 4,
+      "ot": false,
+      "winner": "away"
+    }
   },
   {
     "id": 170,

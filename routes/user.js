@@ -276,14 +276,12 @@ router.get('/', requireLogin, (req, res) => {
         });
         html += `
                 </tbody>
-            </table>
-            <br>`;
+            </table>`;
     }
     html += `
             </div>
             <div id="playoffTablePreview" style="display:none; overflow:auto; max-width:100%;">
       <table class="points-table"><tr><th scope="col" id="points-table-header" colspan="20"><h2>Týmy - ${selectedLiga} ${selectedSeason} - Playoff</h2></th></tr>`;
-
     playoffData.forEach((row) => {
         html += '<tr>';
         row.forEach(cell => {
@@ -299,18 +297,29 @@ router.get('/', requireLogin, (req, res) => {
         });
         html += '</tr>';
     });
-
+    const totalMatches = leagueObj.maxMatches
+    const filledMatches = matches.filter(m => m.result && m.liga === selectedLiga && m.season === selectedSeason).length;
+    const percentage = totalMatches > 0 ? Math.round((filledMatches / totalMatches) * 100) : 0;
 
     html += `
       </table>
     </div>
+    <section class="progress-section">
+        <h3>Odehráno zápasů</h3>
+        <div class="progress-container">
+            <div class="progress-bar" style="width:${percentage}%;">${percentage}%</div>
+        </div>
+        <p id="progress-text"></p>
+    </section>
 
     <script>
-      function showTable(which) {
+    function showTable(which) {
         document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none';
         const p = document.getElementById('playoffTablePreview');
         p.style.display = which === 'playoff' ? 'block' : 'none';
-      }
+    }
+    const bar = document.getElementById("progress-bar");
+    const text = document.getElementById("progress-text");
     </script>
         </div>
 `;
@@ -361,7 +370,7 @@ router.get('/', requireLogin, (req, res) => {
         <tr>
             <td>${index + 1}.</td>
             <td>${user.username}</td>
-            <td>${successRateOverall}%${currentUserStats && currentUserStats.total !== user.maxFromTips ? ` (${successRate}%)` : ''}</td>
+            <td>${successRateOverall}%${user.total !== user.maxFromTips ? ` (${successRate}%)` : ''}</td>
             <td>${user.correct}</td>
             <td>${user.totalRegular}</td>
             <td>${user.totalPlayoff}</td>

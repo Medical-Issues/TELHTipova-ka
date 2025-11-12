@@ -49,8 +49,8 @@
     "stats": {
       "25/26": {
         "TELH": {
-          "correct": 81,
-          "totalRegular": 137,
+          "correct": 82,
+          "totalRegular": 138,
           "totalPlayoff": 0
         },
         "MS": {
@@ -59,8 +59,8 @@
           "totalPlayoff": 0
         },
         "Euro Hockey Tour": {
-          "correct": 2,
-          "totalRegular": 4,
+          "correct": 4,
+          "totalRegular": 6,
           "totalPlayoff": 0
         }
       }
@@ -756,6 +756,46 @@
           {
             "matchId": 149,
             "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 150,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 151,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 152,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 153,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 154,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 155,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 156,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 157,
+            "winner": "away",
             "loserWins": 0
           }
         ],
@@ -1635,8 +1675,8 @@
     "stats": {
       "25/26": {
         "TELH": {
-          "correct": 77,
-          "totalRegular": 145,
+          "correct": 78,
+          "totalRegular": 146,
           "totalPlayoff": 0
         },
         "MS": {
@@ -1645,8 +1685,8 @@
           "totalPlayoff": 0
         },
         "Euro Hockey Tour": {
-          "correct": 1,
-          "totalRegular": 2,
+          "correct": 2,
+          "totalRegular": 4,
           "totalPlayoff": 0
         }
       }
@@ -2349,6 +2389,46 @@
             "matchId": 149,
             "winner": "home",
             "loserWins": 0
+          },
+          {
+            "matchId": 150,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 151,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 152,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 153,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 154,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 155,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 156,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 157,
+            "winner": "away",
+            "loserWins": 0
           }
         ],
         "Euro Hockey Tour": [
@@ -2388,8 +2468,8 @@
     "stats": {
       "25/26": {
         "TELH": {
-          "correct": 73,
-          "totalRegular": 137,
+          "correct": 74,
+          "totalRegular": 138,
           "totalPlayoff": 0
         },
         "MS": {
@@ -2398,8 +2478,8 @@
           "totalPlayoff": 0
         },
         "Euro Hockey Tour": {
-          "correct": 2,
-          "totalRegular": 4,
+          "correct": 3,
+          "totalRegular": 6,
           "totalPlayoff": 0
         }
       }

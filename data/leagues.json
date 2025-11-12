@@ -2,21 +2,25 @@
   {
     "name": "TELH",
     "isMultigroup": false,
-    "groupCount": 1
+    "groupCount": 1,
+    "maxMatches": 208
   },
   {
     "name": "MAXA",
     "isMultigroup": false,
-    "groupCount": 1
+    "groupCount": 1,
+    "maxMatches": 0
   },
   {
     "name": "MS",
     "isMultigroup": true,
-    "groupCount": 2
+    "groupCount": 2,
+    "maxMatches": 50
   },
   {
     "name": "Euro Hockey Tour",
     "isMultigroup": true,
-    "groupCount": 4
+    "groupCount": 4,
+    "maxMatches": 24
   }
 ]

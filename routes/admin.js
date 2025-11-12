@@ -1124,46 +1124,78 @@ router.get('/leagues/manage', requireAdmin, (req, res) => {
             </label>
             <label id="groupCountLabel" style="display:none; gap: 10px; flex-direction: row;">
                 Počet skupin:
-            <input type="number" class="league-select" min="1" max="10" id="groupCount" name="newLeague[groupCount]">
+                <input type="number" class="league-select" min="1" max="10" id="groupCount" name="newLeague[groupCount]">
+            </label>
+            <label>
+                Maximální počet zápasů:
+                <input type="number" min="1" class="league-select" name="newLeague[maxMatches]" required>
             </label>
 
             <button class="action-btn edit-btn" type="submit">Přidat</button>
         </form>
+
         <h2>Seznam lig</h2>
         <ul>
             ${leagues.map(l => `
                 <li>
-                    ${l.name} 
+                    <form method="POST" action="/admin/leagues/update" style="display:inline-flex; align-items:center; gap:10px;">
+                        <input type="hidden" name="league" value="${l.name}">
+                        <strong>${l.name}</strong> 
+                        <label>Max zápasů:
+                            <input type="number" name="maxMatches" value="${l.maxMatches || 0}" min="0" style="width:80px;">
+                        </label>
+                        <button class="action-btn edit-btn" type="submit">Uložit</button>
+                    </form>
                     <form method="POST" action="/admin/leagues/delete" style="display:inline;">
                         <input type="hidden" name="league" value="${l.name}">
                         <button class="action-btn delete-btn" type="submit">Smazat</button>
                     </form>
                 </li>`).join('')}
         </ul>
+
         <a href="/admin">← Zpět na hlavní stránku</a>
+
+        <script>
+            function toggleGroupInput() {
+                const checkbox = document.getElementById('multiGroupCheckbox');
+                const label = document.getElementById('groupCountLabel');
+                label.style.display = checkbox.checked ? 'flex' : 'none';
+            }
+        </script>
     </body>
-    <script>
-        function toggleGroupInput() {
-            const checkbox = document.getElementById('multiGroupCheckbox');
-            const label = document.getElementById('groupCountLabel');
-            label.style.display = checkbox.checked ? 'flex' : 'none';
-        }
-    </script>
     </html>
     `;
     res.send(html);
 });
 
 router.post('/leagues/manage', requireAdmin, express.urlencoded({ extended: true }), (req, res) => {
-    const {ligaName, multigroup, groupCount} = req.body.newLeague;
+    const { ligaName, multigroup, groupCount, maxMatches } = req.body.newLeague;
     let leagues = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf8'));
+
     if (!leagues.some(l => l.name === ligaName)) {
-        leagues.push({ name: ligaName, isMultigroup: multigroup === 'on' || false, groupCount: Number(groupCount) || 1});
+        leagues.push({
+            name: ligaName,
+            isMultigroup: multigroup === 'on' || false,
+            groupCount: Number(groupCount) || 1,
+            maxMatches: Number(maxMatches) || 0
+        });
         fs.writeFileSync('./data/leagues.json', JSON.stringify(leagues, null, 2));
     }
     res.redirect('/admin/leagues/manage');
 });
 
+router.post('/leagues/update', requireAdmin, express.urlencoded({ extended: true }), (req, res) => {
+    const { league, maxMatches } = req.body;
+    let leagues = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf8'));
+
+    const index = leagues.findIndex(l => l.name === league);
+    if (index !== -1) {
+        leagues[index].maxMatches = Number(maxMatches) || 0;
+        fs.writeFileSync('./data/leagues.json', JSON.stringify(leagues, null, 2));
+    }
+
+    res.redirect('/admin/leagues/manage');
+});
 
 router.post('/leagues/delete', requireAdmin, express.urlencoded({ extended: true }), (req, res) => {
     const leagueToDelete = req.body.league?.name || req.body.league;
