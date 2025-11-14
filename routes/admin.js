@@ -308,6 +308,7 @@ document.getElementById('backupBtn').addEventListener('click', async () => {
 
     res.send(html);
 });
+
 router.post('/leagues', express.urlencoded({ extended: true }), requireAdmin, (req, res) => {
     const ligaName = req.body.name?.trim();
     if (!ligaName) return res.send('<p style="color:red;">Název ligy je povinný. <a href="/admin/leagues/manage">Zpět</a></p>');
@@ -961,7 +962,7 @@ document.querySelectorAll('td').forEach(cell => {
     if (e.shiftKey) {
       // SHIFT + Pravý klik → mění barvu textu
       if (e.ctrlKey || e.metaKey) {
-        cell.style.color = 'lightgrey'; // reset textu
+        cell.style.color = 'lightgrey';
       } else {
         cell.style.color = selectedTextColor;
       }
@@ -1072,7 +1073,6 @@ router.post('/playoff/delete', requireAdmin, (req, res) => {
         if (playoffData[season] && playoffData[season][league]) {
             delete playoffData[season][league];
 
-            // Pokud tím pádem sezóna bude prázdná, smaž ji taky
             if (Object.keys(playoffData[season]).length === 0) {
                 delete playoffData[season];
             }

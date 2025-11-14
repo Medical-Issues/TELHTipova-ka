@@ -249,7 +249,7 @@ function removeTipsForDeletedMatch(matchId) {
 }
 
 function calculateTeamScores(matches, selectedSeason, selectedLiga) {
-    const scores = {}; // teamId => { gf, ga }
+    const scores = {};
 
     matches.forEach(match => {
         const result = match.result;
@@ -280,7 +280,95 @@ function calculateTeamScores(matches, selectedSeason, selectedLiga) {
 
     return scores;
 }
+function getLeagueZones(leagueObj) {
+    if (!leagueObj) return { quarterfinal: 0, playin: 0, relegation: 0 };
+    return {
+        quarterfinal: Number(leagueObj.quarterfinal || 0),
+        playin: Number(leagueObj.playin || 0),
+        relegation: Number(leagueObj.relegation || 0)
+    };
+}
 
+function getTeamZone(index, totalTeams, cfg) {
+    const pos = index + 1;
+    if (pos <= cfg.quarterfinal) return "quarterfinal";
+    if (pos <= cfg.playin) return "playin";
+    if (pos > totalTeams - cfg.relegation) return "relegation";
+    return "neutral";
+}
+
+function getTeamStats(team, season, maxMatches) {
+    if (!team) {
+        return { points: 0, maxPoints: Number.MAX_SAFE_INTEGER, remaining: Number.MAX_SAFE_INTEGER };
+    }
+    const stats = team.stats?.[season] || {};
+    const points = stats.points || 0;
+    const played = (stats.wins || 0) + (stats.otWins || 0) + (stats.otLosses || 0) + (stats.losses || 0);
+
+    let remaining;
+    if (played > maxMatches) {
+        remaining = 0;
+    } else {
+        remaining = maxMatches - played;
+    }
+
+    const maxPoints = points + (remaining * 3);
+    return { points, maxPoints };
+}
+function isLockedPosition(index, totalTeams, sortedTeams, cfg, season, maxMatches, allTeamsFinished) {
+    if (cfg.quarterfinal === 0 && cfg.playin === 0 && cfg.relegation === 0) {
+        return false;
+    }
+    if (allTeamsFinished) {
+        return true;
+    }
+    const myTeam = sortedTeams[index];
+    if (!myTeam) return false;
+
+    const { points: myPoints, maxPoints: myMaxPoints } = getTeamStats(myTeam, season, maxMatches);
+
+    const lastQfIndex = cfg.quarterfinal - 1;
+    const lastPlayinIndex = cfg.playin - 1;
+    const firstRelegationIndex = totalTeams - cfg.relegation;
+
+    if (index <= lastQfIndex) {
+        const chaser = sortedTeams[lastQfIndex + 1];
+        if (!chaser) return true;
+
+        const { maxPoints: chaserMaxPoints } = getTeamStats(chaser, season, maxMatches);
+
+        return chaserMaxPoints < myPoints;
+    }
+
+    else if (index <= lastPlayinIndex) {
+        const chaser = sortedTeams[lastPlayinIndex + 1];
+        const cannotFall = !chaser || (getTeamStats(chaser, season, maxMatches).maxPoints < myPoints);
+
+        const leader = sortedTeams[lastQfIndex];
+        const cannotRise = !leader || (myMaxPoints < getTeamStats(leader, season, maxMatches).points);
+
+        return cannotFall && cannotRise;
+    }
+
+    else if (index >= firstRelegationIndex) {
+        const leader = sortedTeams[firstRelegationIndex - 1];
+        if (!leader) return true;
+
+        const { points: leaderPoints } = getTeamStats(leader, season, maxMatches);
+
+        return myMaxPoints < leaderPoints;
+    }
+
+    else {
+        const chaser = sortedTeams[firstRelegationIndex];
+        const cannotFall = !chaser || (getTeamStats(chaser, season, maxMatches).maxPoints < myPoints);
+
+        const leader = sortedTeams[lastPlayinIndex];
+        const cannotRise = !leader || (myMaxPoints < getTeamStats(leader, season, maxMatches).points);
+
+        return cannotFall && cannotRise;
+    }
+}
 
 module.exports = {
     requireLogin,
@@ -291,4 +379,7 @@ module.exports = {
     generateSeasonRange,
     removeTipsForDeletedMatch,
     calculateTeamScores,
+    getLeagueZones,
+    getTeamZone,
+    isLockedPosition,
 }

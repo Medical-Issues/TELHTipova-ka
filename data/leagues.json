@@ -3,7 +3,10 @@
     "name": "TELH",
     "isMultigroup": false,
     "groupCount": 1,
-    "maxMatches": 208
+    "maxMatches": 364,
+    "quarterfinal": 4,
+    "playin": 12,
+    "relegation": 1
   },
   {
     "name": "MAXA",

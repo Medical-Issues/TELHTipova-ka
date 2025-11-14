@@ -2,7 +2,7 @@ const fs = require("fs");
 const express = require("express");
 const router = express.Router();
 const path = require('path');
-const {loadTeams, requireLogin, calculateTeamScores} = require("../utils/fileUtils");
+const {loadTeams, requireLogin, calculateTeamScores, getLeagueZones, getTeamZone, isLockedPosition} = require("../utils/fileUtils");
 
 router.post("/tip", requireLogin, (req, res) => {
     const username = req.session.user;
@@ -121,22 +121,20 @@ router.get('/', requireLogin, (req, res) => {
         userStats = allUsers
             .filter(u => {
                 const tips = u.tips?.[selectedSeason]?.[selectedLiga] || [];
-                return tips.length > 0; // jen uživatelé co tipovali
+                return tips.length > 0;
             })
             .map(u => {
                 const stats = u.stats?.[selectedSeason]?.[selectedLiga] || {};
                 const userTips = u.tips?.[selectedSeason]?.[selectedLiga] || [];
 
-                // max bodů jen z tipovaných zápasů (vyhodnocené)
                 const maxFromTips = userTips.reduce((sum, tip) => {
                     const match = matchesInLiga.find(m => Number(m.id) === Number(tip.matchId));
-                    if (!match || !match.result) return sum; // ignorovat nevyhodnocené
+                    if (!match || !match.result) return sum;
                     if (!match.isPlayoff) return sum + 1;
                     if (match.bo === 1) return sum + 5;
                     return sum + 3;
                 }, 0);
 
-                // max bodů z celé ligy (vyhodnocené)
                 const totalPoints = matchesInLiga.reduce((sum, match) => {
                     if (!match.result) return sum;
                     if (!match.isPlayoff) return sum + 1;
@@ -147,8 +145,8 @@ router.get('/', requireLogin, (req, res) => {
                 return {
                     username: u.username,
                     correct: stats.correct || 0,
-                    total: totalPoints,       // max body z celé ligy
-                    maxFromTips: maxFromTips, // max body jen z tipovaných zápasů
+                    total: totalPoints,
+                    maxFromTips: maxFromTips,
                     totalRegular: stats.totalRegular || 0,
                     totalPlayoff: stats.totalPlayoff || 0
                 };
@@ -219,65 +217,96 @@ router.get('/', requireLogin, (req, res) => {
         `
     for (const group of sortedGroups) {
         const teamsInGroup = teamsByGroup[group];
+        const zoneConfig = getLeagueZones(leagueObj);
+        console.log("ZONECFG", selectedLiga, zoneConfig);
+
         html += `
-            <table class="points-table">
-                <thead>
-                    <tr><th scope="col" id="points-table-header" colspan="10"><h2>Týmy - ${selectedLiga} ${selectedSeason} - Základní část ${leagueObj?.isMultigroup ? `(Skupina ${group})` : ''}</h2></th></tr>
-                    <tr>
-                        <th class="position" scope="col">Místo</th>
-                        <th scope="col">Tým</th>
-                        <th class="points" scope="col">Body</th>
-                        <th scope="col">Skóre</th>
-                        <th scope="col">Rozdíl</th>
-                        <th scope="col">Z</th>
-                        <th scope="col">V</th>
-                        <th scope="col">Vpp</th>
-                        <th scope="col">Ppp</th>
-                        <th scope="col">P</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                         `;
+    <table class="points-table">
+        <thead>
+            <tr>
+                <th scope="col" id="points-table-header" colspan="10">
+                    <h2>Týmy - ${selectedLiga} ${selectedSeason} - Základní část ${leagueObj?.isMultigroup ? `(Skupina ${group})` : ''}</h2>
+                </th>
+            </tr>
+            <tr>
+                <th class="position" scope="col">Místo</th>
+                <th scope="col">Tým</th>
+                <th class="points" scope="col">Body</th>
+                <th scope="col">Skóre</th>
+                <th scope="col">Rozdíl</th>
+                <th scope="col">Z</th>
+                <th scope="col">V</th>
+                <th scope="col">Vpp</th>
+                <th scope="col">Ppp</th>
+                <th scope="col">P</th>
+            </tr>
+        </thead>
+        <tbody>
+    `;
+
         teamsInGroup.sort((a, b) => {
             const aStats = a.stats?.[selectedSeason] || {};
             const bStats = b.stats?.[selectedSeason] || {};
             const aPoints = aStats.points || 0;
             const bPoints = bStats.points || 0;
-            const aScore = scores[a.id] || {gf: 0, ga: 0};
-            const bScore = scores[b.id] || {gf: 0, ga: 0};
+            const aScore = scores[a.id] || {gf:0, ga:0};
+            const bScore = scores[b.id] || {gf:0, ga:0};
             const aDiff = aScore.gf - aScore.ga;
             const bDiff = bScore.gf - bScore.ga;
-            const aMatches = (aStats.wins || 0) + (aStats.otWins || 0) + (aStats.otLosses || 0) + (aStats.losses || 0);
-            const bMatches = (bStats.wins || 0) + (bStats.otWins || 0) + (bStats.otLosses || 0) + (bStats.losses || 0);
+            const aMatches = (aStats.wins||0)+(aStats.otWins||0)+(aStats.otLosses||0)+(aStats.losses||0);
+            const bMatches = (bStats.wins||0)+(bStats.otWins||0)+(bStats.otLosses||0)+(bStats.losses||0);
+
             if (bPoints !== aPoints) return bPoints - aPoints;
             if (bDiff !== aDiff) return bDiff - aDiff;
             return aMatches - bMatches;
         });
 
+        const sorted = teamsInGroup;
+
         teamsInGroup.forEach((team, index) => {
-            const teamStats = scores[team.id] || {gf: 0, ga: 0};
+            const zone = getTeamZone(index, teamsInGroup.length, zoneConfig);
+            const matchesPerTeam = (leagueObj.maxMatches * 2) / teamsInGroup.length;
+            const allTeamsFinished = sorted.every(team => {
+                const stats = team.stats?.[selectedSeason] || {};
+                const played = (stats.wins || 0) + (stats.otWins || 0) + (stats.otLosses || 0) + (stats.losses || 0);
+                return played >= matchesPerTeam;
+            });
+            const locked = isLockedPosition(index, teamsInGroup.length, sorted, zoneConfig, selectedSeason, matchesPerTeam, allTeamsFinished);
+            team.zone = zone;
+            team.locked = locked;
+
+            const rowClass = locked ? `${zone} locked` : '';
+            const rankClass = zone;
+
+            const teamStats = scores[team.id] || {gf:0, ga:0};
             const goalDiff = teamStats.gf - teamStats.ga;
-            const numberMatches = team.stats?.[selectedSeason]?.wins + team.stats?.[selectedSeason]?.otWins + team.stats?.[selectedSeason]?.otLosses + team.stats?.[selectedSeason]?.losses || 0;
+            const numberMatches = (team.stats?.[selectedSeason]?.wins||0)
+                + (team.stats?.[selectedSeason]?.otWins||0)
+                + (team.stats?.[selectedSeason]?.otLosses||0)
+                + (team.stats?.[selectedSeason]?.losses||0);
 
             html += `
-    <tr>
-        <td>${index + 1}.</td>
-        <td>${team.name}</td>
-        <td class="points numbers">${team.stats?.[selectedSeason]?.points || 0}</td>
-        <td class="numbers">${teamStats.gf}:${teamStats.ga}</td>
-        <td class="numbers">${goalDiff > 0 ? '+' + goalDiff : goalDiff}</td>
-        <td class="numbers">${numberMatches || 0}</td>
-        <td class="numbers">${team.stats?.[selectedSeason]?.wins || 0}</td>
-        <td class="numbers">${team.stats?.[selectedSeason]?.otWins || 0}</td>
-        <td class="numbers">${team.stats?.[selectedSeason]?.otLosses || 0}</td>
-        <td class="numbers">${team.stats?.[selectedSeason]?.losses || 0}</td>
-    </tr>`;
+        <tr class="${rowClass}">
+            <td class="rank-cell ${rankClass}">${index + 1}.</td>
+            <td>${team.name}</td>
+            <td class="points numbers">${team.stats?.[selectedSeason]?.points || 0}</td>
+            <td class="numbers">${teamStats.gf}:${teamStats.ga}</td>
+            <td class="numbers">${goalDiff > 0 ? '+' + goalDiff : goalDiff}</td>
+            <td class="numbers">${numberMatches || 0}</td>
+            <td class="numbers">${team.stats?.[selectedSeason]?.wins || 0}</td>
+            <td class="numbers">${team.stats?.[selectedSeason]?.otWins || 0}</td>
+            <td class="numbers">${team.stats?.[selectedSeason]?.otLosses || 0}</td>
+            <td class="numbers">${team.stats?.[selectedSeason]?.losses || 0}</td>
+        </tr>
+        `;
         });
+        console.log(teamsInGroup.map(t => ({ name: t.name, zone: t.zone, locked: t.locked })));
         html += `
-                </tbody>
-            </table>`;
+        </tbody>
+    </table>
+    `;
     }
+
     html += `
             </div>
             <div id="playoffTablePreview" style="display:none; overflow:auto; max-width:100%;">

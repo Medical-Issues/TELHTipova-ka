@@ -49,8 +49,8 @@
     "stats": {
       "25/26": {
         "TELH": {
-          "correct": 83,
-          "totalRegular": 140,
+          "correct": 86,
+          "totalRegular": 146,
           "totalPlayoff": 0
         },
         "MS": {
@@ -795,6 +795,36 @@
           },
           {
             "matchId": 157,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 158,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 159,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 160,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 161,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 162,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 163,
             "winner": "away",
             "loserWins": 0
           }
@@ -1619,12 +1649,12 @@
           },
           {
             "matchId": 158,
-            "winner": "away",
+            "winner": "home",
             "loserWins": 0
           },
           {
             "matchId": 159,
-            "winner": "home",
+            "winner": "away",
             "loserWins": 0
           },
           {
@@ -1675,8 +1705,8 @@
     "stats": {
       "25/26": {
         "TELH": {
-          "correct": 80,
-          "totalRegular": 148,
+          "correct": 82,
+          "totalRegular": 154,
           "totalPlayoff": 0
         },
         "MS": {
@@ -2429,6 +2459,36 @@
             "matchId": 157,
             "winner": "away",
             "loserWins": 0
+          },
+          {
+            "matchId": 158,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 159,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 160,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 161,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 162,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 163,
+            "winner": "away",
+            "loserWins": 0
           }
         ],
         "Euro Hockey Tour": [
@@ -2468,8 +2528,8 @@
     "stats": {
       "25/26": {
         "TELH": {
-          "correct": 75,
-          "totalRegular": 140,
+          "correct": 77,
+          "totalRegular": 146,
           "totalPlayoff": 0
         },
         "MS": {
