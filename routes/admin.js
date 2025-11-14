@@ -1111,14 +1111,29 @@ router.get('/leagues/manage', requireAdmin, (req, res) => {
         <meta charset="UTF-8">
         <title>Správa lig</title>
         <link rel="stylesheet" href="/css/styles.css">
+        <style>
+            form[action="/admin/leagues/manage"] {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                max-width: 400px;
+                margin-bottom: 20px;
+            }
+            form[action="/admin/leagues/manage"] label {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            .league-select { width: 100px; }
+        </style>
     </head>
     <body>
         <h1>Správa lig</h1>
         <form method="POST" action="/admin/leagues/manage">
             <label>Nová liga:
-                <input type="text" class="league-select" name="newLeague[ligaName]" required>
+                <input type="text" class="league-select" name="newLeague[ligaName]" required style="width: 200px;">
             </label>
-            <label style="display: flex; align-items: center; gap: 10px;">
+            <label style="display: flex; align-items: center; gap: 10px; justify-content: flex-start;">
                 Více skupin/tabulek:
                 <input type="checkbox" id="multiGroupCheckbox" name="newLeague[multigroup]" onchange="toggleGroupInput()">
             </label>
@@ -1127,22 +1142,44 @@ router.get('/leagues/manage', requireAdmin, (req, res) => {
                 <input type="number" class="league-select" min="1" max="10" id="groupCount" name="newLeague[groupCount]">
             </label>
             <label>
-                Maximální počet zápasů:
+                Maximální počet zápasů (celkem):
                 <input type="number" min="1" class="league-select" name="newLeague[maxMatches]" required>
             </label>
-
-            <button class="action-btn edit-btn" type="submit">Přidat</button>
+            
+            <label>
+                Čtvrtfinále (počet týmů):
+                <input type="number" min="0" class="league-select" name="newLeague[quarterfinal]">
+            </label>
+            <label>
+                Play-in (končí pozicí):
+                <input type="number" min="0" class="league-select" name="newLeague[playin]">
+            </label>
+            <label>
+                Baráž (počet týmů):
+                <input type="number" min="0" class="league-select" name="newLeague[relegation]">
+            </label>
+            <button class="action-btn edit-btn" type="submit" style="max-width: 100px;">Přidat</button>
         </form>
 
         <h2>Seznam lig</h2>
         <ul>
             ${leagues.map(l => `
-                <li>
-                    <form method="POST" action="/admin/leagues/update" style="display:inline-flex; align-items:center; gap:10px;">
+                <li style="margin-bottom: 10px;">
+                    <form method="POST" action="/admin/leagues/update" style="display:inline-flex; align-items:center; gap:10px; flex-wrap: wrap;">
                         <input type="hidden" name="league" value="${l.name}">
                         <strong>${l.name}</strong> 
                         <label>Max zápasů:
                             <input type="number" name="maxMatches" value="${l.maxMatches || 0}" min="0" style="width:80px;">
+                        </label>
+                        
+                        <label>ČF (do):
+                            <input type="number" name="quarterfinal" value="${l.quarterfinal || 0}" min="0" style="width:60px;">
+                        </label>
+                        <label>Play-in (do):
+                            <input type="number" name="playin" value="${l.playin || 0}" min="0" style="width:60px;">
+                        </label>
+                        <label>Baráž (počet):
+                            <input type="number" name="relegation" value="${l.relegation || 0}" min="0" style="width:60px;">
                         </label>
                         <button class="action-btn edit-btn" type="submit">Uložit</button>
                     </form>
@@ -1169,7 +1206,7 @@ router.get('/leagues/manage', requireAdmin, (req, res) => {
 });
 
 router.post('/leagues/manage', requireAdmin, express.urlencoded({ extended: true }), (req, res) => {
-    const { ligaName, multigroup, groupCount, maxMatches } = req.body.newLeague;
+    const { ligaName, multigroup, groupCount, maxMatches, quarterfinal, playin, relegation } = req.body.newLeague;
     let leagues = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf8'));
 
     if (!leagues.some(l => l.name === ligaName)) {
@@ -1177,7 +1214,11 @@ router.post('/leagues/manage', requireAdmin, express.urlencoded({ extended: true
             name: ligaName,
             isMultigroup: multigroup === 'on' || false,
             groupCount: Number(groupCount) || 1,
-            maxMatches: Number(maxMatches) || 0
+            maxMatches: Number(maxMatches) || 0,
+
+            quarterfinal: Number(quarterfinal) || 0,
+            playin: Number(playin) || 0,
+            relegation: Number(relegation) || 0
         });
         fs.writeFileSync('./data/leagues.json', JSON.stringify(leagues, null, 2));
     }
@@ -1185,12 +1226,16 @@ router.post('/leagues/manage', requireAdmin, express.urlencoded({ extended: true
 });
 
 router.post('/leagues/update', requireAdmin, express.urlencoded({ extended: true }), (req, res) => {
-    const { league, maxMatches } = req.body;
+    const { league, maxMatches, quarterfinal, playin, relegation } = req.body;
     let leagues = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf8'));
 
     const index = leagues.findIndex(l => l.name === league);
     if (index !== -1) {
         leagues[index].maxMatches = Number(maxMatches) || 0;
+        leagues[index].quarterfinal = Number(quarterfinal) || 0;
+        leagues[index].playin = Number(playin) || 0;
+        leagues[index].relegation = Number(relegation) || 0;
+
         fs.writeFileSync('./data/leagues.json', JSON.stringify(leagues, null, 2));
     }
 
