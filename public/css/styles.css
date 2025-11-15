@@ -623,18 +623,18 @@ tr.postponed {
     transition: width 0.6s ease;
 }
 .rank-cell.quarterfinal {
-    background-color: rgba(40, 167, 69, 1);
+    background-color: rgba(0, 255, 0, 1);
     color: black;
 }
 
 .rank-cell.playin {
-    background-color: rgba(255, 193, 7, 1);
+    background-color: rgba(120,255,120,1);
 : #ffc107;
     color: black;
 }
 
 .rank-cell.relegation {
-    background-color: rgba(220, 53, 69, 1);
+    background-color: rgba(255, 0, 0, 1);
     color: white;
 }
 
@@ -643,15 +643,15 @@ tr.postponed {
 }
 
 .quarterfinal.locked {
-    background-color: rgba(40, 167, 69, 0.35);
+    background-color: rgba(0, 255, 0, 0.35);
 }
 
 .playin.locked {
-    background-color: rgba(255, 193, 7, 0.35);
+    background-color: rgba(120,255,120,0.35);
 }
 
 .relegation.locked {
-    background-color: rgba(220, 53, 69, 0.35);
+    background-color: rgba(255, 0, 0, 0.35);
 }
 
 .neutral.locked {
