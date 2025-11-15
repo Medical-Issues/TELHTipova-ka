@@ -100,7 +100,10 @@ router.get('/', requireLogin, (req, res) => {
     const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf-8'));
     const allowedLeagues = JSON.parse(fs.readFileSync('./data/allowedLeagues.json', 'utf-8'));
     const selectedSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
-    const leagues = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf-8'));
+    const allSeasonData = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf-8'));
+    const leagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues)
+        ? allSeasonData[selectedSeason].leagues
+        : [];
 
     const leaguesFromTeams = [...new Set(teams.map(t => t.liga))];
     const leaguesFromMatches = [...new Set(matches.map(m => m.liga))];
@@ -179,7 +182,18 @@ router.get('/', requireLogin, (req, res) => {
         teamsByGroup[group].push(team);
     });
 
-    const leagueObj = leagues.find(l => l.name === selectedLiga);
+    const leagueObj = leagues.find(l => l.name === selectedLiga) || {
+        name: selectedLiga || "Neznámá liga",
+        maxMatches: 0,
+        quarterfinal: 0,
+        playin: 0,
+        relegation: 0,
+        isMultigroup: false
+    };
+
+    if (leagueObj.maxMatches === 0 && selectedLiga) {
+        console.warn(`[VAROVÁNÍ] Pro ligu '${selectedLiga}' (sezóna ${selectedSeason}) nebyla nalezena konfigurační data v leagues.json. Tabulka se nemusí zobrazit správně.`);
+    }
     const sortedGroups = Object.keys(teamsByGroup).sort();
 
     let html = `
@@ -218,7 +232,6 @@ router.get('/', requireLogin, (req, res) => {
     for (const group of sortedGroups) {
         const teamsInGroup = teamsByGroup[group];
         const zoneConfig = getLeagueZones(leagueObj);
-        console.log("ZONECFG", selectedLiga, zoneConfig);
 
         html += `
     <table class="points-table">
@@ -300,7 +313,6 @@ router.get('/', requireLogin, (req, res) => {
         </tr>
         `;
         });
-        console.log(teamsInGroup.map(t => ({ name: t.name, zone: t.zone, locked: t.locked })));
         html += `
         </tbody>
     </table>
@@ -772,11 +784,13 @@ router.get('/history', requireLogin, (req, res) => {
 
 router.get('/history/a', requireLogin, (req, res) => {
     const username = req.session.user;
-    const selectedSeason = req.query.sezona;
+    const selectedSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
     const teams = loadTeams().filter(t => t.stats[selectedSeason]).filter(t => t.stats[selectedSeason].wins + t.stats[selectedSeason].otWins + t.stats[selectedSeason].otLosses + t.stats[selectedSeason].losses > 0);
     const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf-8'));
-    const leagues = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf-8'));
-
+    const allSeasonData = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf-8'));
+    const leagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues)
+        ? allSeasonData[selectedSeason].leagues
+        : [];
     const leaguesFromTeams = [...new Set(teams.map(t => t.liga))];
     const leaguesFromMatches = [...new Set(matches.map(m => m.liga))];
     const allLeagues = [...new Set([...leaguesFromTeams, ...leaguesFromMatches])];
@@ -788,37 +802,49 @@ router.get('/history/a', requireLogin, (req, res) => {
     const teamsInSelectedLiga = teams.filter(t => t.liga === selectedLiga);
 
     const scores = calculateTeamScores(matches, selectedSeason, selectedLiga);
+    const leagueObj = leagues.find(l => l.name === selectedLiga);
 
     let userStats = [];
     try {
         const usersData = fs.readFileSync('./data/users.json', 'utf-8');
         const allUsers = JSON.parse(usersData);
+
+        const matchesInLiga = matches.filter(m => m.season === selectedSeason && m.liga === selectedLiga);
+
         userStats = allUsers
-            .filter(u => u.stats && u.stats[selectedSeason] && u.stats[selectedSeason][selectedLiga] &&
-                (u.stats[selectedSeason][selectedLiga].totalRegular > 0 || u.stats[selectedSeason][selectedLiga].totalPlayoff > 0))
-            .map(u => ({
-                username: u.username,
-                correct: (u.stats[selectedSeason][selectedLiga]?.correct) || 0,
-                total: (() => {
-                    const stats = u.stats?.[selectedSeason]?.[selectedLiga];
-                    if (!stats) return 0;
+            .filter(u => {
+                const stats = u.stats?.[selectedSeason]?.[selectedLiga];
+                const tips = u.tips?.[selectedSeason]?.[selectedLiga] || [];
+                return (stats && (stats.totalRegular > 0 || stats.totalPlayoff > 0)) || tips.length > 0;
+            })
+            .map(u => {
+                const stats = u.stats?.[selectedSeason]?.[selectedLiga] || {};
+                const userTips = u.tips?.[selectedSeason]?.[selectedLiga] || [];
 
-                    const userTips = u.tips?.[selectedSeason]?.[selectedLiga] || [];
+                const maxFromTips = userTips.reduce((sum, tip) => {
+                    const match = matchesInLiga.find(m => Number(m.id) === Number(tip.matchId));
+                    if (!match || !match.result) return sum;
+                    if (!match.isPlayoff) return sum + 1;
+                    if (match.bo === 1) return sum + 5;
+                    return sum + 3;
+                }, 0);
 
-                    let maxPlayoffPoints = 0;
-                    userTips.forEach(tip => {
-                        if (tip.scoreHome !== undefined && tip.scoreAway !== undefined) {
-                            maxPlayoffPoints += 5;
-                        } else if (tip.loserWins !== undefined) {
-                            maxPlayoffPoints += 3;
-                        }
-                    });
+                const totalPoints = matchesInLiga.reduce((sum, match) => {
+                    if (!match.result) return sum;
+                    if (!match.isPlayoff) return sum + 1;
+                    if (match.bo === 1) return sum + 5;
+                    return sum + 3;
+                }, 0);
 
-                    return (stats.totalRegular || 0) + maxPlayoffPoints;
-                })(),
-                totalRegular: u.stats[selectedSeason][selectedLiga].totalRegular,
-                totalPlayoff: u.stats[selectedSeason][selectedLiga].totalPlayoff,
-            }));
+                return {
+                    username: u.username,
+                    correct: stats.correct || 0,
+                    total: totalPoints,
+                    maxFromTips: maxFromTips,
+                    totalRegular: stats.totalRegular || 0,
+                    totalPlayoff: stats.totalPlayoff || 0
+                };
+            });
     } catch (err) {
         console.error("Chyba při načítání statistik uživatelů:", err);
     }
@@ -840,7 +866,6 @@ router.get('/history/a', requireLogin, (req, res) => {
         console.error("Chyba při načítání playoff dat:", e);
     }
 
-    const leagueObj = leagues.find(l => l.name === selectedLiga);
     const isMultigroup = leagueObj?.isMultigroup || false;
 
     const teamsByGroup = {};
@@ -880,6 +905,19 @@ router.get('/history/a', requireLogin, (req, res) => {
         `;
     for (const groupLetter of sortedGroups) {
         const teamsInGroup = teamsByGroup[groupLetter];
+        const sorted = teamsInGroup;
+        const zoneConfig = leagueObj ? {
+            quarterfinal: leagueObj.quarterfinal,
+            playin: leagueObj.playin,
+            relegation: leagueObj.relegation
+        } : { quarterfinal: 0, playin: 0, relegation: 0 };
+
+        const matchesPerTeam = leagueObj ? (leagueObj.maxMatches * 2) / teamsInGroup.length : 0;
+        const allTeamsFinished = sorted.every(team => {
+            const stats = team.stats?.[selectedSeason] || {};
+            const played = (stats.wins || 0) + (stats.otWins || 0) + (stats.otLosses || 0) + (stats.losses || 0);
+            return played >= matchesPerTeam;
+        });
 
         html += `
   <table class="points-table">
@@ -929,11 +967,12 @@ router.get('/history/a', requireLogin, (req, res) => {
                 + (team.stats?.[selectedSeason]?.otWins || 0)
                 + (team.stats?.[selectedSeason]?.otLosses || 0)
                 + (team.stats?.[selectedSeason]?.losses || 0);
+            const zone = getTeamZone(index, teamsInGroup.length, zoneConfig);
+            const locked = isLockedPosition(index, teamsInGroup.length, sorted, zoneConfig, selectedSeason, matchesPerTeam, allTeamsFinished);
 
+            const rowClass = locked ? `${zone} locked` : zone;
             html += `
-      <tr>
-        <td>${index + 1}.</td>
-        <td>${team.name}</td>
+      <tr class="${rowClass}"> <td class="rank-cell ${zone}">${index + 1}.</td> <td>${team.name}</td>
         <td class="points numbers">${team.stats?.[selectedSeason]?.points || 0}</td>
         <td class="numbers">${teamStats.gf}:${teamStats.ga}</td>
         <td class="numbers">${goalDiff > 0 ? '+' + goalDiff : goalDiff}</td>
@@ -985,7 +1024,7 @@ router.get('/history/a', requireLogin, (req, res) => {
              `;
 
         if (currentUserStats) {
-            const percent = (currentUserStats.correct / currentUserStats.total * 100).toFixed(2);
+            const percent = currentUserStats.total > 0 ? (currentUserStats.correct / currentUserStats.total * 100).toFixed(2) : "0.00";
             html += `
             <p>Správně tipnuto z maximálního počtu všech možných bodů: <strong>${currentUserStats.correct}</strong> z <strong>${currentUserStats.total}</strong> (${percent} %)</p>
         `;
@@ -1015,17 +1054,19 @@ router.get('/history/a', requireLogin, (req, res) => {
                 if (b.correct !== a.correct) {
                     return b.correct - a.correct;
                 }
-                return b.total - a.total;
+                return a.maxFromTips - b.maxFromTips;
             })
             .forEach((user, index) => {
-                const correct = user.correct || 0;
-                const total = user.total || 0;
-                const successRate = total > 0 ? ((correct / total) * 100).toFixed(2) : '0.00';
+                const successRateOverall = user.maxFromTips > 0 ? ((user.correct / user.maxFromTips) * 100).toFixed(2) : '0.00';
+                const successRate = user.total > 0 ? ((user.correct / user.total) * 100).toFixed(2) : '0.00';
+
                 html += `
         <tr>
             <td>${index + 1}.</td>
             <td>${user.username}</td>
-            <td>${successRate}%</td>
+            
+            <td>${successRateOverall}%${user.total !== user.maxFromTips ? ` (${successRate}%)` : ''}</td>
+            
             <td>${user.correct}</td>
             <td>${user.totalRegular}</td>
             <td>${user.totalPlayoff}</td>

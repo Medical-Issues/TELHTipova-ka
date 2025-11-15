@@ -4,7 +4,7 @@
       [
         {
           "text": "Předkolo",
-          "bgColor": "rgb(0, 0, 255)",
+          "bgColor": "rgb(255, 60, 0)",
           "textColor": "lightgrey"
         },
         {
@@ -14,7 +14,7 @@
         },
         {
           "text": "Čtvrtfinále",
-          "bgColor": "rgb(0, 0, 255)",
+          "bgColor": "rgb(255, 60, 0)",
           "textColor": "lightgrey"
         },
         {
@@ -29,7 +29,7 @@
         },
         {
           "text": "Semifinále",
-          "bgColor": "rgb(0, 0, 255)",
+          "bgColor": "rgb(255, 60, 0)",
           "textColor": "lightgrey"
         },
         {
@@ -54,7 +54,7 @@
         },
         {
           "text": "Fínále",
-          "bgColor": "rgb(0, 0, 255)",
+          "bgColor": "rgb(255, 60, 0)",
           "textColor": "lightgrey"
         },
         {
@@ -218,7 +218,7 @@
         },
         {
           "text": "1. místo",
-          "bgColor": "rgb(255, 255, 0)",
+          "bgColor": "rgb(255, 60, 0)",
           "textColor": "rgb(0, 0, 0)"
         },
         {
@@ -320,17 +320,17 @@
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 60, 0)",
+          "bgColor": "rgb(88, 80, 80)",
           "textColor": "lightgrey"
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 0, 0)",
+          "bgColor": "rgb(88, 80, 80)",
           "textColor": "lightgrey"
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 0, 0)",
+          "bgColor": "rgb(88, 80, 80)",
           "textColor": "lightgrey"
         },
         {
@@ -412,32 +412,32 @@
       [
         {
           "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "8-12. místo",
           "bgColor": "rgb(255, 60, 0)",
           "textColor": "lightgrey"
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 0, 0)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "8-12. místo",
-          "bgColor": "rgb(255, 0, 0)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
           "bgColor": "rgb(0, 0, 0)",
           "textColor": "lightgrey"
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 0, 0)",
+          "bgColor": "rgb(88, 80, 80)",
           "textColor": "lightgrey"
         },
         {
           "text": "",
-          "bgColor": "rgb(0, 0, 0)",
+          "bgColor": "rgb(255, 60, 0)",
           "textColor": "lightgrey"
         },
         {
@@ -534,32 +534,32 @@
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 0, 0)",
+          "bgColor": "rgb(88, 80, 80)",
           "textColor": "lightgrey"
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 60, 0)",
+          "bgColor": "rgb(88, 80, 80)",
           "textColor": "lightgrey"
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 0, 0)",
+          "bgColor": "rgb(88, 80, 80)",
           "textColor": "lightgrey"
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 0, 0)",
+          "bgColor": "rgb(88, 80, 80)",
           "textColor": "lightgrey"
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 0, 0)",
+          "bgColor": "rgb(88, 80, 80)",
           "textColor": "lightgrey"
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 0, 0)",
+          "bgColor": "rgb(88, 80, 80)",
           "textColor": "lightgrey"
         },
         {
@@ -626,7 +626,7 @@
         },
         {
           "text": "2. místo",
-          "bgColor": "rgb(255, 255, 0)",
+          "bgColor": "rgb(255, 60, 0)",
           "textColor": "rgb(0, 0, 0)"
         },
         {
@@ -636,12 +636,12 @@
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 0, 0)",
+          "bgColor": "rgb(88, 80, 80)",
           "textColor": "lightgrey"
         },
         {
           "text": "",
-          "bgColor": "rgb(0, 0, 0)",
+          "bgColor": "rgb(255, 60, 0)",
           "textColor": "lightgrey"
         },
         {
@@ -661,7 +661,7 @@
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 0, 0)",
+          "bgColor": "rgb(88, 80, 80)",
           "textColor": "lightgrey"
         },
         {
@@ -728,22 +728,17 @@
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 60, 0)",
+          "bgColor": "rgb(88, 80, 80)",
           "textColor": "lightgrey"
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 0, 0)",
+          "bgColor": "rgb(88, 80, 80)",
           "textColor": "lightgrey"
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 0, 0)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
+          "bgColor": "rgb(88, 80, 80)",
           "textColor": "lightgrey"
         },
         {
@@ -763,7 +758,12 @@
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 0, 0)",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(88, 80, 80)",
           "textColor": "lightgrey"
         },
         {
@@ -820,17 +820,17 @@
       [
         {
           "text": "",
-          "bgColor": "rgb(255, 60, 0)",
+          "bgColor": "rgb(51, 51, 51)",
           "textColor": "lightgrey"
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 0, 0)",
+          "bgColor": "rgb(51, 51, 51)",
           "textColor": "lightgrey"
         },
         {
           "text": "7-11. místo",
-          "bgColor": "rgb(255, 0, 0)",
+          "bgColor": "rgb(255, 60, 0)",
           "textColor": "lightgrey"
         },
         {
@@ -865,7 +865,7 @@
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 0, 0)",
+          "bgColor": "rgb(88, 80, 80)",
           "textColor": "lightgrey"
         },
         {
@@ -967,7 +967,7 @@
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 0, 0)",
+          "bgColor": "rgb(88, 80, 80)",
           "textColor": "lightgrey"
         },
         {
@@ -1034,7 +1034,7 @@
         },
         {
           "text": "3. místo",
-          "bgColor": "rgb(255, 255, 0)",
+          "bgColor": "rgb(255, 60, 0)",
           "textColor": "rgb(0, 0, 0)"
         },
         {
@@ -1069,7 +1069,7 @@
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 0, 0)",
+          "bgColor": "rgb(88, 80, 80)",
           "textColor": "lightgrey"
         },
         {
@@ -1136,22 +1136,17 @@
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 60, 0)",
+          "bgColor": "rgb(88, 80, 80)",
           "textColor": "lightgrey"
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 0, 0)",
+          "bgColor": "rgb(88, 80, 80)",
           "textColor": "lightgrey"
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 0, 0)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
+          "bgColor": "rgb(88, 80, 80)",
           "textColor": "lightgrey"
         },
         {
@@ -1171,7 +1166,12 @@
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 0, 0)",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(88, 80, 80)",
           "textColor": "lightgrey"
         },
         {
@@ -1228,32 +1228,32 @@
       [
         {
           "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "6-10. místo",
           "bgColor": "rgb(255, 60, 0)",
           "textColor": "lightgrey"
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 0, 0)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "6-10. místo",
-          "bgColor": "rgb(255, 0, 0)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
           "bgColor": "rgb(0, 0, 0)",
           "textColor": "lightgrey"
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 0, 0)",
+          "bgColor": "rgb(88, 80, 80)",
           "textColor": "lightgrey"
         },
         {
           "text": "",
-          "bgColor": "rgb(0, 0, 0)",
+          "bgColor": "rgb(255, 60, 0)",
           "textColor": "lightgrey"
         },
         {
@@ -1273,7 +1273,7 @@
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 0, 0)",
+          "bgColor": "rgb(88, 80, 80)",
           "textColor": "lightgrey"
         },
         {
@@ -1350,32 +1350,32 @@
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 0, 0)",
+          "bgColor": "rgb(88, 80, 80)",
           "textColor": "lightgrey"
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 60, 0)",
+          "bgColor": "rgb(88, 80, 80)",
           "textColor": "lightgrey"
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 0, 0)",
+          "bgColor": "rgb(88, 80, 80)",
           "textColor": "lightgrey"
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 0, 0)",
+          "bgColor": "rgb(88, 80, 80)",
           "textColor": "lightgrey"
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 0, 0)",
+          "bgColor": "rgb(88, 80, 80)",
           "textColor": "lightgrey"
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 0, 0)",
+          "bgColor": "rgb(88, 80, 80)",
           "textColor": "lightgrey"
         },
         {
@@ -1442,7 +1442,7 @@
         },
         {
           "text": "4. místo",
-          "bgColor": "rgb(255, 255, 0)",
+          "bgColor": "rgb(255, 60, 0)",
           "textColor": "rgb(0, 0, 0)"
         },
         {
@@ -1452,12 +1452,12 @@
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 0, 0)",
+          "bgColor": "rgb(88, 80, 80)",
           "textColor": "lightgrey"
         },
         {
           "text": "",
-          "bgColor": "rgb(0, 0, 0)",
+          "bgColor": "rgb(255, 60, 0)",
           "textColor": "lightgrey"
         },
         {
@@ -1544,17 +1544,17 @@
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 60, 0)",
+          "bgColor": "rgb(88, 80, 80)",
           "textColor": "lightgrey"
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 0, 0)",
+          "bgColor": "rgb(88, 80, 80)",
           "textColor": "lightgrey"
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 0, 0)",
+          "bgColor": "rgb(88, 80, 80)",
           "textColor": "lightgrey"
         },
         {
@@ -1636,17 +1636,17 @@
       [
         {
           "text": "",
-          "bgColor": "rgb(255, 60, 0)",
+          "bgColor": "rgb(51, 51, 51)",
           "textColor": "lightgrey"
         },
         {
           "text": "",
-          "bgColor": "rgb(255, 0, 0)",
+          "bgColor": "rgb(51, 51, 51)",
           "textColor": "lightgrey"
         },
         {
           "text": "5-9. místo",
-          "bgColor": "rgb(255, 0, 0)",
+          "bgColor": "rgb(255, 60, 0)",
           "textColor": "lightgrey"
         },
         {
@@ -1942,7 +1942,7 @@
       [
         {
           "text": "Předkolo",
-          "bgColor": "rgb(0, 0, 255)",
+          "bgColor": "rgb(255, 60, 0)",
           "textColor": "lightgrey"
         },
         {
@@ -1952,7 +1952,7 @@
         },
         {
           "text": "Čtvrtfinále",
-          "bgColor": "rgb(0, 0, 255)",
+          "bgColor": "rgb(255, 60, 0)",
           "textColor": "lightgrey"
         },
         {
@@ -1967,7 +1967,7 @@
         },
         {
           "text": "Semifinále",
-          "bgColor": "rgb(0, 0, 255)",
+          "bgColor": "rgb(255, 60, 0)",
           "textColor": "lightgrey"
         },
         {
@@ -1992,7 +1992,7 @@
         },
         {
           "text": "Finále",
-          "bgColor": "rgb(0, 0, 255)",
+          "bgColor": "rgb(255, 60, 0)",
           "textColor": "lightgrey"
         },
         {
