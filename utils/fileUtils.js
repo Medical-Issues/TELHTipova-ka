@@ -171,11 +171,13 @@ function evaluateAndAssignPoints(liga, season) {
 
 function generateSeasonRange(startYear, numberOfSeasons) {
     const seasons = [];
-    const addYears = 2024 - startYear;
-    for (let i = 0; i < numberOfSeasons + addYears; i++) {
+    for (let i = 0; i < numberOfSeasons; i++) {
         const y1 = startYear + i;
         const y2 = y1 + 1;
-        seasons.push(`${String(y1).slice(-2)}/${String(y2).slice(-2)}`);
+        const shortY1 = String(y1 % 100).padStart(2, '0');
+        const shortY2 = String(y2 % 100).padStart(2, '0');
+
+        seasons.push(`${shortY1}/${shortY2}`);
     }
     return seasons;
 }

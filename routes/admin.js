@@ -35,6 +35,15 @@ router.get('/', requireAdmin, (req, res) => {
     const leaguesFromTeams = [...new Set(teams.map(t => t.liga))];
     const leaguesFromLeagues = [... new Set(leagues.map(t => t.name))];
     const allLeagues = [...new Set([...leaguesFromTeams, ...leaguesFromMatches, ...leaguesFromLeagues])];
+    const currentYear = new Date().getFullYear();
+    const seasonsFromTeams = teams.map(t => t.season).filter(Boolean);
+    const seasonsFromMatches = matches.map(m => m.season).filter(Boolean);
+
+    const knownSeasons = [...seasonsFromTeams, ...seasonsFromMatches];
+    const futureSeasons = generateSeasonRange(currentYear, 10);
+
+    const allSeasons = [...new Set([...futureSeasons, ...knownSeasons])];
+    allSeasons.sort();
 
     const uniqueLeagues = allLeagues.filter(l => leaguesFromLeagues.includes(l));
 
@@ -54,15 +63,9 @@ router.get('/', requireAdmin, (req, res) => {
         }
     });
 
-    const seasons = [...new Set(
-        matches
-            .filter(m => m.liga === selectedLiga)
-            .map(m => m.season || 'Neurčeno')
-    )];
-
-    const selectedSeason = req.query.season && seasons.includes(req.query.season)
+    const selectedSeason = req.query.season && allSeasons.includes(req.query.season)
         ? req.query.season
-        : seasons[0] || 'Neurčeno';
+        : allSeasons[0] || 'Neurčeno';
 
     const filteredMatches = matches.filter(m =>
         m.liga === selectedLiga && (m.season || 'Neurčeno') === selectedSeason
@@ -108,7 +111,7 @@ router.get('/', requireAdmin, (req, res) => {
     </select>
     Sezóna:
     <select class="league-select" name="season" onchange="this.form.submit()">
-        ${seasons.map(s => `<option value="${s}" ${s === selectedSeason ? 'selected' : ''}>${s}</option>`).join('')}
+        ${allSeasons.map(s => `<option value="${s}" ${s === selectedSeason ? 'selected' : ''}>${s}</option>`).join('')}
     </select>
   </form>
   <section class="all-match-table-and-leagues">
@@ -221,7 +224,7 @@ router.get('/', requireAdmin, (req, res) => {
       <label for="season-select">Sezóna:</label>
       <div class="season-choose">
         <select id="season-select" class="league-select" style="width: 100%" name="season">
-          ${seasons.map(s => `<option value="${s}" ${s === chosenSeason ? 'selected' : ''}>${s}</option>`).join('')}
+           ${allSeasons.map(s => `<option value="${s}" ${s === chosenSeason ? 'selected' : ''}>${s}</option>`).join('')}
         </select>
         <button type="submit" class="action-btn edit-btn" style="margin-top: 10px;">Vybrat sezónu</button>
       </div>
