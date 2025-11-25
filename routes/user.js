@@ -484,15 +484,20 @@ router.get('/', requireLogin, (req, res) => {
             groupedMatches[dateTime].push(match);
         });
 
+        const getPragueISO = () => {
+            return new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Prague' }).replace(' ', 'T');
+        };
+        const currentPragueTimeISO = getPragueISO();
+
         for (const [dateTime, matchesAtSameTime] of Object.entries(groupedMatches)) {
             let formattedDateTime;
 
-            if (matchesAtSameTime.some(m => m.postponed)) {
+            if (matchesAtSameTime.some(m => m.postponed) || dateTime === "Neznámý čas") {
                 formattedDateTime = "Odložené zápasy";
             } else {
-                formattedDateTime = new Date(dateTime).toLocaleString('cs-CZ', {
-                    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                });
+                const [dPart, tPart] = dateTime.split('T');
+                const [year, month, day] = dPart.split('-');
+                formattedDateTime = `${day}. ${month}. ${year} ${tPart}`;
             }
 
             html += `
@@ -509,96 +514,73 @@ router.get('/', requireLogin, (req, res) => {
                 const awayTeam = teams.find(t => t.id === match.awayTeamId)?.name || '???';
                 const existingTip = userTips.find(t => t.matchId === match.id);
                 const selectedWinner = existingTip?.winner;
-                function parseCETDate(datetimeString) {
-                    if (datetimeString != null) {
-                        const [datePart, timePart] = datetimeString.split("T");
-                        const [year, month, day] = datePart.split("-").map(Number);
-                        const [hour, minute] = timePart.split(":").map(Number);
 
-                        const date = new Date(Date.UTC(year, month - 1, day, hour, minute));
-                        date.setHours(date.getHours()-2);
-                        return date;
-                    } else {
-                        return null;
-                    }
-                }
-
-                const matchTime = parseCETDate(match.datetime);
-                const now = new Date();
-                const matchStarted = match.postponed ? true : matchTime <= now;
-
+                // Oprava času (tvá původní nebo ISO logika, zde používám tu bezpečnou ISO)
+                const matchStarted = match.postponed ? true : (match.datetime <= currentPragueTimeISO);
                 const isPlayoff = match.isPlayoff;
-                const bo = match.bo || 5;
-                Math.ceil(bo / 2);
+
                 if (match.postponed) {
                     html += `
-<tr class="match-row postponed">
-    <td colspan="3"><strong>${homeTeam} vs ${awayTeam}</strong></td>
-</tr>
-`;
-                } else if (!isPlayoff) {
+                    <tr class="match-row postponed">
+                        <td colspan="3"><strong>${homeTeam} vs ${awayTeam}</strong></td>
+                    </tr>`;
+                }
+                // --- VARIANTA 1: NORMÁLNÍ ZÁPAS (Bez formuláře, ID je v řádku) ---
+                else if (!isPlayoff) {
                     html += `
-<tr class="match-row">
-    <td>
-        <form action="/tip" method="POST" style="display:inline">
-            <input type="hidden" name="matchId" value="${match.id}">
-            <input type="hidden" name="winner" value="home">
-            <button type="submit" class="team-link ${selectedWinner === "home" ? "selected" : ""}" ${matchStarted ? 'disabled' : ''}>${homeTeam}</button>
-        </form>
-    </td>
-    <td class="vs">vs</td>
-    <td>
-        <form action="/tip" method="POST" style="display:inline">
-            <input type="hidden" name="matchId" value="${match.id}">
-            <input type="hidden" name="winner" value="away">
-            <button type="submit" class="team-link ${selectedWinner === "away" ? "selected" : ""}" ${matchStarted ? 'disabled' : ''}>${awayTeam}</button>
-        </form>
-    </td>
-</tr>
-`;
-                } else {
+                    <tr class="match-row simple-match-row" data-match-id="${match.id}">
+                        <td>
+                            <button type="button" class="team-link home-btn ${selectedWinner === "home" ? "selected" : ""}" 
+                                    data-winner="home" ${matchStarted ? 'disabled' : ''}>${homeTeam}</button>
+                        </td>
+                        <td class="vs">vs</td>
+                        <td>
+                            <button type="button" class="team-link away-btn ${selectedWinner === "away" ? "selected" : ""}" 
+                                    data-winner="away" ${matchStarted ? 'disabled' : ''}>${awayTeam}</button>
+                        </td>
+                    </tr>`;
+                }
+                // --- VARIANTA 2: PLAYOFF ZÁPAS ---
+                else {
                     const existingLoserWins = existingTip?.loserWins || 0;
                     const bo = match.bo || 7;
                     const maxLoserWins = Math.floor(bo / 2);
 
                     html += `
-<tr class="match-row">
-  <form class="playoff-form" action="/tip" method="POST">
-    <input type="hidden" name="matchId" value="${match.id}">
-    <input type="hidden" name="winner" value="">
-    <td>
-      <button type="button" class="team-link home-btn ${selectedWinner === "home" ? "selected" : ""}" ${matchStarted ? 'disabled' : ''}>
-        ${homeTeam}
-      </button>
-    </td>
-    <td class="vs">vs</td>
-    <td>
-      <button type="button" class="team-link away-btn ${selectedWinner === "away" ? "selected" : ""}" ${matchStarted ? 'disabled' : ''}>
-        ${awayTeam}
-      </button>
-    </td>
-  </form>
-</tr>
+                    <tr class="match-row playoff-parent-row" data-match-id="${match.id}">
+                        <td>
+                          <button type="button" class="team-link home-btn ${selectedWinner === "home" ? "selected" : ""}" 
+                                  data-winner="home" ${matchStarted ? 'disabled' : ''}>
+                            ${homeTeam}
+                          </button>
+                        </td>
+                        <td class="vs">vs</td>
+                        <td>
+                          <button type="button" class="team-link away-btn ${selectedWinner === "away" ? "selected" : ""}" 
+                                  data-winner="away" ${matchStarted ? 'disabled' : ''}>
+                            ${awayTeam}
+                          </button>
+                        </td>
+                    </tr>
 
-<tr class="match-row loser-row" style="display:${existingTip ? 'table-row' : 'none'}">
-  <td colspan="3">
-    <form class="loserwins-form" action="/tip" method="POST" data-bo="${match.bo}">
-      <input type="hidden" name="matchId" value="${match.id}">
-      <input type="hidden" name="winner" value="${existingTip?.winner ?? ''}">
-      
-      ${match.bo === 1
+                    <tr class="match-row loser-row" style="display:${existingTip ? 'table-row' : 'none'}">
+                      <td colspan="3">
+                        <form class="loserwins-form" onsubmit="return false;" data-bo="${match.bo}">
+                          <input type="hidden" name="matchId" value="${match.id}">
+                          <input type="hidden" name="winner" value="${existingTip?.winner ?? ''}">
+                          
+                          ${match.bo === 1
                         ? `Skóre: 
-          <input type="number" name="scoreHome" value="${existingTip?.scoreHome ?? ''}" min="0" style="width:50px"> :
-          <input type="number" name="scoreAway" value="${existingTip?.scoreAway ?? ''}" min="0" style="width:50px">`
+                              <input type="number" name="scoreHome" value="${existingTip?.scoreHome ?? ''}" min="0" style="width:50px"> :
+                              <input type="number" name="scoreAway" value="${existingTip?.scoreAway ?? ''}" min="0" style="width:50px">`
                         : `Kolik zápasů vyhrál poražený:
-          <select name="loserWins">
-            ${Array.from({length: maxLoserWins+1}, (_, i) => `<option value="${i}" ${i===existingLoserWins?'selected':''}>${i}</option>`).join('')}
-          </select>`
+                              <select name="loserWins">
+                                ${Array.from({length: maxLoserWins+1}, (_, i) => `<option value="${i}" ${i===existingLoserWins?'selected':''}>${i}</option>`).join('')}
+                              </select>`
                     }
-    </form>
-  </td>
-</tr>
-`;
+                        </form>
+                      </td>
+                    </tr>`;
                 }
             }
 
@@ -608,104 +590,127 @@ router.get('/', requireLogin, (req, res) => {
     `;
         }
 
-        html += `</section></main></body><script>
+        html += `</section></main></body>
+
+<script>
 document.addEventListener('DOMContentLoaded', () => {
-  document.querySelectorAll('.loserwins-form').forEach(loserForm => {
-    const row = loserForm.closest('tr').previousElementSibling;
-    const loserRow = loserForm.closest('tr');
-    const bo = parseInt(loserForm.dataset.bo, 10);
-    const winnerInput = loserForm.querySelector('input[name="winner"]');
-    const homeBtn = row.querySelector('.home-btn');
-    const awayBtn = row.querySelector('.away-btn');
 
-    function saveWinner(winner) {
-      winnerInput.value = winner;
-      homeBtn.classList.toggle('selected', winner === 'home');
-      awayBtn.classList.toggle('selected', winner === 'away');
+    // Hlavní funkce pro odeslání dat
+    function sendTip(formData, homeBtn, awayBtn, loserRow) {
+        const winner = formData.get('winner');
 
-      loserRow.style.display = 'table-row';
-
-      const formData = new URLSearchParams();
-      formData.append('matchId', loserForm.querySelector('input[name="matchId"]').value);
-      formData.append('winner', winner);
-
-      fetch('/tip', {
-        method: 'POST',
-        headers: { 'x-requested-with': 'fetch' },
-        body: formData
-      })
-        .then(() => {
-          console.log('Tip vítěze uložen');
-          localStorage.setItem('scrollPos', window.scrollY);
-          location.reload();
+        fetch('/tip', {
+            method: 'POST',
+            headers: { 'x-requested-with': 'fetch' },
+            body: formData
         })
-        .catch(err => console.error(err));
+        .then(res => {
+            if (res.ok) {
+                console.log('Tip uložen');
+                
+                // VIZUÁLNÍ UPDATE (Až po potvrzení serverem, nebo hned - jak chceš)
+                if (homeBtn) {
+                    homeBtn.classList.toggle('selected', winner === 'home');
+                    // Pokud kliknu na Home, musím zajistit, že Away už není selected
+                    if (winner === 'home' && awayBtn) awayBtn.classList.remove('selected');
+                }
+                if (awayBtn) {
+                    awayBtn.classList.toggle('selected', winner === 'away');
+                    if (winner === 'away' && homeBtn) homeBtn.classList.remove('selected');
+                }
+
+                if (loserRow) loserRow.style.display = 'table-row';
+            } else {
+                alert('Chyba při ukládání (Server Error).');
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert('Chyba připojení.');
+        });
     }
 
-    homeBtn.addEventListener('click', () => saveWinner('home'));
-    awayBtn.addEventListener('click', () => saveWinner('away'));
-
-    if (bo === 1) {
-      const scoreHomeInput = loserForm.querySelector('input[name="scoreHome"]');
-      const scoreAwayInput = loserForm.querySelector('input[name="scoreAway"]');
-
-      [scoreHomeInput, scoreAwayInput].forEach(input => {
-        input.addEventListener('keydown', e => {
-          if (e.key === 'Enter') {
+    // --- 1. OBSLUHA KLIKNUTÍ NA TÝMY (Pro Playoff i Normální) ---
+    // Hledáme všechna tlačítka, která mají data-winner
+    document.querySelectorAll('button[data-winner]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
             e.preventDefault();
-            if (!winnerInput.value) {
-              alert('Nejdřív vyber vítěze!');
-              return;
+            
+            // Najdeme řádek tabulky
+            const row = btn.closest('tr');
+            const matchId = row.dataset.matchId;
+            const winner = btn.dataset.winner;
+
+            const homeBtn = row.querySelector('.home-btn');
+            const awayBtn = row.querySelector('.away-btn');
+            
+            // Zjistíme, jestli je to playoff (jestli následuje loser-row)
+            const nextRow = row.nextElementSibling;
+            let loserRow = null;
+            let loserForm = null;
+
+            if (nextRow && nextRow.classList.contains('loser-row')) {
+                loserRow = nextRow;
+                loserForm = loserRow.querySelector('form');
+            }
+
+            // Pokud existuje formulář pro skóre, musíme v něm aktualizovat hidden input 'winner'
+            // To je DŮLEŽITÉ pro změnu tipu, aby se při zadání skóre poslal správný vítěz
+            if (loserForm) {
+                const wInput = loserForm.querySelector('input[name="winner"]');
+                if (wInput) wInput.value = winner;
             }
 
             const formData = new URLSearchParams();
-            formData.append('matchId', loserForm.querySelector('input[name="matchId"]').value);
-            formData.append('winner', winnerInput.value);
-            formData.append('scoreHome', scoreHomeInput.value.trim());
-            formData.append('scoreAway', scoreAwayInput.value.trim());
+            formData.append('matchId', matchId);
+            formData.append('winner', winner);
 
-            fetch('/tip', {
-              method: 'POST',
-              headers: { 'x-requested-with': 'fetch' },
-              body: formData
-            })
-              .then(() => {
-                console.log('Skóre uložené');
-                localStorage.setItem('scrollPos', window.scrollY);
-                location.reload();
-              })
-              .catch(err => console.error(err));
-          }
+            sendTip(formData, homeBtn, awayBtn, loserRow);
         });
-      });
-    } else {
-      const select = loserForm.querySelector('select[name="loserWins"]');
-      select.addEventListener('change', () => {
-        const formData = new URLSearchParams();
-        formData.append('matchId', loserForm.querySelector('input[name="matchId"]').value);
-        formData.append('winner', winnerInput.value);
-        formData.append('loserWins', select.value);
+    });
 
-        fetch('/tip', {
-          method: 'POST',
-          headers: { 'x-requested-with': 'fetch' },
-          body: formData
-        })
-          .then(() => {
-            console.log('Tip uložen');
-            localStorage.setItem('scrollPos', window.scrollY);
-            location.reload();
-          })
-          .catch(err => console.error(err));
-      });
-    }
-  });
+    // --- 2. OBSLUHA SKÓRE A SELECTU (Playoff) ---
+    document.querySelectorAll('.loserwins-form').forEach(form => {
+        const matchId = form.querySelector('input[name="matchId"]').value;
+        const winnerInput = form.querySelector('input[name="winner"]'); // Tento input aktualizujeme výše
 
-  const savedPos = localStorage.getItem('scrollPos');
-  if (savedPos) {
-    window.scrollTo(0, parseInt(savedPos));
-    localStorage.removeItem('scrollPos');
-  }
+        // ENTER (Skóre)
+        form.querySelectorAll('input[type="number"]').forEach(input => {
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (!winnerInput.value) { alert('Vyber nejdřív vítěze!'); return; }
+
+                    const scoreHome = form.querySelector('input[name="scoreHome"]').value;
+                    const scoreAway = form.querySelector('input[name="scoreAway"]').value;
+
+                    const formData = new URLSearchParams();
+                    formData.append('matchId', matchId);
+                    formData.append('winner', winnerInput.value);
+                    formData.append('scoreHome', scoreHome);
+                    formData.append('scoreAway', scoreAway);
+
+                    // Tlačítka nepotřebujeme měnit, už svítí
+                    sendTip(formData, null, null, null);
+                }
+            });
+        });
+
+        // SELECT (Loser wins)
+        const select = form.querySelector('select');
+        if (select) {
+            select.addEventListener('change', () => {
+                if (!winnerInput.value) { alert('Vyber nejdřív vítěze!'); return; }
+
+                const formData = new URLSearchParams();
+                formData.append('matchId', matchId);
+                formData.append('winner', winnerInput.value);
+                formData.append('loserWins', select.value);
+
+                sendTip(formData, null, null, null);
+            });
+        }
+    });
 });
 </script>
 </html>`

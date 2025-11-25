@@ -16,7 +16,6 @@ html {
     font-family: "Segoe UI", serif;
     color: lightgrey;
     width: 100%;
-    display: flex;
 }
 
 #error-msg {
