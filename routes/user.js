@@ -1114,13 +1114,52 @@ router.get('/history/a', requireLogin, (req, res) => {
 </section>
 </section>
 <section class="matches-container">
-    <h2>Historie tipů</h2>
-    <table class="points-table">
-        `
-        const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8')).filter(m => m.liga === selectedLiga && m.result).filter(m => m.season === selectedSeason).sort((a, b) => new Date(a.datetime) - new Date(b.datetime));
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+        <h2 style="margin: 0;">Historie tipů</h2>
+        
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <label for="historyUserSelect" style="color: lightgrey;">Zobrazit:</label>
+            `;
+
+        const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'))
+            .filter(m => m.liga === selectedLiga && m.result)
+            .filter(m => m.season === selectedSeason)
+            .sort((a, b) => new Date(a.datetime) - new Date(b.datetime));
+
         const users = JSON.parse(fs.readFileSync('./data/users.json', 'utf8'));
-        const currentUser = users.find(u => u.username === username);
-        const userTips = currentUser?.tips?.[selectedSeason]?.[selectedLiga] || [];
+
+        // 1. Uživatelé pro Select (jen ti, co mají tipy)
+        const usersWithTips = users.filter(u => {
+            const tips = u.tips?.[selectedSeason]?.[selectedLiga];
+            return tips && tips.length > 0;
+        }).sort((a, b) => a.username.localeCompare(b.username));
+
+        // Defaultně zobrazíme přihlášeného uživatele (nebo prvního v seznamu)
+        const initialUser = usersWithTips.find(u => u.username === username) ? username : (usersWithTips[0]?.username || "");
+
+        // 2. HTML PRO SELECT (Žádné URL, jen volání JS funkce)
+        html += `
+            <select id="historyUserSelect" 
+                    onchange="showUserHistory(this.value)"
+                    style="background-color: black; color: orangered; border: 1px solid orangered; padding: 5px; border-radius: 5px;">
+        `;
+
+        if (usersWithTips.length === 0) {
+            html += `<option disabled selected>Žádná data</option>`;
+        } else {
+            usersWithTips.forEach(u => {
+                const isSelected = u.username === initialUser ? 'selected' : '';
+                html += `<option value="${u.username}" ${isSelected}>${u.username}</option>`;
+            });
+        }
+
+        html += `   </select>
+        </div>
+    </div>
+
+    <table class="points-table">
+        `;
+
         const groupedMatches = matches.reduce((groups, match) => {
             const dateTime = match.datetime || match.date || "Neznámý čas";
             if (!groups[dateTime]) groups[dateTime] = [];
@@ -1129,6 +1168,60 @@ router.get('/history/a', requireLogin, (req, res) => {
         }, {});
         const teams = JSON.parse(fs.readFileSync('./data/teams.json', 'utf8'));
 
+        // --- POMOCNÁ FUNKCE PRO GENEROVÁNÍ HTML BUŇKY PRO JEDNOHO USERA ---
+        // Abychom nemuseli kopírovat logiku 10x, uděláme si funkci uvnitř
+        const renderUserTip = (u, match, type) => {
+            const userTip = u.tips?.[selectedSeason]?.[selectedLiga]?.find(t => t.matchId === match.id);
+            const selectedWinner = userTip?.winner;
+            const bo = match.bo || 5;
+
+            // CSS třída pro identifikaci uživatele (např. "user-Pepa")
+            // Pokud to není aktuálně vybraný uživatel, rovnou ho skryjeme (display: none)
+            const visibilityStyle = u.username === initialUser ? '' : 'display:none;';
+            const userClass = `history-item user-${u.username.replace(/[^a-zA-Z0-9]/g, '_')}`; // Ošetření speciálních znaků
+
+            if (type === 'home' || type === 'away') {
+                const teamName = type === 'home'
+                    ? (teams.find(t => t.id === match.homeTeamId)?.name || '???')
+                    : (teams.find(t => t.id === match.awayTeamId)?.name || '???');
+
+                // Logika pro barvu
+                let cssClass = "";
+                if (selectedWinner === type) {
+                    cssClass = match.result.winner === type ? "right-selected" : "wrong-selected";
+                }
+
+                return `<div class="${userClass} team-link-history ${cssClass}" style="${visibilityStyle}">${teamName}</div>`;
+            }
+
+            if (type === 'score') {
+                if (selectedWinner === "home" || selectedWinner === "away") {
+                    if (bo === 1) {
+                        const tH = userTip?.scoreHome ?? 0;
+                        const tA = userTip?.scoreAway ?? 0;
+                        const aH = match.result.scoreHome;
+                        const aA = match.result.scoreAway;
+                        const diff = Math.abs(tH - aH) + Math.abs(tA - aA);
+
+                        let sc = 'diff-3plus';
+                        if (diff === 0) sc = 'exact-score';
+                        else if (diff === 1) sc = 'diff-1';
+                        else if (diff === 2) sc = 'diff-2';
+
+                        return `<div class="${userClass} team-link-history ${sc}" style="${visibilityStyle}">${tH} : ${tA}</div>`;
+                    } else {
+                        const correct = userTip?.loserWins !== undefined && userTip.loserWins ===
+                            (match.result.winner === "home" ? match.result.scoreAway : match.result.scoreHome);
+                        const sc = correct ? "right-selected" : "wrong-selected";
+                        return `<div class="${userClass} team-link-history ${sc}" style="${visibilityStyle}">${userTip?.loserWins ?? '-'}</div>`;
+                    }
+                }
+                return `<div class="${userClass}" style="${visibilityStyle}">-</div>`;
+            }
+            return '';
+        };
+
+        // --- HLAVNÍ SMYČKA ---
         for (const [dateTime, matchesAtSameTime] of Object.entries(groupedMatches)) {
             const formattedDateTime = new Date(dateTime).toLocaleString('cs-CZ', {
                 day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
@@ -1137,99 +1230,70 @@ router.get('/history/a', requireLogin, (req, res) => {
             html += `<table class="matches-table">`;
             html += `<thead class="matches-table-header"><tr><th colSpan="6">Zápasy</th></tr></thead>`;
             html += `<tbody>`;
-            for (const match of matchesAtSameTime) {
-                const homeTeam = teams.find(t => t.id === match.homeTeamId)?.name || '???';
-                const awayTeam = teams.find(t => t.id === match.awayTeamId)?.name || '???';
-                const existingTip = userTips.find(t => t.matchId === match.id);
-                const selectedWinner = existingTip?.winner;
-                const isPlayoff = match.isPlayoff;
-                const bo = match.bo || 5;
 
-                if (!isPlayoff) {
+            for (const match of matchesAtSameTime) {
+                // Generujeme obsah buněk pro VŠECHNY uživatele najednou
+                let homeCellHTML = "";
+                let awayCellHTML = "";
+                let scoreCellHTML = ""; // Pro Playoff střed
+
+                usersWithTips.forEach(u => {
+                    homeCellHTML += renderUserTip(u, match, 'home');
+                    awayCellHTML += renderUserTip(u, match, 'away');
+                    if (match.isPlayoff) {
+                        scoreCellHTML += renderUserTip(u, match, 'score');
+                    }
+                });
+
+                if (!match.isPlayoff) {
                     html += `
-                        <tr class="match-row">
-    <td class="match-row">
-        <form action="/tip" method="POST" style="display:inline">
-            <input type="hidden" name="matchId" value="${match.id}">
-            <input type="hidden" name="winner" value="home">
-            <div class="team-link-history ${selectedWinner === "home" ? match.result.winner === "home" ? "right-selected" : "wrong-selected" : ""}">${homeTeam}</div>
-        </form>
-    </td>
-    <td class="vs">${match.result.scoreHome}</td>
-    <td class="vs">${match.result.ot === true ? "pp/sn": ":"}</td>
-    <td class="vs">${match.result.scoreAway}</td>
-    <td class="match-row">
-        <form action="/tip" method="POST" style="display:inline">
-            <input type="hidden" name="matchId" value="${match.id}">
-            <input type="hidden" name="winner" value="away">
-            <div class="team-link-history ${selectedWinner === "away" ? match.result.winner === "away" ? "right-selected" : "wrong-selected" : ""}">${awayTeam}</div>
-        </form>
-    </td>
-</tr>`;
+                    <tr class="match-row">
+                        <td class="match-row">${homeCellHTML}</td>
+                        <td class="vs">${match.result.scoreHome}</td>
+                        <td class="vs">${match.result.ot === true ? "pp/sn": ":"}</td>
+                        <td class="vs">${match.result.scoreAway}</td>
+                        <td class="match-row">${awayCellHTML}</td>
+                    </tr>`;
                 } else {
                     html += `
-<tr class="match-row">
-    <form action="/tip" method="POST">
-        <input type="hidden" name="matchId" value="${match.id}">
-        <input type="hidden" name="winner" value="home">
-        <td>
-            <div class="team-link-history ${selectedWinner === "home" ? match.result?.winner === "home" ? "right-selected" : "wrong-selected" : ""}">${homeTeam}</div>
-        </td>
-    </form>
-    <td class="vs">${match.result.scoreHome}</td>
-    <td class="vs">vs</td>
-    <td class="vs">${match.result.scoreAway}</td>
-    <form action="/tip" method="POST">
-        <input type="hidden" name="matchId" value="${match.id}">
-        <input type="hidden" name="winner" value="away">
-        <td>
-            <div class="team-link-history ${selectedWinner === "away" ? match.result?.winner === "away" ? "right-selected" : "wrong-selected" : ""}">${awayTeam}</div>
-        </td>
-    </form>
-</tr>`;
-                    html += `
-<tr class="match-row">
-  <td style="color: black" colspan="5">
-${
-                        selectedWinner === "home" || selectedWinner === "away"
-                            ? (() => {
-                                if (bo === 1) {
-                                    const tipScoreHome = existingTip?.scoreHome ?? 0;
-                                    const tipScoreAway = existingTip?.scoreAway ?? 0;
-                                    const actualScoreHome = match.result.scoreHome;
-                                    const actualScoreAway = match.result.scoreAway;
-
-                                    const diff = Math.abs(tipScoreHome - actualScoreHome) + Math.abs(tipScoreAway - actualScoreAway);
-
-                                    let scoreClass;
-                                    if (diff === 0) scoreClass = 'exact-score';
-                                    else if (diff === 1) scoreClass = 'diff-1';
-                                    else if (diff === 2) scoreClass = 'diff-2';
-                                    else scoreClass = 'diff-3plus';
-
-                                    return `<div class="team-link-history ${scoreClass}">${tipScoreHome} : ${tipScoreAway}</div>`;
-                                } else {
-                                    const correct = existingTip?.loserWins !== undefined && existingTip.loserWins ===
-                                        (match.result.winner === "home" ? match.result.scoreAway : match.result.scoreHome);
-                                    const scoreClass = correct ? "right-selected" : "wrong-selected";
-                                    return `<div class="team-link-history ${scoreClass}">${existingTip?.loserWins ?? '-'}</div>`;
-                                }
-                            })()
-                            : ''
-                    }
-    </td>
-</tr>
-`;
+                    <tr class="match-row">
+                        <td>${homeCellHTML}</td>
+                        <td class="vs">${match.result.scoreHome}</td>
+                        <td class="vs">vs</td>
+                        <td class="vs">${match.result.scoreAway}</td>
+                        <td>${awayCellHTML}</td>
+                    </tr>
+                    <tr class="match-row">
+                      <td style="color: black" colspan="5">${scoreCellHTML}</td>
+                    </tr>`;
                 }
             }
-            html += `
-                        
-        </tbody>
-    </table>
-    `;
+            html += `</tbody></table>`;
         }
-        `
-        html += </section></main></body></html>`
+
+        html += `
+    </section>
+    </main>
+
+    <script>
+        // TATO FUNKCE PŘEPÍNÁ VIDITELNOST BEZ RELOADU
+        function showUserHistory(username) {
+            // 1. Schováme všechny
+            document.querySelectorAll('.history-item').forEach(el => {
+                el.style.display = 'none';
+            });
+
+            // 2. Ošetříme speciální znaky ve jméně (stejně jako na serveru)
+            const safeName = username.replace(/[^a-zA-Z0-9]/g, '_');
+
+            // 3. Ukážeme ty, co patří vybranému
+            document.querySelectorAll('.user-' + safeName).forEach(el => {
+                el.style.display = 'flex'; // Nebo 'flex'/'table-cell' podle potřeby, block obvykle stačí pro div
+            });
+        }
+    </script>
+    </body></html>`;
+
         res.send(html);
     }
 })
