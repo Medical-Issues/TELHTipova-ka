@@ -3,7 +3,6 @@ const express = require("express");
 const router = express.Router();
 const path = require('path');
 const {loadTeams, requireLogin, calculateTeamScores, getLeagueZones, getTeamZone, isLockedPosition} = require("../utils/fileUtils");
-
 router.post("/tip", requireLogin, (req, res) => {
     const username = req.session.user;
     const matchId = parseInt(req.body.matchId);

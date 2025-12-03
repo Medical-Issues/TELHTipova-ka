@@ -1,7 +1,6 @@
 const fs = require('fs');
 const path = require('path');
 
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const REPO_OWNER = 'Medical-Issues';
 const REPO_NAME = 'TELHTipovackaZaloha';
 const BRANCH = 'main';
@@ -9,7 +8,19 @@ const DATA_FOLDER = path.join(__dirname, '..', 'data');
 
 async function loadJsonFilesFromGitHub() {
     const { Octokit } = await import('@octokit/rest');
-    const octokit = new Octokit({ auth: GITHUB_TOKEN });
+    const { retry } = require("@octokit/plugin-retry");
+    const MyOctokit = Octokit.plugin(retry);
+
+    const octokit = new MyOctokit({
+        auth: process.env.GITHUB_TOKEN,
+        retry: {
+            doNotRetry: ["429"],
+        },
+        request: {
+            retries: 3,
+            retryAfter: 1000,
+        },
+    });
 
     try {
         const { data: files } = await octokit.rest.repos.getContent({

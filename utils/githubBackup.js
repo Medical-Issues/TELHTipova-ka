@@ -8,7 +8,19 @@ const DATA_FOLDER = path.join(__dirname, '..', 'data');
 
 async function backupJsonFilesToGitHub() {
     const { Octokit } = await import('@octokit/rest');
-    const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+    const { retry } = require("@octokit/plugin-retry");
+
+    const MyOctokit = Octokit.plugin(retry);
+    const octokit = new MyOctokit({
+        auth: process.env.GITHUB_TOKEN,
+        retry: {
+            doNotRetry: ["429"],
+        },
+        request: {
+            retries: 3,
+            retryAfter: 2000,
+        },
+    });
 
     const files = fs.readdirSync(DATA_FOLDER).filter(file => file.endsWith('.json'));
 
@@ -42,6 +54,15 @@ async function backupJsonFilesToGitHub() {
         });
 
         console.log(`✅ Zálohováno: ${file}`);
+    }
+    try {
+        console.log("✅ Záloha úspěšná");
+    } catch (error) {
+        if (error.status >= 500) {
+            console.error("🔥 GitHub má problémy (Status 500).");
+        } else {
+            console.error("❌ Jiná chyba::", error.message);
+        }
     }
 }
 

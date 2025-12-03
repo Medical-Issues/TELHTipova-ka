@@ -10,6 +10,7 @@
   },
   "private": true,
   "dependencies": {
+    "@octokit/plugin-retry": "^8.0.3",
     "@octokit/rest": "^22.0.0",
     "bcrypt": "^6.0.0",
     "body-parser": "^2.2.0",
