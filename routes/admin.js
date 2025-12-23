@@ -485,12 +485,12 @@ router.get('/new/match', requireAdmin, (req, res) => {
             <form style="display: flex; flex-direction: row; gap: 10px" action="/admin/new/match" method="POST">
                 <label style="display: flex; flex-direction: column" for="homeTeamId">Domácí tým
                     <select class="league-select" style="width: 220px" id="homeTeamId" name="homeTeamId" required>
-                        ${teams.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+                        ${teams.map(t => `<option value="${t.id}">${t.liga} - ${t.name}</option>`).join('')}
                     </select>
                 </label>
                 <label style="display: flex; flex-direction: column" for="awayTeamId">Hostující tým
                     <select class="league-select" style="width: 220px" id="awayTeamId" name="awayTeamId" required>
-                        ${teams.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+                        ${teams.map(t => `<option value="${t.id}">${t.liga} - ${t.name}</option>`).join('')}
                     </select>
                 </label>
                 <label style="display: flex; flex-direction: column" for="datetime">Datum a čas
