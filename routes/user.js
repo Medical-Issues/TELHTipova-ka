@@ -5,6 +5,9 @@ const path = require('path');
 const {loadTeams, requireLogin, calculateTeamScores, getLeagueZones, getTeamZone, isLockedPosition} = require("../utils/fileUtils");
 router.post("/tip", requireLogin, (req, res) => {
     const username = req.session.user;
+    if (username === "admin") {
+        return res.status(403).send("Administrátor se nemůže účastnit tipování.");
+    }
     const matchId = parseInt(req.body.matchId);
     const winner = req.body.winner;
     const loserWins = parseInt(req.body.loserWins);
@@ -514,7 +517,6 @@ router.get('/', requireLogin, (req, res) => {
                 const existingTip = userTips.find(t => t.matchId === match.id);
                 const selectedWinner = existingTip?.winner;
 
-                // Oprava času (tvá původní nebo ISO logika, zde používám tu bezpečnou ISO)
                 const matchStarted = match.postponed ? true : (match.datetime <= currentPragueTimeISO);
                 const isPlayoff = match.isPlayoff;
 
@@ -530,7 +532,7 @@ router.get('/', requireLogin, (req, res) => {
                     <tr class="match-row simple-match-row" data-match-id="${match.id}">
                         <td>
                             <button type="button" class="team-link home-btn ${selectedWinner === "home" ? "selected" : ""}" 
-                                    data-winner="home" ${matchStarted ? 'disabled' : ''}>${homeTeam}</button>
+                                    data-winner="home" ${matchStarted && ? 'disabled' : ''}>${homeTeam}</button>
                         </td>
                         <td class="vs">vs</td>
                         <td>
