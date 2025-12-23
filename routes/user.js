@@ -532,7 +532,7 @@ router.get('/', requireLogin, (req, res) => {
                     <tr class="match-row simple-match-row" data-match-id="${match.id}">
                         <td>
                             <button type="button" class="team-link home-btn ${selectedWinner === "home" ? "selected" : ""}" 
-                                    data-winner="home" ${matchStarted && ? 'disabled' : ''}>${homeTeam}</button>
+                                    data-winner="home" ${matchStarted ? 'disabled' : ''}>${homeTeam}</button>
                         </td>
                         <td class="vs">vs</td>
                         <td>
