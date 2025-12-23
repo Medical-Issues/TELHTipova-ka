@@ -7,8 +7,9 @@ const BRANCH = 'main';
 const DATA_FOLDER = path.join(__dirname, '..', 'data');
 
 async function loadJsonFilesFromGitHub() {
-    const { Octokit } = await import('@octokit/rest');
+    const { Octokit } = require("@octokit/rest");
     const { retry } = require("@octokit/plugin-retry");
+
     const MyOctokit = Octokit.plugin(retry);
 
     const octokit = new MyOctokit({
@@ -23,7 +24,7 @@ async function loadJsonFilesFromGitHub() {
     });
 
     try {
-        const { data: files } = await octokit.rest.repos.getContent({
+        const { data: files } = await octokit.repos.getContent({
             owner: REPO_OWNER,
             repo: REPO_NAME,
             path: 'data',
@@ -32,7 +33,7 @@ async function loadJsonFilesFromGitHub() {
 
         for (const file of files) {
             if (file.name.endsWith('.json')) {
-                const { data: fileData } = await octokit.rest.repos.getContent({
+                const { data: fileData } = await octokit.repos.getContent({
                     owner: REPO_OWNER,
                     repo: REPO_NAME,
                     path: `data/${file.name}`,
@@ -42,6 +43,11 @@ async function loadJsonFilesFromGitHub() {
                 const content = Buffer.from(fileData.content, 'base64').toString('utf8');
 
                 const filePath = path.join(DATA_FOLDER, file.name);
+
+                if (!fs.existsSync(DATA_FOLDER)){
+                    fs.mkdirSync(DATA_FOLDER, { recursive: true });
+                }
+
                 fs.writeFileSync(filePath, content, 'utf8');
                 console.log(`⬇️ Staženo: ${file.name}`);
             }

@@ -10,8 +10,9 @@
   },
   "private": true,
   "dependencies": {
-    "@octokit/plugin-retry": "^8.0.3",
-    "@octokit/rest": "^22.0.0",
+    "@octokit/core": "^4.2.4",
+    "@octokit/plugin-retry": "^4.1.6",
+    "@octokit/rest": "^19.0.13",
     "bcrypt": "^6.0.0",
     "body-parser": "^2.2.0",
     "dotenv": "^17.2.0",

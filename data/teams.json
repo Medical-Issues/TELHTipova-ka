@@ -7,11 +7,11 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 37,
-        "wins": 10,
-        "otWins": 3,
+        "points": 54,
+        "wins": 15,
+        "otWins": 4,
         "otLosses": 1,
-        "losses": 10
+        "losses": 14
       }
     }
   },
@@ -23,11 +23,11 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 26,
-        "wins": 6,
-        "otWins": 2,
-        "otLosses": 4,
-        "losses": 10
+        "points": 38,
+        "wins": 9,
+        "otWins": 3,
+        "otLosses": 5,
+        "losses": 15
       }
     }
   },
@@ -39,11 +39,11 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 43,
-        "wins": 12,
-        "otWins": 3,
+        "points": 54,
+        "wins": 15,
+        "otWins": 4,
         "otLosses": 1,
-        "losses": 5
+        "losses": 13
       }
     }
   },
@@ -55,11 +55,11 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 26,
-        "wins": 7,
-        "otWins": 2,
-        "otLosses": 1,
-        "losses": 12
+        "points": 39,
+        "wins": 10,
+        "otWins": 3,
+        "otLosses": 3,
+        "losses": 16
       }
     }
   },
@@ -71,11 +71,11 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 14,
-        "wins": 3,
+        "points": 28,
+        "wins": 7,
         "otWins": 2,
-        "otLosses": 1,
-        "losses": 16
+        "otLosses": 3,
+        "losses": 20
       }
     }
   },
@@ -87,11 +87,11 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 37,
-        "wins": 10,
-        "otWins": 2,
-        "otLosses": 3,
-        "losses": 6
+        "points": 50,
+        "wins": 13,
+        "otWins": 3,
+        "otLosses": 5,
+        "losses": 11
       }
     }
   },
@@ -103,11 +103,11 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 37,
-        "wins": 11,
+        "points": 53,
+        "wins": 16,
         "otWins": 0,
-        "otLosses": 4,
-        "losses": 8
+        "otLosses": 5,
+        "losses": 11
       }
     }
   },
@@ -119,11 +119,11 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 33,
-        "wins": 10,
-        "otWins": 1,
-        "otLosses": 1,
-        "losses": 11
+        "points": 50,
+        "wins": 14,
+        "otWins": 3,
+        "otLosses": 2,
+        "losses": 14
       }
     }
   },
@@ -135,11 +135,11 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 35,
-        "wins": 10,
+        "points": 50,
+        "wins": 15,
         "otWins": 1,
         "otLosses": 3,
-        "losses": 7
+        "losses": 12
       }
     }
   },
@@ -151,11 +151,11 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 31,
-        "wins": 9,
+        "points": 52,
+        "wins": 16,
         "otWins": 1,
         "otLosses": 2,
-        "losses": 9
+        "losses": 12
       }
     }
   },
@@ -167,11 +167,11 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 36,
-        "wins": 10,
-        "otWins": 2,
-        "otLosses": 2,
-        "losses": 7
+        "points": 55,
+        "wins": 15,
+        "otWins": 3,
+        "otLosses": 4,
+        "losses": 9
       }
     }
   },
@@ -183,11 +183,11 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 35,
-        "wins": 9,
+        "points": 50,
+        "wins": 14,
         "otWins": 3,
         "otLosses": 2,
-        "losses": 9
+        "losses": 15
       }
     }
   },
@@ -199,11 +199,11 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 34,
-        "wins": 10,
-        "otWins": 1,
+        "points": 49,
+        "wins": 13,
+        "otWins": 4,
         "otLosses": 2,
-        "losses": 10
+        "losses": 13
       }
     }
   },
@@ -215,11 +215,11 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 38,
-        "wins": 10,
-        "otWins": 4,
-        "otLosses": 0,
-        "losses": 7
+        "points": 56,
+        "wins": 15,
+        "otWins": 5,
+        "otLosses": 1,
+        "losses": 12
       }
     }
   },
@@ -549,7 +549,15 @@
     "liga": "Euro Hockey Tour",
     "active": true,
     "group": 2,
-    "stats": {}
+    "stats": {
+      "25/26": {
+        "points": 6,
+        "wins": 2,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 1
+      }
+    }
   },
   {
     "id": 54,
@@ -589,7 +597,15 @@
     "liga": "Euro Hockey Tour",
     "active": true,
     "group": 2,
-    "stats": {}
+    "stats": {
+      "25/26": {
+        "points": 2,
+        "wins": 0,
+        "otWins": 1,
+        "otLosses": 0,
+        "losses": 2
+      }
+    }
   },
   {
     "id": 58,
@@ -629,7 +645,15 @@
     "liga": "Euro Hockey Tour",
     "active": true,
     "group": 2,
-    "stats": {}
+    "stats": {
+      "25/26": {
+        "points": 8,
+        "wins": 2,
+        "otWins": 1,
+        "otLosses": 0,
+        "losses": 0
+      }
+    }
   },
   {
     "id": 62,
@@ -669,7 +693,15 @@
     "liga": "Euro Hockey Tour",
     "active": true,
     "group": 2,
-    "stats": {}
+    "stats": {
+      "25/26": {
+        "points": 2,
+        "wins": 0,
+        "otWins": 0,
+        "otLosses": 2,
+        "losses": 1
+      }
+    }
   },
   {
     "id": 66,
