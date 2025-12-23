@@ -5,7 +5,7 @@ const path = require('path');
 const {loadTeams, requireLogin, calculateTeamScores, getLeagueZones, getTeamZone, isLockedPosition} = require("../utils/fileUtils");
 router.post("/tip", requireLogin, (req, res) => {
     const username = req.session.user;
-    if (username === "admin") {
+    if (username === "Admin") {
         return res.status(403).send("Administrátor se nemůže účastnit tipování.");
     }
     const matchId = parseInt(req.body.matchId);
