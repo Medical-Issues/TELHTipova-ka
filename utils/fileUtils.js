@@ -317,6 +317,146 @@ function getTeamStats(team, season, maxMatches) {
     const maxPoints = points + (remaining * 3);
     return { points, maxPoints };
 }
+
+const paths = {
+    allowedLeagues: path.join(__dirname, '../data/allowedLeagues.json'),
+    leagues: path.join(__dirname, '../data/leagues.json'),
+    teams: path.join(__dirname, '../data/teams.json'),
+    matches: path.join(__dirname, '../data/matches.json'),
+    users: path.join(__dirname, '../data/users.json'),
+    playoff: path.join(__dirname, '../data/playoff.json')
+};
+
+const loadJSON = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
+const saveJSON = (file, data) => fs.writeFileSync(file, JSON.stringify(data, null, 2));
+
+function renameLeagueGlobal(oldName, newName) {
+    console.log(`🚨 START: Přejmenovávám ligu "${oldName}" na "${newName}"`);
+
+    // 1. ALLOWEDLEAGUES.JSON (Pole stringů)
+    try {
+        const allowed = loadJSON(paths.allowedLeagues);
+        const index = allowed.indexOf(oldName);
+        if (index !== -1) {
+            allowed[index] = newName;
+            saveJSON(paths.allowedLeagues, allowed);
+            console.log('✅ allowedLeagues.json: Název v poli upraven.');
+        }
+    } catch (e) { console.error('Chyba allowedLeagues:', e.message); }
+
+    // 2. LEAGUES.JSON (OPRAVENO: Iterace přes sezóny)
+    // -------------------------------------
+    try {
+        const leaguesData = loadJSON(paths.leagues);
+        let leaguesChanged = false;
+
+        // Projdeme všechny klíče (sezóny), např. "24/25", "25/26"
+        Object.keys(leaguesData).forEach(seasonKey => {
+            const seasonObj = leaguesData[seasonKey];
+
+            // Pokud má sezóna pole 'leagues'
+            if (seasonObj && Array.isArray(seasonObj.leagues)) {
+                const leagueToUpdate = seasonObj.leagues.find(l => l.name === oldName);
+
+                if (leagueToUpdate) {
+                    leagueToUpdate.name = newName;
+                    leaguesChanged = true;
+                }
+            }
+        });
+
+        if (leaguesChanged) {
+            saveJSON(paths.leagues, leaguesData);
+            console.log('✅ leagues.json: Název upraven napříč sezónami.');
+        }
+    } catch (e) { console.error('Chyba leagues:', e.message); }
+
+    // 3. TEAMS.JSON
+    try {
+        const teams = loadJSON(paths.teams);
+        let count = 0;
+        teams.forEach(t => {
+            if (t.liga === oldName) {
+                t.liga = newName;
+                count++;
+            }
+        });
+        if (count > 0) {
+            saveJSON(paths.teams, teams);
+            console.log(`✅ teams.json: Upraveno u ${count} týmů.`);
+        }
+    } catch (e) { console.error('Chyba teams:', e.message); }
+
+    // 4. MATCHES.JSON
+    try {
+        const matches = loadJSON(paths.matches);
+        let count = 0;
+
+        // Pomocná funkce, protože matches může být pole nebo objekt
+        const updateMatchesList = (list) => {
+            let c = 0;
+            list.forEach(m => {
+                if (m.liga === oldName) { m.liga = newName; c++; }
+            });
+            return c;
+        };
+
+        if (Array.isArray(matches)) {
+            count = updateMatchesList(matches);
+        } else {
+            // Pokud je matches rozděleno po sezónách/ligách
+            Object.keys(matches).forEach(key => {
+                if (Array.isArray(matches[key])) {
+                    count += updateMatchesList(matches[key]);
+                }
+            });
+        }
+
+        if (count > 0) {
+            saveJSON(paths.matches, matches);
+            console.log(`✅ matches.json: Upraveno u ${count} zápasů.`);
+        }
+    } catch (e) { console.error('Chyba matches:', e.message); }
+
+    // 5. PLAYOFF.JSON (Textová náhrada)
+    try {
+        let rawPlayoff = fs.readFileSync(paths.playoff, 'utf8');
+        const regex = new RegExp(`"${oldName}"`, 'g');
+        const newPlayoff = rawPlayoff.replace(regex, `"${newName}"`);
+
+        if (rawPlayoff !== newPlayoff) {
+            fs.writeFileSync(paths.playoff, newPlayoff);
+            console.log('✅ playoff.json: Textově nahrazeny výskyty názvu.');
+        }
+    } catch (e) { console.error('Chyba playoff:', e.message); }
+
+    // 6. USERS.JSON (Statistiky - Klíče)
+    try {
+        const users = loadJSON(paths.users);
+        let usersUpdated = 0;
+
+        users.forEach(user => {
+            if (!user.stats) return;
+
+            Object.keys(user.stats).forEach(season => {
+                const seasonStats = user.stats[season];
+                if (seasonStats && seasonStats.hasOwnProperty(oldName)) {
+                    seasonStats[newName] = seasonStats[oldName];
+                    delete seasonStats[oldName];
+                    usersUpdated++;
+                }
+            });
+        });
+
+        if (usersUpdated > 0) {
+            saveJSON(paths.users, users);
+            console.log(`✅ users.json: Přejmenovány statistiky u ${usersUpdated} uživatelů.`);
+        }
+    } catch (e) { console.error('Chyba users:', e.message); }
+
+    console.log('🏁 HOTOVO. Všechny ligy přejmenovány.');
+}
+
 function isLockedPosition(index, totalTeams, sortedTeams, cfg, season, maxMatches, allTeamsFinished) {
     if (cfg.quarterfinal === 0 && cfg.playin === 0 && cfg.relegation === 0) {
         return false;
@@ -384,4 +524,5 @@ module.exports = {
     getLeagueZones,
     getTeamZone,
     isLockedPosition,
+    renameLeagueGlobal,
 }

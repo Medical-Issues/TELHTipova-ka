@@ -802,7 +802,7 @@
   {
     "id": 78,
     "name": "HC Sparta Praha",
-    "liga": "Sprengler Cup",
+    "liga": "Spengler Cup",
     "active": true,
     "group": 1,
     "stats": {}
@@ -810,7 +810,7 @@
   {
     "id": 79,
     "name": "IFK Helsinki",
-    "liga": "Sprengler Cup",
+    "liga": "Spengler Cup",
     "active": true,
     "group": 1,
     "stats": {}
@@ -818,7 +818,7 @@
   {
     "id": 80,
     "name": "HC Fribourg-Gottéron",
-    "liga": "Sprengler Cup",
+    "liga": "Spengler Cup",
     "active": true,
     "group": 1,
     "stats": {}
@@ -826,7 +826,7 @@
   {
     "id": 81,
     "name": "HC Davos",
-    "liga": "Sprengler Cup",
+    "liga": "Spengler Cup",
     "active": true,
     "group": 2,
     "stats": {}
@@ -834,7 +834,7 @@
   {
     "id": 82,
     "name": "Kanada",
-    "liga": "Sprengler Cup",
+    "liga": "Spengler Cup",
     "active": true,
     "group": 2,
     "stats": {}
@@ -842,7 +842,7 @@
   {
     "id": 83,
     "name": "Výběr univerzit USA",
-    "liga": "Sprengler Cup",
+    "liga": "Spengler Cup",
     "active": true,
     "group": 2,
     "stats": {}

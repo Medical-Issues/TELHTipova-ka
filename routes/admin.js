@@ -9,6 +9,7 @@ const {
     evaluateAndAssignPoints,
     generateSeasonRange,
     removeTipsForDeletedMatch,
+    renameLeagueGlobal,
 } = require("../utils/fileUtils");
 router.post('/backup', async (req, res) => {
     try {
@@ -1263,7 +1264,14 @@ router.post('/leagues/update', requireAdmin, express.urlencoded({ extended: true
         const index = allSeasonData[selectedSeason].leagues.findIndex(l => l.name === originalLeagueName);
 
         if (index !== -1) {
-            allSeasonData[selectedSeason].leagues[index].name = leagueName || NaN;
+            if (originalLeagueName !== leagueName) {
+                console.log(`Změna názvu ligy z ${originalLeagueName} na ${leagueName}`);
+
+                renameLeagueGlobal(originalLeagueName, leagueName);
+
+                allSeasonData[selectedSeason].leagues[index].name = leagueName;
+            }
+
             allSeasonData[selectedSeason].leagues[index].maxMatches = Number(maxMatches) || 0;
             allSeasonData[selectedSeason].leagues[index].quarterfinal = Number(quarterfinal) || 0;
             allSeasonData[selectedSeason].leagues[index].playin = Number(playin) || 0;
