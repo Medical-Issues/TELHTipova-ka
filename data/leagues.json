@@ -36,6 +36,24 @@
         "quarterfinal": 0,
         "playin": 0,
         "relegation": 0
+      },
+      {
+        "name": "MSJ",
+        "isMultigroup": true,
+        "groupCount": 2,
+        "maxMatches": 29,
+        "quarterfinal": 4,
+        "playin": 4,
+        "relegation": 1
+      },
+      {
+        "name": "Spengler Cup",
+        "isMultigroup": true,
+        "groupCount": 2,
+        "maxMatches": 11,
+        "quarterfinal": 2,
+        "playin": 3,
+        "relegation": 3
       }
     ]
   }

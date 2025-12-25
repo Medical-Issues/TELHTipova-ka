@@ -1186,9 +1186,8 @@ router.get('/leagues/manage', requireAdmin, (req, res) => {
             ${seasonLeagues.map(l => `
                 <li style="margin-bottom: 10px;">
                     <form method="POST" action="/admin/leagues/update" style="display:inline-flex; align-items:center; gap:10px; flex-wrap: wrap;">
-                        <input type="hidden" name="league" value="${l.name}">
-                        <strong>${l.name}</strong> 
-                        
+                        <input type="hidden" name="originalLeagueName" value="${l.name}">
+                        <input type="text" name="leagueName" class="league-select" style="width: 300px" value="${l.name}">
                         <label>Max zápasů:
                             <input type="number" name="maxMatches" value="${l.maxMatches || 0}" min="0" style="width:80px;">
                         </label>
@@ -1256,14 +1255,15 @@ router.post('/leagues/manage', requireAdmin, express.urlencoded({ extended: true
 });
 
 router.post('/leagues/update', requireAdmin, express.urlencoded({ extended: true }), (req, res) => {
-    const { league, maxMatches, quarterfinal, playin, relegation } = req.body;
+    const { originalLeagueName, leagueName, maxMatches, quarterfinal, playin, relegation } = req.body;
     const allSeasonData = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf8'));
     const selectedSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
 
     if (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues) {
-        const index = allSeasonData[selectedSeason].leagues.findIndex(l => l.name === league);
+        const index = allSeasonData[selectedSeason].leagues.findIndex(l => l.name === originalLeagueName);
 
         if (index !== -1) {
+            allSeasonData[selectedSeason].leagues[index].name = leagueName || NaN;
             allSeasonData[selectedSeason].leagues[index].maxMatches = Number(maxMatches) || 0;
             allSeasonData[selectedSeason].leagues[index].quarterfinal = Number(quarterfinal) || 0;
             allSeasonData[selectedSeason].leagues[index].playin = Number(playin) || 0;

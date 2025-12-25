@@ -7,8 +7,8 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 54,
-        "wins": 15,
+        "points": 57,
+        "wins": 16,
         "otWins": 4,
         "otLosses": 1,
         "losses": 14
@@ -27,7 +27,7 @@
         "wins": 9,
         "otWins": 3,
         "otLosses": 5,
-        "losses": 15
+        "losses": 16
       }
     }
   },
@@ -59,7 +59,7 @@
         "wins": 10,
         "otWins": 3,
         "otLosses": 3,
-        "losses": 16
+        "losses": 17
       }
     }
   },
@@ -71,8 +71,8 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 28,
-        "wins": 7,
+        "points": 31,
+        "wins": 8,
         "otWins": 2,
         "otLosses": 3,
         "losses": 20
@@ -87,10 +87,10 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 50,
+        "points": 51,
         "wins": 13,
         "otWins": 3,
-        "otLosses": 5,
+        "otLosses": 6,
         "losses": 11
       }
     }
@@ -107,7 +107,7 @@
         "wins": 16,
         "otWins": 0,
         "otLosses": 5,
-        "losses": 11
+        "losses": 12
       }
     }
   },
@@ -123,7 +123,7 @@
         "wins": 14,
         "otWins": 3,
         "otLosses": 2,
-        "losses": 14
+        "losses": 15
       }
     }
   },
@@ -135,9 +135,9 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 50,
+        "points": 52,
         "wins": 15,
-        "otWins": 1,
+        "otWins": 2,
         "otLosses": 3,
         "losses": 12
       }
@@ -151,8 +151,8 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 52,
-        "wins": 16,
+        "points": 55,
+        "wins": 17,
         "otWins": 1,
         "otLosses": 2,
         "losses": 12
@@ -167,8 +167,8 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 55,
-        "wins": 15,
+        "points": 58,
+        "wins": 16,
         "otWins": 3,
         "otLosses": 4,
         "losses": 9
@@ -183,8 +183,8 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 50,
-        "wins": 14,
+        "points": 53,
+        "wins": 15,
         "otWins": 3,
         "otLosses": 2,
         "losses": 15
@@ -203,7 +203,7 @@
         "wins": 13,
         "otWins": 4,
         "otLosses": 2,
-        "losses": 13
+        "losses": 14
       }
     }
   },
@@ -717,6 +717,134 @@
     "liga": "Euro Hockey Tour",
     "active": true,
     "group": 4,
+    "stats": {}
+  },
+  {
+    "id": 68,
+    "name": "Slovensko",
+    "liga": "MSJ",
+    "active": true,
+    "group": 1,
+    "stats": {}
+  },
+  {
+    "id": 69,
+    "name": "Švýcarsko",
+    "liga": "MSJ",
+    "active": true,
+    "group": 1,
+    "stats": {}
+  },
+  {
+    "id": 70,
+    "name": "Německo",
+    "liga": "MSJ",
+    "active": true,
+    "group": 1,
+    "stats": {}
+  },
+  {
+    "id": 71,
+    "name": "Švédsko",
+    "liga": "MSJ",
+    "active": true,
+    "group": 1,
+    "stats": {}
+  },
+  {
+    "id": 72,
+    "name": "USA",
+    "liga": "MSJ",
+    "active": true,
+    "group": 1,
+    "stats": {}
+  },
+  {
+    "id": 73,
+    "name": "Finsko",
+    "liga": "MSJ",
+    "active": true,
+    "group": 2,
+    "stats": {}
+  },
+  {
+    "id": 74,
+    "name": "Česko",
+    "liga": "MSJ",
+    "active": true,
+    "group": 2,
+    "stats": {}
+  },
+  {
+    "id": 75,
+    "name": "Dánsko",
+    "liga": "MSJ",
+    "active": true,
+    "group": 2,
+    "stats": {}
+  },
+  {
+    "id": 76,
+    "name": "Lotyšsko",
+    "liga": "MSJ",
+    "active": true,
+    "group": 2,
+    "stats": {}
+  },
+  {
+    "id": 77,
+    "name": "Kanada",
+    "liga": "MSJ",
+    "active": true,
+    "group": 2,
+    "stats": {}
+  },
+  {
+    "id": 78,
+    "name": "HC Sparta Praha",
+    "liga": "Sprengler Cup",
+    "active": true,
+    "group": 1,
+    "stats": {}
+  },
+  {
+    "id": 79,
+    "name": "IFK Helsinki",
+    "liga": "Sprengler Cup",
+    "active": true,
+    "group": 1,
+    "stats": {}
+  },
+  {
+    "id": 80,
+    "name": "HC Fribourg-Gottéron",
+    "liga": "Sprengler Cup",
+    "active": true,
+    "group": 1,
+    "stats": {}
+  },
+  {
+    "id": 81,
+    "name": "HC Davos",
+    "liga": "Sprengler Cup",
+    "active": true,
+    "group": 2,
+    "stats": {}
+  },
+  {
+    "id": 82,
+    "name": "Kanada",
+    "liga": "Sprengler Cup",
+    "active": true,
+    "group": 2,
+    "stats": {}
+  },
+  {
+    "id": 83,
+    "name": "Výběr univerzit USA",
+    "liga": "Sprengler Cup",
+    "active": true,
+    "group": 2,
     "stats": {}
   }
 ]
