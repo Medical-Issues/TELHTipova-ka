@@ -678,7 +678,7 @@ document.addEventListener('DOMContentLoaded', () => {
         form.querySelectorAll('input[type="number"]').forEach(input => {
     
     // 1. HLAVNÍ LOGIKA - Spustí se při "opuštění" políčka (klik vedle, Tab, nebo vynucený blur)
-    input.addEventListener('change', (e) => {
+    input.addEventListener('change', () => {
         if (!winnerInput.value) { 
             alert('Vyber nejdřív vítěze!');
             // Volitelné: vrátit focus zpět, pokud chybí vítěz
