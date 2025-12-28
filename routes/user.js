@@ -675,27 +675,43 @@ document.addEventListener('DOMContentLoaded', () => {
         const matchId = form.querySelector('input[name="matchId"]').value;
         const winnerInput = form.querySelector('input[name="winner"]'); // Tento input aktualizujeme výše
 
-        // ENTER (Skóre)
         form.querySelectorAll('input[type="number"]').forEach(input => {
-            input.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    if (!winnerInput.value) { alert('Vyber nejdřív vítěze!'); return; }
+    
+    // 1. HLAVNÍ LOGIKA - Spustí se při "opuštění" políčka (klik vedle, Tab, nebo vynucený blur)
+    input.addEventListener('change', (e) => {
+        if (!winnerInput.value) { 
+            alert('Vyber nejdřív vítěze!');
+            // Volitelné: vrátit focus zpět, pokud chybí vítěz
+            // e.target.focus(); 
+            return; 
+        }
 
-                    const scoreHome = form.querySelector('input[name="scoreHome"]').value;
-                    const scoreAway = form.querySelector('input[name="scoreAway"]').value;
+        const scoreHome = form.querySelector('input[name="scoreHome"]').value;
+        const scoreAway = form.querySelector('input[name="scoreAway"]').value;
 
-                    const formData = new URLSearchParams();
-                    formData.append('matchId', matchId);
-                    formData.append('winner', winnerInput.value);
-                    formData.append('scoreHome', scoreHome);
-                    formData.append('scoreAway', scoreAway);
+        // Kontrola, zda jsou vyplněna obě čísla
+        if (scoreHome === '' || scoreAway === '') {
+            return; 
+        }
 
-                    // Tlačítka nepotřebujeme měnit, už svítí
-                    sendTip(formData, null, null, null);
-                }
-            });
-        });
+        const formData = new URLSearchParams();
+        formData.append('matchId', matchId);
+        formData.append('winner', winnerInput.value);
+        formData.append('scoreHome', scoreHome);
+        formData.append('scoreAway', scoreAway);
+
+        console.log('Ukládám...'); // Debug
+        sendTip(formData, null, null, null);
+    });
+
+    // 2. ENTER LOGIKA - Jen "vyhodí" uživatele z políčka
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault(); // Zabrání odeslání celého formuláře (refresh stránky)
+            input.blur();       // TOTO je ten trik -> způsobí, že se spustí 'change' nahoře
+        }
+    });
+});
 
         // SELECT (Loser wins)
         const select = form.querySelector('select');
