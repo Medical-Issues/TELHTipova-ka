@@ -341,7 +341,7 @@ router.get('/', requireLogin, (req, res) => {
         html += '</tr>';
     });
     const totalMatches = leagueObj.maxMatches
-    const filledMatches = matches.filter(m => m.result && m.liga === selectedLiga && m.season === selectedSeason && m.isPlayoff !== true).length;
+    const filledMatches = matches.filter(m => m.result && m.liga === selectedLiga && m.season === selectedSeason && m.isPlayoff === true).length;
     const percentage = totalMatches > 0 ? Math.round((filledMatches / totalMatches) * 100) : 0;
 
     html += `
