@@ -107,14 +107,19 @@ function evaluateAndAssignPoints(liga, season) {
 
         for (const tip of tipsInSeason) {
             const match = matches.find(m => m.id === tip.matchId);
+            // Pokud zápas nemá výsledek nebo vítěze, přeskakujeme
             if (!match?.result || !match.result.winner) continue;
 
+            // ---------------------------------------------------------
+            // 1. PLAYOFF BO1 (Jeden zápas)
+            // ---------------------------------------------------------
             if (match.isPlayoff && Number(match.bo) === 1) {
                 totalPlayoff++;
 
                 const realHome = Number(match.result.scoreHome ?? 0);
                 const realAway = Number(match.result.scoreAway ?? 0);
 
+                // Ošetření různých názvů proměnných v datech
                 const tipHome = Number(tip.scoreHome ?? tip.scoreH ?? tip.homeGoals ?? 0);
                 const tipAway = Number(tip.scoreAway ?? tip.scoreA ?? tip.awayGoals ?? 0);
 
@@ -122,41 +127,71 @@ function evaluateAndAssignPoints(liga, season) {
                     continue;
                 }
 
+                // Zjistíme "směr" výsledku (1 = výhra domácích, -1 = výhra hostů)
+                const realOutcome = Math.sign(realHome - realAway);
+                const tipOutcome = Math.sign(tipHome - tipAway);
+
+                // DŮLEŽITÉ: Pokud netrefil vítěze, automaticky 0 bodů a jdeme dál
+                if (realOutcome !== tipOutcome) {
+                    continue;
+                }
+
+                // Pokud trefil vítěze, počítáme přesnost skóre
                 if (tipHome === realHome && tipAway === realAway) {
-                    correctPoints += 5;
+                    correctPoints += 5; // Přesný výsledek
                 } else {
                     const delta = Math.abs(tipHome - realHome) + Math.abs(tipAway - realAway);
 
                     if (delta === 1) correctPoints += 4;
                     else if (delta === 2) correctPoints += 3;
-                    else correctPoints += 1;
+                    else correctPoints += 1; // Delta 3 a více
                 }
 
                 continue;
             }
 
+            // ---------------------------------------------------------
+            // 2. PLAYOFF BO > 1 (Série na více vítězných map)
+            // ---------------------------------------------------------
             if (match.isPlayoff && Number(match.bo) > 1) {
                 totalPlayoff++;
 
                 const realWinner = match.result.winner;
                 const tipWinner = tip.winner;
+
+                // Pokud netrefil vítěze série, 0 bodů
+                if (tipWinner !== realWinner) {
+                    continue;
+                }
+
+                // Pokud trefil vítěze, zkontrolujeme přesný počet map poraženého
                 const realLoserWins = realWinner === "home"
                     ? Number(match.result.scoreAway ?? 0)
                     : Number(match.result.scoreHome ?? 0);
+
                 const tipLoserWins = Number.isFinite(Number(tip.loserWins)) ? Number(tip.loserWins) : -1;
 
-                if (tipWinner === realWinner) correctPoints += 1;
-                if (tipWinner === realWinner && tipLoserWins === realLoserWins) correctPoints += 2;
+                if (tipLoserWins === realLoserWins) {
+                    correctPoints += 3; // Správný vítěz I přesné skóre série
+                } else {
+                    correctPoints += 1; // Správný vítěz, ale špatné skóre
+                }
 
                 continue;
             }
 
+            // ---------------------------------------------------------
+            // 3. OBYČEJNÝ ZÁPAS (Regular Season)
+            // ---------------------------------------------------------
             if (!match.isPlayoff) {
                 totalRegular++;
-                if (tip.winner === match.result.winner) correctPoints += 1;
+                if (tip.winner === match.result.winner) {
+                    correctPoints += 1;
+                }
             }
         }
 
+        // Uložení statistik do objektu uživatele
         if (!user.stats) user.stats = {};
         if (!user.stats[season]) user.stats[season] = {};
         if (!user.stats[season][liga]) user.stats[season][liga] = {};
@@ -166,6 +201,7 @@ function evaluateAndAssignPoints(liga, season) {
         user.stats[season][liga].totalPlayoff = totalPlayoff;
     }
 
+    // Zápis do souboru
     fs.writeFileSync('./data/users.json', JSON.stringify(users, null, 2));
 }
 
