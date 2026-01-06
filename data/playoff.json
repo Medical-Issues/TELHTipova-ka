@@ -8627,9 +8627,9 @@
           "textColor": "lightgrey"
         },
         {
-          "text": "",
-          "bgColor": "rgb(0, 0, 0)",
-          "textColor": "lightgrey"
+          "text": "4",
+          "bgColor": "rgb(255, 215, 0)",
+          "textColor": "rgb(0, 0, 0)"
         },
         {
           "text": "",
@@ -8831,9 +8831,9 @@
           "textColor": "lightgrey"
         },
         {
-          "text": "",
-          "bgColor": "rgb(0, 0, 0)",
-          "textColor": "lightgrey"
+          "text": "2",
+          "bgColor": "rgb(143, 143, 143)",
+          "textColor": "rgb(0, 0, 0)"
         },
         {
           "text": "",

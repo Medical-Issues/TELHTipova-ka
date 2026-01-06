@@ -81,7 +81,7 @@
         "MSJ": {
           "correct": 29,
           "totalRegular": 20,
-          "totalPlayoff": 8
+          "totalPlayoff": 9
         }
       }
     },
@@ -3368,7 +3368,7 @@
         "MSJ": {
           "correct": 38,
           "totalRegular": 20,
-          "totalPlayoff": 8
+          "totalPlayoff": 9
         }
       }
     }
@@ -4992,9 +4992,9 @@
           "totalPlayoff": 5
         },
         "MSJ": {
-          "correct": 28,
+          "correct": 32,
           "totalRegular": 20,
-          "totalPlayoff": 8
+          "totalPlayoff": 9
         }
       }
     }

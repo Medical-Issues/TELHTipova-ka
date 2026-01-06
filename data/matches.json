@@ -5332,6 +5332,13 @@
     "liga": "MSJ",
     "season": "25/26",
     "isPlayoff": true,
-    "bo": 1
+    "bo": 1,
+    "postponed": false,
+    "result": {
+      "scoreHome": 4,
+      "scoreAway": 2,
+      "ot": false,
+      "winner": "home"
+    }
   }
 ]

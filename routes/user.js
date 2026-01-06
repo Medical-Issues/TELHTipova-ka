@@ -807,71 +807,84 @@ router.get('/history', requireLogin, (req, res) => {
 router.get('/history/a', requireLogin, (req, res) => {
     const username = req.session.user;
     const selectedSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
-    const teams = loadTeams().filter(t => t.stats[selectedSeason]).filter(t => t.stats[selectedSeason].wins + t.stats[selectedSeason].otWins + t.stats[selectedSeason].otLosses + t.stats[selectedSeason].losses > 0);
     const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf-8'));
     const allSeasonData = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf-8'));
-    const leagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues)
-        ? allSeasonData[selectedSeason].leagues
-        : [];
+
+    // 1. ZÁKLADNÍ NAČÍTÁNÍ DAT TÝMŮ A LIG
+    const teams = loadTeams().filter(t => t.stats[selectedSeason]).filter(t => t.stats[selectedSeason].wins + t.stats[selectedSeason].otWins + t.stats[selectedSeason].otLosses + t.stats[selectedSeason].losses > 0);
+    const leagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues) ? allSeasonData[selectedSeason].leagues : [];
     const leaguesFromTeams = [...new Set(teams.map(t => t.liga))];
     const leaguesFromMatches = [...new Set(matches.map(m => m.liga))];
     const allLeagues = [...new Set([...leaguesFromTeams, ...leaguesFromMatches])];
-    const uniqueLeagues = allLeagues.filter(l => {
-        return matches.some(m => m.liga === l && m.season === selectedSeason);
-    });
+    const uniqueLeagues = allLeagues.filter(l => matches.some(m => m.liga === l && m.season === selectedSeason));
 
     const selectedLiga = req.query.liga && uniqueLeagues.includes(req.query.liga) ? req.query.liga : uniqueLeagues[0];
     const teamsInSelectedLiga = teams.filter(t => t.liga === selectedLiga);
-
     const scores = calculateTeamScores(matches, selectedSeason, selectedLiga);
     const leagueObj = leagues.find(l => l.name === selectedLiga);
 
-    let userStats = [];
+    // --- HLAVNÍ OPRAVA: VŠE NAČTEME A SPOČÍTÁME TADY NAHOŘE ---
+
+    // 2. NAČTENÍ UŽIVATELŮ (pouze jednou)
+    let allUsers = [];
     try {
         const usersData = fs.readFileSync('./data/users.json', 'utf-8');
-        const allUsers = JSON.parse(usersData);
-
-        const matchesInLiga = matches.filter(m => m.season === selectedSeason && m.liga === selectedLiga);
-
-        userStats = allUsers
-            .filter(u => {
-                const stats = u.stats?.[selectedSeason]?.[selectedLiga];
-                const tips = u.tips?.[selectedSeason]?.[selectedLiga] || [];
-                return (stats && (stats.totalRegular > 0 || stats.totalPlayoff > 0)) || tips.length > 0;
-            })
-            .map(u => {
-                const stats = u.stats?.[selectedSeason]?.[selectedLiga] || {};
-                const userTips = u.tips?.[selectedSeason]?.[selectedLiga] || [];
-
-                const maxFromTips = userTips.reduce((sum, tip) => {
-                    const match = matchesInLiga.find(m => Number(m.id) === Number(tip.matchId));
-                    if (!match || !match.result) return sum;
-                    if (!match.isPlayoff) return sum + 1;
-                    if (match.bo === 1) return sum + 5;
-                    return sum + 3;
-                }, 0);
-
-                const totalPoints = matchesInLiga.reduce((sum, match) => {
-                    if (!match.result) return sum;
-                    if (!match.isPlayoff) return sum + 1;
-                    if (match.bo === 1) return sum + 5;
-                    return sum + 3;
-                }, 0);
-
-                return {
-                    username: u.username,
-                    correct: stats.correct || 0,
-                    total: totalPoints,
-                    maxFromTips: maxFromTips,
-                    totalRegular: stats.totalRegular || 0,
-                    totalPlayoff: stats.totalPlayoff || 0
-                };
-            });
+        allUsers = JSON.parse(usersData);
     } catch (err) {
-        console.error("Chyba při načítání statistik uživatelů:", err);
+        console.error("Chyba při načítání uživatelů:", err);
     }
 
-    const currentUserStats = userStats.find(u => u.username === username);
+    // 3. ZJIŠTĚNÍ INITIAL USER (Kdo se má zobrazit)
+    const usersWithTips = allUsers.filter(u => {
+        const tips = u.tips?.[selectedSeason]?.[selectedLiga];
+        return tips && tips.length > 0;
+    }).sort((a, b) => a.username.localeCompare(b.username));
+
+    // Pokud je přihlášený uživatel v seznamu, vybereme jeho. Jinak prvního ze seznamu.
+    const initialUser = usersWithTips.find(u => u.username === username) ? username : (usersWithTips[0]?.username || "");
+
+    // 4. VÝPOČET STATISTIK (userStats)
+    const matchesInLiga = matches.filter(m => m.season === selectedSeason && m.liga === selectedLiga);
+
+    const userStats = allUsers
+        .filter(u => {
+            const stats = u.stats?.[selectedSeason]?.[selectedLiga];
+            const tips = u.tips?.[selectedSeason]?.[selectedLiga] || [];
+            return (stats && (stats.totalRegular > 0 || stats.totalPlayoff > 0)) || tips.length > 0;
+        })
+        .map(u => {
+            const stats = u.stats?.[selectedSeason]?.[selectedLiga] || {};
+            const userTips = u.tips?.[selectedSeason]?.[selectedLiga] || [];
+
+            const maxFromTips = userTips.reduce((sum, tip) => {
+                const match = matchesInLiga.find(m => Number(m.id) === Number(tip.matchId));
+                if (!match || !match.result) return sum;
+                if (!match.isPlayoff) return sum + 1;
+                if (match.bo === 1) return sum + 5;
+                return sum + 3;
+            }, 0);
+
+            const totalPoints = matchesInLiga.reduce((sum, match) => {
+                if (!match.result) return sum;
+                if (!match.isPlayoff) return sum + 1;
+                if (match.bo === 1) return sum + 5;
+                return sum + 3;
+            }, 0);
+
+            return {
+                username: u.username,
+                correct: stats.correct || 0,
+                total: totalPoints,
+                maxFromTips: maxFromTips,
+                totalRegular: stats.totalRegular || 0,
+                totalPlayoff: stats.totalPlayoff || 0
+            };
+        });
+
+    // Najdeme statistiky pro toho uživatele, kterého jsme vybrali jako výchozího
+    const displayedUserStats = userStats.find(u => u.username === initialUser);
+
+    // --- KONEC OPRAVY LOGIKY, DÁLE POKRAČUJE HTML GENERACE ---
 
     const playoffPath = path.join(__dirname, '../data/playoff.json');
     let playoffData = [];
@@ -880,23 +893,18 @@ router.get('/history/a', requireLogin, (req, res) => {
         const allPlayoffs = JSON.parse(raw);
         if (allPlayoffs[selectedSeason] && allPlayoffs[selectedSeason][selectedLiga]) {
             playoffData = allPlayoffs[selectedSeason][selectedLiga];
-        } else {
-            console.warn('Playoff data v tabulce pro danou sezónu a ligu nebyla nalezena.');
         }
-
     } catch (e) {
         console.error("Chyba při načítání playoff dat:", e);
     }
 
     const isMultigroup = leagueObj?.isMultigroup || false;
-
     const teamsByGroup = {};
     teamsInSelectedLiga.forEach(team => {
         const groupLetter = String.fromCharCode(64 + team.group);
         if (!teamsByGroup[groupLetter]) teamsByGroup[groupLetter] = [];
         teamsByGroup[groupLetter].push(team);
     });
-
     const sortedGroups = Object.keys(teamsByGroup).sort();
 
     let html = `
@@ -925,6 +933,8 @@ router.get('/history/a', requireLogin, (req, res) => {
         </div>
         <div id="regularTable">
         `;
+
+    // ... ZDE JE VÁŠ KÓD PRO TABULKY TÝMŮ (beze změny) ...
     for (const groupLetter of sortedGroups) {
         const teamsInGroup = teamsByGroup[groupLetter];
         const sorted = teamsInGroup;
@@ -933,7 +943,6 @@ router.get('/history/a', requireLogin, (req, res) => {
             playin: leagueObj.playin,
             relegation: leagueObj.relegation
         } : { quarterfinal: 0, playin: 0, relegation: 0 };
-
         const matchesPerTeam = leagueObj ? (leagueObj.maxMatches * 2) / teamsInGroup.length : 0;
         const allTeamsFinished = sorted.every(team => {
             const stats = team.stats?.[selectedSeason] || {};
@@ -941,29 +950,7 @@ router.get('/history/a', requireLogin, (req, res) => {
             return played >= matchesPerTeam;
         });
 
-        html += `
-  <table class="points-table">
-    <thead>
-      <tr>
-        <th scope="col" id="points-table-header" colspan="10">
-          <h2>Týmy - ${selectedLiga} ${selectedSeason} - Základní část
-          ${isMultigroup ? ` - Skupina ${groupLetter}` : ''}</h2>
-        </th>
-      </tr>
-      <tr>
-        <th class="position">Místo</th>
-        <th>Tým</th>
-        <th class="points">Body</th>
-        <th>Skóre</th>
-        <th>Rozdíl</th>
-        <th>Z</th>
-        <th>V</th>
-        <th>Vpp</th>
-        <th>Ppp</th>
-        <th>P</th>
-      </tr>
-    </thead>
-    <tbody>`;
+        html += `<table class="points-table"><thead><tr><th scope="col" id="points-table-header" colspan="10"><h2>Týmy - ${selectedLiga} ${selectedSeason} - Základní část${isMultigroup ? ` - Skupina ${groupLetter}` : ''}</h2></th></tr><tr><th class="position">Místo</th><th>Tým</th><th class="points">Body</th><th>Skóre</th><th>Rozdíl</th><th>Z</th><th>V</th><th>Vpp</th><th>Ppp</th><th>P</th></tr></thead><tbody>`;
 
         teamsInGroup.sort((a, b) => {
             const aStats = a.stats?.[selectedSeason] || {};
@@ -976,7 +963,6 @@ router.get('/history/a', requireLogin, (req, res) => {
             const bDiff = bScore.gf - bScore.ga;
             const aMatches = (aStats.wins || 0) + (aStats.otWins || 0) + (aStats.otLosses || 0) + (aStats.losses || 0);
             const bMatches = (bStats.wins || 0) + (bStats.otWins || 0) + (bStats.otLosses || 0) + (bStats.losses || 0);
-
             if (bPoints !== aPoints) return bPoints - aPoints;
             if (bDiff !== aDiff) return bDiff - aDiff;
             return aMatches - bMatches;
@@ -985,182 +971,70 @@ router.get('/history/a', requireLogin, (req, res) => {
         teamsInGroup.forEach((team, index) => {
             const teamStats = scores[team.id] || {gf: 0, ga: 0};
             const goalDiff = teamStats.gf - teamStats.ga;
-            const numberMatches = (team.stats?.[selectedSeason]?.wins || 0)
-                + (team.stats?.[selectedSeason]?.otWins || 0)
-                + (team.stats?.[selectedSeason]?.otLosses || 0)
-                + (team.stats?.[selectedSeason]?.losses || 0);
+            const numberMatches = (team.stats?.[selectedSeason]?.wins || 0) + (team.stats?.[selectedSeason]?.otWins || 0) + (team.stats?.[selectedSeason]?.otLosses || 0) + (team.stats?.[selectedSeason]?.losses || 0);
             const zone = getTeamZone(index, teamsInGroup.length, zoneConfig);
             const locked = isLockedPosition(index, teamsInGroup.length, sorted, zoneConfig, selectedSeason, matchesPerTeam, allTeamsFinished);
-
             const rowClass = locked ? `${zone} locked` : zone;
-            html += `
-      <tr class="${rowClass}"> <td class="rank-cell ${zone}">${index + 1}.</td> <td>${team.name}</td>
-        <td class="points numbers">${team.stats?.[selectedSeason]?.points || 0}</td>
-        <td class="numbers">${teamStats.gf}:${teamStats.ga}</td>
-        <td class="numbers">${goalDiff > 0 ? '+' + goalDiff : goalDiff}</td>
-        <td class="numbers">${numberMatches}</td>
-        <td class="numbers">${team.stats?.[selectedSeason]?.wins || 0}</td>
-        <td class="numbers">${team.stats?.[selectedSeason]?.otWins || 0}</td>
-        <td class="numbers">${team.stats?.[selectedSeason]?.otLosses || 0}</td>
-        <td class="numbers">${team.stats?.[selectedSeason]?.losses || 0}</td>
-      </tr>`;
+            html += `<tr class="${rowClass}"> <td class="rank-cell ${zone}">${index + 1}.</td> <td>${team.name}</td><td class="points numbers">${team.stats?.[selectedSeason]?.points || 0}</td><td class="numbers">${teamStats.gf}:${teamStats.ga}</td><td class="numbers">${goalDiff > 0 ? '+' + goalDiff : goalDiff}</td><td class="numbers">${numberMatches}</td><td class="numbers">${team.stats?.[selectedSeason]?.wins || 0}</td><td class="numbers">${team.stats?.[selectedSeason]?.otWins || 0}</td><td class="numbers">${team.stats?.[selectedSeason]?.otLosses || 0}</td><td class="numbers">${team.stats?.[selectedSeason]?.losses || 0}</td></tr>`;
         });
-
-        html += `
-    </tbody>
-  </table><br>`;
+        html += `</tbody></table><br>`;
     }
-    html += `
-        </div>
-        <div id="playoffTablePreview" style="display:none; overflow:auto; max-width:100%;">
-      <table class="points-table"><tr><th scope="col" id="points-table-header" colspan="20"><h2>Týmy - ${selectedLiga} ${selectedSeason} - Playoff</h2></th></tr>`;
-
+    html += `</div><div id="playoffTablePreview" style="display:none; overflow:auto; max-width:100%;"><table class="points-table"><tr><th scope="col" id="points-table-header" colspan="20"><h2>Týmy - ${selectedLiga} ${selectedSeason} - Playoff</h2></th></tr>`;
     playoffData.forEach((row) => {
         html += '<tr>';
-        row.forEach(cell => {
-            const bg = cell.bgColor ? ` style="background-color:${cell.bgColor}"` : '';
-            const txt = cell.text || '';
-            html += `<td${bg}>${txt}</td>`;
-        });
+        row.forEach(cell => { const bg = cell.bgColor ? ` style="background-color:${cell.bgColor}"` : ''; const txt = cell.text || ''; html += `<td${bg}>${txt}</td>`; });
         html += '</tr>';
     });
+    html += `</table></div><script>function showTable(which) { document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none'; const p = document.getElementById('playoffTablePreview'); p.style.display = which === 'playoff' ? 'block' : 'none'; }</script></div>`;
 
-    html += `
-      </table>
-    </div>
 
-    <script>
-      function showTable(which) {
-        document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none';
-        const p = document.getElementById('playoffTablePreview');
-        p.style.display = which === 'playoff' ? 'block' : 'none';
-      }
-    </script>
-        </div>
-`;
-
-    if (username) {
+    // --- HORNÍ STATISTIKY (Používáme initialUser a displayedUserStats spočítané nahoře) ---
+    if (initialUser) {
         html += `
             <section class="user_stats">
-                <h2>Tvoje statistiky</h2>
-             `;
+                <h2>Statistiky uživatele <span id="stats-username-header">${initialUser}</span></h2>
+                <div id="stats-content-box">`;
 
-        if (currentUserStats) {
-            const percent = currentUserStats.total > 0 ? (currentUserStats.correct / currentUserStats.total * 100).toFixed(2) : "0.00";
-            html += `
-            <p>Správně tipnuto z maximálního počtu všech možných bodů: <strong>${currentUserStats.correct}</strong> z <strong>${currentUserStats.total}</strong> (${percent} %)</p>
-        `;
+        if (displayedUserStats) {
+            const percent = displayedUserStats.total > 0 ? (displayedUserStats.correct / displayedUserStats.total * 100).toFixed(2) : "0.00";
+            html += `<p>Správně tipnuto z maximálního počtu všech možných bodů: <strong>${displayedUserStats.correct}</strong> z <strong>${displayedUserStats.total}</strong> (${percent} %)</p>`;
         } else {
-            html += `<p>Nemáš ještě žádné tipy nebo není vyhodnoceno.</p>`;
+            html += `<p>Data nejsou dostupná.</p>`;
         }
+        html += `</div></section>`;
 
+        // --- TABULKA VŠECH UŽIVATELŮ ---
+        html += `<section class="global_stats"><table class="points-table"><thead><tr><th scope="col" id="points-table-header" colspan="6"><h2>Statistiky všech</h2></th></tr><tr><th class="position">Místo</th><th>Uživatel</th><th>Úspěšnost</th><th>Počet bodů</th><th>Celkem tipů v ZČ</th><th>Celkem tipů v Playoff</th></tr></thead><tbody>`;
+        userStats.sort((a, b) => {
+            if (b.correct !== a.correct) return b.correct - a.correct;
+            return a.maxFromTips - b.maxFromTips;
+        }).forEach((user, index) => {
+            const successRateOverall = user.maxFromTips > 0 ? ((user.correct / user.maxFromTips) * 100).toFixed(2) : '0.00';
+            const successRate = user.total > 0 ? ((user.correct / user.total) * 100).toFixed(2) : '0.00';
+            html += `<tr><td>${index + 1}.</td><td>${user.username}</td><td>${successRateOverall}%${user.total !== user.maxFromTips ? ` (${successRate}%)` : ''}</td><td>${user.correct}</td><td>${user.totalRegular}</td><td>${user.totalPlayoff}</td></tr>`;
+        });
+        html += `</tbody></table><br>
+        <table style="color: black" class="points-table">
+            <tr style="background-color: #00FF00"><td colspan="3">Za správný tip zápasu v základní části</td><td colspan="3">1 bod</td></tr>
+            <tr style="background-color: #FF0000"><td colspan="3">Za správný tip vítěze dané série v playoff ale špatný tip počtu vyhraných zápasů týmu který prohrál</td><td colspan="3">1 bod</td></tr>
+            <tr style="background-color: #00FF00"><td colspan="3">Za správný tip vítěze dané série v playoff + počet vyhraných zápasů týmů který prohrál</td><td colspan="3">3 body</td></tr>
+            <tr style="background-color: #00FF00"><td colspan="3">Za správný tip vítěze daného zápasu v playoff + správné skóre</td><td colspan="3">5 bodů</td></tr>
+            <tr style="background-color: #FFFF00"><td colspan="3">Za správný tip vítěze daného zápasu v playoff + chyba ve skóre o 1 gól</td><td colspan="3">4 body</td></tr>
+            <tr style="background-color: #FF6600"><td colspan="3">Za správný tip vítěze daného zápasu v playoff + chyba ve skóre o 2 góly</td><td colspan="3">3 body</td></tr>
+            <tr style="background-color: #FF0000"><td colspan="3">Za správný tip vítěze daného zápasu v playoff + chyba ve skóre o 3+ gólů</td><td colspan="3">1 bod</td></tr>
+        </table>
+        </section></section>`;
+
+        // --- SPODNÍ ČÁST (HISTORIE) ---
         html += `
-        </section>
+        <section class="matches-container">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+                <h2 style="margin: 0;">Historie tipů</h2>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <label for="historyUserSelect" style="color: lightgrey;">Zobrazit:</label>
+                    <select id="historyUserSelect" onchange="showUserHistory(this.value)" style="background-color: black; color: orangered; border: 1px solid orangered; padding: 5px; border-radius: 5px;">`;
 
-<section class="global_stats">
-    <table class="points-table">
-        <thead>
-            <tr><th scope="col" id="points-table-header" colspan="6"><h2>Statistiky všech</h2></th></tr>
-            <tr>
-                <th class="position">Místo</th>
-                <th>Uživatel</th>
-                <th>Úspěšnost</th>
-                <th>Počet bodů</th>
-                <th>Celkem tipů v ZČ</th>
-                <th>Celkem tipů v Playoff</th>
-            </tr>
-        </thead>
-        <tbody>`;
-        userStats
-            .sort((a, b) => {
-                if (b.correct !== a.correct) {
-                    return b.correct - a.correct;
-                }
-                return a.maxFromTips - b.maxFromTips;
-            })
-            .forEach((user, index) => {
-                const successRateOverall = user.maxFromTips > 0 ? ((user.correct / user.maxFromTips) * 100).toFixed(2) : '0.00';
-                const successRate = user.total > 0 ? ((user.correct / user.total) * 100).toFixed(2) : '0.00';
-
-                html += `
-        <tr>
-            <td>${index + 1}.</td>
-            <td>${user.username}</td>
-            
-            <td>${successRateOverall}%${user.total !== user.maxFromTips ? ` (${successRate}%)` : ''}</td>
-            
-            <td>${user.correct}</td>
-            <td>${user.totalRegular}</td>
-            <td>${user.totalPlayoff}</td>
-        </tr>`;
-            });
-        html += `
-        </tbody>
-    </table>
-    <br>
-    <table style="color: black" class="points-table">
-        <tr style="background-color: #00FF00">
-            <td colspan="3">Za správný tip zápasu v základní části</td>
-            <td colspan="3">1 bod</td>
-        </tr>
-        <tr style="background-color: #FF0000">
-            <td colspan="3">Za správný tip vítěze dané série v playoff ale špatný tip počtu vyhraných zápasů týmu který prohrál</td>
-            <td colspan="3">1 bod</td>
-        </tr>
-        <tr style="background-color: #00FF00">
-            <td colspan="3">Za správný tip vítěze dané série v playoff + počet vyhraných zápasů týmů který prohrál</td>
-            <td colspan="3">3 body</td>
-        </tr>
-        <tr style="background-color: #00FF00">
-            <td colspan="3">Za správný tip vítěze daného zápasu v playoff + správné skóre</td>
-            <td colspan="3">5 bodů</td>
-        </tr>
-        <tr style="background-color: #FFFF00">
-            <td colspan="3">Za správný tip vítěze daného zápasu v playoff + chyba ve skóre o 1 gól</td>
-            <td colspan="3">4 body</td>
-        </tr>
-        <tr style="background-color: #FF6600">
-            <td colspan="3">Za správný tip vítěze daného zápasu v playoff + chyba ve skóre o 2 góly</td>
-            <td colspan="3">3 body</td>
-        </tr>
-        <tr style="background-color: #FF0000">
-            <td colspan="3">Za správný tip vítěze daného zápasu v playoff + chyba ve skóre o 3+ gólů</td>
-            <td colspan="3">1 bod</td>
-        </tr>
-    </table>
-</section>
-</section>
-<section class="matches-container">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
-        <h2 style="margin: 0;">Historie tipů</h2>
-        
-        <div style="display: flex; align-items: center; gap: 10px;">
-            <label for="historyUserSelect" style="color: lightgrey;">Zobrazit:</label>
-            `;
-
-        const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'))
-            .filter(m => m.liga === selectedLiga && m.result)
-            .filter(m => m.season === selectedSeason)
-            .sort((a, b) => new Date(a.datetime) - new Date(b.datetime));
-
-        const users = JSON.parse(fs.readFileSync('./data/users.json', 'utf8'));
-
-        // 1. Uživatelé pro Select (jen ti, co mají tipy)
-        const usersWithTips = users.filter(u => {
-            const tips = u.tips?.[selectedSeason]?.[selectedLiga];
-            return tips && tips.length > 0;
-        }).sort((a, b) => a.username.localeCompare(b.username));
-
-        // Defaultně zobrazíme přihlášeného uživatele (nebo prvního v seznamu)
-        const initialUser = usersWithTips.find(u => u.username === username) ? username : (usersWithTips[0]?.username || "");
-
-        // 2. HTML PRO SELECT (Žádné URL, jen volání JS funkce)
-        html += `
-            <select id="historyUserSelect" 
-                    onchange="showUserHistory(this.value)"
-                    style="background-color: black; color: orangered; border: 1px solid orangered; padding: 5px; border-radius: 5px;">
-        `;
-
+        // ZDE UŽ NEPOČÍTÁME usersWithTips ZNOVU, POUŽIJEME PROMĚNNOU ZE ZAČÁTKU
         if (usersWithTips.length === 0) {
             html += `<option disabled selected>Žádná data</option>`;
         } else {
@@ -1170,44 +1044,36 @@ router.get('/history/a', requireLogin, (req, res) => {
             });
         }
 
-        html += `   </select>
-        </div>
-    </div>
+        html += `   </select></div></div><table class="points-table">`;
 
-    <table class="points-table">
-        `;
+        const groupedMatches = matches
+            .filter(m => m.liga === selectedLiga && m.result && m.season === selectedSeason)
+            .sort((a, b) => new Date(a.datetime) - new Date(b.datetime))
+            .reduce((groups, match) => {
+                const dateTime = match.datetime || match.date || "Neznámý čas";
+                if (!groups[dateTime]) groups[dateTime] = [];
+                groups[dateTime].push(match);
+                return groups;
+            }, {});
 
-        const groupedMatches = matches.reduce((groups, match) => {
-            const dateTime = match.datetime || match.date || "Neznámý čas";
-            if (!groups[dateTime]) groups[dateTime] = [];
-            groups[dateTime].push(match);
-            return groups;
-        }, {});
-        const teams = JSON.parse(fs.readFileSync('./data/teams.json', 'utf8'));
+        const teamsJSON = JSON.parse(fs.readFileSync('./data/teams.json', 'utf8'));
 
-        // --- POMOCNÁ FUNKCE PRO GENEROVÁNÍ HTML BUŇKY PRO JEDNOHO USERA ---
-        // Abychom nemuseli kopírovat logiku 10x, uděláme si funkci uvnitř
         const renderUserTip = (u, match, type) => {
             const userTip = u.tips?.[selectedSeason]?.[selectedLiga]?.find(t => t.matchId === match.id);
             const selectedWinner = userTip?.winner;
             const bo = match.bo || 5;
-
-            // CSS třída pro identifikaci uživatele (např. "user-Pepa")
-            // Pokud to není aktuálně vybraný uživatel, rovnou ho skryjeme (display: none)
+            // Použijeme initialUser pro určení viditelnosti
             const visibilityStyle = u.username === initialUser ? '' : 'display:none;';
-            const userClass = `history-item user-${u.username.replace(/[^a-zA-Z0-9]/g, '_')}`; // Ošetření speciálních znaků
+            const userClass = `history-item user-${u.username.replace(/[^a-zA-Z0-9]/g, '_')}`;
 
             if (type === 'home' || type === 'away') {
                 const teamName = type === 'home'
-                    ? (teams.find(t => t.id === match.homeTeamId)?.name || '???')
-                    : (teams.find(t => t.id === match.awayTeamId)?.name || '???');
-
-                // Logika pro barvu
+                    ? (teamsJSON.find(t => t.id === match.homeTeamId)?.name || '???')
+                    : (teamsJSON.find(t => t.id === match.awayTeamId)?.name || '???');
                 let cssClass = "";
                 if (selectedWinner === type) {
                     cssClass = match.result.winner === type ? "right-selected" : "wrong-selected";
                 }
-
                 return `<div class="${userClass} team-link-history ${cssClass}" style="${visibilityStyle}">${teamName}</div>`;
             }
 
@@ -1219,16 +1085,10 @@ router.get('/history/a', requireLogin, (req, res) => {
                         const aH = match.result.scoreHome;
                         const aA = match.result.scoreAway;
                         const diff = Math.abs(tH - aH) + Math.abs(tA - aA);
-
-                        let sc = 'diff-3plus';
-                        if (diff === 0) sc = 'exact-score';
-                        else if (diff === 1) sc = 'diff-1';
-                        else if (diff === 2) sc = 'diff-2';
-
+                        let sc = diff === 0 ? 'exact-score' : (diff === 1 ? 'diff-1' : (diff === 2 ? 'diff-2' : 'diff-3plus'));
                         return `<div class="${userClass} team-link-history ${sc}" style="${visibilityStyle}">${tH} : ${tA}</div>`;
                     } else {
-                        const correct = userTip?.loserWins !== undefined && userTip.loserWins ===
-                            (match.result.winner === "home" ? match.result.scoreAway : match.result.scoreHome);
+                        const correct = userTip?.loserWins !== undefined && userTip.loserWins === (match.result.winner === "home" ? match.result.scoreAway : match.result.scoreHome);
                         const sc = correct ? "right-selected" : "wrong-selected";
                         return `<div class="${userClass} team-link-history ${sc}" style="${visibilityStyle}">${userTip?.loserWins ?? '-'}</div>`;
                     }
@@ -1238,81 +1098,53 @@ router.get('/history/a', requireLogin, (req, res) => {
             return '';
         };
 
-        // --- HLAVNÍ SMYČKA ---
         for (const [dateTime, matchesAtSameTime] of Object.entries(groupedMatches)) {
-            const formattedDateTime = new Date(dateTime).toLocaleString('cs-CZ', {
-                day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
-            });
-            html += `<h3>${formattedDateTime}</h3>`;
-            html += `<table class="matches-table">`;
-            html += `<thead class="matches-table-header"><tr><th colSpan="6">Zápasy</th></tr></thead>`;
-            html += `<tbody>`;
-
+            const formattedDateTime = new Date(dateTime).toLocaleString('cs-CZ', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+            html += `<h3>${formattedDateTime}</h3><table class="matches-table"><thead class="matches-table-header"><tr><th colSpan="6">Zápasy</th></tr></thead><tbody>`;
             for (const match of matchesAtSameTime) {
-                // Generujeme obsah buněk pro VŠECHNY uživatele najednou
-                let homeCellHTML = "";
-                let awayCellHTML = "";
-                let scoreCellHTML = ""; // Pro Playoff střed
-
+                let homeCellHTML = "", awayCellHTML = "", scoreCellHTML = "";
                 usersWithTips.forEach(u => {
                     homeCellHTML += renderUserTip(u, match, 'home');
                     awayCellHTML += renderUserTip(u, match, 'away');
-                    if (match.isPlayoff) {
-                        scoreCellHTML += renderUserTip(u, match, 'score');
-                    }
+                    if (match.isPlayoff) scoreCellHTML += renderUserTip(u, match, 'score');
                 });
 
                 if (!match.isPlayoff) {
-                    html += `
-                    <tr class="match-row">
-                        <td class="match-row">${homeCellHTML}</td>
-                        <td class="vs">${match.result.scoreHome}</td>
-                        <td class="vs">${match.result.ot === true ? "pp/sn": ":"}</td>
-                        <td class="vs">${match.result.scoreAway}</td>
-                        <td class="match-row">${awayCellHTML}</td>
-                    </tr>`;
+                    html += `<tr class="match-row"><td class="match-row">${homeCellHTML}</td><td class="vs">${match.result.scoreHome}</td><td class="vs">${match.result.ot === true ? "pp/sn": ":"}</td><td class="vs">${match.result.scoreAway}</td><td class="match-row">${awayCellHTML}</td></tr>`;
                 } else {
-                    html += `
-                    <tr class="match-row">
-                        <td>${homeCellHTML}</td>
-                        <td class="vs">${match.result.scoreHome}</td>
-                        <td class="vs">vs</td>
-                        <td class="vs">${match.result.scoreAway}</td>
-                        <td>${awayCellHTML}</td>
-                    </tr>
-                    <tr class="match-row">
-                      <td style="color: black" colspan="5">${scoreCellHTML}</td>
-                    </tr>`;
+                    html += `<tr class="match-row"><td>${homeCellHTML}</td><td class="vs">${match.result.scoreHome}</td><td class="vs">vs</td><td class="vs">${match.result.scoreAway}</td><td>${awayCellHTML}</td></tr><tr class="match-row"><td style="color: black" colspan="5">${scoreCellHTML}</td></tr>`;
                 }
             }
             html += `</tbody></table>`;
         }
 
-        html += `
-    </section>
-    </main>
-
+        html += `</section></main>
     <script>
-        // TATO FUNKCE PŘEPÍNÁ VIDITELNOST BEZ RELOADU
+        const globalStatsData = ${JSON.stringify(userStats)};
+
         function showUserHistory(username) {
-            // 1. Schováme všechny
-            document.querySelectorAll('.history-item').forEach(el => {
-                el.style.display = 'none';
-            });
+            const statsHeader = document.getElementById('stats-username-header');
+            const statsBox = document.getElementById('stats-content-box');
+            const userStat = globalStatsData.find(u => u.username === username);
 
-            // 2. Ošetříme speciální znaky ve jméně (stejně jako na serveru)
+            if (statsHeader) statsHeader.innerText = username;
+            if (statsBox) {
+                if (userStat) {
+                    const percent = userStat.total > 0 ? (userStat.correct / userStat.total * 100).toFixed(2) : "0.00";
+                    statsBox.innerHTML = '<p>Správně tipnuto z maximálního počtu všech možných bodů: <strong>' + userStat.correct + '</strong> z <strong>' + userStat.total + '</strong> (' + percent + ' %)</p>';
+                } else {
+                    statsBox.innerHTML = '<p>Data statistik nejsou pro tohoto uživatele dostupná.</p>';
+                }
+            }
+
+            document.querySelectorAll('.history-item').forEach(el => el.style.display = 'none');
             const safeName = username.replace(/[^a-zA-Z0-9]/g, '_');
-
-            // 3. Ukážeme ty, co patří vybranému
-            document.querySelectorAll('.user-' + safeName).forEach(el => {
-                el.style.display = 'flex'; // Nebo 'flex'/'table-cell' podle potřeby, block obvykle stačí pro div
-            });
+            document.querySelectorAll('.user-' + safeName).forEach(el => el.style.display = 'flex');
         }
-    </script>
-    </body></html>`;
+    </script></body></html>`;
 
         res.send(html);
     }
-})
+});
 
 module.exports = router;
