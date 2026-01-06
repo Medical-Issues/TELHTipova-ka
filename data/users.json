@@ -59,8 +59,8 @@
     "stats": {
       "25/26": {
         "TELH": {
-          "correct": 129,
-          "totalRegular": 236,
+          "correct": 139,
+          "totalRegular": 255,
           "totalPlayoff": 0
         },
         "MS": {
@@ -74,14 +74,14 @@
           "totalPlayoff": 0
         },
         "Spengler Cup": {
-          "correct": 4,
+          "correct": 10,
           "totalRegular": 6,
-          "totalPlayoff": 0
+          "totalPlayoff": 5
         },
         "MSJ": {
-          "correct": 9,
-          "totalRegular": 9,
-          "totalPlayoff": 0
+          "correct": 29,
+          "totalRegular": 20,
+          "totalPlayoff": 8
         }
       }
     },
@@ -1267,6 +1267,131 @@
             "matchId": 287,
             "winner": "away",
             "loserWins": 0
+          },
+          {
+            "matchId": 297,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 296,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 298,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 299,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 300,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 301,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 302,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 303,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 304,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 305,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 306,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 307,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 309,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 310,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 308,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 311,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 312,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 313,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 314,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 328,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 329,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 330,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 331,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 332,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 333,
+            "winner": "away",
+            "loserWins": 0
           }
         ],
         "Euro Hockey Tour": [
@@ -1365,8 +1490,32 @@
           {
             "matchId": 315,
             "winner": "home",
-            "scoreHome": null,
-            "scoreAway": null
+            "scoreHome": 3,
+            "scoreAway": 1
+          },
+          {
+            "matchId": 316,
+            "winner": "home",
+            "scoreHome": 4,
+            "scoreAway": 1
+          },
+          {
+            "matchId": 317,
+            "winner": "away",
+            "scoreHome": 2,
+            "scoreAway": 4
+          },
+          {
+            "matchId": 318,
+            "winner": "home",
+            "scoreHome": 4,
+            "scoreAway": 1
+          },
+          {
+            "matchId": 320,
+            "winner": "home",
+            "scoreHome": 4,
+            "scoreAway": 2
           }
         ],
         "MSJ": [
@@ -1419,6 +1568,110 @@
             "matchId": 268,
             "winner": "home",
             "loserWins": 0
+          },
+          {
+            "matchId": 269,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 270,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 271,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 272,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 273,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 274,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 275,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 319,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 276,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 277,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 323,
+            "winner": "home",
+            "scoreHome": 5,
+            "scoreAway": 1
+          },
+          {
+            "matchId": 321,
+            "winner": "home",
+            "scoreHome": 5,
+            "scoreAway": 2
+          },
+          {
+            "matchId": 322,
+            "winner": "home",
+            "scoreHome": 4,
+            "scoreAway": 1
+          },
+          {
+            "matchId": 325,
+            "winner": "home",
+            "scoreHome": 4,
+            "scoreAway": 1
+          },
+          {
+            "matchId": 324,
+            "winner": "home",
+            "scoreHome": 5,
+            "scoreAway": 3
+          },
+          {
+            "matchId": 326,
+            "winner": "home",
+            "scoreHome": 4,
+            "scoreAway": 2
+          },
+          {
+            "matchId": 327,
+            "winner": "home",
+            "scoreHome": 5,
+            "scoreAway": 2
+          },
+          {
+            "matchId": 350,
+            "winner": "away",
+            "scoreHome": 3,
+            "scoreAway": 5
+          },
+          {
+            "matchId": 351,
+            "winner": "away",
+            "scoreHome": 3,
+            "scoreAway": 4
           }
         ]
       }
@@ -2616,6 +2869,206 @@
             "matchId": 289,
             "winner": "home",
             "loserWins": 0
+          },
+          {
+            "matchId": 296,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 297,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 298,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 299,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 300,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 301,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 302,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 303,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 304,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 305,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 306,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 307,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 308,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 309,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 310,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 311,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 312,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 313,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 314,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 328,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 329,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 330,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 331,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 332,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 333,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 334,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 335,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 336,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 337,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 338,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 339,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 340,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 341,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 343,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 344,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 345,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 346,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 347,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 348,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 349,
+            "winner": "home",
+            "loserWins": 0
           }
         ],
         "Euro Hockey Tour": [
@@ -2758,13 +3211,72 @@
           },
           {
             "matchId": 276,
-            "winner": "home",
+            "winner": "away",
             "loserWins": 0
           },
           {
             "matchId": 277,
             "winner": "home",
             "loserWins": 0
+          },
+          {
+            "matchId": 319,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 323,
+            "winner": "away",
+            "scoreHome": 3,
+            "scoreAway": 5
+          },
+          {
+            "matchId": 321,
+            "winner": "home",
+            "scoreHome": 8,
+            "scoreAway": 1
+          },
+          {
+            "matchId": 322,
+            "winner": "home",
+            "scoreHome": 7,
+            "scoreAway": 2
+          },
+          {
+            "matchId": 324,
+            "winner": "away",
+            "scoreHome": 3,
+            "scoreAway": 4
+          },
+          {
+            "matchId": 325,
+            "winner": "home",
+            "scoreHome": 6,
+            "scoreAway": 3
+          },
+          {
+            "matchId": 326,
+            "winner": "home",
+            "scoreHome": 5,
+            "scoreAway": 3
+          },
+          {
+            "matchId": 327,
+            "winner": "away",
+            "scoreHome": 4,
+            "scoreAway": 6
+          },
+          {
+            "matchId": 350,
+            "winner": "away",
+            "scoreHome": 4,
+            "scoreAway": 5
+          },
+          {
+            "matchId": 351,
+            "winner": "away",
+            "scoreHome": 3,
+            "scoreAway": 7
           }
         ],
         "Spengler Cup": [
@@ -2801,14 +3313,32 @@
           {
             "matchId": 315,
             "winner": "away",
-            "scoreHome": 4,
-            "scoreAway": 2
+            "scoreHome": 2,
+            "scoreAway": 4
           },
           {
             "matchId": 316,
             "winner": "home",
-            "scoreHome": null,
-            "scoreAway": null
+            "scoreHome": 5,
+            "scoreAway": 1
+          },
+          {
+            "matchId": 317,
+            "winner": "away",
+            "scoreHome": 2,
+            "scoreAway": 3
+          },
+          {
+            "matchId": 318,
+            "winner": "home",
+            "scoreHome": 3,
+            "scoreAway": 1
+          },
+          {
+            "matchId": 320,
+            "winner": "home",
+            "scoreHome": 4,
+            "scoreAway": 2
           }
         ]
       }
@@ -2816,8 +3346,8 @@
     "stats": {
       "25/26": {
         "TELH": {
-          "correct": 118,
-          "totalRegular": 237,
+          "correct": 130,
+          "totalRegular": 256,
           "totalPlayoff": 0
         },
         "MS": {
@@ -2831,14 +3361,14 @@
           "totalPlayoff": 0
         },
         "Spengler Cup": {
-          "correct": 3,
+          "correct": 4,
           "totalRegular": 6,
-          "totalPlayoff": 0
+          "totalPlayoff": 5
         },
         "MSJ": {
-          "correct": 9,
-          "totalRegular": 9,
-          "totalPlayoff": 0
+          "correct": 38,
+          "totalRegular": 20,
+          "totalPlayoff": 8
         }
       }
     }
@@ -4030,6 +4560,131 @@
             "matchId": 289,
             "winner": "home",
             "loserWins": 0
+          },
+          {
+            "matchId": 296,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 297,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 298,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 299,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 300,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 301,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 302,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 303,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 304,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 305,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 306,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 307,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 309,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 308,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 310,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 311,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 312,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 313,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 314,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 328,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 329,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 330,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 331,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 333,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 332,
+            "winner": "home",
+            "loserWins": 0
           }
         ],
         "Euro Hockey Tour": [
@@ -4144,6 +4799,110 @@
             "matchId": 268,
             "winner": "home",
             "loserWins": 0
+          },
+          {
+            "matchId": 269,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 270,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 271,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 272,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 273,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 274,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 275,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 319,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 276,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 277,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 323,
+            "winner": "home",
+            "scoreHome": 3,
+            "scoreAway": 1
+          },
+          {
+            "matchId": 321,
+            "winner": "home",
+            "scoreHome": 5,
+            "scoreAway": 2
+          },
+          {
+            "matchId": 322,
+            "winner": "home",
+            "scoreHome": 3,
+            "scoreAway": 1
+          },
+          {
+            "matchId": 324,
+            "winner": "home",
+            "scoreHome": 4,
+            "scoreAway": 3
+          },
+          {
+            "matchId": 325,
+            "winner": "home",
+            "scoreHome": 5,
+            "scoreAway": 1
+          },
+          {
+            "matchId": 326,
+            "winner": "home",
+            "scoreHome": 3,
+            "scoreAway": 2
+          },
+          {
+            "matchId": 327,
+            "winner": "home",
+            "scoreHome": 5,
+            "scoreAway": 1
+          },
+          {
+            "matchId": 350,
+            "winner": "away",
+            "scoreHome": 1,
+            "scoreAway": 4
+          },
+          {
+            "matchId": 351,
+            "winner": "home",
+            "scoreHome": 3,
+            "scoreAway": 2
           }
         ],
         "Spengler Cup": [
@@ -4176,6 +4935,36 @@
             "matchId": 295,
             "winner": "away",
             "loserWins": 0
+          },
+          {
+            "matchId": 315,
+            "winner": "home",
+            "scoreHome": 3,
+            "scoreAway": 2
+          },
+          {
+            "matchId": 316,
+            "winner": "home",
+            "scoreHome": 4,
+            "scoreAway": 1
+          },
+          {
+            "matchId": 317,
+            "winner": "home",
+            "scoreHome": 3,
+            "scoreAway": 1
+          },
+          {
+            "matchId": 318,
+            "winner": "away",
+            "scoreHome": 3,
+            "scoreAway": 4
+          },
+          {
+            "matchId": 320,
+            "winner": "away",
+            "scoreHome": 2,
+            "scoreAway": 3
           }
         ]
       }
@@ -4183,8 +4972,8 @@
     "stats": {
       "25/26": {
         "TELH": {
-          "correct": 126,
-          "totalRegular": 236,
+          "correct": 135,
+          "totalRegular": 255,
           "totalPlayoff": 0
         },
         "MS": {
@@ -4198,14 +4987,14 @@
           "totalPlayoff": 0
         },
         "Spengler Cup": {
-          "correct": 4,
+          "correct": 11,
           "totalRegular": 6,
-          "totalPlayoff": 0
+          "totalPlayoff": 5
         },
         "MSJ": {
-          "correct": 8,
-          "totalRegular": 9,
-          "totalPlayoff": 0
+          "correct": 28,
+          "totalRegular": 20,
+          "totalPlayoff": 8
         }
       }
     }
