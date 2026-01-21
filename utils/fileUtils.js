@@ -547,6 +547,115 @@ function isLockedPosition(index, totalTeams, sortedTeams, cfg, season, maxMatche
         return cannotFall && cannotRise;
     }
 }
+// utils/fileUtils.js
+
+// ... tvé existující importy ...
+
+function evaluateRegularSeasonTable(season, liga) {
+    const fs = require('fs');
+
+    // 1. Načtení dat
+    const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'));
+    // Filtrujeme týmy jen pro danou ligu
+    const teams = JSON.parse(fs.readFileSync('./data/teams.json', 'utf8')).filter(t => t.active && t.liga === liga);
+    const users = JSON.parse(fs.readFileSync('./data/users.json', 'utf8'));
+
+    // Zjistíme, jestli je liga multigroup (pro správné párování)
+    const allSeasonData = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf8'));
+    const isMultigroup = allSeasonData[season]?.leagues.find(l => l.name === liga)?.isMultigroup || false;
+
+    let tableTips = {};
+    try { tableTips = JSON.parse(fs.readFileSync('./data/tableTips.json', 'utf8')); } catch (e) {}
+
+    // 2. Vypočítat REÁLNÉ SKÓRE a BODY (Live tabulka)
+    const scores = {};
+    teams.forEach(t => scores[t.id] = { points: 0, gf: 0, ga: 0 });
+
+    matches.filter(m => m.season === season && m.liga === liga && m.result).forEach(m => {
+        const homeId = m.homeTeamId;
+        const awayId = m.awayTeamId;
+        if(scores[homeId] && scores[awayId]) {
+            const sH = parseInt(m.result.scoreHome);
+            const sA = parseInt(m.result.scoreAway);
+            scores[homeId].gf += sH; scores[homeId].ga += sA;
+            scores[awayId].gf += sA; scores[awayId].ga += sH;
+
+            if (m.result.ot) {
+                if (sH > sA) { scores[homeId].points += 2; scores[awayId].points += 1; }
+                else { scores[awayId].points += 2; scores[homeId].points += 1; }
+            } else {
+                if (sH > sA) scores[homeId].points += 3;
+                else if (sA > sH) scores[awayId].points += 3;
+                else { scores[homeId].points += 1; scores[awayId].points += 1; }
+            }
+        }
+    });
+
+    // 3. Příprava "Reálných skupin" (abychom věděli, kdo patří do Skupiny A, kdo do B)
+    const groupedTeamsReal = {};
+    teams.forEach(t => {
+        // Klíč musí být stejný jako při ukládání (string)
+        const gKey = isMultigroup ? String(t.group || 1) : "default";
+        if (!groupedTeamsReal[gKey]) groupedTeamsReal[gKey] = [];
+        groupedTeamsReal[gKey].push(t);
+    });
+
+    // 4. Vyhodnocení každého uživatele
+    users.forEach(user => {
+        let userTipData = tableTips?.[season]?.[liga]?.[user.username];
+        if (!userTipData) return;
+
+        // BACKWARD COMPATIBILITY: Pokud má uživatel starý formát (pole), převedeme na objekt
+        if (Array.isArray(userTipData)) {
+            userTipData = { "default": userTipData };
+        }
+
+        let totalCorrect = 0;
+        let totalDeviation = 0;
+
+        // Projdeme všechny reálné skupiny (A, B, C...) a porovnáme s tipem
+        Object.keys(groupedTeamsReal).forEach(gKey => {
+            const realTeamsInGroup = groupedTeamsReal[gKey];
+
+            // Seřadíme reálné týmy ve skupině podle bodů
+            const realOrderIds = realTeamsInGroup.sort((a, b) => {
+                const sa = scores[a.id];
+                const sb = scores[b.id];
+                if (sb.points !== sa.points) return sb.points - sa.points;
+                return (sb.gf - sb.ga) - (sa.gf - sa.ga);
+            }).map(t => t.id);
+
+            // Vytáhneme uživatelův tip pro tuto skupinu
+            const userGroupTip = userTipData[gKey] || [];
+
+            // Porovnáváme
+            realOrderIds.forEach((realId, realIndex) => {
+                const userIndex = userGroupTip.indexOf(realId);
+
+                if (userIndex !== -1) {
+                    // Tým nalezen v tipu -> počítáme rozdíl
+                    const diff = Math.abs(realIndex - userIndex);
+                    totalDeviation += diff;
+                    if (diff === 0) totalCorrect++;
+                } else {
+                    // Tým v tipu chybí (uživatel netipoval tuto skupinu kompletně)
+                    // Penalizace: Přičteme počet týmů ve skupině (nebo jiná logika)
+                    totalDeviation += realOrderIds.length;
+                }
+            });
+        });
+
+        // Uložení výsledků
+        if (!user.stats) user.stats = {};
+        if (!user.stats[season]) user.stats[season] = {};
+        if (!user.stats[season][liga]) user.stats[season][liga] = {};
+
+        user.stats[season][liga].tableCorrect = totalCorrect;
+        user.stats[season][liga].tableDeviation = totalDeviation;
+    });
+
+    fs.writeFileSync('./data/users.json', JSON.stringify(users, null, 2));
+}
 
 module.exports = {
     requireLogin,
@@ -561,4 +670,5 @@ module.exports = {
     getTeamZone,
     isLockedPosition,
     renameLeagueGlobal,
+    evaluateRegularSeasonTable,
 }

@@ -91,6 +91,17 @@ header {
     display: flex;
     flex-direction: row;
     align-items: center;
+    position: relative;
+    padding-right: 40px;
+}
+.logo_title::before {
+    content: "";
+    position: absolute;
+    right: 15px;
+    width: 1px;
+    background-color: orangered;
+    top: 15px;
+    bottom: 15px;
 }
 
 body {
@@ -424,7 +435,7 @@ button:disabled {
      display: flex;
      align-items: center;
      justify-content: center;
-     gap: 10px
+     gap: 10px;
  }
  .history-btn {
      display: flex;
@@ -440,6 +451,10 @@ button:disabled {
  .history-table-choose {
      height: 30px;
      font-size: 15px;
+ }
+ .changed {
+     width: 150px;
+     text-align: center;
  }
  .points-table-history {
      height: 40px;
@@ -666,4 +681,40 @@ tr.postponed {
     font-weight: bold;
 }
 
-
+.sortable-list {
+    list-style-type: none;
+    padding: 0;
+    width: 100%;
+    max-width: 80%;
+    margin: 0 auto;
+}
+.sortable-item {
+    background: #1a1a1a; border: 1px solid #444; margin: 5px 0; padding: 15px;
+    cursor: grab;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: #fff;
+}
+.sortable-item:hover {
+    background: #333;
+}
+.sortable-item.dragging {
+    opacity: 0.5;
+}
+.rank-number {
+    font-weight: bold;
+    color: orangered;
+    margin-right: 15px;
+    width: 30px;
+}
+.save-btn {
+    display: block;
+    margin: 20px auto;
+    padding: 10px 30px;
+    background: orangered;
+    color: white;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+}

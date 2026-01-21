@@ -5123,7 +5123,14 @@
     "datetime": "2026-01-06T17:30",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 4,
+      "scoreAway": 1,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 329,
@@ -5133,7 +5140,13 @@
     "liga": "TELH",
     "season": "25/26",
     "isPlayoff": false,
-    "postponed": false
+    "postponed": false,
+    "result": {
+      "scoreHome": 2,
+      "scoreAway": 0,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 330,
@@ -5142,7 +5155,14 @@
     "datetime": "2026-01-06T17:30",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 4,
+      "scoreAway": 6,
+      "ot": false,
+      "winner": "away"
+    }
   },
   {
     "id": 331,
@@ -5151,7 +5171,14 @@
     "datetime": "2026-01-06T18:00",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 3,
+      "scoreAway": 2,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 332,
@@ -5161,7 +5188,13 @@
     "liga": "TELH",
     "season": "25/26",
     "isPlayoff": false,
-    "postponed": false
+    "postponed": false,
+    "result": {
+      "scoreHome": 2,
+      "scoreAway": 3,
+      "ot": true,
+      "winner": "away"
+    }
   },
   {
     "id": 333,
@@ -5170,7 +5203,14 @@
     "datetime": "2026-01-07T17:00",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 6,
+      "scoreAway": 3,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 334,
@@ -5179,7 +5219,14 @@
     "datetime": "2026-01-09T17:30",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 1,
+      "scoreAway": 5,
+      "ot": false,
+      "winner": "away"
+    }
   },
   {
     "id": 335,
@@ -5188,7 +5235,14 @@
     "datetime": "2026-01-09T17:30",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 3,
+      "scoreAway": 4,
+      "ot": true,
+      "winner": "away"
+    }
   },
   {
     "id": 336,
@@ -5197,7 +5251,14 @@
     "datetime": "2026-01-09T18:00",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 7,
+      "scoreAway": 2,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 337,
@@ -5206,7 +5267,14 @@
     "datetime": "2026-01-09T18:00",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 3,
+      "scoreAway": 2,
+      "ot": true,
+      "winner": "home"
+    }
   },
   {
     "id": 338,
@@ -5215,7 +5283,14 @@
     "datetime": "2026-01-09T18:00",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 4,
+      "scoreAway": 3,
+      "ot": true,
+      "winner": "home"
+    }
   },
   {
     "id": 339,
@@ -5224,7 +5299,14 @@
     "datetime": "2026-01-09T18:00",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 4,
+      "scoreAway": 1,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 340,
@@ -5233,7 +5315,14 @@
     "datetime": "2026-01-11T15:00",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 2,
+      "scoreAway": 1,
+      "ot": true,
+      "winner": "home"
+    }
   },
   {
     "id": 341,
@@ -5242,7 +5331,14 @@
     "datetime": "2026-01-11T15:00",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 5,
+      "scoreAway": 3,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 343,
@@ -5251,7 +5347,14 @@
     "datetime": "2026-01-11T16:00",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 3,
+      "scoreAway": 4,
+      "ot": true,
+      "winner": "away"
+    }
   },
   {
     "id": 344,
@@ -5260,7 +5363,14 @@
     "datetime": "2026-01-11T16:00",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 8,
+      "scoreAway": 1,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 345,
@@ -5269,7 +5379,14 @@
     "datetime": "2026-01-11T17:00",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 5,
+      "scoreAway": 1,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 346,
@@ -5278,7 +5395,14 @@
     "datetime": "2026-01-11T17:00",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 3,
+      "scoreAway": 2,
+      "ot": true,
+      "winner": "home"
+    }
   },
   {
     "id": 347,
@@ -5287,7 +5411,14 @@
     "datetime": "2026-01-12T17:30",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 3,
+      "scoreAway": 2,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 348,
@@ -5296,7 +5427,14 @@
     "datetime": "2026-01-13T18:00",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 6,
+      "scoreAway": 3,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 349,
@@ -5305,7 +5443,14 @@
     "datetime": "2026-01-13T18:30",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 5,
+      "scoreAway": 1,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 350,
@@ -5340,5 +5485,270 @@
       "ot": false,
       "winner": "home"
     }
+  },
+  {
+    "id": 352,
+    "homeTeamId": 1,
+    "awayTeamId": 9,
+    "datetime": "2026-01-15T18:30",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 1,
+      "scoreAway": 3,
+      "ot": false,
+      "winner": "away"
+    }
+  },
+  {
+    "id": 353,
+    "homeTeamId": 13,
+    "awayTeamId": 6,
+    "datetime": "2026-01-16T17:30",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 5,
+      "scoreAway": 1,
+      "ot": false,
+      "winner": "home"
+    }
+  },
+  {
+    "id": 354,
+    "homeTeamId": 4,
+    "awayTeamId": 11,
+    "datetime": "2026-01-16T17:30",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 4,
+      "scoreAway": 2,
+      "ot": false,
+      "winner": "home"
+    }
+  },
+  {
+    "id": 355,
+    "homeTeamId": 12,
+    "awayTeamId": 5,
+    "datetime": "2026-01-16T17:30",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 4,
+      "scoreAway": 1,
+      "ot": false,
+      "winner": "home"
+    }
+  },
+  {
+    "id": 356,
+    "homeTeamId": 7,
+    "awayTeamId": 3,
+    "datetime": "2026-01-16T18:00",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 5,
+      "scoreAway": 3,
+      "ot": false,
+      "winner": "home"
+    }
+  },
+  {
+    "id": 357,
+    "homeTeamId": 14,
+    "awayTeamId": 2,
+    "datetime": "2026-01-16T18:00",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 1,
+      "scoreAway": 0,
+      "ot": false,
+      "winner": "home"
+    }
+  },
+  {
+    "id": 358,
+    "homeTeamId": 8,
+    "awayTeamId": 10,
+    "datetime": "2026-01-16T18:00",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 1,
+      "scoreAway": 5,
+      "ot": false,
+      "winner": "away"
+    }
+  },
+  {
+    "id": 359,
+    "homeTeamId": 10,
+    "awayTeamId": 1,
+    "datetime": "2026-01-18T16:00",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 3,
+      "scoreAway": 4,
+      "ot": true,
+      "winner": "away"
+    }
+  },
+  {
+    "id": 360,
+    "homeTeamId": 2,
+    "awayTeamId": 8,
+    "datetime": "2026-01-18T16:00",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 2,
+      "scoreAway": 0,
+      "ot": false,
+      "winner": "home"
+    }
+  },
+  {
+    "id": 361,
+    "homeTeamId": 7,
+    "awayTeamId": 5,
+    "datetime": "2026-01-18T16:00",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 4,
+      "scoreAway": 1,
+      "ot": false,
+      "winner": "home"
+    }
+  },
+  {
+    "id": 362,
+    "homeTeamId": 12,
+    "awayTeamId": 9,
+    "datetime": "2026-01-18T16:00",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 2,
+      "scoreAway": 3,
+      "ot": true,
+      "winner": "away"
+    }
+  },
+  {
+    "id": 363,
+    "homeTeamId": 4,
+    "awayTeamId": 3,
+    "datetime": "2026-01-18T16:30",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 4,
+      "scoreAway": 3,
+      "ot": true,
+      "winner": "home"
+    }
+  },
+  {
+    "id": 364,
+    "homeTeamId": 6,
+    "awayTeamId": 14,
+    "datetime": "2026-01-18T16:30",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 2,
+      "scoreAway": 3,
+      "ot": true,
+      "winner": "away"
+    }
+  },
+  {
+    "id": 365,
+    "homeTeamId": 11,
+    "awayTeamId": 13,
+    "datetime": "2026-01-18T17:00",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 5,
+      "scoreAway": 1,
+      "ot": false,
+      "winner": "home"
+    }
+  },
+  {
+    "id": 366,
+    "homeTeamId": 6,
+    "awayTeamId": 3,
+    "datetime": "2026-01-20T17:30",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 2,
+      "scoreAway": 1,
+      "ot": true,
+      "winner": "home"
+    }
+  },
+  {
+    "id": 367,
+    "homeTeamId": 1,
+    "awayTeamId": 14,
+    "datetime": "2026-01-20T18:30",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 1,
+      "scoreAway": 2,
+      "ot": true,
+      "winner": "away"
+    }
+  },
+  {
+    "id": 368,
+    "homeTeamId": 11,
+    "awayTeamId": 9,
+    "datetime": "2026-01-21T18:00",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false
   }
 ]

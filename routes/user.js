@@ -3,6 +3,597 @@ const express = require("express");
 const router = express.Router();
 const path = require('path');
 const {loadTeams, requireLogin, calculateTeamScores, getLeagueZones, getTeamZone, isLockedPosition} = require("../utils/fileUtils");
+
+router.get("/table-tip", requireLogin, (req, res) => {
+    const username = req.session.user;
+    const selectedSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
+
+    // 1. Načtení dat
+    JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'));
+    const teams = loadTeams().filter(t => t.active);
+    const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf-8'));
+    const allowedLeagues = JSON.parse(fs.readFileSync('./data/allowedLeagues.json', 'utf-8'));
+    const allSeasonData = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf-8'));
+    const leagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues) ? allSeasonData[selectedSeason].leagues : [];
+
+    const leaguesFromTeams = [...new Set(teams.map(t => t.liga))];
+    const leaguesFromMatches = [...new Set(matches.map(m => m.liga))];
+    const allLeagues = [...new Set([...leaguesFromTeams, ...leaguesFromMatches])];
+    const uniqueLeagues = allLeagues.filter(l => allowedLeagues.includes(l));
+
+    const selectedLiga = req.query.liga && uniqueLeagues.includes(req.query.liga) ? req.query.liga : uniqueLeagues[0];
+    const teamsInSelectedLiga = teams.filter(t => t.liga === selectedLiga);
+
+    const scores = calculateTeamScores(matches, selectedSeason, selectedLiga);
+
+    const leagueObj = leagues.find(l => l.name === selectedLiga) || {
+        name: selectedLiga || "Neznámá liga",
+        maxMatches: 0, quarterfinal: 0, playin: 0, relegation: 0, isMultigroup: false
+    };
+
+    // Načtení tipů
+    let tableTips;
+    try { tableTips = JSON.parse(fs.readFileSync('./data/tableTips.json', 'utf8')); } catch (e) { tableTips = {}; }
+    const userTipData = tableTips?.[selectedSeason]?.[selectedLiga]?.[username] || null;
+
+    // --- LOGIKA SKUPIN (Backend = Čísla) ---
+    const groupedTeams = {};
+    teamsInSelectedLiga.forEach(team => {
+        let gKey = "default";
+        if (leagueObj.isMultigroup) {
+            // Použijeme číslo z databáze (1, 2...) převedené na string
+            // Tím pádem to bude sedět na zámky v Adminu (["1"])
+            gKey = String(team.group || 1);
+        }
+        if (!groupedTeams[gKey]) groupedTeams[gKey] = [];
+        groupedTeams[gKey].push(team);
+    });
+
+    // Seřadíme klíče číselně (1, 2, 3...)
+    const sortedGroupKeys = Object.keys(groupedTeams).sort((a,b) => {
+        if(a === 'default') return -1;
+        return parseInt(a) - parseInt(b);
+    });
+
+    // --- POMOCNÁ FUNKCE: PŘEVOD ČÍSLA NA PÍSMENO PRO ZOBRAZENÍ ---
+    const getGroupDisplayLabel = (gKey) => {
+        if (gKey === 'default') return '';
+        const num = parseInt(gKey);
+        // 1 -> A (ASCII 65), 2 -> B (ASCII 66)...
+        return `Skupina ${String.fromCharCode(64 + num)}`;
+    };
+
+    // Statistiky (User Stats)
+    let userStats = [];
+    try {
+        const usersData = fs.readFileSync('./data/users.json', 'utf-8');
+        const allUsers = JSON.parse(usersData);
+        const matchesInLiga = matches.filter(m => m.season === selectedSeason && m.liga === selectedLiga);
+        userStats = allUsers.filter(u => {
+            const tips = u.tips?.[selectedSeason]?.[selectedLiga] || [];
+            const tableStats = u.stats?.[selectedSeason]?.[selectedLiga]?.tableCorrect;
+            return tips.length > 0 || tableStats !== undefined;
+        }).map(u => {
+            const stats = u.stats?.[selectedSeason]?.[selectedLiga] || {};
+            const userTips = u.tips?.[selectedSeason]?.[selectedLiga] || [];
+            const maxFromTips = userTips.reduce((sum, tip) => {
+                const match = matchesInLiga.find(m => Number(m.id) === Number(tip.matchId));
+                if (!match || !match.result) return sum;
+                if (!match.isPlayoff) return sum + 1;
+                if (match.bo === 1) return sum + 5;
+                return sum + 3;
+            }, 0);
+            const totalPoints = matchesInLiga.reduce((sum, match) => {
+                if (!match.result) return sum;
+                if (!match.isPlayoff) return sum + 1;
+                if (match.bo === 1) return sum + 5;
+                return sum + 3;
+            }, 0);
+            return {
+                username: u.username,
+                correct: stats.correct || 0,
+                total: totalPoints,
+                maxFromTips: maxFromTips,
+                totalRegular: stats.totalRegular || 0,
+                totalPlayoff: stats.totalPlayoff || 0,
+                tableCorrect: stats.tableCorrect || 0,
+                tableDeviation: stats.tableDeviation || 0
+            };
+        });
+    } catch (err) {}
+    const currentUserStats = userStats.find(u => u.username === username);
+
+    // Playoff data
+    const playoffPath = path.join(__dirname, '../data/playoff.json');
+    let playoffData = [];
+    try {
+        const raw = fs.readFileSync(playoffPath, 'utf8');
+        const allPlayoffs = JSON.parse(raw);
+        if (allPlayoffs[selectedSeason] && allPlayoffs[selectedSeason][selectedLiga]) {
+            playoffData = allPlayoffs[selectedSeason][selectedLiga];
+        }
+    } catch (e) {}
+
+    // Načtení zámků
+    let isTipsLocked = false;
+    let isRegularSeasonFinished = false;
+    try {
+        const statusData = JSON.parse(fs.readFileSync('./data/leagueStatus.json', 'utf8'));
+        isRegularSeasonFinished = statusData?.[selectedSeason]?.[selectedLiga]?.regularSeasonFinished || false;
+        // isTipsLocked může být true (vše) nebo ["1", "3"] (částečně)
+        isTipsLocked = statusData?.[selectedSeason]?.[selectedLiga]?.tableTipsLocked || false;
+    } catch (e) {}
+
+    const statusStyle = isRegularSeasonFinished ? "color: lightgrey; font-weight: bold;" : "color: white; opacity: 0.7; background-color: black";
+
+    // --- HTML ---
+    let html = `
+    <!DOCTYPE html>
+    <html lang="cs">
+    <head>
+        <meta charset="UTF-8">
+        <title>Tipovačka</title>
+        <link rel="stylesheet" href="./css/styles.css" />
+        <link rel="icon" href="./images/logo.png">
+    </head>
+    <body class="usersite">
+    <header class="header">
+        <form class="league-dropdown" method="GET" action="/table-tip">
+            <div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
+            <label class="league-select-name">
+                Liga:
+                <select id="league-select" name="liga" required onchange="this.form.submit()">
+                    ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected' : ''}>${l}</option>`).join('')}
+                </select>
+            </label>
+            <a class="history-btn" href="/history">Historie</a>
+            <a class="history-btn changed" href="/?liga=${encodeURIComponent(selectedLiga)}">Tipovačka</a>
+            <a class="history-btn changed" href="/prestupy">Přestupy TELH</a>
+        </form>
+        <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
+    </header>
+    <main class="main_page">
+        <section class="stats-container">
+            <div class="left-panel">
+                <div style="display: flex; flex-direction: row; justify-content: space-around; margin:20px 0; text-align:center;">
+                    <button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('regular')">Základní část</button>
+                    <button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('playoff')">Playoff</button>
+                </div>
+                <div id="regularTable">
+                    `;
+
+    // --- LEVÝ PANEL (TABULKY) ---
+    // Iterujeme "1", "2"
+    for (const gKey of sortedGroupKeys) {
+        const teamsInGroup = groupedTeams[gKey];
+        const zoneConfig = getLeagueZones(leagueObj);
+
+        // Zobrazíme PÍSMENO (Skupina A)
+        const groupLabel = getGroupDisplayLabel(gKey);
+        const headerText = sortedGroupKeys.length > 1 && groupLabel ? `(${groupLabel})` : '';
+
+        html += `
+        <table class="points-table">
+            <thead>
+                <tr>
+                    <th scope="col" id="points-table-header" colspan="10">
+                        <h2>Týmy - ${selectedLiga} ${selectedSeason} - Základní část ${headerText}</h2>
+                    </th>
+                </tr>
+                <tr>
+                    <th class="position" scope="col">Místo</th>
+                    <th scope="col">Tým</th>
+                    <th class="points" scope="col">Body</th>
+                    <th scope="col">Skóre</th>
+                    <th scope="col">Rozdíl</th>
+                    <th scope="col">Z</th>
+                    <th scope="col">V</th>
+                    <th scope="col">Vpp</th>
+                    <th scope="col">Ppp</th>
+                    <th scope="col">P</th>
+                </tr>
+            </thead>
+            <tbody>
+        `;
+
+        // Řazení podle bodů (Realita)
+        teamsInGroup.sort((a, b) => {
+            const aStats = a.stats?.[selectedSeason] || {};
+            const bStats = b.stats?.[selectedSeason] || {};
+            const aPoints = aStats.points || 0;
+            const bPoints = bStats.points || 0;
+            const aScore = scores[a.id] || {gf:0, ga:0};
+            const bScore = scores[b.id] || {gf:0, ga:0};
+            const aDiff = aScore.gf - aScore.ga;
+            const bDiff = bScore.gf - bScore.ga;
+            const aMatches = (aStats.wins||0)+(aStats.otWins||0)+(aStats.otLosses||0)+(aStats.losses||0);
+            const bMatches = (bStats.wins||0)+(bStats.otWins||0)+(bStats.otLosses||0)+(bStats.losses||0);
+
+            if (bPoints !== aPoints) return bPoints - aPoints;
+            if (bDiff !== aDiff) return bDiff - aDiff;
+            return aMatches - bMatches;
+        });
+
+        const sorted = teamsInGroup;
+
+        teamsInGroup.forEach((team, index) => {
+            const zone = getTeamZone(index, teamsInGroup.length, zoneConfig);
+            const matchesPerTeam = (leagueObj.maxMatches * 2) / teamsInGroup.length;
+            const allTeamsFinished = sorted.every(team => {
+                const stats = team.stats?.[selectedSeason] || {};
+                const played = (stats.wins || 0) + (stats.otWins || 0) + (stats.otLosses || 0) + (stats.losses || 0);
+                return played >= matchesPerTeam;
+            });
+            const locked = isLockedPosition(index, teamsInGroup.length, sorted, zoneConfig, selectedSeason, matchesPerTeam, allTeamsFinished);
+
+            const teamStats = scores[team.id] || {gf:0, ga:0};
+            const goalDiff = teamStats.gf - teamStats.ga;
+            const numberMatches = (team.stats?.[selectedSeason]?.wins||0) + (team.stats?.[selectedSeason]?.otWins||0) + (team.stats?.[selectedSeason]?.otLosses||0) + (team.stats?.[selectedSeason]?.losses||0);
+
+            html += `
+            <tr class="${locked ? `${zone} locked` : ''}">
+                <td class="rank-cell ${zone}">${index + 1}.</td>
+                <td>${team.name}</td>
+                <td class="points numbers">${team.stats?.[selectedSeason]?.points || 0}</td>
+                <td class="numbers">${teamStats.gf}:${teamStats.ga}</td>
+                <td class="numbers">${goalDiff > 0 ? '+' + goalDiff : goalDiff}</td>
+                <td class="numbers">${numberMatches || 0}</td>
+                <td class="numbers">${team.stats?.[selectedSeason]?.wins || 0}</td>
+                <td class="numbers">${team.stats?.[selectedSeason]?.otWins || 0}</td>
+                <td class="numbers">${team.stats?.[selectedSeason]?.otLosses || 0}</td>
+                <td class="numbers">${team.stats?.[selectedSeason]?.losses || 0}</td>
+            </tr>`;
+        });
+        html += `</tbody></table>`;
+    }
+
+    // --- ZBYTEK LEVÉHO PANELU (Playoff) ---
+    html += `
+            </div>
+            <div id="playoffTablePreview" style="display:none; overflow:auto; max-width:100%;">
+                <table class="points-table"><tr><th scope="col" id="points-table-header" colspan="20"><h2>Týmy - ${selectedLiga} ${selectedSeason} - Playoff</h2></th></tr>
+                ${playoffData.map(row => `<tr>${row.map(c => `<td style="${c.bgColor?`background:${c.bgColor};`:''}${c.textColor?`color:${c.textColor}`:''}">${c.text}</td>`).join('')}</tr>`).join('')}
+                </table>
+            </div>
+            <section class="progress-section">
+                <h3>Odehráno zápasů v základní části</h3>
+            </section>
+            <script>
+                function showTable(which) {
+                    document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none';
+                    const p = document.getElementById('playoffTablePreview');
+                    p.style.display = which === 'playoff' ? 'block' : 'none';
+                }
+            </script>
+        </div>`;
+
+    // --- STATISTIKY (OBNOVENO V PLNÉ PARÁDĚ) ---
+    if (username) {
+        html += `
+        <section class="user_stats">
+            <h2>Tvoje statistiky</h2>
+            ${currentUserStats ? `
+                <p>Správně tipnuto z maximálního počtu všech vyhodnocených zápasů: 
+                    <strong>${currentUserStats.correct}</strong> z <strong>${currentUserStats.total}</strong> 
+                    (${(currentUserStats.correct / currentUserStats.total * 100).toFixed(2)} %)
+                </p>
+                ${currentUserStats.total !== currentUserStats.maxFromTips ? `
+                <p>Správně tipnuto z tipovaných zápasů: 
+                    <strong>${currentUserStats.correct}</strong> z <strong>${currentUserStats.maxFromTips}</strong> 
+                    (${(currentUserStats.correct / currentUserStats.maxFromTips * 100).toFixed(2)} %)
+                </p>` : ''}
+            ` : `<p>Nemáš ještě žádné tipy nebo není vyhodnoceno.</p>`}
+            
+            ${currentUserStats?.tableCorrect > 0 || currentUserStats?.tableDeviation > 0 ? `
+                <hr><h3>Výsledek tipovačky tabulky</h3>
+                <p>Trefené pozice: <strong>${currentUserStats.tableCorrect}</strong></p>
+                <p>Odchylka: <strong>${currentUserStats.tableDeviation}</strong></p>
+            ` : `<p><em>Tipovačka tabulky zatím nebyla vyhodnocena.</em></p>`}
+        </section>
+        
+        <section class="global_stats">
+            <table class="points-table">
+                <thead>
+                    <tr><th scope="col" id="points-table-header" colspan="8"><h2>Statistiky všech</h2></th></tr>
+                    <tr>
+                        <th class="position">Místo</th>
+                        <th>Uživatel</th>
+                        <th>Úspěšnost</th>
+                        <th>Počet bodů</th>
+                        <th>Celkem tipů v ZČ</th>
+                        <th>Celkem tipů v Playoff</th>
+                        <th>Trefené pozice (Tabulka)</th>
+                        <th>Odchylka (Tabulka)</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+
+        userStats.sort((a, b) => {
+            if (b.correct !== a.correct) return b.correct - a.correct;
+            if (b.tableCorrect !== a.tableCorrect) return b.tableCorrect - a.tableCorrect;
+            return a.tableDeviation - b.tableDeviation;
+        }).forEach((user, index) => {
+            const successRate = user.total > 0 ? ((user.correct / user.total) * 100).toFixed(2) : '0.00';
+            const successRateOverall = user.maxFromTips > 0 ? ((user.correct / user.maxFromTips) * 100).toFixed(2) : '0.00';
+
+            html += `
+                <tr>
+                    <td>${index + 1}.</td>
+                    <td>${user.username}</td>
+                    <td>${successRateOverall}%${user.total !== user.maxFromTips ? ` (${successRate}%)` : ''}</td>
+                    <td>${user.correct}</td>
+                    <td>${user.totalRegular}</td>
+                    <td>${user.totalPlayoff}</td>
+                    <td style="${statusStyle}">${user.tableCorrect > 0 ? user.tableCorrect : '-'}</td>
+                    <td style="${statusStyle}">${user.tableDeviation > 0 ? user.tableDeviation : '-'}</td>
+                </tr>`;
+        });
+
+        html += `
+                </tbody>
+            </table>
+            <br>
+            <table style="color: black" class="points-table">
+                <tr style="background-color: #00FF00"><td colspan="3">Za správný tip zápasu v základní části</td><td colspan="3">1 bod</td></tr>
+                <tr style="background-color: #FF0000"><td colspan="3">Za správný tip vítěze dané série v playoff ale špatný tip počtu vyhraných zápasů týmu který prohrál</td><td colspan="3">1 bod</td></tr>
+                <tr style="background-color: #00FF00"><td colspan="3">Za správný tip vítěze dané série v playoff + počet vyhraných zápasů týmů který prohrál</td><td colspan="3">3 body</td></tr>
+                <tr style="background-color: #00FF00"><td colspan="3">Za správný tip vítěze daného zápasu v playoff + správné skóre</td><td colspan="3">5 bodů</td></tr>
+                <tr style="background-color: #FFFF00"><td colspan="3">Za správný tip vítěze daného zápasu v playoff + chyba ve skóre o 1 gól</td><td colspan="3">4 body</td></tr>
+                <tr style="background-color: #FF6600"><td colspan="3">Za správný tip vítěze daného zápasu v playoff + chyba ve skóre o 2 góly</td><td colspan="3">3 body</td></tr>
+                <tr style="background-color: #FF0000"><td colspan="3">Za správný tip vítěze daného zápasu v playoff + chyba ve skóre o 3+ gólů</td><td colspan="3">1 bod</td></tr>
+                <tr style="background-color: #00FF00"><td colspan="3">Za přesné trefení pozice týmu v konečné tabulce</td><td colspan="3">1 bod (Tabulka)</td></tr>
+                <tr style="background-color: orangered"><td colspan="3">Odchylka tipu tabulky (rozdíl pozic)</td><td colspan="3">Sčítá se (čím méně, tím lépe)</td></tr>
+            </table>
+        </section>
+        </section>`;
+    }
+
+    // --- PRAVÝ PANEL: TIPOVÁNÍ TABULKY ---
+    html += `
+        <section class="matches-container">
+            <h2 style="text-align:center;">Seřaď týmy v tabulce</h2>
+            <p style="text-align:center;">Chyť tým myší a přetáhni ho na požadovanou pozici.</p>
+            
+            <form id="sortForm">
+    `;
+
+    for (const gKey of sortedGroupKeys) {
+        let teamsInGroup = groupedTeams[gKey];
+        // Převedeme 1 na "Skupina A" jen pro zobrazení
+        const groupLabel = getGroupDisplayLabel(gKey);
+
+        // Kontrola zámku: gKey je "1" (číslo jako string), isTipsLocked v DB je ["1"]
+        const isGroupLocked = (isTipsLocked === true) || (Array.isArray(isTipsLocked) && isTipsLocked.includes(gKey));
+
+        // Načtení tipu
+        let currentGroupTipIds = [];
+        if (userTipData) {
+            if (Array.isArray(userTipData)) {
+                currentGroupTipIds = userTipData;
+            } else {
+                currentGroupTipIds = userTipData[gKey] || [];
+            }
+        }
+        const hasTipForGroup = currentGroupTipIds.length > 0;
+
+        // Vypočteme REÁLNÉ pořadí
+        const realRankMap = {};
+        const realStandings = [...teamsInGroup].sort((a, b) => {
+            const statsA = scores[a.id] || { points: 0, gf: 0, ga: 0 };
+            const statsB = scores[b.id] || { points: 0, gf: 0, ga: 0 };
+            if (statsB.points !== statsA.points) return statsB.points - statsA.points;
+            return (statsB.gf - statsB.ga) - (statsA.gf - statsA.ga);
+        });
+        realStandings.forEach((t, i) => realRankMap[t.id] = i + 1);
+
+        // Řazení pro zobrazení
+        if (hasTipForGroup) {
+            teamsInGroup.sort((a, b) => {
+                const indexA = currentGroupTipIds.indexOf(a.id);
+                const indexB = currentGroupTipIds.indexOf(b.id);
+                if (indexA === -1) return 1;
+                if (indexB === -1) return -1;
+                return indexA - indexB;
+            });
+        } else {
+            teamsInGroup.sort((a, b) => {
+                const statsA = scores[a.id] || { points: 0, gf: 0, ga: 0 };
+                const statsB = scores[b.id] || { points: 0, gf: 0, ga: 0 };
+                if (statsB.points !== statsA.points) return statsB.points - statsA.points;
+                return (statsB.gf - statsB.ga) - (statsA.gf - statsA.ga);
+            });
+        }
+
+        html += `
+            <div style="margin-top: 30px;">
+                ${groupLabel ? `<h3 style="border-bottom:1px solid #555;">${groupLabel}</h3>` : ''}
+                
+                ${isGroupLocked ? `<div style="background-color:#330000; color:#ffcccc; padding:5px; border:1px solid red; font-size:0.8em; margin-bottom:5px;">Skupina uzamčena</div>` : ''}
+                
+                <ul class="sortable-list" id="list-${gKey}" data-group="${gKey}">
+                    ${teamsInGroup.map((team, index) => {
+            const userRank = index + 1;
+            const realRank = realRankMap[team.id];
+            const diff = userRank - realRank;
+            const isCorrect = (diff === 0);
+
+            let bgStyle = "background-color: #1a1a1a; border: 1px solid #444;";
+            let diffText;
+            let diffColor = "gray";
+
+            if (hasTipForGroup) {
+                if (isCorrect) {
+                    bgStyle = "background-color: rgba(40, 100, 40, 0.6); border-color: #00ff00;";
+                    diffText = "✔";
+                    diffColor = "#00ff00";
+                } else {
+                    diffText = `<span style="font-size: 0.8em">Akt.: ${realRank}. (${Math.abs(diff)})</span>`;
+                    diffColor = "orange";
+                }
+            } else {
+                diffText = `<span style="font-size: 0.7em; color: #666;">Neuloženo</span>`;
+            }
+
+            return `
+                        <li class="sortable-item" 
+                            draggable="${!isGroupLocked}" 
+                            data-id="${team.id}"
+                            data-group="${gKey}"
+                            style="${bgStyle} ${isGroupLocked ? 'cursor: default; opacity: 0.9;' : 'cursor: grab;'} display: flex; align-items: center; justify-content: space-between; margin: 5px 0; padding: 15px; color: #fff;">
+                            
+                            <div style="display:flex; align-items:center;">
+                                <span class="rank-number" style="font-weight: bold; color: orangered; margin-right: 15px; width: 30px;">${userRank}.</span>
+                                <span class="team-name" style="font-weight: bold;">${team.name}</span>
+                            </div>
+
+                            <div style="display:flex; align-items:center; gap: 15px;">
+                                <span style="color: ${diffColor}; font-weight: normal; margin-right: 10px;">${diffText}</span>
+                                <span style="font-size:20px;">${isGroupLocked ? '🔒' : '☰'}</span>
+                            </div>
+                        </li>
+                        `;
+        }).join('')}
+                </ul>
+            </div>
+        `;
+    }
+
+    if (isTipsLocked !== true) {
+        html += `<button type="button" id="saveBtn" class="save-btn" style="margin-top:20px;">Uložit všechny tipy</button>`;
+    }
+
+    // --- SCRIPT (OPRAVA DRAG&DROP BUGU) ---
+    html += `
+            </form>
+        </section>
+    </main>
+    <script>
+        const currentUserUsername = "${username}";
+        const sortableLists = document.querySelectorAll('.sortable-list');
+        let draggedItem = null;
+        let sourceListId = null;
+
+        sortableLists.forEach(list => {
+            list.addEventListener('dragstart', (e) => {
+                const item = e.target.closest('.sortable-item');
+                const isDraggable = item && item.getAttribute('draggable') !== 'false';
+
+                if (isDraggable) {
+                    draggedItem = item;
+                    sourceListId = list.id;
+                    item.classList.add('dragging');
+                } else {
+                    e.preventDefault();
+                }
+            });
+            
+            list.addEventListener('dragend', (e) => {
+                const item = e.target.closest('.sortable-item');
+                if (item) {
+                    item.classList.remove('dragging');
+                }
+                draggedItem = null;
+                sourceListId = null;
+                updateRanks(list);
+            });
+            
+            list.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                
+                if (list.id === sourceListId) {
+                    const afterElement = getDragAfterElement(list, e.clientY);
+                    if (afterElement == null) {
+                        list.appendChild(draggedItem);
+                    } else {
+                        list.insertBefore(draggedItem, afterElement);
+                    }
+                }
+            });
+        });
+
+        function getDragAfterElement(container, y) {
+            const draggableElements = [...container.querySelectorAll('.sortable-item:not(.dragging)')];
+            return draggableElements.reduce((closest, child) => {
+                const box = child.getBoundingClientRect();
+                const offset = y - box.top - box.height / 2;
+                if (offset < 0 && offset > closest.offset) return { offset: offset, element: child };
+                else return closest;
+            }, { offset: Number.NEGATIVE_INFINITY }).element;
+        }
+
+        function updateRanks(listContainer) {
+            const items = listContainer.querySelectorAll('.sortable-item');
+            items.forEach((item, index) => {
+                const rs = item.querySelector('.rank-number');
+                if (rs) rs.innerText = (index + 1) + '.';
+            });
+        }
+
+        const saveBtn = document.getElementById('saveBtn');
+        if (saveBtn) {
+            saveBtn.addEventListener('click', () => {
+                if (currentUserUsername === 'Admin') return alert('Admin netipuje.');
+
+                const payloadData = {};
+                document.querySelectorAll('.sortable-list').forEach(list => {
+                    const gKey = list.getAttribute('data-group');
+                    
+                    payloadData[gKey] = Array.from(list.querySelectorAll('.sortable-item'))
+                                     .map(i => parseInt(i.getAttribute('data-id')));
+                });
+
+                fetch('/table-tip', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        liga: '${selectedLiga}',
+                        season: '${selectedSeason}',
+                        teamOrder: payloadData
+                    })
+                }).then(res => {
+                    if(res.ok) { alert('Uloženo!'); location.reload(); }
+                    else if(res.status === 403) alert('Některá ze skupin je zamčena!');
+                    else alert('Chyba.');
+                });
+            });
+        }
+    </script>
+    </body>
+    </html>
+    `;
+    res.send(html);
+});
+
+router.post("/table-tip", requireLogin, express.json(), (req, res) => {
+    const username = req.session.user;
+    if (username === "Admin") return res.status(403).send("Admin netipuje.");
+
+    const { liga, season, teamOrder } = req.body; // teamOrder je objekt
+    if (!liga || !season || !teamOrder) return res.status(400).send("Chybí data.");
+
+    // Kontrola globálního zámku
+    try {
+        const statusData = JSON.parse(fs.readFileSync('./data/leagueStatus.json', 'utf8'));
+        const lockedStatus = statusData?.[season]?.[liga]?.tableTipsLocked;
+        if (lockedStatus === true) return res.status(403).send("Tipování je uzamčeno.");
+    } catch (e) {}
+
+    let tableTips = {};
+    try {
+        if (fs.existsSync('./data/tableTips.json')) {
+            tableTips = JSON.parse(fs.readFileSync('./data/tableTips.json', 'utf8'));
+        }
+    } catch (e) { console.error(e); }
+
+    if (!tableTips[season]) tableTips[season] = {};
+    if (!tableTips[season][liga]) tableTips[season][liga] = {};
+
+    tableTips[season][liga][username] = teamOrder;
+
+    fs.writeFileSync('./data/tableTips.json', JSON.stringify(tableTips, null, 2));
+    res.sendStatus(200);
+});
+
 router.post("/tip", requireLogin, (req, res) => {
     const username = req.session.user;
     if (username === "Admin") {
@@ -117,6 +708,7 @@ router.get('/', requireLogin, (req, res) => {
 
     const scores = calculateTeamScores(matches, selectedSeason, selectedLiga);
 
+    // --- NAČÍTÁNÍ STATISTIK VČETNĚ TABULKY ---
     let userStats = [];
     try {
         const usersData = fs.readFileSync('./data/users.json', 'utf-8');
@@ -125,8 +717,10 @@ router.get('/', requireLogin, (req, res) => {
 
         userStats = allUsers
             .filter(u => {
+                // Zobrazit uživatele, pokud má tipy na zápasy NEBO tip na tabulku
                 const tips = u.tips?.[selectedSeason]?.[selectedLiga] || [];
-                return tips.length > 0;
+                const tableStats = u.stats?.[selectedSeason]?.[selectedLiga]?.tableCorrect;
+                return tips.length > 0 || tableStats !== undefined;
             })
             .map(u => {
                 const stats = u.stats?.[selectedSeason]?.[selectedLiga] || {};
@@ -153,7 +747,10 @@ router.get('/', requireLogin, (req, res) => {
                     total: totalPoints,
                     maxFromTips: maxFromTips,
                     totalRegular: stats.totalRegular || 0,
-                    totalPlayoff: stats.totalPlayoff || 0
+                    totalPlayoff: stats.totalPlayoff || 0,
+                    // NOVÉ STATISTIKY PRO TABULKU
+                    tableCorrect: stats.tableCorrect || 0,
+                    tableDeviation: stats.tableDeviation || 0
                 };
             });
     } catch (err) {
@@ -162,6 +759,7 @@ router.get('/', requireLogin, (req, res) => {
 
     const currentUserStats = userStats.find(u => u.username === username);
 
+    // ... (PONECHÁNÍ TVÉHO KÓDU PRO PLAYOFF DATA) ...
     const playoffPath = path.join(__dirname, '../data/playoff.json');
     let playoffData = [];
     try {
@@ -169,10 +767,7 @@ router.get('/', requireLogin, (req, res) => {
         const allPlayoffs = JSON.parse(raw);
         if (allPlayoffs[selectedSeason] && allPlayoffs[selectedSeason][selectedLiga]) {
             playoffData = allPlayoffs[selectedSeason][selectedLiga];
-        } else {
-            console.warn('Playoff data pro danou sezónu a ligu nebyla nalezena.');
         }
-
     } catch (e) {
         console.error("Chyba při načítání playoff dat:", e);
     }
@@ -193,11 +788,17 @@ router.get('/', requireLogin, (req, res) => {
         isMultigroup: false
     };
 
-    if (leagueObj.maxMatches === 0 && selectedLiga) {
-        console.warn(`[VAROVÁNÍ] Pro ligu '${selectedLiga}' (sezóna ${selectedSeason}) nebyla nalezena konfigurační data v leagues.json. Tabulka se nemusí zobrazit správně.`);
-    }
     const sortedGroups = Object.keys(teamsByGroup).sort();
 
+    let isRegularSeasonFinished = false;
+    try {
+        const statusData = JSON.parse(fs.readFileSync('./data/leagueStatus.json', 'utf8'));
+        isRegularSeasonFinished = statusData?.[selectedSeason]?.[selectedLiga]?.regularSeasonFinished || false;
+    } catch (e) {}
+    const statusStyle = isRegularSeasonFinished
+        ? "color: lightgrey; font-weight: bold;"
+        : "color: white; opacity: 0.7; background-color: black";
+    // --- ZAČÁTEK HTML ---
     let html = `
     <!DOCTYPE html>
 <html lang="cs">
@@ -210,8 +811,8 @@ router.get('/', requireLogin, (req, res) => {
 </head>
 <body class="usersite">
 <header class="header">
-    <div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
     <form class="league-dropdown" method="GET" action="/">
+    <div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
     <label class="league-select-name">
         Liga:
         <select id="league-select" name="liga" required onchange="this.form.submit()">
@@ -219,6 +820,8 @@ router.get('/', requireLogin, (req, res) => {
         </select>
     </label>
         <a class="history-btn" href="/history">Historie</a>
+        <a class="history-btn changed" href="/table-tip?liga=${encodeURIComponent(selectedLiga)}">Základní část</a>
+        <a class="history-btn changed" href="/prestupy">Přestupy TELH</a>
     </form>
     <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
@@ -230,7 +833,9 @@ router.get('/', requireLogin, (req, res) => {
             <button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('playoff')">Playoff</button>
         </div>
         <div id="regularTable">
-        `
+        `;
+
+    // ... (PONECHEJ TVŮJ KÓD GENERUJÍCÍ TABULKU TÝMŮ - teamsInGroup smyčka) ...
     for (const group of sortedGroups) {
         const teamsInGroup = teamsByGroup[group];
         const zoneConfig = getLeagueZones(leagueObj);
@@ -382,12 +987,17 @@ router.get('/', requireLogin, (req, res) => {
             (${(currentUserStats.correct / currentUserStats.maxFromTips * 100).toFixed(2)} %)
         </p>` : ''}
     ` : `<p>Nemáš ještě žádné tipy nebo není vyhodnoceno.</p>`}
+        ${currentUserStats?.tableCorrect > 0 || currentUserStats?.tableDeviation > 0 ? `
+    <hr>
+    <h3>Výsledek tipovačky tabulky</h3>
+    <p>Správně trefených pozic: <strong>${currentUserStats?.tableCorrect}</strong> (bodů)</p>
+    <p>Celková odchylka v umístění: <strong>${currentUserStats?.tableDeviation}</strong> (menší je lepší)</p>
+` : `<p><em>Tipovačka tabulky zatím nebyla vyhodnocena (nebo nemáš žádné body).</em></p>`}
 </section>
-
 <section class="global_stats">
     <table class="points-table">
         <thead>
-            <tr><th scope="col" id="points-table-header" colspan="6"><h2>Statistiky všech</h2></th></tr>
+            <tr><th scope="col" id="points-table-header" colspan="8"><h2>Statistiky všech</h2></th></tr>
             <tr>
                 <th class="position">Místo</th>
                 <th>Uživatel</th>
@@ -395,6 +1005,8 @@ router.get('/', requireLogin, (req, res) => {
                 <th>Počet bodů</th>
                 <th>Celkem tipů v ZČ</th>
                 <th>Celkem tipů v Playoff</th>
+                <th>Trefené pozice (Tabulka)</th>
+                <th>Odchylka (Tabulka)</th>
             </tr>
         </thead>
         <tbody>`;
@@ -403,7 +1015,8 @@ router.get('/', requireLogin, (req, res) => {
                 if (b.correct !== a.correct) {
                     return b.correct - a.correct;
                 }
-                return b.total - a.total;
+                if (b.tableCorrect !== a.tableCorrect) return b.tableCorrect - a.tableCorrect;
+                return a.tableDeviation - b.tableDeviation;
             })
             .forEach((user, index) => {
                 const successRate = user.total > 0 ? ((user.correct / user.total) * 100).toFixed(2) : '0.00';
@@ -417,6 +1030,8 @@ router.get('/', requireLogin, (req, res) => {
             <td>${user.correct}</td>
             <td>${user.totalRegular}</td>
             <td>${user.totalPlayoff}</td>
+            <td style="${statusStyle}">${user.tableCorrect > 0 ? user.tableCorrect : '-'}</td>
+            <td style="${statusStyle}">${user.tableDeviation > 0 ? user.tableDeviation : '-'}</td>
         </tr>`;
             });
         html += `
@@ -451,6 +1066,14 @@ router.get('/', requireLogin, (req, res) => {
         <tr style="background-color: #FF0000">
             <td colspan="3">Za správný tip vítěze daného zápasu v playoff + chyba ve skóre o 3+ gólů</td>
             <td colspan="3">1 bod</td>
+        </tr>
+        <tr style="background-color: #00FF00">
+            <td colspan="3">Za přesné trefení pozice týmu v konečné tabulce</td>
+            <td colspan="3">1 bod (Tabulka)</td>
+        </tr>
+        <tr style="background-color: orangered">
+            <td colspan="3">Odchylka tipu tabulky (rozdíl pozic)</td>
+            <td colspan="3">Sčítá se (čím méně, tím lépe)</td>
         </tr>
     </table>
 </section>
@@ -1145,6 +1768,403 @@ router.get('/history/a', requireLogin, (req, res) => {
 
         res.send(html);
     }
+
 });
 
+router.get("/prestupy", requireLogin, (req, res) => {
+    const username = req.session.user;
+    const teams = loadTeams().filter(t => t.active);
+    const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf-8'));
+    const allowedLeagues = JSON.parse(fs.readFileSync('./data/allowedLeagues.json', 'utf-8'));
+    const selectedSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
+    const allSeasonData = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf-8'));
+    const leagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues)
+        ? allSeasonData[selectedSeason].leagues
+        : [];
+
+    const leaguesFromTeams = [...new Set(teams.map(t => t.liga))];
+    const leaguesFromMatches = [...new Set(matches.map(m => m.liga))];
+    const allLeagues = [...new Set([...leaguesFromTeams, ...leaguesFromMatches])];
+    const uniqueLeagues = allLeagues.filter(l => allowedLeagues.includes(l));
+
+    const selectedLiga = req.query.liga && uniqueLeagues.includes(req.query.liga) ? req.query.liga : uniqueLeagues[0];
+    const teamsInSelectedLiga = teams.filter(t => t.liga === selectedLiga);
+
+    const scores = calculateTeamScores(matches, selectedSeason, selectedLiga);
+
+    // --- NAČÍTÁNÍ STATISTIK VČETNĚ TABULKY ---
+    let userStats = [];
+    try {
+        const usersData = fs.readFileSync('./data/users.json', 'utf-8');
+        const allUsers = JSON.parse(usersData);
+        const matchesInLiga = matches.filter(m => m.season === selectedSeason && m.liga === selectedLiga);
+
+        userStats = allUsers
+            .filter(u => {
+                // Zobrazit uživatele, pokud má tipy na zápasy NEBO tip na tabulku
+                const tips = u.tips?.[selectedSeason]?.[selectedLiga] || [];
+                const tableStats = u.stats?.[selectedSeason]?.[selectedLiga]?.tableCorrect;
+                return tips.length > 0 || tableStats !== undefined;
+            })
+            .map(u => {
+                const stats = u.stats?.[selectedSeason]?.[selectedLiga] || {};
+                const userTips = u.tips?.[selectedSeason]?.[selectedLiga] || [];
+
+                const maxFromTips = userTips.reduce((sum, tip) => {
+                    const match = matchesInLiga.find(m => Number(m.id) === Number(tip.matchId));
+                    if (!match || !match.result) return sum;
+                    if (!match.isPlayoff) return sum + 1;
+                    if (match.bo === 1) return sum + 5;
+                    return sum + 3;
+                }, 0);
+
+                const totalPoints = matchesInLiga.reduce((sum, match) => {
+                    if (!match.result) return sum;
+                    if (!match.isPlayoff) return sum + 1;
+                    if (match.bo === 1) return sum + 5;
+                    return sum + 3;
+                }, 0);
+
+                return {
+                    username: u.username,
+                    correct: stats.correct || 0,
+                    total: totalPoints,
+                    maxFromTips: maxFromTips,
+                    totalRegular: stats.totalRegular || 0,
+                    totalPlayoff: stats.totalPlayoff || 0,
+                    // NOVÉ STATISTIKY PRO TABULKU
+                    tableCorrect: stats.tableCorrect || 0,
+                    tableDeviation: stats.tableDeviation || 0
+                };
+            });
+    } catch (err) {
+        console.error("Chyba při načítání statistik uživatelů:", err);
+    }
+    const currentUserStats = userStats.find(u => u.username === username);
+
+    // ... (PONECHÁNÍ TVÉHO KÓDU PRO PLAYOFF DATA) ...
+    const playoffPath = path.join(__dirname, '../data/playoff.json');
+    let playoffData = [];
+    try {
+        const raw = fs.readFileSync(playoffPath, 'utf8');
+        const allPlayoffs = JSON.parse(raw);
+        if (allPlayoffs[selectedSeason] && allPlayoffs[selectedSeason][selectedLiga]) {
+            playoffData = allPlayoffs[selectedSeason][selectedLiga];
+        }
+    } catch (e) {
+        console.error("Chyba při načítání playoff dat:", e);
+    }
+
+    const teamsByGroup = {};
+    teamsInSelectedLiga.forEach(team => {
+        const group = team.group ? String.fromCharCode(team.group + 64) : 'X';
+        if (!teamsByGroup[group]) teamsByGroup[group] = [];
+        teamsByGroup[group].push(team);
+    });
+
+    const leagueObj = leagues.find(l => l.name === selectedLiga) || {
+        name: selectedLiga || "Neznámá liga",
+        maxMatches: 0,
+        quarterfinal: 0,
+        playin: 0,
+        relegation: 0,
+        isMultigroup: false
+    };
+
+    const sortedGroups = Object.keys(teamsByGroup).sort();
+
+    let isRegularSeasonFinished = false;
+    try {
+        const statusData = JSON.parse(fs.readFileSync('./data/leagueStatus.json', 'utf8'));
+        isRegularSeasonFinished = statusData?.[selectedSeason]?.[selectedLiga]?.regularSeasonFinished || false;
+    } catch (e) {}
+    const statusStyle = isRegularSeasonFinished
+        ? "color: lightgrey; font-weight: bold;"
+        : "color: white; opacity: 0.7; background-color: black";
+    // --- ZAČÁTEK HTML ---
+    let html = `
+    <!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tipovačka</title>
+    <link rel="stylesheet" href="./css/styles.css" />
+    <link rel="icon" href="./images/logo.png">
+</head>
+<body class="usersite">
+<header class="header">
+    <form class="league-dropdown" method="GET" action="/">
+    <div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
+    <label class="league-select-name">
+        Liga:
+        <select id="league-select" name="liga" required onchange="this.form.submit()">
+        ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected' : ''}>${l}</option>`).join('')}
+        </select>
+    </label>
+        <a class="history-btn" href="/history">Historie</a>
+        <a class="history-btn changed" href="/?liga=${encodeURIComponent(selectedLiga)}">Tipovačka</a>
+        <a class="history-btn changed" href="/table-tip?liga=${encodeURIComponent(selectedLiga)}">Základní část</a>
+    </form>
+    <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
+</header>
+<main class="main_page">
+    <section class="stats-container">
+        <div class="left-panel">
+        <div style="display: flex; flex-direction: row; justify-content: space-around; margin:20px 0; text-align:center;">
+            <button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('regular')">Základní část</button>
+            <button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('playoff')">Playoff</button>
+        </div>
+        <div id="regularTable">
+        `;
+
+    // ... (PONECHEJ TVŮJ KÓD GENERUJÍCÍ TABULKU TÝMŮ - teamsInGroup smyčka) ...
+    for (const group of sortedGroups) {
+        const teamsInGroup = teamsByGroup[group];
+        const zoneConfig = getLeagueZones(leagueObj);
+
+        html += `
+    <table class="points-table">
+        <thead>
+            <tr>
+                <th scope="col" id="points-table-header" colspan="10">
+                    <h2>Týmy - ${selectedLiga} ${selectedSeason} - Základní část ${leagueObj?.isMultigroup ? `(Skupina ${group})` : ''}</h2>
+                </th>
+            </tr>
+            <tr>
+                <th class="position" scope="col">Místo</th>
+                <th scope="col">Tým</th>
+                <th class="points" scope="col">Body</th>
+                <th scope="col">Skóre</th>
+                <th scope="col">Rozdíl</th>
+                <th scope="col">Z</th>
+                <th scope="col">V</th>
+                <th scope="col">Vpp</th>
+                <th scope="col">Ppp</th>
+                <th scope="col">P</th>
+            </tr>
+        </thead>
+        <tbody>
+    `;
+
+        teamsInGroup.sort((a, b) => {
+            const aStats = a.stats?.[selectedSeason] || {};
+            const bStats = b.stats?.[selectedSeason] || {};
+            const aPoints = aStats.points || 0;
+            const bPoints = bStats.points || 0;
+            const aScore = scores[a.id] || {gf:0, ga:0};
+            const bScore = scores[b.id] || {gf:0, ga:0};
+            const aDiff = aScore.gf - aScore.ga;
+            const bDiff = bScore.gf - bScore.ga;
+            const aMatches = (aStats.wins||0)+(aStats.otWins||0)+(aStats.otLosses||0)+(aStats.losses||0);
+            const bMatches = (bStats.wins||0)+(bStats.otWins||0)+(bStats.otLosses||0)+(bStats.losses||0);
+
+            if (bPoints !== aPoints) return bPoints - aPoints;
+            if (bDiff !== aDiff) return bDiff - aDiff;
+            return aMatches - bMatches;
+        });
+
+        const sorted = teamsInGroup;
+
+        teamsInGroup.forEach((team, index) => {
+            const zone = getTeamZone(index, teamsInGroup.length, zoneConfig);
+            const matchesPerTeam = (leagueObj.maxMatches * 2) / teamsInGroup.length;
+            const allTeamsFinished = sorted.every(team => {
+                const stats = team.stats?.[selectedSeason] || {};
+                const played = (stats.wins || 0) + (stats.otWins || 0) + (stats.otLosses || 0) + (stats.losses || 0);
+                return played >= matchesPerTeam;
+            });
+            const locked = isLockedPosition(index, teamsInGroup.length, sorted, zoneConfig, selectedSeason, matchesPerTeam, allTeamsFinished);
+            team.zone = zone;
+            team.locked = locked;
+
+            const rowClass = locked ? `${zone} locked` : '';
+            const rankClass = zone;
+
+            const teamStats = scores[team.id] || {gf:0, ga:0};
+            const goalDiff = teamStats.gf - teamStats.ga;
+            const numberMatches = (team.stats?.[selectedSeason]?.wins||0)
+                + (team.stats?.[selectedSeason]?.otWins||0)
+                + (team.stats?.[selectedSeason]?.otLosses||0)
+                + (team.stats?.[selectedSeason]?.losses||0);
+
+            html += `
+        <tr class="${rowClass}">
+            <td class="rank-cell ${rankClass}">${index + 1}.</td>
+            <td>${team.name}</td>
+            <td class="points numbers">${team.stats?.[selectedSeason]?.points || 0}</td>
+            <td class="numbers">${teamStats.gf}:${teamStats.ga}</td>
+            <td class="numbers">${goalDiff > 0 ? '+' + goalDiff : goalDiff}</td>
+            <td class="numbers">${numberMatches || 0}</td>
+            <td class="numbers">${team.stats?.[selectedSeason]?.wins || 0}</td>
+            <td class="numbers">${team.stats?.[selectedSeason]?.otWins || 0}</td>
+            <td class="numbers">${team.stats?.[selectedSeason]?.otLosses || 0}</td>
+            <td class="numbers">${team.stats?.[selectedSeason]?.losses || 0}</td>
+        </tr>
+        `;
+        });
+        html += `
+        </tbody>
+    </table>
+    `;
+    }
+
+    html += `
+            </div>
+            <div id="playoffTablePreview" style="display:none; overflow:auto; max-width:100%;">
+      <table class="points-table"><tr><th scope="col" id="points-table-header" colspan="20"><h2>Týmy - ${selectedLiga} ${selectedSeason} - Playoff</h2></th></tr>`;
+    playoffData.forEach((row) => {
+        html += '<tr>';
+        row.forEach(cell => {
+            const bgColor = cell.bgColor || '';
+            const textColor = cell.textColor || '';
+            const styleParts = [];
+            if (bgColor) styleParts.push(`background-color:${bgColor}`);
+            if (textColor) styleParts.push(`color:${textColor}`);
+            const styleAttr = styleParts.length ? ` style="${styleParts.join(';')}"` : '';
+
+            const txt = cell.text || '';
+            html += `<td${styleAttr}>${txt}</td>`;
+        });
+        html += '</tr>';
+    });
+    const totalMatches = leagueObj.maxMatches
+    const filledMatches = matches.filter(m => m.result && m.liga === selectedLiga && m.season === selectedSeason).length;
+    const percentage = totalMatches > 0 ? Math.round((filledMatches / totalMatches) * 100) : 0;
+
+    html += `
+      </table>
+    </div>
+    <section class="progress-section">
+        <h3>Odehráno zápasů v základní části</h3>
+        <div class="progress-container">
+            <div class="progress-bar" style="width:${percentage}%;">${percentage}%</div>
+        </div>
+        <p id="progress-text"></p>
+    </section>
+
+    <script>
+    function showTable(which) {
+        document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none';
+        const p = document.getElementById('playoffTablePreview');
+        p.style.display = which === 'playoff' ? 'block' : 'none';
+    }
+    const bar = document.getElementById("progress-bar");
+    const text = document.getElementById("progress-text");
+    </script>
+        </div>
+`;
+    if (username) {
+        html += `
+<section class="user_stats">
+    <h2>Tvoje statistiky</h2>
+    ${currentUserStats ? `
+        <p>Správně tipnuto z maximálního počtu všech vyhodnocených zápasů: 
+            <strong>${currentUserStats.correct}</strong> z <strong>${currentUserStats.total}</strong> 
+            (${(currentUserStats.correct / currentUserStats.total * 100).toFixed(2)} %)
+        </p>
+        ${currentUserStats.total !== currentUserStats.maxFromTips ? `
+        <p>Správně tipnuto z tipovaných zápasů: 
+            <strong>${currentUserStats.correct}</strong> z <strong>${currentUserStats.maxFromTips}</strong> 
+            (${(currentUserStats.correct / currentUserStats.maxFromTips * 100).toFixed(2)} %)
+        </p>` : ''}
+    ` : `<p>Nemáš ještě žádné tipy nebo není vyhodnoceno.</p>`}
+        ${currentUserStats?.tableCorrect > 0 || currentUserStats?.tableDeviation > 0 ? `
+    <hr>
+    <h3>Výsledek tipovačky tabulky</h3>
+    <p>Správně trefených pozic: <strong>${currentUserStats?.tableCorrect}</strong> (bodů)</p>
+    <p>Celková odchylka v umístění: <strong>${currentUserStats?.tableDeviation}</strong> (menší je lepší)</p>
+` : `<p><em>Tipovačka tabulky zatím nebyla vyhodnocena (nebo nemáš žádné body).</em></p>`}
+</section>
+<section class="global_stats">
+    <table class="points-table">
+        <thead>
+            <tr><th scope="col" id="points-table-header" colspan="8"><h2>Statistiky všech</h2></th></tr>
+            <tr>
+                <th class="position">Místo</th>
+                <th>Uživatel</th>
+                <th>Úspěšnost</th>
+                <th>Počet bodů</th>
+                <th>Celkem tipů v ZČ</th>
+                <th>Celkem tipů v Playoff</th>
+                <th>Trefené pozice (Tabulka)</th>
+                <th>Odchylka (Tabulka)</th>
+            </tr>
+        </thead>
+        <tbody>`;
+        userStats
+            .sort((a, b) => {
+                if (b.correct !== a.correct) {
+                    return b.correct - a.correct;
+                }
+                if (b.tableCorrect !== a.tableCorrect) return b.tableCorrect - a.tableCorrect;
+                return a.tableDeviation - b.tableDeviation;
+            })
+            .forEach((user, index) => {
+                const successRate = user.total > 0 ? ((user.correct / user.total) * 100).toFixed(2) : '0.00';
+                const successRateOverall = user.maxFromTips > 0 ? ((user.correct / user.maxFromTips) * 100).toFixed(2) : '0.00';
+
+                html += `
+        <tr>
+            <td>${index + 1}.</td>
+            <td>${user.username}</td>
+            <td>${successRateOverall}%${user.total !== user.maxFromTips ? ` (${successRate}%)` : ''}</td>
+            <td>${user.correct}</td>
+            <td>${user.totalRegular}</td>
+            <td>${user.totalPlayoff}</td>
+            <td style="${statusStyle}">${user.tableCorrect > 0 ? user.tableCorrect : '-'}</td>
+            <td style="${statusStyle}">${user.tableDeviation > 0 ? user.tableDeviation : '-'}</td>
+        </tr>`;
+            });
+        html += `
+        </tbody>
+    </table>
+    <br>
+    <table style="color: black" class="points-table">
+        <tr style="background-color: #00FF00">
+            <td colspan="3">Za správný tip zápasu v základní části</td>
+            <td colspan="3">1 bod</td>
+        </tr>
+        <tr style="background-color: #FF0000">
+            <td colspan="3">Za správný tip vítěze dané série v playoff ale špatný tip počtu vyhraných zápasů týmu který prohrál</td>
+            <td colspan="3">1 bod</td>
+        </tr>
+        <tr style="background-color: #00FF00">
+            <td colspan="3">Za správný tip vítěze dané série v playoff + počet vyhraných zápasů týmů který prohrál</td>
+            <td colspan="3">3 body</td>
+        </tr>
+        <tr style="background-color: #00FF00">
+            <td colspan="3">Za správný tip vítěze daného zápasu v playoff + správné skóre</td>
+            <td colspan="3">5 bodů</td>
+        </tr>
+        <tr style="background-color: #FFFF00">
+            <td colspan="3">Za správný tip vítěze daného zápasu v playoff + chyba ve skóre o 1 gól</td>
+            <td colspan="3">4 body</td>
+        </tr>
+        <tr style="background-color: #FF6600">
+            <td colspan="3">Za správný tip vítěze daného zápasu v playoff + chyba ve skóre o 2 góly</td>
+            <td colspan="3">3 body</td>
+        </tr>
+        <tr style="background-color: #FF0000">
+            <td colspan="3">Za správný tip vítěze daného zápasu v playoff + chyba ve skóre o 3+ gólů</td>
+            <td colspan="3">1 bod</td>
+        </tr>
+        <tr style="background-color: #00FF00">
+            <td colspan="3">Za přesné trefení pozice týmu v konečné tabulce</td>
+            <td colspan="3">1 bod (Tabulka)</td>
+        </tr>
+        <tr style="background-color: orangered">
+            <td colspan="3">Odchylka tipu tabulky (rozdíl pozic)</td>
+            <td colspan="3">Sčítá se (čím méně, tím lépe)</td>
+        </tr>
+    </table>
+</section>
+</section>
+<section class="matches-container">
+<h1>Funkce bude v budoucnu přidána</h1>
+</section>
+</main></body>
+` }
+    res.send(html)
+});
 module.exports = router;
