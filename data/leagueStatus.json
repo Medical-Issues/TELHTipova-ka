@@ -2,13 +2,22 @@
   "25/26": {
     "TELH": {
       "regularSeasonFinished": false,
-      "tableTipsLocked": false
+      "tableTipsLocked": true
     },
     "Euro Hockey Tour": {
       "tableTipsLocked": [
         "1",
         "2"
       ]
+    },
+    "MAXA": {
+      "tableTipsLocked": true
+    },
+    "Spengler Cup": {
+      "tableTipsLocked": true
+    },
+    "MSJ": {
+      "tableTipsLocked": true
     }
   }
 }

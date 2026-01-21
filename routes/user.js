@@ -359,10 +359,7 @@ router.get("/table-tip", requireLogin, (req, res) => {
 
     for (const gKey of sortedGroupKeys) {
         let teamsInGroup = groupedTeams[gKey];
-        // Převedeme 1 na "Skupina A" jen pro zobrazení
         const groupLabel = getGroupDisplayLabel(gKey);
-
-        // Kontrola zámku: gKey je "1" (číslo jako string), isTipsLocked v DB je ["1"]
         const isGroupLocked = (isTipsLocked === true) || (Array.isArray(isTipsLocked) && isTipsLocked.includes(gKey));
 
         // Načtení tipu
@@ -376,17 +373,33 @@ router.get("/table-tip", requireLogin, (req, res) => {
         }
         const hasTipForGroup = currentGroupTipIds.length > 0;
 
-        // Vypočteme REÁLNÉ pořadí
         const realRankMap = {};
         const realStandings = [...teamsInGroup].sort((a, b) => {
-            const statsA = scores[a.id] || { points: 0, gf: 0, ga: 0 };
-            const statsB = scores[b.id] || { points: 0, gf: 0, ga: 0 };
-            if (statsB.points !== statsA.points) return statsB.points - statsA.points;
-            return (statsB.gf - statsB.ga) - (statsA.gf - statsA.ga);
-        });
-        realStandings.forEach((t, i) => realRankMap[t.id] = i + 1);
+            // 1. Body bereme z ULOŽENÝCH STATISTIK (team.stats), ne z live výpočtu
+            const statsA = a.stats?.[selectedSeason] || {};
+            const statsB = b.stats?.[selectedSeason] || {};
+            const pointsA = statsA.points || 0;
+            const pointsB = statsB.points || 0;
 
+            // 2. Skóre bereme z live výpočtu (stejně jako v levé tabulce)
+            const scoreA = scores[a.id] || {gf:0, ga:0};
+            const scoreB = scores[b.id] || {gf:0, ga:0};
+            const diffA = scoreA.gf - scoreA.ga;
+            const diffB = scoreB.gf - scoreB.ga;
+
+            // 3. Počet zápasů (pro přesnou shodu s levou tabulkou)
+            const matchesA = (statsA.wins||0)+(statsA.otWins||0)+(statsA.otLosses||0)+(statsA.losses||0);
+            const matchesB = (statsB.wins||0)+(statsB.otWins||0)+(statsB.otLosses||0)+(statsB.losses||0);
+
+            // Samotné porovnání
+            if (pointsB !== pointsA) return pointsB - pointsA; // Kdo má víc bodů
+            if (diffB !== diffA) return diffB - diffA;         // Kdo má lepší skóre
+            return matchesA - matchesB;                        // Kdo má méně zápasů (volitelné)
+        });
+
+        realStandings.forEach((t, i) => realRankMap[t.id] = i + 1);
         // Řazení pro zobrazení
+        // Řazení pro zobrazení (Smart Sort nebo User Tip)
         if (hasTipForGroup) {
             teamsInGroup.sort((a, b) => {
                 const indexA = currentGroupTipIds.indexOf(a.id);
@@ -396,11 +409,15 @@ router.get("/table-tip", requireLogin, (req, res) => {
                 return indexA - indexB;
             });
         } else {
+            // Pokud netipoval, seřadíme to stejně jako realStandings (Smart Sort)
             teamsInGroup.sort((a, b) => {
-                const statsA = scores[a.id] || { points: 0, gf: 0, ga: 0 };
-                const statsB = scores[b.id] || { points: 0, gf: 0, ga: 0 };
-                if (statsB.points !== statsA.points) return statsB.points - statsA.points;
-                return (statsB.gf - statsB.ga) - (statsA.gf - statsA.ga);
+                const statsA = a.stats?.[selectedSeason] || {};
+                const statsB = b.stats?.[selectedSeason] || {};
+                if ((statsB.points||0) !== (statsA.points||0)) return (statsB.points||0) - (statsA.points||0);
+
+                const sA = scores[a.id] || {gf:0, ga:0};
+                const sB = scores[b.id] || {gf:0, ga:0};
+                return (sB.gf - sB.ga) - (sA.gf - sA.ga);
             });
         }
 
