@@ -50,7 +50,7 @@ th, td {
     border-collapse: collapse;
     overflow: hidden;
     background-color: #333;
-    font-size: 11px;
+    font-size: 10px;
 }
 
 .left-panel {
@@ -189,7 +189,7 @@ main {
     align-items: center;
     text-align: center;
     gap: 10px;
-    width: 40%;
+    width: 50%;
 }
 
 .user_stats {
@@ -205,7 +205,7 @@ main {
 .matches-container {
     border: 1px solid orangered;
     padding: 10px;
-    width: 60%;
+    width: 50%;
 }
 .matches-table {
     width: 100%;
@@ -458,7 +458,7 @@ button:disabled {
  }
  .points-table-history {
      height: 40px;
-     font-size: 20px;
+     font-size: 10px;
  }
  .position {
      width: 50px;

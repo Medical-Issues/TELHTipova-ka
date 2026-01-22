@@ -139,7 +139,7 @@
         "wins": 17,
         "otWins": 4,
         "otLosses": 5,
-        "losses": 16
+        "losses": 17
       }
     }
   },
@@ -167,8 +167,8 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 80,
-        "wins": 22,
+        "points": 83,
+        "wins": 23,
         "otWins": 4,
         "otLosses": 6,
         "losses": 10
