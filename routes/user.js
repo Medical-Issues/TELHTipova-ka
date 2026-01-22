@@ -2223,7 +2223,7 @@ router.get('/history/table', requireLogin, (req, res) => {
                     const realRank = realRankMaps[gKey][team.id];
                     const diff = userRank - realRank;
                     let bgStyle = "background-color: #1a1a1a; border: 1px solid #444;";
-                    let diffText = "";
+                    let diffText;
                     let diffColor = "gray";
 
                     if (hasTip) {
