@@ -856,7 +856,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 </label>
 <a class="history-btn" href="/history">Historie</a>
 <a class="history-btn changed" href="/table-tip?liga=${encodeURIComponent(selectedLiga)}">Základní část</a>
-<a class="history-btn changed" href="/prestupy">Přestupy TELH</a>
+<a class="history-btn changed" href="/prestupły">Přestupy TELH</a>
 </form>
 <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
@@ -870,35 +870,11 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <div id="regularTable">
 `;
 
-    // ... (PONECHEJ TVŮJ KÓD GENERUJÍCÍ TABULKU TÝMŮ - teamsInGroup smyčka) ...
     for (const group of sortedGroups) {
         const teamsInGroup = teamsByGroup[group];
         const zoneConfig = getLeagueZones(leagueObj);
 
-        html += `
-<table class="points-table">
-<thead>
-<tr>
-<th scope="col" id="points-table-header" colspan="10">
-<h2>Týmy - ${selectedLiga} ${selectedSeason} - Základní část ${leagueObj?.isMultigroup ? `(Skupina ${group})` : ''}</h2>
-</th>
-</tr>
-<tr>
-<th class="position" scope="col">Místo</th>
-<th scope="col">Tým</th>
-<th class="points" scope="col">Body</th>
-<th scope="col">Skóre</th>
-<th scope="col">Rozdíl</th>
-<th scope="col">Z</th>
-<th scope="col">V</th>
-<th scope="col">Vpp</th>
-<th scope="col">Ppp</th>
-<th scope="col">P</th>
-</tr>
-</thead>
-<tbody>
-`;
-
+        // Řazení týmů ve skupině
         teamsInGroup.sort((a, b) => {
             const aStats = a.stats?.[selectedSeason] || {};
             const bStats = b.stats?.[selectedSeason] || {};
@@ -916,8 +892,16 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
             return aMatches - bMatches;
         });
 
-        const sorted = teamsInGroup;
+        // Vykreslení tabulky skupiny (původní kód)
+        html += `
+<table class="points-table">
+<thead>
+<tr><th scope="col" id="points-table-header" colspan="10"><h2>Týmy - ${selectedLiga} ${selectedSeason} - Základní část ${leagueObj?.isMultigroup ? `(Skupina ${group})` : ''}</h2></th></tr>
+<tr><th class="position">Místo</th><th>Tým</th><th class="points">Body</th><th>Skóre</th><th>Rozdíl</th><th>Z</th><th>V</th><th>Vpp</th><th>Ppp</th><th>P</th></tr>
+</thead>
+<tbody>`;
 
+        const sorted = teamsInGroup;
         teamsInGroup.forEach((team, index) => {
             const zone = getTeamZone(index, teamsInGroup.length, zoneConfig);
             const matchesPerTeam = (leagueObj.maxMatches * 2) / teamsInGroup.length;
@@ -927,18 +911,13 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
                 return played >= matchesPerTeam;
             });
             const locked = isLockedPosition(index, teamsInGroup.length, sorted, zoneConfig, selectedSeason, matchesPerTeam, allTeamsFinished);
-            team.zone = zone;
-            team.locked = locked;
-
             const rowClass = locked ? `${zone} locked` : '';
             const rankClass = zone;
-
             const teamStats = scores[team.id] || {gf: 0, ga: 0};
             const goalDiff = teamStats.gf - teamStats.ga;
             const numberMatches = (team.stats?.[selectedSeason]?.wins || 0) + (team.stats?.[selectedSeason]?.otWins || 0) + (team.stats?.[selectedSeason]?.otLosses || 0) + (team.stats?.[selectedSeason]?.losses || 0);
 
-            html += `
-<tr class="${rowClass}">
+            html += `<tr class="${rowClass}">
 <td class="rank-cell ${rankClass}">${index + 1}.</td>
 <td>${team.name}</td>
 <td class="points numbers">${team.stats?.[selectedSeason]?.points || 0}</td>
@@ -949,15 +928,10 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <td class="numbers">${team.stats?.[selectedSeason]?.otWins || 0}</td>
 <td class="numbers">${team.stats?.[selectedSeason]?.otLosses || 0}</td>
 <td class="numbers">${team.stats?.[selectedSeason]?.losses || 0}</td>
-</tr>
-`;
+</tr>`;
         });
-        html += `
-</tbody>
-</table>
-`;
+        html += `</tbody></table><br>`;
     }
-
     html += `
 </div>
 <div id="playoffTablePreview" style="display:none; overflow:auto; max-width:100%;">

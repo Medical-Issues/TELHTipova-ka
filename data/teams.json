@@ -7,8 +7,8 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 65,
-        "wins": 17,
+        "points": 68,
+        "wins": 18,
         "otWins": 5,
         "otLosses": 4,
         "losses": 16
@@ -23,11 +23,11 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 55,
+        "points": 58,
         "wins": 14,
-        "otWins": 4,
-        "otLosses": 5,
-        "losses": 20
+        "otWins": 5,
+        "otLosses": 6,
+        "losses": 21
       }
     }
   },
@@ -39,11 +39,11 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 72,
-        "wins": 19,
+        "points": 75,
+        "wins": 20,
         "otWins": 6,
         "otLosses": 3,
-        "losses": 16
+        "losses": 17
       }
     }
   },
@@ -55,11 +55,11 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 54,
-        "wins": 14,
-        "otWins": 4,
+        "points": 59,
+        "wins": 15,
+        "otWins": 5,
         "otLosses": 4,
-        "losses": 20
+        "losses": 21
       }
     }
   },
@@ -75,7 +75,7 @@
         "wins": 11,
         "otWins": 3,
         "otLosses": 4,
-        "losses": 26
+        "losses": 28
       }
     }
   },
@@ -87,9 +87,9 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 73,
-        "wins": 19,
-        "otWins": 4,
+        "points": 78,
+        "wins": 20,
+        "otWins": 5,
         "otLosses": 8,
         "losses": 12
       }
@@ -103,8 +103,8 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 70,
-        "wins": 20,
+        "points": 79,
+        "wins": 23,
         "otWins": 2,
         "otLosses": 6,
         "losses": 14
@@ -119,11 +119,11 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 59,
-        "wins": 17,
+        "points": 62,
+        "wins": 18,
         "otWins": 3,
         "otLosses": 2,
-        "losses": 22
+        "losses": 24
       }
     }
   },
@@ -135,11 +135,11 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 64,
-        "wins": 17,
+        "points": 67,
+        "wins": 18,
         "otWins": 4,
         "otLosses": 5,
-        "losses": 17
+        "losses": 19
       }
     }
   },
@@ -151,9 +151,9 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 70,
-        "wins": 20,
-        "otWins": 3,
+        "points": 78,
+        "wins": 22,
+        "otWins": 4,
         "otLosses": 4,
         "losses": 15
       }
@@ -167,10 +167,10 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 83,
-        "wins": 23,
-        "otWins": 4,
-        "otLosses": 6,
+        "points": 89,
+        "wins": 24,
+        "otWins": 5,
+        "otLosses": 7,
         "losses": 10
       }
     }
@@ -183,11 +183,11 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 63,
+        "points": 64,
         "wins": 17,
         "otWins": 4,
-        "otLosses": 4,
-        "losses": 20
+        "otLosses": 5,
+        "losses": 21
       }
     }
   },
@@ -199,11 +199,11 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 61,
+        "points": 62,
         "wins": 16,
         "otWins": 5,
-        "otLosses": 3,
-        "losses": 18
+        "otLosses": 4,
+        "losses": 20
       }
     }
   },
@@ -215,11 +215,11 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 71,
-        "wins": 18,
+        "points": 75,
+        "wins": 19,
         "otWins": 8,
-        "otLosses": 1,
-        "losses": 16
+        "otLosses": 2,
+        "losses": 17
       }
     }
   },
@@ -974,5 +974,101 @@
         "losses": 1
       }
     }
+  },
+  {
+    "id": 84,
+    "name": "Česko",
+    "liga": "Olympiáda",
+    "active": true,
+    "group": 1,
+    "stats": {}
+  },
+  {
+    "id": 85,
+    "name": "Francie",
+    "liga": "Olympiáda",
+    "active": true,
+    "group": 1,
+    "stats": {}
+  },
+  {
+    "id": 86,
+    "name": "Švýcarsko",
+    "liga": "Olympiáda",
+    "active": true,
+    "group": 1,
+    "stats": {}
+  },
+  {
+    "id": 87,
+    "name": "Kanada",
+    "liga": "Olympiáda",
+    "active": true,
+    "group": 1,
+    "stats": {}
+  },
+  {
+    "id": 88,
+    "name": "Finsko",
+    "liga": "Olympiáda",
+    "active": true,
+    "group": 2,
+    "stats": {}
+  },
+  {
+    "id": 89,
+    "name": "Itálie",
+    "liga": "Olympiáda",
+    "active": true,
+    "group": 2,
+    "stats": {}
+  },
+  {
+    "id": 90,
+    "name": "Slovensko",
+    "liga": "Olympiáda",
+    "active": true,
+    "group": 2,
+    "stats": {}
+  },
+  {
+    "id": 91,
+    "name": "Švédsko",
+    "liga": "Olympiáda",
+    "active": true,
+    "group": 2,
+    "stats": {}
+  },
+  {
+    "id": 92,
+    "name": "Dánsko",
+    "liga": "Olympiáda",
+    "active": true,
+    "group": 3,
+    "stats": {}
+  },
+  {
+    "id": 93,
+    "name": "Německo",
+    "liga": "Olympiáda",
+    "active": true,
+    "group": 3,
+    "stats": {}
+  },
+  {
+    "id": 94,
+    "name": "Lotyšsko",
+    "liga": "Olympiáda",
+    "active": true,
+    "group": 3,
+    "stats": {}
+  },
+  {
+    "id": 95,
+    "name": "USA",
+    "liga": "Olympiáda",
+    "active": true,
+    "group": 3,
+    "stats": {}
   }
 ]

@@ -54,6 +54,15 @@
         "quarterfinal": 1,
         "playin": 3,
         "relegation": 3
+      },
+      {
+        "name": "Olympiáda",
+        "isMultigroup": true,
+        "groupCount": 3,
+        "maxMatches": 30,
+        "quarterfinal": 1,
+        "playin": 2,
+        "relegation": 0
       }
     ]
   }

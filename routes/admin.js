@@ -447,7 +447,7 @@ router.post('/teams/edit/:id', requireAdmin, (req, res) => {
 });
 
 router.get('/new/match', requireAdmin, (req, res) => {
-    const teams = loadTeams();
+    const teams = loadTeams(); // Předpokládám, že zde jsou všichni, včetně active: false, pokud je chceš filtrovat, přidej .filter(t => t.active)
     const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'));
 
     const seasonsFromTeams = teams.map(t => t.season).filter(Boolean);
@@ -460,6 +460,9 @@ router.get('/new/match', requireAdmin, (req, res) => {
     const allSeasons = [...new Set([...futureSeasons, ...knownSeasons])];
     allSeasons.sort();
 
+    // 1. Získáme unikátní ligy pro filtr
+    const uniqueLeagues = [...new Set(teams.map(t => t.liga))].sort();
+
     const html = `
         <!DOCTYPE html>
     <html lang="cs">
@@ -470,10 +473,39 @@ router.get('/new/match', requireAdmin, (req, res) => {
         <link rel="stylesheet" href="/css/styles.css" />
         <link rel="icon" href="/images/logo.png">
         <script>
+            // 2. Předáme data týmů z backendu do JS proměnné
+            const allTeams = ${JSON.stringify(teams)};
+
             function toggleBOOptions() {
                 const checkbox = document.getElementById('isPlayoff');
                 const boOptions = document.getElementById('boOptions');
                 boOptions.style.display = checkbox.checked ? 'flex' : 'none';
+            }
+
+            // 3. Funkce pro filtrování
+            function filterByLeague() {
+                const selectedLeague = document.getElementById('leagueFilter').value;
+                const homeSelect = document.getElementById('homeTeamId');
+                const awaySelect = document.getElementById('awayTeamId');
+
+                // Vyfiltrujeme týmy (nebo vezmeme všechny, pokud je vybráno "Všechny ligy")
+                const filteredTeams = selectedLeague === 'all' 
+                    ? allTeams 
+                    : allTeams.filter(t => t.liga === selectedLeague);
+
+                // Funkce pro přegenerování <option> v selectu
+                const updateSelect = (selectElement) => {
+                    selectElement.innerHTML = ''; // Vyčistit současné
+                    filteredTeams.forEach(t => {
+                        const option = document.createElement('option');
+                        option.value = t.id;
+                        option.text = t.liga + ' - ' + t.name;
+                        selectElement.appendChild(option);
+                    });
+                };
+
+                updateSelect(homeSelect);
+                updateSelect(awaySelect);
             }
         </script>
         </head>
@@ -483,7 +515,16 @@ router.get('/new/match', requireAdmin, (req, res) => {
         </header>
         <main>
             <h1>Vytvořit nový zápas</h1>
-            <form style="display: flex; flex-direction: row; gap: 10px" action="/admin/new/match" method="POST">
+            
+            <div style="margin-bottom: 20px; padding: 10px; background-color: #333; border-radius: 8px; display: inline-flex; align-items: center; gap: 10px;">
+                <label for="leagueFilter" style="color: white; font-weight: bold;">Rychlý filtr ligy:</label>
+                <select class="league-select" id="leagueFilter" onchange="filterByLeague()">
+                    <option value="all">-- Všechny ligy --</option>
+                    ${uniqueLeagues.map(l => `<option value="${l}">${l}</option>`).join('')}
+                </select>
+            </div>
+
+            <form style="display: flex; flex-direction: row; gap: 10px; flex-wrap: wrap;" action="/admin/new/match" method="POST">
                 <label style="display: flex; flex-direction: column" for="homeTeamId">Domácí tým
                     <select class="league-select" style="width: 220px" id="homeTeamId" name="homeTeamId" required>
                         ${teams.map(t => `<option value="${t.id}">${t.liga} - ${t.name}</option>`).join('')}
@@ -502,19 +543,21 @@ router.get('/new/match', requireAdmin, (req, res) => {
                         ${allSeasons.map(s => `<option value="${s}">${s}</option>`).join('')}
                     </select>
                 </label>
-                <label style="display: flex; align-items: center; flex-direction: row">
-                    Playoff série
-                    <input type="checkbox" name="isPlayoff" id="isPlayoff" onchange="toggleBOOptions()" />
-                </label>
-                <div style="display: none; flex-direction: column; align-items: center" id="boOptions">
-                        Typ série (BO)
-                        <select class="league-select" name="bo" id="bo">
-                            <option value="1">BO1</option>
-                            <option value="3">BO3</option>
-                            <option value="5">BO5</option>
-                            <option value="7">BO7</option>
-                            <option value="9">BO9</option>
-                        </select>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <label style="display: flex; align-items: center; flex-direction: row; gap: 5px;">
+                        Playoff série
+                        <input type="checkbox" name="isPlayoff" id="isPlayoff" onchange="toggleBOOptions()" />
+                    </label>
+                    <div style="display: none; flex-direction: column; align-items: center" id="boOptions">
+                            Typ série (BO)
+                            <select class="league-select" name="bo" id="bo">
+                                <option value="1">BO1</option>
+                                <option value="3">BO3</option>
+                                <option value="5">BO5</option>
+                                <option value="7">BO7</option>
+                                <option value="9">BO9</option>
+                            </select>
+                    </div>
                 </div>
                 <button class="action-btn btn" type="submit">Vytvořit zápas</button>
 
