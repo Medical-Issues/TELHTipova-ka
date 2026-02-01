@@ -7,8 +7,8 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 68,
-        "wins": 18,
+        "points": 74,
+        "wins": 20,
         "otWins": 5,
         "otLosses": 4,
         "losses": 16
@@ -23,8 +23,8 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 58,
-        "wins": 14,
+        "points": 61,
+        "wins": 15,
         "otWins": 5,
         "otLosses": 6,
         "losses": 21
@@ -39,8 +39,8 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 75,
-        "wins": 20,
+        "points": 78,
+        "wins": 21,
         "otWins": 6,
         "otLosses": 3,
         "losses": 17
@@ -59,7 +59,7 @@
         "wins": 15,
         "otWins": 5,
         "otLosses": 4,
-        "losses": 21
+        "losses": 22
       }
     }
   },
@@ -75,7 +75,7 @@
         "wins": 11,
         "otWins": 3,
         "otLosses": 4,
-        "losses": 28
+        "losses": 29
       }
     }
   },
@@ -91,7 +91,7 @@
         "wins": 20,
         "otWins": 5,
         "otLosses": 8,
-        "losses": 12
+        "losses": 13
       }
     }
   },
@@ -103,10 +103,10 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 79,
+        "points": 81,
         "wins": 23,
         "otWins": 2,
-        "otLosses": 6,
+        "otLosses": 8,
         "losses": 14
       }
     }
@@ -135,9 +135,9 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 67,
+        "points": 69,
         "wins": 18,
-        "otWins": 4,
+        "otWins": 5,
         "otLosses": 5,
         "losses": 19
       }
@@ -151,9 +151,9 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 78,
+        "points": 82,
         "wins": 22,
-        "otWins": 4,
+        "otWins": 6,
         "otLosses": 4,
         "losses": 15
       }
@@ -171,7 +171,7 @@
         "wins": 24,
         "otWins": 5,
         "otLosses": 7,
-        "losses": 10
+        "losses": 11
       }
     }
   },
@@ -199,11 +199,11 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 62,
+        "points": 63,
         "wins": 16,
         "otWins": 5,
-        "otLosses": 4,
-        "losses": 20
+        "otLosses": 5,
+        "losses": 21
       }
     }
   },
@@ -215,8 +215,8 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 75,
-        "wins": 19,
+        "points": 78,
+        "wins": 20,
         "otWins": 8,
         "otLosses": 2,
         "losses": 17

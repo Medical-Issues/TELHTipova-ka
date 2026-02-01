@@ -727,6 +727,7 @@ router.post("/tip", requireLogin, (req, res) => {
     });
 });
 router.get('/', requireLogin, (req, res) => {
+    // ... (načítání dat beze změny) ...
     const username = req.session.user;
     const teams = loadTeams().filter(t => t.active);
     const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf-8'));
@@ -744,68 +745,43 @@ router.get('/', requireLogin, (req, res) => {
     const teamsInSelectedLiga = teams.filter(t => t.liga === selectedLiga);
     const scores = calculateTeamScores(matches, selectedSeason, selectedLiga);
 
-    // --- NAČÍTÁNÍ STATISTIK VČETNĚ TABULKY ---
+    // --- STATISTIKY ---
     let userStats = [];
     try {
         const usersData = fs.readFileSync('./data/users.json', 'utf-8');
         const allUsers = JSON.parse(usersData);
         const matchesInLiga = matches.filter(m => m.season === selectedSeason && m.liga === selectedLiga);
-
-        userStats = allUsers
-            .filter(u => {
-                // Zobrazit uživatele, pokud má tipy na zápasy NEBO tip na tabulku
-                const tips = u.tips?.[selectedSeason]?.[selectedLiga] || [];
-                const tableStats = u.stats?.[selectedSeason]?.[selectedLiga]?.tableCorrect;
-                return tips.length > 0 || tableStats !== undefined;
-            })
-            .map(u => {
-                const stats = u.stats?.[selectedSeason]?.[selectedLiga] || {};
-                const userTips = u.tips?.[selectedSeason]?.[selectedLiga] || [];
-
-                const maxFromTips = userTips.reduce((sum, tip) => {
-                    const match = matchesInLiga.find(m => Number(m.id) === Number(tip.matchId));
-                    if (!match || !match.result) return sum;
-                    if (!match.isPlayoff) return sum + 1;
-                    if (match.bo === 1) return sum + 5;
-                    return sum + 3;
-                }, 0);
-
-                const totalPoints = matchesInLiga.reduce((sum, match) => {
-                    if (!match.result) return sum;
-                    if (!match.isPlayoff) return sum + 1;
-                    if (match.bo === 1) return sum + 5;
-                    return sum + 3;
-                }, 0);
-
-                return {
-                    username: u.username,
-                    correct: stats.correct || 0,
-                    total: totalPoints,
-                    maxFromTips: maxFromTips,
-                    totalRegular: stats.totalRegular || 0,
-                    totalPlayoff: stats.totalPlayoff || 0, // NOVÉ STATISTIKY PRO TABULKU
-                    tableCorrect: stats.tableCorrect || 0,
-                    tableDeviation: stats.tableDeviation || 0
-                };
-            });
-    } catch (err) {
-        console.error("Chyba při načítání statistik uživatelů:", err);
-    }
+        userStats = allUsers.filter(u => {
+            const tips = u.tips?.[selectedSeason]?.[selectedLiga] || [];
+            const tableStats = u.stats?.[selectedSeason]?.[selectedLiga]?.tableCorrect;
+            return tips.length > 0 || tableStats !== undefined;
+        }).map(u => {
+            const stats = u.stats?.[selectedSeason]?.[selectedLiga] || {};
+            const userTips = u.tips?.[selectedSeason]?.[selectedLiga] || [];
+            const maxFromTips = userTips.reduce((sum, tip) => {
+                const match = matchesInLiga.find(m => Number(m.id) === Number(tip.matchId));
+                if (!match || !match.result) return sum;
+                return sum + (match.isPlayoff ? 3 : (match.bo === 1 ? 5 : 3));
+            }, 0);
+            const totalPoints = matchesInLiga.reduce((sum, match) => {
+                if (!match.result) return sum;
+                return sum + (match.isPlayoff ? 3 : (match.bo === 1 ? 5 : 3));
+            }, 0);
+            return {
+                username: u.username, correct: stats.correct || 0, total: totalPoints, maxFromTips: maxFromTips,
+                tableCorrect: stats.tableCorrect || 0, tableDeviation: stats.tableDeviation || 0
+            };
+        });
+    } catch (err) { console.error(err); }
 
     const currentUserStats = userStats.find(u => u.username === username);
-
-    // ... (PONECHÁNÍ TVÉHO KÓDU PRO PLAYOFF DATA) ...
     const playoffPath = path.join(__dirname, '../data/playoff.json');
     let playoffData = [];
     try {
         const raw = fs.readFileSync(playoffPath, 'utf8');
         const allPlayoffs = JSON.parse(raw);
-        if (allPlayoffs[selectedSeason] && allPlayoffs[selectedSeason][selectedLiga]) {
-            playoffData = allPlayoffs[selectedSeason][selectedLiga];
-        }
-    } catch (e) {
-        console.error("Chyba při načítání playoff dat:", e);
-    }
+        if (allPlayoffs[selectedSeason] && allPlayoffs[selectedSeason][selectedLiga]) playoffData = allPlayoffs[selectedSeason][selectedLiga];
+    } catch (e) {}
 
     const teamsByGroup = {};
     teamsInSelectedLiga.forEach(team => {
@@ -816,24 +792,18 @@ router.get('/', requireLogin, (req, res) => {
 
     const leagueObj = leagues.find(l => l.name === selectedLiga) || {
         name: selectedLiga || "Neznámá liga",
-        maxMatches: 0,
-        quarterfinal: 0,
-        playin: 0,
-        relegation: 0,
-        isMultigroup: false
+        maxMatches: 0, quarterfinal: 0, playin: 0, relegation: 0, isMultigroup: false
     };
 
     const sortedGroups = Object.keys(teamsByGroup).sort();
-
     let isRegularSeasonFinished = false;
     try {
         const statusData = JSON.parse(fs.readFileSync('./data/leagueStatus.json', 'utf8'));
         isRegularSeasonFinished = statusData?.[selectedSeason]?.[selectedLiga]?.regularSeasonFinished || false;
-    } catch (e) {
-    }
+    } catch (e) {}
     const statusStyle = isRegularSeasonFinished ? "color: lightgrey; font-weight: bold;" : "color: white; opacity: 0.7; background-color: black";
 
-    // --- ZAČÁTEK HTML ---
+    // --- HTML ---
     let html = `
 <!DOCTYPE html>
 <html lang="cs">
@@ -856,7 +826,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 </label>
 <a class="history-btn" href="/history">Historie</a>
 <a class="history-btn changed" href="/table-tip?liga=${encodeURIComponent(selectedLiga)}">Základní část</a>
-<a class="history-btn changed" href="/prestupły">Přestupy TELH</a>
+<a class="history-btn changed" href="/prestupy">Přestupy TELH</a>
 </form>
 <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
@@ -870,29 +840,20 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <div id="regularTable">
 `;
 
+    // --- TABULKY TÝMŮ ---
     for (const group of sortedGroups) {
         const teamsInGroup = teamsByGroup[group];
         const zoneConfig = getLeagueZones(leagueObj);
 
-        // Řazení týmů ve skupině
         teamsInGroup.sort((a, b) => {
             const aStats = a.stats?.[selectedSeason] || {};
             const bStats = b.stats?.[selectedSeason] || {};
-            const aPoints = aStats.points || 0;
-            const bPoints = bStats.points || 0;
-            const aScore = scores[a.id] || {gf: 0, ga: 0};
-            const bScore = scores[b.id] || {gf: 0, ga: 0};
-            const aDiff = aScore.gf - aScore.ga;
-            const bDiff = bScore.gf - bScore.ga;
-            const aMatches = (aStats.wins || 0) + (aStats.otWins || 0) + (aStats.otLosses || 0) + (aStats.losses || 0);
-            const bMatches = (bStats.wins || 0) + (bStats.otWins || 0) + (bStats.otLosses || 0) + (bStats.losses || 0);
-
-            if (bPoints !== aPoints) return bPoints - aPoints;
-            if (bDiff !== aDiff) return bDiff - aDiff;
-            return aMatches - bMatches;
+            const pA = aStats.points || 0; const pB = bStats.points || 0;
+            const sA = scores[a.id] || {gf:0, ga:0}; const sB = scores[b.id] || {gf:0, ga:0};
+            if (pB !== pA) return pB - pA;
+            return (sB.gf - sB.ga) - (sA.gf - sA.ga);
         });
 
-        // Vykreslení tabulky skupiny (původní kód)
         html += `
 <table class="points-table">
 <thead>
@@ -902,20 +863,125 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <tbody>`;
 
         const sorted = teamsInGroup;
+        const matchesPerTeam = (leagueObj.maxMatches * 2) / teamsInGroup.length;
+
+        // --- VÝPOČET HRANIC PRO JISTOTY ---
+        const qfCount = leagueObj.quarterfinal || 0;
+        const totalPlayoffCount = leagueObj.playin || 0; // 12
+        const relegationCount = leagueObj.relegation || 0; // 1
+
+        // Indexy pro výpočty (0-based)
+        const lastPlayinIndex = totalPlayoffCount - 1; // Index 11 (12. tým)
+        const firstRelegationIndex = sorted.length - relegationCount; // Index 13 (14. tým)
+
+        // Hranice
+        let thresholdQF = 0;
+        let thresholdPlayin = 0; // Kolik bodů má první nepostupující
+        let pointsToMakePlayoffs = 0; // Kolik bodů má poslední postupující
+        let maxPointsOfRelegationTeam = 0; // Kolik max může nahrát ten co sestupuje
+
+        // 1. Hranice pro Čtvrtfinále (Top 4) - musím mít víc bodů než 5. tým
+        if (sorted.length > qfCount) {
+            const firstOutQF = sorted[qfCount]; // Index 4 (5. tým)
+            const stats = firstOutQF.stats?.[selectedSeason] || {};
+            const played = (stats.wins||0)+(stats.otWins||0)+(stats.otLosses||0)+(stats.losses||0);
+            const remaining = Math.max(0, matchesPerTeam - played);
+            thresholdQF = (stats.points || 0) + (remaining * 3);
+        }
+
+        // 2. Hranice pro Playoff (Top 12) - musím mít víc bodů než 13. tým
+        if (sorted.length > totalPlayoffCount) {
+            const firstOutPlayin = sorted[totalPlayoffCount]; // Index 12 (13. tým)
+            const stats = firstOutPlayin.stats?.[selectedSeason] || {};
+            const played = (stats.wins||0)+(stats.otWins||0)+(stats.otLosses||0)+(stats.losses||0);
+            const remaining = Math.max(0, matchesPerTeam - played);
+            thresholdPlayin = (stats.points || 0) + (remaining * 3);
+        }
+
+        // 3. Pro výpočet "Jsem eliminován z playoff" (Neutral)
+        // Potřebuji vědět, kolik bodů má aktuálně 12. tým. Pokud moje maximum je menší, jsem out.
+        if (sorted.length > lastPlayinIndex) {
+            const lastInTeam = sorted[lastPlayinIndex]; // Index 11 (12. tým)
+            pointsToMakePlayoffs = lastInTeam.stats?.[selectedSeason]?.points || 0;
+        }
+
+        // 4. Pro výpočet "Jsem zachráněn" (Neutral)
+        // Potřebuji vědět maximum bodů 14. týmu. Pokud mám víc, jsem safe.
+        if (relegationCount > 0 && sorted.length >= firstRelegationIndex + 1) {
+            const relegationTeam = sorted[firstRelegationIndex]; // Index 13 (14. tým)
+            const stats = relegationTeam.stats?.[selectedSeason] || {};
+            const played = (stats.wins||0)+(stats.otWins||0)+(stats.otLosses||0)+(stats.losses||0);
+            const remaining = Math.max(0, matchesPerTeam - played);
+            maxPointsOfRelegationTeam = (stats.points || 0) + (remaining * 3);
+        }
+
         teamsInGroup.forEach((team, index) => {
-            const zone = getTeamZone(index, teamsInGroup.length, zoneConfig);
-            const matchesPerTeam = (leagueObj.maxMatches * 2) / teamsInGroup.length;
+            const currentZone = getTeamZone(index, teamsInGroup.length, zoneConfig);
+
+            const stats = team.stats?.[selectedSeason] || {};
+            const myPoints = stats.points || 0;
+            const played = (stats.wins||0) + (stats.otWins||0) + (stats.otLosses||0) + (stats.losses||0);
+            const remaining = Math.max(0, matchesPerTeam - played);
+            const myMaxPoints = myPoints + (remaining * 3);
+
+            // Locked logic
             const allTeamsFinished = sorted.every(team => {
-                const stats = team.stats?.[selectedSeason] || {};
-                const played = (stats.wins || 0) + (stats.otWins || 0) + (stats.otLosses || 0) + (stats.losses || 0);
-                return played >= matchesPerTeam;
+                const s = team.stats?.[selectedSeason] || {};
+                const p = (s.wins||0) + (s.otWins||0) + (s.otLosses||0) + (s.losses||0);
+                return p >= matchesPerTeam;
             });
             const locked = isLockedPosition(index, teamsInGroup.length, sorted, zoneConfig, selectedSeason, matchesPerTeam, allTeamsFinished);
-            const rowClass = locked ? `${zone} locked` : '';
-            const rankClass = zone;
-            const teamStats = scores[team.id] || {gf: 0, ga: 0};
+
+            // --- KONTROLA JISTOT (Clinched) ---
+
+            const clinchedQF = (myPoints > thresholdQF) || (sorted.length <= qfCount);
+            const clinchedPlayin = (myPoints > thresholdPlayin) || (sorted.length <= totalPlayoffCount);
+
+            // Kontrola NEUTRÁL: Nemůžu do playoff A nemůžu sestoupit
+            const eliminatedFromPlayoffs = (myMaxPoints < pointsToMakePlayoffs);
+            const safeFromRelegation = (myPoints > maxPointsOfRelegationTeam);
+
+            // Kontrola SESTUP: Jsem na sestupovém místě a moje maximum nestačí na záchranu (na body 13. týmu)
+            // (Zde zjednodušeno: porovnáváme s aktuálními body 13. týmu)
+            let clinchedRelegation = false;
+            if (relegationCount > 0 && index >= firstRelegationIndex) {
+                // Pro jistý sestup musím mít max < aktuální body 13. týmu
+                // 13. tým je na indexu firstRelegationIndex - 1
+                const safeTeamPoints = sorted[firstRelegationIndex - 1].stats?.[selectedSeason]?.points || 0;
+                if (myMaxPoints < safeTeamPoints) clinchedRelegation = true;
+            }
+
+            // --- VÝBĚR TŘÍDY ---
+            let rowClass = currentZone;
+
+            if (clinchedRelegation) {
+                rowClass = 'clinched-relegation'; // Červená
+            } else if (clinchedQF) {
+                rowClass = 'clinched-quarterfinal'; // Tmavě zelená
+            } else if (clinchedPlayin) {
+                rowClass = 'clinched-playin'; // Světle zelená
+            } else if (eliminatedFromPlayoffs && safeFromRelegation) {
+                // Tým je v "zemi nikoho" -> Šedá
+                rowClass = 'clinched-neutral';
+            }
+
+            // Aplikace zámku
+            if (locked) {
+                rowClass += ' locked';
+            } else {
+                // Fallback pro jistotu: pokud máme clinched, chceme ty plné barvy
+                // (Tyto ify zajišťují, že pokud nejsem locked, použiji "clinched-" třídy, které mají opacity 0.35 nebo 1 podle CSS)
+                if (clinchedRelegation) rowClass = 'clinched-relegation';
+                else if (clinchedQF) rowClass = 'clinched-quarterfinal';
+                else if (clinchedPlayin) rowClass = 'clinched-playin';
+                else if (eliminatedFromPlayoffs && safeFromRelegation) rowClass = 'clinched-neutral';
+            }
+
+            const rankClass = currentZone; // Čísla dle aktuální pozice
+
+            const teamStats = scores[team.id] || {gf:0, ga:0};
             const goalDiff = teamStats.gf - teamStats.ga;
-            const numberMatches = (team.stats?.[selectedSeason]?.wins || 0) + (team.stats?.[selectedSeason]?.otWins || 0) + (team.stats?.[selectedSeason]?.otLosses || 0) + (team.stats?.[selectedSeason]?.losses || 0);
+            const numberMatches = played;
 
             html += `<tr class="${rowClass}">
 <td class="rank-cell ${rankClass}">${index + 1}.</td>
@@ -1756,7 +1822,8 @@ router.get('/history/a', requireLogin, (req, res) => {
         });
     }
 
-    html += `   </select></div></div><table class="points-table">`;
+    html += `   </select></div></div>
+   <table class="points-table">`;
 
     // (ZBYTEK KÓDU PRO ZÁPASY ZŮSTÁVÁ)
     const groupedMatches = matches
