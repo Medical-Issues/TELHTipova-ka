@@ -981,15 +981,13 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 
             const teamStats = scores[team.id] || {gf:0, ga:0};
             const goalDiff = teamStats.gf - teamStats.ga;
-            const numberMatches = played;
-
             html += `<tr class="${rowClass}">
 <td class="rank-cell ${rankClass}">${index + 1}.</td>
 <td>${team.name}</td>
 <td class="points numbers">${team.stats?.[selectedSeason]?.points || 0}</td>
 <td class="numbers">${teamStats.gf}:${teamStats.ga}</td>
 <td class="numbers">${goalDiff > 0 ? '+' + goalDiff : goalDiff}</td>
-<td class="numbers">${numberMatches || 0}</td>
+<td class="numbers">${played || 0}</td>
 <td class="numbers">${team.stats?.[selectedSeason]?.wins || 0}</td>
 <td class="numbers">${team.stats?.[selectedSeason]?.otWins || 0}</td>
 <td class="numbers">${team.stats?.[selectedSeason]?.otLosses || 0}</td>
