@@ -150,6 +150,13 @@ router.get("/table-tip", requireLogin, (req, res) => {
         <link rel="icon" href="./images/logo.png">
     </head>
     <body class="usersite">
+    <script>
+                function showTable(which) {
+                    document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none';
+                    const p = document.getElementById('playoffTablePreview');
+                    p.style.display = which === 'playoff' ? 'block' : 'none';
+                }
+            </script>
     <header class="header">
         <form class="league-dropdown" method="GET" action="/table-tip">
             <div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
@@ -262,6 +269,7 @@ router.get("/table-tip", requireLogin, (req, res) => {
     const totalMatches = leagueObj.maxMatches
     const filledMatches = matches.filter(m => m.result && m.liga === selectedLiga && m.season === selectedSeason).length;
     const percentage = totalMatches > 0 ? Math.round((filledMatches / totalMatches) * 100) : 0;
+
     // --- ZBYTEK LEVÉHO PANELU (Playoff) ---
     html += `
             </div>
@@ -277,13 +285,6 @@ router.get("/table-tip", requireLogin, (req, res) => {
             </div>
             <p id="progress-text"></p>
             </section>
-            <script>
-                function showTable(which) {
-                    document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none';
-                    const p = document.getElementById('playoffTablePreview');
-                    p.style.display = which === 'playoff' ? 'block' : 'none';
-                }
-            </script>
         </div>`;
 
     // --- STATISTIKY (OBNOVENO V PLNÉ PARÁDĚ) ---
@@ -499,12 +500,12 @@ router.get("/table-tip", requireLogin, (req, res) => {
         html += `<button type="button" id="saveBtn" class="save-btn" style="margin-top:20px;">Uložit všechny tipy</button>`;
     }
 
-    // --- SCRIPT (OPRAVA DRAG&DROP BUGU) ---
     html += `
             </form>
         </section>
     </main>
     <script>
+    `
         const currentUserUsername = "${username}";
         const sortableLists = document.querySelectorAll('.sortable-list');
         let draggedItem = null;
@@ -593,7 +594,7 @@ router.get("/table-tip", requireLogin, (req, res) => {
                     else alert('Chyba.');
                 });
             });
-        }
+        }`
     </script>
     </body>
     </html>
@@ -726,7 +727,7 @@ router.post("/tip", requireLogin, (req, res) => {
         res.redirect(`/?liga=${encodeURIComponent(league)}&sezona=${encodeURIComponent(season)}`);
     });
 });
-router.get('/', requireLogin, (req, res) => {
+router.get('/', requireLogin, (req, res, match) => {
     // ... (načítání dat beze změny) ...
     const username = req.session.user;
     const teams = loadTeams().filter(t => t.active);
@@ -815,6 +816,15 @@ router.get('/', requireLogin, (req, res) => {
 <link rel="icon" href="./images/logo.png">
 </head>
 <body class="usersite">
+<script>
+function showTable(which) {
+document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none';
+const p = document.getElementById('playoffTablePreview');
+p.style.display = which === 'playoff' ? 'block' : 'none';
+}
+const bar = document.getElementById("progress-bar");
+const text = document.getElementById("progress-text");
+</script>
 <header class="header">
 <form class="league-dropdown" method="GET" action="/">
 <div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
@@ -1003,8 +1013,9 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
     playoffData.forEach((row) => {
         html += '<tr>';
         row.forEach(cell => {
+            cell.textColor = undefined;
             const bgColor = cell.bgColor || '';
-            const textColor = cell.textColor || '';
+            const textColor = '';
             const styleParts = [];
             if (bgColor) styleParts.push(`background-color:${bgColor}`);
             if (textColor) styleParts.push(`color:${textColor}`);
@@ -1029,16 +1040,6 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 </div>
 <p id="progress-text"></p>
 </section>
-
-<script>
-function showTable(which) {
-document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none';
-const p = document.getElementById('playoffTablePreview');
-p.style.display = which === 'playoff' ? 'block' : 'none';
-}
-const bar = document.getElementById("progress-bar");
-const text = document.getElementById("progress-text");
-</script>
 </div>
 `;
 
@@ -1273,6 +1274,13 @@ ${Array.from({length: maxLoserWins + 1}, (_, i) => `<option value="${i}" ${i ===
 </tr>`;
                 }
             }
+            match.bo = undefined;
+            match.isPlayoff = undefined;
+            match.datetime = undefined;
+            match.postponed = undefined;
+            match.id = undefined;
+            match.awayTeamId = undefined;
+            match.homeTeamId = undefined;
 
             html += `
 </tbody>
@@ -1492,10 +1500,10 @@ router.get('/history', requireLogin, (req, res) => {
 
     res.send(html);
 });
-router.get('/history/a', requireLogin, (req, res) => {
+router.get('/history/a', requireLogin, (req, res, match) => {
     const username = req.session.user;
     const selectedLiga = req.query.liga;
-    const selectedSeason = req.query.sezona;
+    const selectedSeason = req.query.season;
 
     if (!selectedLiga || !selectedSeason) return res.redirect('/history');
 
@@ -1657,6 +1665,16 @@ router.get('/history/a', requireLogin, (req, res) => {
     <link rel="stylesheet" href="../../css/styles.css" />
     <link rel="icon" href="/images/logo.png">
 </head>
+<script>
+function showTable(which) {
+document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none';
+const p = document.getElementById('playoffTablePreview');
+p.style.display = which === 'playoff' ? 'block' : 'none';
+}
+const bar = document.getElementById("progress-bar");
+const text = document.getElementById("progress-text");
+</script>
+
 <body class="usersite">
 <header class="header">
 <div class="league-dropdown">
@@ -1804,6 +1822,12 @@ router.get('/history/a', requireLogin, (req, res) => {
 
     // --- PRAVÁ STRANA: ZÁPASY ---
     html += `
+<script>const globalStatsData = ${JSON.stringify(userStats)};
+        function showUserHistory(username) {
+            document.querySelectorAll('.history-item').forEach(el => el.style.display = 'none');
+            const safeName = username.replace(/[^a-zA-Z0-9]/g, '_');
+            document.querySelectorAll('.user-' + safeName).forEach(el => el.style.display = 'flex');
+        }</script>
         <section class="matches-container">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
                 <h2 style="margin: 0;">Historie tipů</h2>
@@ -1883,24 +1907,19 @@ router.get('/history/a', requireLogin, (req, res) => {
                 html += `<tr class="match-row"><td>${homeCellHTML}</td><td class="vs">${match.result.scoreHome}</td><td class="vs">vs</td><td class="vs">${match.result.scoreAway}</td><td>${awayCellHTML}</td></tr><tr class="match-row"><td style="color: black" colspan="5">${scoreCellHTML}</td></tr>`;
             }
         }
+        match.result = undefined;
+        match.isPlayoff = undefined;
         html += `</tbody></table>`;
     }
 
     html += `</section></main>
-    <script>
-        const globalStatsData = ${JSON.stringify(userStats)};
-        function showUserHistory(username) {
-            document.querySelectorAll('.history-item').forEach(el => el.style.display = 'none');
-            const safeName = username.replace(/[^a-zA-Z0-9]/g, '_');
-            document.querySelectorAll('.user-' + safeName).forEach(el => el.style.display = 'flex');
-        }
-    </script></body></html>`;
+    </body></html>`;
     res.send(html);
 });
 router.get('/history/table', requireLogin, (req, res) => {
     const username = req.session.user;
     const selectedLiga = req.query.liga;
-    const selectedSeason = req.query.sezona;
+    const selectedSeason = req.query.season;
 
     if (!selectedLiga || !selectedSeason) return res.redirect('/history');
 
@@ -2061,6 +2080,15 @@ router.get('/history/table', requireLogin, (req, res) => {
         <link rel="stylesheet" href="../../css/styles.css" />
         <link rel="icon" href="/images/logo.png">
     </head>
+    <script>
+function showTable(which) {
+document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none';
+const p = document.getElementById('playoffTablePreview');
+p.style.display = which === 'playoff' ? 'block' : 'none';
+}
+const bar = document.getElementById("progress-bar");
+const text = document.getElementById("progress-text");
+</script>
     <body class="usersite">
     <header class="header">
         <div class="league-dropdown">
@@ -2208,6 +2236,13 @@ router.get('/history/table', requireLogin, (req, res) => {
 
     // --- PRAVÁ STRANA: TABULKA TIPŮ ---
     html += `
+<script>
+        function showUserTableHistory(username) {
+            document.querySelectorAll('.user-history-table-container').forEach(el => el.style.display = 'none');
+            const safeName = username.replace(/[^a-zA-Z0-9]/g, '_');
+            document.querySelectorAll('.user-table-' + safeName).forEach(el => el.style.display = 'block');
+        }
+    </script>
         <section class="matches-container">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
                 <h2 style="margin: 0;">Historie tipu tabulky</h2>
@@ -2295,13 +2330,7 @@ router.get('/history/table', requireLogin, (req, res) => {
     }
 
     html += `</section></main>
-    <script>
-        function showUserTableHistory(username) {
-            document.querySelectorAll('.user-history-table-container').forEach(el => el.style.display = 'none');
-            const safeName = username.replace(/[^a-zA-Z0-9]/g, '_');
-            document.querySelectorAll('.user-table-' + safeName).forEach(el => el.style.display = 'block');
-        }
-    </script></body></html>`;
+    </body></html>`;
     res.send(html);
 });
 
@@ -2422,6 +2451,15 @@ router.get("/prestupy", requireLogin, (req, res) => {
     <link rel="stylesheet" href="./css/styles.css" />
     <link rel="icon" href="./images/logo.png">
 </head>
+<script>
+function showTable(which) {
+document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none';
+const p = document.getElementById('playoffTablePreview');
+p.style.display = which === 'playoff' ? 'block' : 'none';
+}
+const bar = document.getElementById("progress-bar");
+const text = document.getElementById("progress-text");
+</script>
 <body class="usersite">
 <header class="header">
     <form class="league-dropdown" method="GET" action="/">
