@@ -59,8 +59,8 @@
     "stats": {
       "25/26": {
         "TELH": {
-          "correct": 177,
-          "totalRegular": 319,
+          "correct": 178,
+          "totalRegular": 320,
           "totalPlayoff": 0,
           "tableCorrect": 1,
           "tableDeviation": 50
@@ -3838,10 +3838,10 @@
     "stats": {
       "25/26": {
         "TELH": {
-          "correct": 166,
-          "totalRegular": 315,
+          "correct": 167,
+          "totalRegular": 316,
           "totalPlayoff": 0,
-          "tableCorrect": 3,
+          "tableCorrect": 4,
           "tableDeviation": 26
         },
         "MS": {
@@ -5761,8 +5761,8 @@
     "stats": {
       "25/26": {
         "TELH": {
-          "correct": 175,
-          "totalRegular": 319,
+          "correct": 176,
+          "totalRegular": 320,
           "totalPlayoff": 0
         },
         "MS": {

@@ -6181,7 +6181,14 @@
     "datetime": "2026-02-02T17:30",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 4,
+      "scoreAway": 1,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 396,

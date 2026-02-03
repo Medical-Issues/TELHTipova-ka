@@ -3,7 +3,7 @@ const express = require("express");
 const router = express.Router();
 const path = require('path');
 const {
-    loadTeams, requireLogin, calculateTeamScores, getLeagueZones, getTeamZone, isLockedPosition
+    loadTeams, requireLogin, calculateTeamScores, getLeagueZones, getTeamZone
 } = require("../utils/fileUtils");
 
 router.get("/table-tip", requireLogin, (req, res) => {
@@ -126,150 +126,366 @@ router.get("/table-tip", requireLogin, (req, res) => {
     } catch (e) {
     }
 
-    // Načtení zámků
     let isTipsLocked = false;
     let isRegularSeasonFinished = false;
     try {
         const statusData = JSON.parse(fs.readFileSync('./data/leagueStatus.json', 'utf8'));
         isRegularSeasonFinished = statusData?.[selectedSeason]?.[selectedLiga]?.regularSeasonFinished || false;
-        // isTipsLocked může být true (vše) nebo ["1", "3"] (částečně)
         isTipsLocked = statusData?.[selectedSeason]?.[selectedLiga]?.tableTipsLocked || false;
     } catch (e) {
     }
+    const teamsByGroup = {};
+    teamsInSelectedLiga.forEach(team => {
+        const group = team.group ? String.fromCharCode(team.group + 64) : 'X';
+        if (!teamsByGroup[group]) teamsByGroup[group] = [];
+        teamsByGroup[group].push(team);
+    });
 
+    const sortedGroups = Object.keys(teamsByGroup).sort();
     const statusStyle = isRegularSeasonFinished ? "color: lightgrey; font-weight: bold;" : "color: white; opacity: 0.7; background-color: black";
 
-    // --- HTML ---
+// --- HTML START ---
     let html = `
-    <!DOCTYPE html>
-    <html lang="cs">
-    <head>
-        <meta charset="UTF-8">
-        <title>Tipovačka</title>
-        <link rel="stylesheet" href="./css/styles.css" />
-        <link rel="icon" href="./images/logo.png">
-    </head>
-    <body class="usersite">
-    <script>
-                function showTable(which) {
-                    document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none';
-                    const p = document.getElementById('playoffTablePreview');
-                    p.style.display = which === 'playoff' ? 'block' : 'none';
-                }
-            </script>
-    <header class="header">
-        <form class="league-dropdown" method="GET" action="/table-tip">
-            <div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
-            <label class="league-select-name">
-                Liga:
-                <select id="league-select" name="liga" required onchange="this.form.submit()">
-                    ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected' : ''}>${l}</option>`).join('')}
-                </select>
-            </label>
-            <a class="history-btn" href="/history">Historie</a>
-            <a class="history-btn changed" href="/?liga=${encodeURIComponent(selectedLiga)}">Tipovačka</a>
-            <a class="history-btn changed" href="/prestupy">Přestupy TELH</a>
-        </form>
-        <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
-    </header>
-    <main class="main_page">
-        <section class="stats-container">
-            <div class="left-panel">
-                <div style="display: flex; flex-direction: row; justify-content: space-around; margin:20px 0; text-align:center;">
-                    <button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('regular')">Základní část</button>
-                    <button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('playoff')">Playoff</button>
-                </div>
-                <div id="regularTable">
-                    `;
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tipovačka</title>
+<link rel="stylesheet" href="./css/styles.css" />
+<link rel="icon" href="./images/logo.png">
+</head>
+<body class="usersite">
+<header class="header">
+<form class="league-dropdown" method="GET" action="/">
+<div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
+<label class="league-select-name">
+Liga:
+<select id="league-select" name="liga" required onchange="this.form.submit()">
+${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected' : ''}>${l}</option>`).join('')}
+</select>
+</label>
+<a class="history-btn" href="/history">Historie</a>
+<a class="history-btn changed" href="/?liga=${encodeURIComponent(selectedLiga)}">Tipovačka</a>
+<a class="history-btn changed" href="/prestupy">Přestupy TELH</a>
+</form>
+<p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
+</header>
+<main class="main_page">
+<section class="stats-container">
+<div class="left-panel">
+<div style="display: flex; flex-direction: row; justify-content: space-around; margin:20px 0; text-align:center;">
+<button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('regular')">Základní část</button>
+<button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('playoff')">Playoff</button>
+</div>
+<div id="regularTable">
+`;
 
-    // --- LEVÝ PANEL (TABULKY) ---
-    // Iterujeme "1", "2"
-    for (const gKey of sortedGroupKeys) {
-        const teamsInGroup = groupedTeams[gKey];
+    // --- ZPRACOVÁNÍ TABULEK ---
+    for (const group of sortedGroups) {
+        const teamsInGroup = teamsByGroup[group];
         const zoneConfig = getLeagueZones(leagueObj);
 
-        // Zobrazíme PÍSMENO (Skupina A)
-        const groupLabel = getGroupDisplayLabel(gKey);
-        const headerText = sortedGroupKeys.length > 1 && groupLabel ? `(${groupLabel})` : '';
-
-        html += `
-        <table class="points-table">
-            <thead>
-                <tr>
-                    <th scope="col" id="points-table-header" colspan="10">
-                        <h2>Týmy - ${selectedLiga} ${selectedSeason} - Základní část ${headerText}</h2>
-                    </th>
-                </tr>
-                <tr>
-                    <th class="position" scope="col">Místo</th>
-                    <th scope="col">Tým</th>
-                    <th class="points" scope="col">Body</th>
-                    <th scope="col">Skóre</th>
-                    <th scope="col">Rozdíl</th>
-                    <th scope="col">Z</th>
-                    <th scope="col">V</th>
-                    <th scope="col">Vpp</th>
-                    <th scope="col">Ppp</th>
-                    <th scope="col">P</th>
-                </tr>
-            </thead>
-            <tbody>
-        `;
-
-        // Řazení podle bodů (Realita)
+        // =========================================================
+        // === IIHF SORTING (FIX: IGNOROVAT PLAYOFF) ===
+        // =========================================================
         teamsInGroup.sort((a, b) => {
             const aStats = a.stats?.[selectedSeason] || {};
             const bStats = b.stats?.[selectedSeason] || {};
-            const aPoints = aStats.points || 0;
-            const bPoints = bStats.points || 0;
-            const aScore = scores[a.id] || {gf: 0, ga: 0};
-            const bScore = scores[b.id] || {gf: 0, ga: 0};
-            const aDiff = aScore.gf - aScore.ga;
-            const bDiff = bScore.gf - bScore.ga;
-            const aMatches = (aStats.wins || 0) + (aStats.otWins || 0) + (aStats.otLosses || 0) + (aStats.losses || 0);
-            const bMatches = (bStats.wins || 0) + (bStats.otWins || 0) + (bStats.otLosses || 0) + (bStats.losses || 0);
+            const pA = aStats.points || 0;
+            const pB = bStats.points || 0;
 
-            if (bPoints !== aPoints) return bPoints - aPoints;
-            if (bDiff !== aDiff) return bDiff - aDiff;
-            return aMatches - bMatches;
+            // 1. Kritérium: BODY
+            if (pB !== pA) return pB - pA;
+
+            // --- MINITABULKA ---
+            // Najdeme týmy se stejným počtem bodů
+            const tiedTeamIds = teamsInGroup
+                .filter(t => (t.stats?.[selectedSeason]?.points || 0) === pA)
+                .map(t => Number(t.id));
+
+            // Funkce pro minitabulku
+            const getMiniStats = (teamId) => {
+                let mPts = 0, mDiff = 0, mGF = 0;
+
+                // FILTR: Jen tato sezóna, výsledek existuje, tým hraje A HLAVNĚ !isPlayoff
+                const groupMatches = matches.filter(m =>
+                    m.season === selectedSeason &&
+                    m.result &&
+                    !m.isPlayoff && // <--- TOTO JE TA OPRAVA!
+                    tiedTeamIds.includes(Number(m.homeTeamId)) &&
+                    tiedTeamIds.includes(Number(m.awayTeamId)) &&
+                    (Number(m.homeTeamId) === teamId || Number(m.awayTeamId) === teamId)
+                );
+
+                groupMatches.forEach(m => {
+                    const isHome = Number(m.homeTeamId) === teamId;
+
+                    let sH = m.result?.scoreHome !== undefined ? Number(m.result.scoreHome) : (m.scoreHome !== undefined ? Number(m.scoreHome) : 0);
+                    let sA = m.result?.scoreAway !== undefined ? Number(m.result.scoreAway) : (m.scoreAway !== undefined ? Number(m.scoreAway) : 0);
+                    const isOt = m.result?.ot || m.result?.so || m.ot || m.so;
+
+                    let hPts, aPts;
+                    if (sH > sA) { hPts = isOt ? 2 : 3; aPts = isOt ? 1 : 0; }
+                    else if (sA > sH) { aPts = isOt ? 2 : 3; hPts = isOt ? 1 : 0; }
+                    else { hPts=1; aPts=1; }
+
+                    let pts, gf, ga;
+                    if (isHome) { pts = hPts; gf = sH; ga = sA; }
+                    else { pts = aPts; gf = sA; ga = sH; }
+
+                    mPts += pts;
+                    mDiff += (gf - ga);
+                    mGF += gf;
+                });
+
+                return { pts: mPts, diff: mDiff, gf: mGF };
+            };
+
+            const msA = getMiniStats(Number(a.id));
+            const msB = getMiniStats(Number(b.id));
+
+            // 2. Kritérium: BODY V MINITABULCE
+            if (msB.pts !== msA.pts) return msB.pts - msA.pts;
+
+            // 3. Kritérium: ROZDÍL SKÓRE V MINITABULCE
+            if (msB.diff !== msA.diff) return msB.diff - msA.diff;
+
+            // 4. Kritérium: GÓLY V MINITABULCE
+            if (msB.gf !== msA.gf) return msB.gf - msA.gf;
+
+            // 5. Kritérium: PŘÍMÝ VZÁJEMNÝ ZÁPAS (Head-to-Head)
+            const directMatch = matches.find(m =>
+                m.season === selectedSeason &&
+                m.result &&
+                !m.isPlayoff && // <--- TOTO JE TA OPRAVA!
+                ((Number(m.homeTeamId) === Number(a.id) && Number(m.awayTeamId) === Number(b.id)) ||
+                    (Number(m.homeTeamId) === Number(b.id) && Number(m.awayTeamId) === Number(a.id)))
+            );
+
+            if (directMatch) {
+                const isAHome = Number(directMatch.homeTeamId) === Number(a.id);
+                let sH = directMatch.result?.scoreHome ?? directMatch.scoreHome ?? 0;
+                let sA = directMatch.result?.scoreAway ?? directMatch.scoreAway ?? 0;
+
+                if (isAHome) {
+                    if (sH > sA) return -1;
+                    if (sA > sH) return 1;
+                } else {
+                    if (sA > sH) return -1;
+                    if (sH > sA) return 1;
+                }
+            }
+
+            // 6. Kritérium: CELKOVÉ SKÓRE
+            const sA = scores[a.id] || {gf:0, ga:0};
+            const sB = scores[b.id] || {gf:0, ga:0};
+            const diffA = sA.gf - sA.ga;
+            const diffB = sB.gf - sB.ga;
+            if (diffA !== diffB) return diffB - diffA;
+
+            return 0;
         });
+
+
+        html += `
+<table class="points-table">
+<thead>
+<tr><th scope="col" id="points-table-header" colspan="10"><h2>Týmy - ${selectedLiga} ${selectedSeason} - Základní část ${leagueObj?.isMultigroup ? `(Skupina ${group})` : ''}</h2></th></tr>
+<tr><th class="position">Místo</th><th>Tým</th><th class="points">Body</th><th>Skóre</th><th>Rozdíl</th><th>Z</th><th>V</th><th>Vpp</th><th>Ppp</th><th>P</th></tr>
+</thead>
+<tbody>`;
 
         const sorted = teamsInGroup;
 
-        teamsInGroup.forEach((team, index) => {
-            const zone = getTeamZone(index, teamsInGroup.length, zoneConfig);
-            const matchesPerTeam = (leagueObj.maxMatches * 2) / teamsInGroup.length;
-            const allTeamsFinished = sorted.every(team => {
-                const stats = team.stats?.[selectedSeason] || {};
-                const played = (stats.wins || 0) + (stats.otWins || 0) + (stats.otLosses || 0) + (stats.losses || 0);
-                return played >= matchesPerTeam;
-            });
-            const locked = isLockedPosition(index, teamsInGroup.length, sorted, zoneConfig, selectedSeason, matchesPerTeam, allTeamsFinished);
+        // --- VÝPOČET ZÁPASŮ ---
+        let matchesPerTeam;
+        if (leagueObj.rounds) {
+            matchesPerTeam = (teamsInGroup.length - 1) * leagueObj.rounds;
+        } else if (leagueObj.isMultigroup) {
+            matchesPerTeam = Math.max(1, teamsInGroup.length - 1);
+        } else {
+            matchesPerTeam = Math.ceil((leagueObj.maxMatches * 2) / teamsInGroup.length);
+        }
 
+        //console.log(`\n=== DEBUG SKUPINA ${group} ===`);
+        //console.log(`MatchesPerTeam vypočteno jako: ${matchesPerTeam}`);
+
+        // --- ZÓNY A LIMITY ---
+        const qfLimit = leagueObj.quarterfinal || 0;
+        const playinLimit = leagueObj.playin || 0;
+        const relegationLimit = leagueObj.relegation || 0;
+
+        // Celkový počet postupujících (QF + Předkolo dohromady)
+        const totalAdvancing = playinLimit;
+
+        // Index, od kterého začíná sestupová zóna
+        const safeZoneIndex = sorted.length - relegationLimit - 1;
+
+        // Funkce pro zjištění maxima bodů, které může získat kdokoliv OD určité pozice dolů
+        const getMaxPotentialOfZone = (fromIndex) => {
+            let globalMax = 0;
+            // Pokud index je mimo tabulku, vracíme 0
+            if (fromIndex >= sorted.length) return 0;
+
+            for (let i = fromIndex; i < sorted.length; i++) {
+                const chaser = sorted[i];
+                const s = chaser.stats?.[selectedSeason] || {};
+                const played = (s.wins || 0) + (s.otWins || 0) + (s.otLosses || 0) + (s.losses || 0);
+                const remaining = Math.max(0, matchesPerTeam - played);
+                const potential = (s.points || 0) + (remaining * 3);
+                if (potential > globalMax) globalMax = potential;
+            }
+            return globalMax;
+        };
+
+        // 1. Práh pro QF: Kolik bodů může max. získat ten nejlepší tým, co by skončil POD čarou QF?
+        const thresholdQF = getMaxPotentialOfZone(qfLimit);
+
+        // 2. Práh pro Postup (Předkolo): Kolik bodů může max. získat ten nejlepší tým, co by nepostoupil VŮBEC?
+        const thresholdPlayin = getMaxPotentialOfZone(totalAdvancing);
+
+        //console.log(`Thresholds: QF > ${thresholdQF}, Playin > ${thresholdPlayin}`);
+
+        let safetyPoints = 0;
+        if (relegationLimit > 0 && safeZoneIndex >= 0 && sorted.length > safeZoneIndex) {
+            safetyPoints = sorted[safeZoneIndex].stats?.[selectedSeason]?.points || 0;
+            //console.log(`SafetyPoints (Relegation threshold): ${safetyPoints} (Tým na indexu ${safeZoneIndex})`);
+        }
+
+        teamsInGroup.forEach((team, index) => {
+            const currentZone = getTeamZone(index, teamsInGroup.length, zoneConfig);
+            const stats = team.stats?.[selectedSeason] || {};
+            const myPoints = stats.points || 0;
+            const played = (stats.wins || 0) + (stats.otWins || 0) + (stats.otLosses || 0) + (stats.losses || 0);
+            const remaining = Math.max(0, matchesPerTeam - played);
+            const myMaxPoints = myPoints + (remaining * 3);
+
+            //console.log(`--- TEAM: ${team.name} (${index + 1}.) ---`);
+            //console.log(`   Pts: ${myPoints}, Played: ${played}, Remaining: ${remaining}, MaxPts: ${myMaxPoints}`);
+
+            // --- STRICT LOCK LOGIKA (Tvoje verze - funguje správně) ---
+            let canDrop = false;
+            for (let i = index + 1; i < sorted.length; i++) {
+                const chaser = sorted[i];
+                const s = chaser.stats?.[selectedSeason] || {};
+                const p = (s.wins||0)+(s.otWins||0)+(s.otLosses||0)+(s.losses||0);
+                const rem = Math.max(0, matchesPerTeam - p);
+                const chaserMax = (s.points || 0) + (rem * 3);
+
+                // 1. Pokud mě může předběhnout na ČISTÉ BODY -> nejsem Locked
+                if (chaserMax > myPoints) {
+                    canDrop = true;
+                    break;
+                }
+
+                // 2. Pokud mě může DOROVNAT na body a ještě se hraje
+                if (chaserMax === myPoints) {
+                    if (rem > 0 || remaining > 0) {
+                        canDrop = true;
+                        break;
+                    }
+                }
+            }
+
+            let canRise = false;
+            if (index > 0) {
+                const leader = sorted[index - 1];
+                const leaderStats = leader.stats?.[selectedSeason] || {};
+                const leaderPoints = leaderStats.points || 0;
+                const pL = (leaderStats.wins||0)+(leaderStats.otWins||0)+(leaderStats.otLosses||0)+(leaderStats.losses||0);
+                const remL = Math.max(0, matchesPerTeam - pL);
+
+                if (myMaxPoints > leaderPoints) {
+                    canRise = true;
+                }
+                else if (myMaxPoints === leaderPoints) {
+                    if (remaining > 0 || remL > 0) {
+                        canRise = true;
+                    }
+                }
+            }
+
+            const locked = !canDrop && !canRise;
+            //console.log(`   Logic: CanDrop=${canDrop}, CanRise=${canRise} => LOCKED=${locked}`);
+
+            // --- CLINCHED (OPRAVENÁ LOGIKA) ---
+            // Zde rozdělujeme logiku:
+            // A) Pokud je tým LOCKED -> Barva se určí natvrdo podle pozice (indexu).
+            // B) Pokud tým NENÍ LOCKED -> Barva se určí podle bodů (matematická jistota).
+
+            let clinchedQF = false;
+            let clinchedPlayin = false;
+            let clinchedRelegation = false;
+
+            if (locked) {
+                // === VARIANTA A: TÝM JE ZAMČENÝ ===
+                // Už se nemůže pohnout, takže pokud je teď na postupovém místě, má to jisté.
+                if (qfLimit > 0 && index < qfLimit) {
+                    clinchedQF = true;
+                } else if (totalAdvancing > 0 && index < totalAdvancing) {
+                    clinchedPlayin = true;
+                }
+
+                // Sestup - pokud je zamčený v zóně sestupu
+                if (relegationLimit > 0 && index > safeZoneIndex) {
+                    clinchedRelegation = true;
+                }
+            } else {
+                // === VARIANTA B: TÝM JEŠTĚ MŮŽE MĚNIT POZICI ===
+                // Musíme použít body a thresholdy.
+
+                // Jistota QF: Mám víc bodů, než kolik může MAXIMÁLNĚ získat ten nejlepší, co by skončil MIMO QF?
+                if (qfLimit > 0 && myPoints > thresholdQF) {
+                    clinchedQF = true;
+                }
+
+                // Jistota Playin: Mám víc bodů, než kolik může MAXIMÁLNĚ získat ten, co by nepostoupil VŮBEC?
+                if (totalAdvancing > 0 && myPoints > thresholdPlayin) {
+                    clinchedPlayin = true;
+                }
+
+                // Jistota Sestupu: I když vše vyhraju, budu mít míň, než má ten poslední v bezpečí TEĎ
+                if (relegationLimit > 0 && index > safeZoneIndex) {
+                    if (myMaxPoints < safetyPoints) clinchedRelegation = true;
+                }
+            }
+
+            //console.log(`   Clinched: QF=${clinchedQF}, Playin=${clinchedPlayin}`);
+
+            // --- TŘÍDY ---
+            // Priorita: Sestup > QF > Playin
+            let rowClass = currentZone;
+            if (clinchedRelegation) rowClass = 'clinched-relegation';
+            else if (clinchedQF) rowClass = 'clinched-quarterfinal';
+            else if (clinchedPlayin) rowClass = 'clinched-playin';
+
+            if (locked) rowClass += ' locked';
+
+            //console.log(`   Final Class: ${rowClass}`);
+
+            const rankClass = currentZone;
             const teamStats = scores[team.id] || {gf: 0, ga: 0};
             const goalDiff = teamStats.gf - teamStats.ga;
-            const numberMatches = (team.stats?.[selectedSeason]?.wins || 0) + (team.stats?.[selectedSeason]?.otWins || 0) + (team.stats?.[selectedSeason]?.otLosses || 0) + (team.stats?.[selectedSeason]?.losses || 0);
 
-            html += `
-            <tr class="${locked ? `${zone} locked` : ''}">
-                <td class="rank-cell ${zone}">${index + 1}.</td>
-                <td>${team.name}</td>
-                <td class="points numbers">${team.stats?.[selectedSeason]?.points || 0}</td>
-                <td class="numbers">${teamStats.gf}:${teamStats.ga}</td>
-                <td class="numbers">${goalDiff > 0 ? '+' + goalDiff : goalDiff}</td>
-                <td class="numbers">${numberMatches || 0}</td>
-                <td class="numbers">${team.stats?.[selectedSeason]?.wins || 0}</td>
-                <td class="numbers">${team.stats?.[selectedSeason]?.otWins || 0}</td>
-                <td class="numbers">${team.stats?.[selectedSeason]?.otLosses || 0}</td>
-                <td class="numbers">${team.stats?.[selectedSeason]?.losses || 0}</td>
-            </tr>`;
+            html += `<tr class="${rowClass}">
+<td class="rank-cell ${rankClass}">${index + 1}.</td>
+<td>${team.name}</td>
+<td class="points numbers">${team.stats?.[selectedSeason]?.points || 0}</td>
+<td class="numbers">${teamStats.gf}:${teamStats.ga}</td>
+<td class="numbers">${goalDiff > 0 ? '+' + goalDiff : goalDiff}</td>
+<td class="numbers">${played}</td>
+<td class="numbers">${team.stats?.[selectedSeason]?.wins || 0}</td>
+<td class="numbers">${team.stats?.[selectedSeason]?.otWins || 0}</td>
+<td class="numbers">${team.stats?.[selectedSeason]?.otLosses || 0}</td>
+<td class="numbers">${team.stats?.[selectedSeason]?.losses || 0}</td>
+</tr>`;
         });
-        html += `</tbody></table>`;
+        html += `</tbody></table><br>`;
     }
     const totalMatches = leagueObj.maxMatches
     const filledMatches = matches.filter(m => m.result && m.liga === selectedLiga && m.season === selectedSeason).length;
     const percentage = totalMatches > 0 ? Math.round((filledMatches / totalMatches) * 100) : 0;
-
     // --- ZBYTEK LEVÉHO PANELU (Playoff) ---
     html += `
             </div>
@@ -285,6 +501,13 @@ router.get("/table-tip", requireLogin, (req, res) => {
             </div>
             <p id="progress-text"></p>
             </section>
+            <script>
+                function showTable(which) {
+                    document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none';
+                    const p = document.getElementById('playoffTablePreview');
+                    p.style.display = which === 'playoff' ? 'block' : 'none';
+                }
+            </script>
         </div>`;
 
     // --- STATISTIKY (OBNOVENO V PLNÉ PARÁDĚ) ---
@@ -499,13 +722,12 @@ router.get("/table-tip", requireLogin, (req, res) => {
     if (isTipsLocked !== true) {
         html += `<button type="button" id="saveBtn" class="save-btn" style="margin-top:20px;">Uložit všechny tipy</button>`;
     }
-
+    // language=HTML
     html += `
             </form>
         </section>
     </main>
     <script>
-    `
         const currentUserUsername = "${username}";
         const sortableLists = document.querySelectorAll('.sortable-list');
         let draggedItem = null;
@@ -594,7 +816,7 @@ router.get("/table-tip", requireLogin, (req, res) => {
                     else alert('Chyba.');
                 });
             });
-        }`
+        }
     </script>
     </body>
     </html>
@@ -727,10 +949,12 @@ router.post("/tip", requireLogin, (req, res) => {
         res.redirect(`/?liga=${encodeURIComponent(league)}&sezona=${encodeURIComponent(season)}`);
     });
 });
-router.get('/', requireLogin, (req, res, match) => {
-    // ... (načítání dat beze změny) ...
+
+router.get('/', requireLogin, (req, res) => {
+    // --- 1. NAČTENÍ DAT ---
     const username = req.session.user;
     const teams = loadTeams().filter(t => t.active);
+
     const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf-8'));
     const allowedLeagues = JSON.parse(fs.readFileSync('./data/allowedLeagues.json', 'utf-8'));
     const selectedSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
@@ -744,14 +968,25 @@ router.get('/', requireLogin, (req, res, match) => {
 
     const selectedLiga = req.query.liga && uniqueLeagues.includes(req.query.liga) ? req.query.liga : uniqueLeagues[0];
     const teamsInSelectedLiga = teams.filter(t => t.liga === selectedLiga);
+
     const scores = calculateTeamScores(matches, selectedSeason, selectedLiga);
 
-    // --- STATISTIKY ---
+    // --- 2. DEFINICE statusStyle ---
+    let isRegularSeasonFinished = false;
+    try {
+        const statusData = JSON.parse(fs.readFileSync('./data/leagueStatus.json', 'utf8'));
+        isRegularSeasonFinished = statusData?.[selectedSeason]?.[selectedLiga]?.regularSeasonFinished || false;
+    } catch (e) {
+    }
+    const statusStyle = isRegularSeasonFinished ? "color: lightgrey; font-weight: bold;" : "color: white; opacity: 0.7; background-color: black";
+
+    // --- 3. STATISTIKY UŽIVATELŮ ---
     let userStats = [];
     try {
         const usersData = fs.readFileSync('./data/users.json', 'utf-8');
         const allUsers = JSON.parse(usersData);
         const matchesInLiga = matches.filter(m => m.season === selectedSeason && m.liga === selectedLiga);
+
         userStats = allUsers.filter(u => {
             const tips = u.tips?.[selectedSeason]?.[selectedLiga] || [];
             const tableStats = u.stats?.[selectedSeason]?.[selectedLiga]?.tableCorrect;
@@ -759,30 +994,47 @@ router.get('/', requireLogin, (req, res, match) => {
         }).map(u => {
             const stats = u.stats?.[selectedSeason]?.[selectedLiga] || {};
             const userTips = u.tips?.[selectedSeason]?.[selectedLiga] || [];
+
             const maxFromTips = userTips.reduce((sum, tip) => {
                 const match = matchesInLiga.find(m => Number(m.id) === Number(tip.matchId));
                 if (!match || !match.result) return sum;
-                return sum + (match.isPlayoff ? 3 : (match.bo === 1 ? 5 : 3));
+                if (!match.isPlayoff) return sum + 1;
+                if (match.bo === 1) return sum + 5;
+                return sum + 3;
             }, 0);
+
             const totalPoints = matchesInLiga.reduce((sum, match) => {
                 if (!match.result) return sum;
-                return sum + (match.isPlayoff ? 3 : (match.bo === 1 ? 5 : 3));
+                if (!match.isPlayoff) return sum + 1;
+                if (match.bo === 1) return sum + 5;
+                return sum + 3;
             }, 0);
+
             return {
-                username: u.username, correct: stats.correct || 0, total: totalPoints, maxFromTips: maxFromTips,
-                tableCorrect: stats.tableCorrect || 0, tableDeviation: stats.tableDeviation || 0
+                username: u.username,
+                correct: stats.correct || 0,
+                total: totalPoints,
+                maxFromTips: maxFromTips,
+                totalRegular: stats.totalRegular || 0,
+                totalPlayoff: stats.totalPlayoff || 0,
+                tableCorrect: stats.tableCorrect || 0,
+                tableDeviation: stats.tableDeviation || 0
             };
         });
-    } catch (err) { console.error(err); }
+    } catch (err) {
+        console.error(err);
+    }
 
     const currentUserStats = userStats.find(u => u.username === username);
+
     const playoffPath = path.join(__dirname, '../data/playoff.json');
     let playoffData = [];
     try {
         const raw = fs.readFileSync(playoffPath, 'utf8');
         const allPlayoffs = JSON.parse(raw);
         if (allPlayoffs[selectedSeason] && allPlayoffs[selectedSeason][selectedLiga]) playoffData = allPlayoffs[selectedSeason][selectedLiga];
-    } catch (e) {}
+    } catch (e) {
+    }
 
     const teamsByGroup = {};
     teamsInSelectedLiga.forEach(team => {
@@ -795,16 +1047,9 @@ router.get('/', requireLogin, (req, res, match) => {
         name: selectedLiga || "Neznámá liga",
         maxMatches: 0, quarterfinal: 0, playin: 0, relegation: 0, isMultigroup: false
     };
-
     const sortedGroups = Object.keys(teamsByGroup).sort();
-    let isRegularSeasonFinished = false;
-    try {
-        const statusData = JSON.parse(fs.readFileSync('./data/leagueStatus.json', 'utf8'));
-        isRegularSeasonFinished = statusData?.[selectedSeason]?.[selectedLiga]?.regularSeasonFinished || false;
-    } catch (e) {}
-    const statusStyle = isRegularSeasonFinished ? "color: lightgrey; font-weight: bold;" : "color: white; opacity: 0.7; background-color: black";
 
-    // --- HTML ---
+    // --- HTML START ---
     let html = `
 <!DOCTYPE html>
 <html lang="cs">
@@ -816,15 +1061,6 @@ router.get('/', requireLogin, (req, res, match) => {
 <link rel="icon" href="./images/logo.png">
 </head>
 <body class="usersite">
-<script>
-function showTable(which) {
-document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none';
-const p = document.getElementById('playoffTablePreview');
-p.style.display = which === 'playoff' ? 'block' : 'none';
-}
-const bar = document.getElementById("progress-bar");
-const text = document.getElementById("progress-text");
-</script>
 <header class="header">
 <form class="league-dropdown" method="GET" action="/">
 <div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
@@ -850,19 +1086,112 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <div id="regularTable">
 `;
 
-    // --- TABULKY TÝMŮ ---
+    // --- ZPRACOVÁNÍ TABULEK ---
     for (const group of sortedGroups) {
         const teamsInGroup = teamsByGroup[group];
         const zoneConfig = getLeagueZones(leagueObj);
 
+        // =========================================================
+        // === IIHF SORTING (FIX: IGNOROVAT PLAYOFF) ===
+        // =========================================================
         teamsInGroup.sort((a, b) => {
             const aStats = a.stats?.[selectedSeason] || {};
             const bStats = b.stats?.[selectedSeason] || {};
-            const pA = aStats.points || 0; const pB = bStats.points || 0;
-            const sA = scores[a.id] || {gf:0, ga:0}; const sB = scores[b.id] || {gf:0, ga:0};
+            const pA = aStats.points || 0;
+            const pB = bStats.points || 0;
+
+            // 1. Kritérium: BODY
             if (pB !== pA) return pB - pA;
-            return (sB.gf - sB.ga) - (sA.gf - sA.ga);
+
+            // --- MINITABULKA ---
+            // Najdeme týmy se stejným počtem bodů
+            const tiedTeamIds = teamsInGroup
+                .filter(t => (t.stats?.[selectedSeason]?.points || 0) === pA)
+                .map(t => Number(t.id));
+
+            // Funkce pro minitabulku
+            const getMiniStats = (teamId) => {
+                let mPts = 0, mDiff = 0, mGF = 0;
+
+                // FILTR: Jen tato sezóna, výsledek existuje, tým hraje A HLAVNĚ !isPlayoff
+                const groupMatches = matches.filter(m =>
+                    m.season === selectedSeason &&
+                    m.result &&
+                    !m.isPlayoff && // <--- TOTO JE TA OPRAVA!
+                    tiedTeamIds.includes(Number(m.homeTeamId)) &&
+                    tiedTeamIds.includes(Number(m.awayTeamId)) &&
+                    (Number(m.homeTeamId) === teamId || Number(m.awayTeamId) === teamId)
+                );
+
+                groupMatches.forEach(m => {
+                    const isHome = Number(m.homeTeamId) === teamId;
+
+                    let sH = m.result?.scoreHome !== undefined ? Number(m.result.scoreHome) : (m.scoreHome !== undefined ? Number(m.scoreHome) : 0);
+                    let sA = m.result?.scoreAway !== undefined ? Number(m.result.scoreAway) : (m.scoreAway !== undefined ? Number(m.scoreAway) : 0);
+                    const isOt = m.result?.ot || m.result?.so || m.ot || m.so;
+
+                    let hPts, aPts;
+                    if (sH > sA) { hPts = isOt ? 2 : 3; aPts = isOt ? 1 : 0; }
+                    else if (sA > sH) { aPts = isOt ? 2 : 3; hPts = isOt ? 1 : 0; }
+                    else { hPts=1; aPts=1; }
+
+                    let pts, gf, ga;
+                    if (isHome) { pts = hPts; gf = sH; ga = sA; }
+                    else { pts = aPts; gf = sA; ga = sH; }
+
+                    mPts += pts;
+                    mDiff += (gf - ga);
+                    mGF += gf;
+                });
+
+                return { pts: mPts, diff: mDiff, gf: mGF };
+            };
+
+            const msA = getMiniStats(Number(a.id));
+            const msB = getMiniStats(Number(b.id));
+
+            // 2. Kritérium: BODY V MINITABULCE
+            if (msB.pts !== msA.pts) return msB.pts - msA.pts;
+
+            // 3. Kritérium: ROZDÍL SKÓRE V MINITABULCE
+            if (msB.diff !== msA.diff) return msB.diff - msA.diff;
+
+            // 4. Kritérium: GÓLY V MINITABULCE
+            if (msB.gf !== msA.gf) return msB.gf - msA.gf;
+
+            // 5. Kritérium: PŘÍMÝ VZÁJEMNÝ ZÁPAS (Head-to-Head)
+            const directMatch = matches.find(m =>
+                m.season === selectedSeason &&
+                m.result &&
+                !m.isPlayoff && // <--- TOTO JE TA OPRAVA!
+                ((Number(m.homeTeamId) === Number(a.id) && Number(m.awayTeamId) === Number(b.id)) ||
+                    (Number(m.homeTeamId) === Number(b.id) && Number(m.awayTeamId) === Number(a.id)))
+            );
+
+            if (directMatch) {
+                const isAHome = Number(directMatch.homeTeamId) === Number(a.id);
+                let sH = directMatch.result?.scoreHome ?? directMatch.scoreHome ?? 0;
+                let sA = directMatch.result?.scoreAway ?? directMatch.scoreAway ?? 0;
+
+                if (isAHome) {
+                    if (sH > sA) return -1;
+                    if (sA > sH) return 1;
+                } else {
+                    if (sA > sH) return -1;
+                    if (sH > sA) return 1;
+                }
+            }
+
+            // 6. Kritérium: CELKOVÉ SKÓRE
+            const sA = scores[a.id] || {gf:0, ga:0};
+            const sB = scores[b.id] || {gf:0, ga:0};
+            const diffA = sA.gf - sA.ga;
+            const diffB = sB.gf - sB.ga;
+            if (diffA !== diffB) return diffB - diffA;
+
+            return 0;
         });
+
 
         html += `
 <table class="points-table">
@@ -873,131 +1202,184 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <tbody>`;
 
         const sorted = teamsInGroup;
-        const matchesPerTeam = (leagueObj.maxMatches * 2) / teamsInGroup.length;
 
-        // --- VÝPOČET HRANIC PRO JISTOTY ---
-        const qfCount = leagueObj.quarterfinal || 0;
-        const totalPlayoffCount = leagueObj.playin || 0; // 12
-        const relegationCount = leagueObj.relegation || 0; // 1
-
-        // Indexy pro výpočty (0-based)
-        const lastPlayinIndex = totalPlayoffCount - 1; // Index 11 (12. tým)
-        const firstRelegationIndex = sorted.length - relegationCount; // Index 13 (14. tým)
-
-        // Hranice
-        let thresholdQF = 0;
-        let thresholdPlayin = 0; // Kolik bodů má první nepostupující
-        let pointsToMakePlayoffs = 0; // Kolik bodů má poslední postupující
-        let maxPointsOfRelegationTeam = 0; // Kolik max může nahrát ten co sestupuje
-
-        // 1. Hranice pro Čtvrtfinále (Top 4) - musím mít víc bodů než 5. tým
-        if (sorted.length > qfCount) {
-            const firstOutQF = sorted[qfCount]; // Index 4 (5. tým)
-            const stats = firstOutQF.stats?.[selectedSeason] || {};
-            const played = (stats.wins||0)+(stats.otWins||0)+(stats.otLosses||0)+(stats.losses||0);
-            const remaining = Math.max(0, matchesPerTeam - played);
-            thresholdQF = (stats.points || 0) + (remaining * 3);
+        // --- VÝPOČET ZÁPASŮ ---
+        let matchesPerTeam;
+        if (leagueObj.rounds) {
+            matchesPerTeam = (teamsInGroup.length - 1) * leagueObj.rounds;
+        } else if (leagueObj.isMultigroup) {
+            matchesPerTeam = Math.max(1, teamsInGroup.length - 1);
+        } else {
+            matchesPerTeam = Math.ceil((leagueObj.maxMatches * 2) / teamsInGroup.length);
         }
 
-        // 2. Hranice pro Playoff (Top 12) - musím mít víc bodů než 13. tým
-        if (sorted.length > totalPlayoffCount) {
-            const firstOutPlayin = sorted[totalPlayoffCount]; // Index 12 (13. tým)
-            const stats = firstOutPlayin.stats?.[selectedSeason] || {};
-            const played = (stats.wins||0)+(stats.otWins||0)+(stats.otLosses||0)+(stats.losses||0);
-            const remaining = Math.max(0, matchesPerTeam - played);
-            thresholdPlayin = (stats.points || 0) + (remaining * 3);
-        }
+        //console.log(`\n=== DEBUG SKUPINA ${group} ===`);
+        //console.log(`MatchesPerTeam vypočteno jako: ${matchesPerTeam}`);
 
-        // 3. Pro výpočet "Jsem eliminován z playoff" (Neutral)
-        // Potřebuji vědět, kolik bodů má aktuálně 12. tým. Pokud moje maximum je menší, jsem out.
-        if (sorted.length > lastPlayinIndex) {
-            const lastInTeam = sorted[lastPlayinIndex]; // Index 11 (12. tým)
-            pointsToMakePlayoffs = lastInTeam.stats?.[selectedSeason]?.points || 0;
-        }
+        // --- ZÓNY A LIMITY ---
+        const qfLimit = leagueObj.quarterfinal || 0;
+        const playinLimit = leagueObj.playin || 0;
+        const relegationLimit = leagueObj.relegation || 0;
 
-        // 4. Pro výpočet "Jsem zachráněn" (Neutral)
-        // Potřebuji vědět maximum bodů 14. týmu. Pokud mám víc, jsem safe.
-        if (relegationCount > 0 && sorted.length >= firstRelegationIndex + 1) {
-            const relegationTeam = sorted[firstRelegationIndex]; // Index 13 (14. tým)
-            const stats = relegationTeam.stats?.[selectedSeason] || {};
-            const played = (stats.wins||0)+(stats.otWins||0)+(stats.otLosses||0)+(stats.losses||0);
-            const remaining = Math.max(0, matchesPerTeam - played);
-            maxPointsOfRelegationTeam = (stats.points || 0) + (remaining * 3);
+        // Celkový počet postupujících (QF + Předkolo dohromady)
+        const totalAdvancing = playinLimit;
+
+        // Index, od kterého začíná sestupová zóna
+        const safeZoneIndex = sorted.length - relegationLimit - 1;
+
+        // Funkce pro zjištění maxima bodů, které může získat kdokoliv OD určité pozice dolů
+        const getMaxPotentialOfZone = (fromIndex) => {
+            let globalMax = 0;
+            // Pokud index je mimo tabulku, vracíme 0
+            if (fromIndex >= sorted.length) return 0;
+
+            for (let i = fromIndex; i < sorted.length; i++) {
+                const chaser = sorted[i];
+                const s = chaser.stats?.[selectedSeason] || {};
+                const played = (s.wins || 0) + (s.otWins || 0) + (s.otLosses || 0) + (s.losses || 0);
+                const remaining = Math.max(0, matchesPerTeam - played);
+                const potential = (s.points || 0) + (remaining * 3);
+                if (potential > globalMax) globalMax = potential;
+            }
+            return globalMax;
+        };
+
+        // 1. Práh pro QF: Kolik bodů může max. získat ten nejlepší tým, co by skončil POD čarou QF?
+        const thresholdQF = getMaxPotentialOfZone(qfLimit);
+
+        // 2. Práh pro Postup (Předkolo): Kolik bodů může max. získat ten nejlepší tým, co by nepostoupil VŮBEC?
+        const thresholdPlayin = getMaxPotentialOfZone(totalAdvancing);
+
+        //console.log(`Thresholds: QF > ${thresholdQF}, Playin > ${thresholdPlayin}`);
+
+        let safetyPoints = 0;
+        if (relegationLimit > 0 && safeZoneIndex >= 0 && sorted.length > safeZoneIndex) {
+            safetyPoints = sorted[safeZoneIndex].stats?.[selectedSeason]?.points || 0;
+            //console.log(`SafetyPoints (Relegation threshold): ${safetyPoints} (Tým na indexu ${safeZoneIndex})`);
         }
 
         teamsInGroup.forEach((team, index) => {
             const currentZone = getTeamZone(index, teamsInGroup.length, zoneConfig);
-
             const stats = team.stats?.[selectedSeason] || {};
             const myPoints = stats.points || 0;
-            const played = (stats.wins||0) + (stats.otWins||0) + (stats.otLosses||0) + (stats.losses||0);
+            const played = (stats.wins || 0) + (stats.otWins || 0) + (stats.otLosses || 0) + (stats.losses || 0);
             const remaining = Math.max(0, matchesPerTeam - played);
             const myMaxPoints = myPoints + (remaining * 3);
 
-            // Locked logic
-            const allTeamsFinished = sorted.every(team => {
-                const s = team.stats?.[selectedSeason] || {};
-                const p = (s.wins||0) + (s.otWins||0) + (s.otLosses||0) + (s.losses||0);
-                return p >= matchesPerTeam;
-            });
-            const locked = isLockedPosition(index, teamsInGroup.length, sorted, zoneConfig, selectedSeason, matchesPerTeam, allTeamsFinished);
+            //console.log(`--- TEAM: ${team.name} (${index + 1}.) ---`);
+            //console.log(`   Pts: ${myPoints}, Played: ${played}, Remaining: ${remaining}, MaxPts: ${myMaxPoints}`);
 
-            // --- KONTROLA JISTOT (Clinched) ---
+            // --- STRICT LOCK LOGIKA (Tvoje verze - funguje správně) ---
+            let canDrop = false;
+            for (let i = index + 1; i < sorted.length; i++) {
+                const chaser = sorted[i];
+                const s = chaser.stats?.[selectedSeason] || {};
+                const p = (s.wins||0)+(s.otWins||0)+(s.otLosses||0)+(s.losses||0);
+                const rem = Math.max(0, matchesPerTeam - p);
+                const chaserMax = (s.points || 0) + (rem * 3);
 
-            const clinchedQF = (myPoints > thresholdQF) || (sorted.length <= qfCount);
-            const clinchedPlayin = (myPoints > thresholdPlayin) || (sorted.length <= totalPlayoffCount);
+                // 1. Pokud mě může předběhnout na ČISTÉ BODY -> nejsem Locked
+                if (chaserMax > myPoints) {
+                    canDrop = true;
+                    break;
+                }
 
-            // Kontrola NEUTRÁL: Nemůžu do playoff A nemůžu sestoupit
-            const eliminatedFromPlayoffs = (myMaxPoints < pointsToMakePlayoffs);
-            const safeFromRelegation = (myPoints > maxPointsOfRelegationTeam);
+                // 2. Pokud mě může DOROVNAT na body a ještě se hraje
+                if (chaserMax === myPoints) {
+                    if (rem > 0 || remaining > 0) {
+                        canDrop = true;
+                        break;
+                    }
+                }
+            }
 
-            // Kontrola SESTUP: Jsem na sestupovém místě a moje maximum nestačí na záchranu (na body 13. týmu)
-            // (Zde zjednodušeno: porovnáváme s aktuálními body 13. týmu)
+            let canRise = false;
+            if (index > 0) {
+                const leader = sorted[index - 1];
+                const leaderStats = leader.stats?.[selectedSeason] || {};
+                const leaderPoints = leaderStats.points || 0;
+                const pL = (leaderStats.wins||0)+(leaderStats.otWins||0)+(leaderStats.otLosses||0)+(leaderStats.losses||0);
+                const remL = Math.max(0, matchesPerTeam - pL);
+
+                if (myMaxPoints > leaderPoints) {
+                    canRise = true;
+                }
+                else if (myMaxPoints === leaderPoints) {
+                    if (remaining > 0 || remL > 0) {
+                        canRise = true;
+                    }
+                }
+            }
+
+            const locked = !canDrop && !canRise;
+            //console.log(`   Logic: CanDrop=${canDrop}, CanRise=${canRise} => LOCKED=${locked}`);
+
+            // --- CLINCHED (OPRAVENÁ LOGIKA) ---
+            // Zde rozdělujeme logiku:
+            // A) Pokud je tým LOCKED -> Barva se určí natvrdo podle pozice (indexu).
+            // B) Pokud tým NENÍ LOCKED -> Barva se určí podle bodů (matematická jistota).
+
+            let clinchedQF = false;
+            let clinchedPlayin = false;
             let clinchedRelegation = false;
-            if (relegationCount > 0 && index >= firstRelegationIndex) {
-                // Pro jistý sestup musím mít max < aktuální body 13. týmu
-                // 13. tým je na indexu firstRelegationIndex - 1
-                const safeTeamPoints = sorted[firstRelegationIndex - 1].stats?.[selectedSeason]?.points || 0;
-                if (myMaxPoints < safeTeamPoints) clinchedRelegation = true;
-            }
 
-            // --- VÝBĚR TŘÍDY ---
-            let rowClass = currentZone;
-
-            if (clinchedRelegation) {
-                rowClass = 'clinched-relegation'; // Červená
-            } else if (clinchedQF) {
-                rowClass = 'clinched-quarterfinal'; // Tmavě zelená
-            } else if (clinchedPlayin) {
-                rowClass = 'clinched-playin'; // Světle zelená
-            } else if (eliminatedFromPlayoffs && safeFromRelegation) {
-                // Tým je v "zemi nikoho" -> Šedá
-                rowClass = 'clinched-neutral';
-            }
-
-            // Aplikace zámku
             if (locked) {
-                rowClass += ' locked';
+                // === VARIANTA A: TÝM JE ZAMČENÝ ===
+                // Už se nemůže pohnout, takže pokud je teď na postupovém místě, má to jisté.
+                if (qfLimit > 0 && index < qfLimit) {
+                    clinchedQF = true;
+                } else if (totalAdvancing > 0 && index < totalAdvancing) {
+                    clinchedPlayin = true;
+                }
+
+                // Sestup - pokud je zamčený v zóně sestupu
+                if (relegationLimit > 0 && index > safeZoneIndex) {
+                    clinchedRelegation = true;
+                }
             } else {
-                // Fallback pro jistotu: pokud máme clinched, chceme ty plné barvy
-                // (Tyto ify zajišťují, že pokud nejsem locked, použiji "clinched-" třídy, které mají opacity 0.35 nebo 1 podle CSS)
-                if (clinchedRelegation) rowClass = 'clinched-relegation';
-                else if (clinchedQF) rowClass = 'clinched-quarterfinal';
-                else if (clinchedPlayin) rowClass = 'clinched-playin';
-                else if (eliminatedFromPlayoffs && safeFromRelegation) rowClass = 'clinched-neutral';
+                // === VARIANTA B: TÝM JEŠTĚ MŮŽE MĚNIT POZICI ===
+                // Musíme použít body a thresholdy.
+
+                // Jistota QF: Mám víc bodů, než kolik může MAXIMÁLNĚ získat ten nejlepší, co by skončil MIMO QF?
+                if (qfLimit > 0 && myPoints > thresholdQF) {
+                    clinchedQF = true;
+                }
+
+                // Jistota Playin: Mám víc bodů, než kolik může MAXIMÁLNĚ získat ten, co by nepostoupil VŮBEC?
+                if (totalAdvancing > 0 && myPoints > thresholdPlayin) {
+                    clinchedPlayin = true;
+                }
+
+                // Jistota Sestupu: I když vše vyhraju, budu mít míň, než má ten poslední v bezpečí TEĎ
+                if (relegationLimit > 0 && index > safeZoneIndex) {
+                    if (myMaxPoints < safetyPoints) clinchedRelegation = true;
+                }
             }
 
-            const rankClass = currentZone; // Čísla dle aktuální pozice
+            //console.log(`   Clinched: QF=${clinchedQF}, Playin=${clinchedPlayin}`);
 
-            const teamStats = scores[team.id] || {gf:0, ga:0};
+            // --- TŘÍDY ---
+            // Priorita: Sestup > QF > Playin
+            let rowClass = currentZone;
+            if (clinchedRelegation) rowClass = 'clinched-relegation';
+            else if (clinchedQF) rowClass = 'clinched-quarterfinal';
+            else if (clinchedPlayin) rowClass = 'clinched-playin';
+
+            if (locked) rowClass += ' locked';
+
+            //console.log(`   Final Class: ${rowClass}`);
+
+            const rankClass = currentZone;
+            const teamStats = scores[team.id] || {gf: 0, ga: 0};
             const goalDiff = teamStats.gf - teamStats.ga;
+
             html += `<tr class="${rowClass}">
 <td class="rank-cell ${rankClass}">${index + 1}.</td>
 <td>${team.name}</td>
 <td class="points numbers">${team.stats?.[selectedSeason]?.points || 0}</td>
 <td class="numbers">${teamStats.gf}:${teamStats.ga}</td>
 <td class="numbers">${goalDiff > 0 ? '+' + goalDiff : goalDiff}</td>
-<td class="numbers">${played || 0}</td>
+<td class="numbers">${played}</td>
 <td class="numbers">${team.stats?.[selectedSeason]?.wins || 0}</td>
 <td class="numbers">${team.stats?.[selectedSeason]?.otWins || 0}</td>
 <td class="numbers">${team.stats?.[selectedSeason]?.otLosses || 0}</td>
@@ -1006,6 +1388,8 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
         });
         html += `</tbody></table><br>`;
     }
+
+    // --- ZBYTEK STRÁNKY ---
     html += `
 </div>
 <div id="playoffTablePreview" style="display:none; overflow:auto; max-width:100%;">
@@ -1013,21 +1397,19 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
     playoffData.forEach((row) => {
         html += '<tr>';
         row.forEach(cell => {
-            cell.textColor = undefined;
-            const bgColor = cell.bgColor || '';
-            const textColor = '';
+            const bg = cell.bgColor || '';
+            const textColor = cell.textColor || '';
             const styleParts = [];
-            if (bgColor) styleParts.push(`background-color:${bgColor}`);
+            if (bg) styleParts.push(`background-color:${bg}`);
             if (textColor) styleParts.push(`color:${textColor}`);
             const styleAttr = styleParts.length ? ` style="${styleParts.join(';')}"` : '';
-
-            const txt = cell.text || '';
-            html += `<td${styleAttr}>${txt}</td>`;
+            html += `<td${styleAttr}>${cell.text || ''}</td>`;
         });
         html += '</tr>';
     });
+
     const totalMatches = leagueObj.maxMatches
-    const filledMatches = matches.filter(m => m.result && m.liga === selectedLiga && m.season === selectedSeason).length;
+    const filledMatches = matches.filter(m => m.result && m.isPlayoff === false && m.liga === selectedLiga && m.season === selectedSeason).length;
     const percentage = totalMatches > 0 ? Math.round((filledMatches / totalMatches) * 100) : 0;
 
     html += `
@@ -1040,6 +1422,14 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 </div>
 <p id="progress-text"></p>
 </section>
+
+<script>
+function showTable(which) {
+document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none';
+const p = document.getElementById('playoffTablePreview');
+p.style.display = which === 'playoff' ? 'block' : 'none';
+}
+</script>
 </div>
 `;
 
@@ -1082,9 +1472,7 @@ ${currentUserStats?.tableCorrect > 0 || currentUserStats?.tableDeviation > 0 ? `
 <tbody>`;
         userStats
             .sort((a, b) => {
-                if (b.correct !== a.correct) {
-                    return b.correct - a.correct;
-                }
+                if (b.correct !== a.correct) return b.correct - a.correct;
                 if (b.tableCorrect !== a.tableCorrect) return b.tableCorrect - a.tableCorrect;
                 return a.tableDeviation - b.tableDeviation;
             })
@@ -1104,47 +1492,21 @@ ${currentUserStats?.tableCorrect > 0 || currentUserStats?.tableDeviation > 0 ? `
 <td style="${statusStyle}">${user.tableDeviation > 0 ? user.tableDeviation : '-'}</td>
 </tr>`;
             });
+
         html += `
 </tbody>
 </table>
 <br>
 <table style="color: black; font-size: 12px" class="points-table">
-<tr style="background-color: #00FF00">
-<td colspan="3">Za správný tip zápasu v základní části</td>
-<td colspan="3">1 bod</td>
-</tr>
-<tr style="background-color: #FF0000">
-<td colspan="3">Za správný tip vítěze dané série v playoff ale špatný tip počtu vyhraných zápasů týmu který prohrál</td>
-<td colspan="3">1 bod</td>
-</tr>
-<tr style="background-color: #00FF00">
-<td colspan="3">Za správný tip vítěze dané série v playoff + počet vyhraných zápasů týmů který prohrál</td>
-<td colspan="3">3 body</td>
-</tr>
-<tr style="background-color: #00FF00">
-<td colspan="3">Za správný tip vítěze daného zápasu v playoff + správné skóre</td>
-<td colspan="3">5 bodů</td>
-</tr>
-<tr style="background-color: #FFFF00">
-<td colspan="3">Za správný tip vítěze daného zápasu v playoff + chyba ve skóre o 1 gól</td>
-<td colspan="3">4 body</td>
-</tr>
-<tr style="background-color: #FF6600">
-<td colspan="3">Za správný tip vítěze daného zápasu v playoff + chyba ve skóre o 2 góly</td>
-<td colspan="3">3 body</td>
-</tr>
-<tr style="background-color: #FF0000">
-<td colspan="3">Za správný tip vítěze daného zápasu v playoff + chyba ve skóre o 3+ gólů</td>
-<td colspan="3">1 bod</td>
-</tr>
-<tr style="background-color: #00FF00">
-<td colspan="3">Za přesné trefení pozice týmu v konečné tabulce</td>
-<td colspan="3">1 bod (Tabulka)</td>
-</tr>
-<tr style="background-color: orangered">
-<td colspan="3">Odchylka tipu tabulky (rozdíl pozic)</td>
-<td colspan="3">Sčítá se (čím méně, tím lépe)</td>
-</tr>
+<tr style="background-color: #00FF00"><td colspan="3">Za správný tip zápasu v základní části</td><td colspan="3">1 bod</td></tr>
+<tr style="background-color: #FF0000"><td colspan="3">Za správný tip vítěze dané série v playoff ale špatný tip počtu vyhraných zápasů</td><td colspan="3">1 bod</td></tr>
+<tr style="background-color: #00FF00"><td colspan="3">Za správný tip vítěze dané série v playoff + počet vyhraných zápasů</td><td colspan="3">3 body</td></tr>
+<tr style="background-color: #00FF00"><td colspan="3">Za správný tip vítěze zápasu v playoff + správné skóre</td><td colspan="3">5 bodů</td></tr>
+<tr style="background-color: #FFFF00"><td colspan="3">Za správný tip vítěze zápasu v playoff + chyba o 1 gól</td><td colspan="3">4 body</td></tr>
+<tr style="background-color: #FF6600"><td colspan="3">Za správný tip vítěze zápasu v playoff + chyba o 2 góly</td><td colspan="3">3 body</td></tr>
+<tr style="background-color: #FF0000"><td colspan="3">Za správný tip vítěze zápasu v playoff + chyba o 3+ gólů</td><td colspan="3">1 bod</td></tr>
+<tr style="background-color: #00FF00"><td colspan="3">Za přesné trefení pozice v konečné tabulce</td><td colspan="3">1 bod</td></tr>
+<tr style="background-color: orangered"><td colspan="3">Odchylka tipu tabulky</td><td colspan="3">Sčítá se</td></tr>
 </table>
 </section>
 </section>
@@ -1153,24 +1515,24 @@ ${currentUserStats?.tableCorrect > 0 || currentUserStats?.tableDeviation > 0 ? `
 <h2>Aktuální zápasy k tipování</h2>
 <table class="points-table">
 `;
-        const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'))
+
+        const matchesData = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'))
             .filter(m => m.liga === selectedLiga && !m.result)
             .filter(m => m.season === selectedSeason)
             .sort((a, b) => new Date(a.datetime) - new Date(b.datetime));
 
-        const users = JSON.parse(fs.readFileSync('./data/users.json', 'utf8'));
-        const currentUser = users.find(u => u.username === username);
-        const userTips = currentUser?.tips?.[selectedSeason]?.[selectedLiga] || [];
-
-        const postponedMatches = matches.filter(m => m.postponed);
-        const normalMatches = matches.filter(m => !m.postponed)
-            .sort((a, b) => new Date(a.datetime) - new Date(b.datetime));
+        const usersData = JSON.parse(fs.readFileSync('./data/users.json', 'utf8'));
+        const currentUserData = usersData.find(u => u.username === username);
+        const userTips = currentUserData?.tips?.[selectedSeason]?.[selectedLiga] || [];
 
         const groupedMatches = {};
+        const postponedMatches = matchesData.filter(m => m.postponed);
+        const normalMatches = matchesData.filter(m => !m.postponed).sort((a, b) => new Date(a.datetime) - new Date(b.datetime));
+
+        const LABEL_POSTPONED = "Odložené zápasy";
 
         if (postponedMatches.length) {
-            const POSTPONED_LABEL = "Odložené zápasy";
-            groupedMatches[POSTPONED_LABEL] = postponedMatches;
+            groupedMatches[LABEL_POSTPONED] = postponedMatches;
         }
 
         normalMatches.forEach(match => {
@@ -1179,258 +1541,84 @@ ${currentUserStats?.tableCorrect > 0 || currentUserStats?.tableDeviation > 0 ? `
             groupedMatches[dateTime].push(match);
         });
 
-        const getPragueISO = () => {
-            return new Date().toLocaleString('sv-SE', {timeZone: 'Europe/Prague'}).replace(' ', 'T');
-        };
-        const currentPragueTimeISO = getPragueISO();
+        const currentPragueTimeISO = new Date().toLocaleString('sv-SE', {timeZone: 'Europe/Prague'}).replace(' ', 'T');
 
         for (const [dateTime, matchesAtSameTime] of Object.entries(groupedMatches)) {
-            let formattedDateTime;
-
-            if (matchesAtSameTime.some(m => m.postponed) || dateTime === "Neznámý čas") {
-                formattedDateTime = "Odložené zápasy";
-            } else {
+            let formattedDateTime = (matchesAtSameTime.some(m => m.postponed) || dateTime === "Neznámý čas") ? "Odložené zápasy" : (() => {
                 const [dPart, tPart] = dateTime.split('T');
                 const [year, month, day] = dPart.split('-');
-                formattedDateTime = `${day}. ${month}. ${year} ${tPart}`;
-            }
+                return `${day}. ${month}. ${year} ${tPart}`;
+            })();
 
-            html += `
-<h3>${formattedDateTime}</h3>
-<table class="matches-table">
-<thead class="matches-table-header">
-<tr><th colspan="3">Zápasy</th></tr>
-</thead>
-<tbody>
-`;
+            html += `<h3>${formattedDateTime}</h3><table class="matches-table"><thead class="matches-table-header"><tr><th colspan="3">Zápasy</th></tr></thead><tbody>`;
 
             for (const match of matchesAtSameTime) {
                 const homeTeam = teams.find(t => t.id === match.homeTeamId)?.name || '???';
                 const awayTeam = teams.find(t => t.id === match.awayTeamId)?.name || '???';
                 const existingTip = userTips.find(t => t.matchId === match.id);
                 const selectedWinner = existingTip?.winner;
-
                 const matchStarted = match.postponed ? true : (match.datetime <= currentPragueTimeISO);
                 const isPlayoff = match.isPlayoff;
 
                 if (match.postponed) {
-                    html += `
-<tr class="match-row postponed">
-<td colspan="3"><strong>${homeTeam} vs ${awayTeam}</strong></td>
-</tr>`;
-                }
-                // --- VARIANTA 1: NORMÁLNÍ ZÁPAS (Bez formuláře, ID je v řádku) ---
-                else if (!isPlayoff) {
-                    html += `
-<tr class="match-row simple-match-row" data-match-id="${match.id}">
-<td>
-<button type="button" class="team-link home-btn ${selectedWinner === "home" ? "selected" : ""}"
-data-winner="home" ${matchStarted ? 'disabled' : ''}>${homeTeam}</button>
-</td>
-<td class="vs">vs</td>
-<td>
-<button type="button" class="team-link away-btn ${selectedWinner === "away" ? "selected" : ""}"
-data-winner="away" ${matchStarted ? 'disabled' : ''}>${awayTeam}</button>
-</td>
-</tr>`;
-                }
-                // --- VARIANTA 2: PLAYOFF ZÁPAS ---
-                else {
+                    html += `<tr class="match-row postponed"><td colspan="3"><strong>${homeTeam} vs ${awayTeam}</strong></td></tr>`;
+                } else if (!isPlayoff) {
+                    html += `<tr class="match-row simple-match-row" data-match-id="${match.id}"><td><button type="button" class="team-link home-btn ${selectedWinner === "home" ? "selected" : ""}" data-winner="home" ${matchStarted ? 'disabled' : ''}>${homeTeam}</button></td><td class="vs">vs</td><td><button type="button" class="team-link away-btn ${selectedWinner === "away" ? "selected" : ""}" data-winner="away" ${matchStarted ? 'disabled' : ''}>${awayTeam}</button></td></tr>`;
+                } else {
                     const existingLoserWins = existingTip?.loserWins || 0;
                     const bo = match.bo || 7;
                     const maxLoserWins = Math.floor(bo / 2);
-
-                    html += `
-<tr class="match-row playoff-parent-row" data-match-id="${match.id}">
-<td>
-<button type="button" class="team-link home-btn ${selectedWinner === "home" ? "selected" : ""}"
-data-winner="home" ${matchStarted ? 'disabled' : ''}>
-${homeTeam}
-</button>
-</td>
-<td class="vs">vs</td>
-<td>
-<button type="button" class="team-link away-btn ${selectedWinner === "away" ? "selected" : ""}"
-data-winner="away" ${matchStarted ? 'disabled' : ''}>
-${awayTeam}
-</button>
-</td>
-</tr>
-
-<tr class="match-row loser-row" style="display:${existingTip ? 'table-row' : 'none'}">
-<td colspan="3">
-<form class="loserwins-form" onsubmit="return false;" data-bo="${match.bo}">
-<input type="hidden" name="matchId" value="${match.id}">
-<input type="hidden" name="winner" value="${existingTip?.winner ?? ''}">
-
-${match.bo === 1 ? `Skóre:
-<input type="number" name="scoreHome" value="${existingTip?.scoreHome ?? ''}" min="0" style="width:50px"> :
-<input type="number" name="scoreAway" value="${existingTip?.scoreAway ?? ''}" min="0" style="width:50px">` : `Kolik zápasů vyhrál poražený:
-<select name="loserWins">
-${Array.from({length: maxLoserWins + 1}, (_, i) => `<option value="${i}" ${i === existingLoserWins ? 'selected' : ''}>${i}</option>`).join('')}
-</select>`}
-</form>
-</td>
-</tr>`;
+                    html += `<tr class="match-row playoff-parent-row" data-match-id="${match.id}"><td><button type="button" class="team-link home-btn ${selectedWinner === "home" ? "selected" : ""}" data-winner="home" ${matchStarted ? 'disabled' : ''}>${homeTeam}</button></td><td class="vs">vs</td><td><button type="button" class="team-link away-btn ${selectedWinner === "away" ? "selected" : ""}" data-winner="away" ${matchStarted ? 'disabled' : ''}>${awayTeam}</button></td></tr>
+                    <tr class="match-row loser-row" style="display:${existingTip ? 'table-row' : 'none'}"><td colspan="3"><form class="loserwins-form" onsubmit="return false;" data-bo="${match.bo}"><input type="hidden" name="matchId" value="${match.id}"><input type="hidden" name="winner" value="${existingTip?.winner ?? ''}">${match.bo === 1 ? `Skóre: <input type="number" name="scoreHome" value="${existingTip?.scoreHome ?? ''}" min="0" style="width:50px"> : <input type="number" name="scoreAway" value="${existingTip?.scoreAway ?? ''}" min="0" style="width:50px">` : `Kolik zápasů vyhrál poražený: <select name="loserWins">${Array.from({length: maxLoserWins + 1}, (_, i) => `<option value="${i}" ${i === existingLoserWins ? 'selected' : ''}>${i}</option>`).join('')}</select>`}</form></td></tr>`;
                 }
             }
-            match.bo = undefined;
-            match.isPlayoff = undefined;
-            match.datetime = undefined;
-            match.postponed = undefined;
-            match.id = undefined;
-            match.awayTeamId = undefined;
-            match.homeTeamId = undefined;
-
-            html += `
-</tbody>
-</table>
-`;
+            html += `</tbody></table>`;
         }
 
-        html += `</section></main></body>
-
-<script>
+        html += `</section></main></body><script>
 document.addEventListener('DOMContentLoaded', () => {
-
-// Hlavní funkce pro odeslání dat
 function sendTip(formData, homeBtn, awayBtn, loserRow) {
 const winner = formData.get('winner');
-
-fetch('/tip', {
-method: 'POST',
-headers: { 'x-requested-with': 'fetch' },
-body: formData
-})
-.then(res => {
-if (res.ok) {
-console.log('Tip uložen');
-
-// VIZUÁLNÍ UPDATE (Až po potvrzení serverem, nebo hned - jak chceš)
-if (homeBtn) {
-homeBtn.classList.toggle('selected', winner === 'home');
-// Pokud kliknu na Home, musím zajistit, že Away už není selected
-if (winner === 'home' && awayBtn) awayBtn.classList.remove('selected');
+fetch('/tip', { method: 'POST', headers: { 'x-requested-with': 'fetch' }, body: formData })
+.then(res => { if (res.ok) { 
+    if(homeBtn) { homeBtn.classList.toggle('selected', winner === 'home'); if(winner === 'home' && awayBtn) awayBtn.classList.remove('selected'); }
+    if(awayBtn) { awayBtn.classList.toggle('selected', winner === 'away'); if(winner === 'away' && homeBtn) homeBtn.classList.remove('selected'); }
+    if(loserRow) loserRow.style.display = 'table-row';
+} else { alert('Chyba při ukládání.'); } })
+.catch(err => { console.error(err); alert('Chyba připojení.'); });
 }
-if (awayBtn) {
-awayBtn.classList.toggle('selected', winner === 'away');
-if (winner === 'away' && homeBtn) homeBtn.classList.remove('selected');
-}
-
-if (loserRow) loserRow.style.display = 'table-row';
-} else {
-alert('Chyba při ukládání (Server Error).');
-}
-})
-.catch(err => {
-console.error(err);
-alert('Chyba připojení.');
-});
-}
-
-// --- 1. OBSLUHA KLIKNUTÍ NA TÝMY (Pro Playoff i Normální) ---
-// Hledáme všechna tlačítka, která mají data-winner
 document.querySelectorAll('button[data-winner]').forEach(btn => {
-btn.addEventListener('click', (e) => {
-e.preventDefault();
-
-// Najdeme řádek tabulky
-const row = btn.closest('tr');
-const matchId = row.dataset.matchId;
-const winner = btn.dataset.winner;
-
-const homeBtn = row.querySelector('.home-btn');
-const awayBtn = row.querySelector('.away-btn');
-
-// Zjistíme, jestli je to playoff (jestli následuje loser-row)
-const nextRow = row.nextElementSibling;
-let loserRow = null;
-let loserForm = null;
-
-if (nextRow && nextRow.classList.contains('loser-row')) {
-loserRow = nextRow;
-loserForm = loserRow.querySelector('form');
-}
-
-// Pokud existuje formulář pro skóre, musíme v něm aktualizovat hidden input 'winner'
-// To je DŮLEŽITÉ pro změnu tipu, aby se při zadání skóre poslal správný vítěz
-if (loserForm) {
-const wInput = loserForm.querySelector('input[name="winner"]');
-if (wInput) wInput.value = winner;
-}
-
-const formData = new URLSearchParams();
-formData.append('matchId', matchId);
-formData.append('winner', winner);
-
+btn.addEventListener('click', (e) => { e.preventDefault();
+const row = btn.closest('tr'); const matchId = row.dataset.matchId; const winner = btn.dataset.winner;
+const homeBtn = row.querySelector('.home-btn'); const awayBtn = row.querySelector('.away-btn');
+const nextRow = row.nextElementSibling; let loserRow = null; let loserForm = null;
+if (nextRow && nextRow.classList.contains('loser-row')) { loserRow = nextRow; loserForm = loserRow.querySelector('form'); }
+if (loserForm) { const wInput = loserForm.querySelector('input[name="winner"]'); if (wInput) wInput.value = winner; }
+const formData = new URLSearchParams(); formData.append('matchId', matchId); formData.append('winner', winner);
 sendTip(formData, homeBtn, awayBtn, loserRow);
 });
 });
-
-// --- 2. OBSLUHA SKÓRE A SELECTU (Playoff) ---
 document.querySelectorAll('.loserwins-form').forEach(form => {
-const matchId = form.querySelector('input[name="matchId"]').value;
-const winnerInput = form.querySelector('input[name="winner"]'); // Tento input aktualizujeme výše
-
+const matchId = form.querySelector('input[name="matchId"]').value; const winnerInput = form.querySelector('input[name="winner"]');
 form.querySelectorAll('input[type="number"]').forEach(input => {
-
-// 1. HLAVNÍ LOGIKA - Spustí se při "opuštění" políčka (klik vedle, Tab, nebo vynucený blur)
-input.addEventListener('change', () => {
-if (!winnerInput.value) {
-alert('Vyber nejdřív vítěze!');
-// Volitelné: vrátit focus zpět, pokud chybí vítěz
-// e.target.focus();
-return;
-}
-
-const scoreHome = form.querySelector('input[name="scoreHome"]').value;
-const scoreAway = form.querySelector('input[name="scoreAway"]').value;
-
-// Kontrola, zda jsou vyplněna obě čísla
-if (scoreHome === '' || scoreAway === '') {
-return;
-}
-
-const formData = new URLSearchParams();
-formData.append('matchId', matchId);
-formData.append('winner', winnerInput.value);
-formData.append('scoreHome', scoreHome);
-formData.append('scoreAway', scoreAway);
-
-console.log('Ukládám...'); // Debug
-sendTip(formData, null, null, null);
+input.addEventListener('change', () => { if (!winnerInput.value) { alert('Vyber nejdřív vítěze!'); return; }
+const scoreHome = form.querySelector('input[name="scoreHome"]').value; const scoreAway = form.querySelector('input[name="scoreAway"]').value;
+if (scoreHome === '' || scoreAway === '') return;
+const formData = new URLSearchParams(); formData.append('matchId', matchId); formData.append('winner', winnerInput.value);
+formData.append('scoreHome', scoreHome); formData.append('scoreAway', scoreAway);
+sendTip(formData, null, null, null); });
+input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); input.blur(); } });
 });
-
-// 2. ENTER LOGIKA - Jen "vyhodí" uživatele z políčka
-input.addEventListener('keydown', (e) => {
-if (e.key === 'Enter') {
-e.preventDefault(); // Zabrání odeslání celého formuláře (refresh stránky)
-input.blur(); // TOTO je ten trik -> způsobí, že se spustí 'change' nahoře
-}
-});
-});
-
-// SELECT (Loser wins)
 const select = form.querySelector('select');
-if (select) {
-select.addEventListener('change', () => {
-if (!winnerInput.value) { alert('Vyber nejdřív vítěze!'); return; }
-
-const formData = new URLSearchParams();
-formData.append('matchId', matchId);
-formData.append('winner', winnerInput.value);
-formData.append('loserWins', select.value);
-
-sendTip(formData, null, null, null);
-});
-}
+if (select) { select.addEventListener('change', () => { if (!winnerInput.value) { alert('Vyber nejdřív vítěze!'); return; }
+const formData = new URLSearchParams(); formData.append('matchId', matchId); formData.append('winner', winnerInput.value); formData.append('loserWins', select.value);
+sendTip(formData, null, null, null); }); }
 });
 });
-</script>
-</html>`
+</script></html>`;
         res.send(html);
     }
-})
+});
 
 router.get('/history', requireLogin, (req, res) => {
     let matches;
@@ -1500,10 +1688,10 @@ router.get('/history', requireLogin, (req, res) => {
 
     res.send(html);
 });
-router.get('/history/a', requireLogin, (req, res, match) => {
+router.get('/history/a', requireLogin, (req, res) => {
     const username = req.session.user;
     const selectedLiga = req.query.liga;
-    const selectedSeason = req.query.season;
+    const selectedSeason = req.query.sezona;
 
     if (!selectedLiga || !selectedSeason) return res.redirect('/history');
 
@@ -1571,9 +1759,7 @@ router.get('/history/a', requireLogin, (req, res, match) => {
         teamsByGroup[gKey].push(team);
     });
     const sortedGroupKeys = Object.keys(teamsByGroup).sort((a, b) => (a === 'default' ? -1 : parseInt(a) - parseInt(b)));
-    const getGroupDisplayLabel = (gKey) => (gKey === 'default' ? '' : `Skupina ${String.fromCharCode(64 + parseInt(gKey))}`);
 
-    // Mapa reálného pořadí
     const realRankMaps = {};
     for (const gKey of sortedGroupKeys) {
         const groupTeams = [...teamsByGroup[gKey]];
@@ -1655,75 +1841,339 @@ router.get('/history/a', requireLogin, (req, res, match) => {
     } catch (e) {
     }
 
-    // --- HTML ---
+    const sortedGroups = Object.keys(teamsByGroup).sort();
+
+// --- HTML START ---
     let html = `
-    <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="cs">
 <head>
-    <meta charset="UTF-8">
-    <title>Historie Zápasy</title>
-    <link rel="stylesheet" href="../../css/styles.css" />
-    <link rel="icon" href="/images/logo.png">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tipovačka</title>
+<link rel="stylesheet" href="../../css/styles.css" />
+<link rel="icon" href="./images/logo.png">
 </head>
-<script>
-function showTable(which) {
-document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none';
-const p = document.getElementById('playoffTablePreview');
-p.style.display = which === 'playoff' ? 'block' : 'none';
-}
-const bar = document.getElementById("progress-bar");
-const text = document.getElementById("progress-text");
-</script>
-
 <body class="usersite">
 <header class="header">
 <div class="league-dropdown">
-    <div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
-    <a class="history-btn" href="/">Aktuální</a>
-    <a class="history-btn" href="/history">Zpět na výběr</a>
-    <a class="history-btn" href="/history/table/?liga=${encodeURIComponent(selectedLiga)}&sezona=${encodeURIComponent(selectedSeason)}">Tipy tabulky</a>
+<div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
+<a class="history-btn" href="/">Aktuální</a>
+<a class="history-btn" href="/history">Zpět na výběr</a>
+<a class="history-btn" style="background:orangered; color:black;" href="/history/a/?liga=${encodeURIComponent(selectedLiga)}&sezona=${encodeURIComponent(selectedSeason)}">Tipy zápasů</a>
+<a class="history-btn" href="/history/table/?liga=${encodeURIComponent(selectedLiga)}&sezona=${encodeURIComponent(selectedSeason)}">Tipy tabulky</a>
 </div>
-    <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a>'}</p>
+<p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
 <main class="main_page">
-    <section class="stats-container">
-        <div class="left-panel">
-        <div style="display: flex; flex-direction: row; justify-content: space-around; margin:20px 0; text-align:center;">
-            <button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('regular')">Základní část</button>
-            <button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('playoff')">Playoff</button>
-        </div>
-        <div id="regularTable">`;
+<section class="stats-container">
+<div class="left-panel">
+<div style="display: flex; flex-direction: row; justify-content: space-around; margin:20px 0; text-align:center;">
+<button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('regular')">Základní část</button>
+<button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('playoff')">Playoff</button>
+</div>
+<div id="regularTable">
+`;
 
-    // GENERACE TABULKY TÝMŮ
-    for (const gKey of sortedGroupKeys) {
-        const teamsInGroup = teamsByGroup[gKey];
-        const groupLabel = getGroupDisplayLabel(gKey);
-        teamsInGroup.sort((a, b) => realRankMaps[gKey][a.id] - realRankMaps[gKey][b.id]);
+    // --- ZPRACOVÁNÍ TABULEK ---
+    for (const group of sortedGroups) {
+        const teamsInGroup = teamsByGroup[group];
+        const zoneConfig = getLeagueZones(leagueObj);
 
-        const sorted = teamsInGroup;
-        const matchesPerTeam = leagueObj ? (leagueObj.maxMatches * 2) / teamsInGroup.length : 0;
-        const zoneConfig = leagueObj ? {
-            quarterfinal: leagueObj.quarterfinal, playin: leagueObj.playin, relegation: leagueObj.relegation
-        } : {quarterfinal: 0, playin: 0, relegation: 0};
-        const allTeamsFinished = sorted.every(team => {
-            const stats = team.stats?.[selectedSeason] || {};
-            const played = (stats.wins || 0) + (stats.otWins || 0) + (stats.otLosses || 0) + (stats.losses || 0);
-            return played >= matchesPerTeam;
+        // =========================================================
+        // === IIHF SORTING (FIX: IGNOROVAT PLAYOFF) ===
+        // =========================================================
+        teamsInGroup.sort((a, b) => {
+            const aStats = a.stats?.[selectedSeason] || {};
+            const bStats = b.stats?.[selectedSeason] || {};
+            const pA = aStats.points || 0;
+            const pB = bStats.points || 0;
+
+            // 1. Kritérium: BODY
+            if (pB !== pA) return pB - pA;
+
+            // --- MINITABULKA ---
+            // Najdeme týmy se stejným počtem bodů
+            const tiedTeamIds = teamsInGroup
+                .filter(t => (t.stats?.[selectedSeason]?.points || 0) === pA)
+                .map(t => Number(t.id));
+
+            // Funkce pro minitabulku
+            const getMiniStats = (teamId) => {
+                let mPts = 0, mDiff = 0, mGF = 0;
+
+                // FILTR: Jen tato sezóna, výsledek existuje, tým hraje A HLAVNĚ !isPlayoff
+                const groupMatches = matches.filter(m =>
+                    m.season === selectedSeason &&
+                    m.result &&
+                    !m.isPlayoff && // <--- TOTO JE TA OPRAVA!
+                    tiedTeamIds.includes(Number(m.homeTeamId)) &&
+                    tiedTeamIds.includes(Number(m.awayTeamId)) &&
+                    (Number(m.homeTeamId) === teamId || Number(m.awayTeamId) === teamId)
+                );
+
+                groupMatches.forEach(m => {
+                    const isHome = Number(m.homeTeamId) === teamId;
+
+                    let sH = m.result?.scoreHome !== undefined ? Number(m.result.scoreHome) : (m.scoreHome !== undefined ? Number(m.scoreHome) : 0);
+                    let sA = m.result?.scoreAway !== undefined ? Number(m.result.scoreAway) : (m.scoreAway !== undefined ? Number(m.scoreAway) : 0);
+                    const isOt = m.result?.ot || m.result?.so || m.ot || m.so;
+
+                    let hPts, aPts;
+                    if (sH > sA) { hPts = isOt ? 2 : 3; aPts = isOt ? 1 : 0; }
+                    else if (sA > sH) { aPts = isOt ? 2 : 3; hPts = isOt ? 1 : 0; }
+                    else { hPts=1; aPts=1; }
+
+                    let pts, gf, ga;
+                    if (isHome) { pts = hPts; gf = sH; ga = sA; }
+                    else { pts = aPts; gf = sA; ga = sH; }
+
+                    mPts += pts;
+                    mDiff += (gf - ga);
+                    mGF += gf;
+                });
+
+                return { pts: mPts, diff: mDiff, gf: mGF };
+            };
+
+            const msA = getMiniStats(Number(a.id));
+            const msB = getMiniStats(Number(b.id));
+
+            // 2. Kritérium: BODY V MINITABULCE
+            if (msB.pts !== msA.pts) return msB.pts - msA.pts;
+
+            // 3. Kritérium: ROZDÍL SKÓRE V MINITABULCE
+            if (msB.diff !== msA.diff) return msB.diff - msA.diff;
+
+            // 4. Kritérium: GÓLY V MINITABULCE
+            if (msB.gf !== msA.gf) return msB.gf - msA.gf;
+
+            // 5. Kritérium: PŘÍMÝ VZÁJEMNÝ ZÁPAS (Head-to-Head)
+            const directMatch = matches.find(m =>
+                m.season === selectedSeason &&
+                m.result &&
+                !m.isPlayoff && // <--- TOTO JE TA OPRAVA!
+                ((Number(m.homeTeamId) === Number(a.id) && Number(m.awayTeamId) === Number(b.id)) ||
+                    (Number(m.homeTeamId) === Number(b.id) && Number(m.awayTeamId) === Number(a.id)))
+            );
+
+            if (directMatch) {
+                const isAHome = Number(directMatch.homeTeamId) === Number(a.id);
+                let sH = directMatch.result?.scoreHome ?? directMatch.scoreHome ?? 0;
+                let sA = directMatch.result?.scoreAway ?? directMatch.scoreAway ?? 0;
+
+                if (isAHome) {
+                    if (sH > sA) return -1;
+                    if (sA > sH) return 1;
+                } else {
+                    if (sA > sH) return -1;
+                    if (sH > sA) return 1;
+                }
+            }
+
+            // 6. Kritérium: CELKOVÉ SKÓRE
+            const sA = scores[a.id] || {gf:0, ga:0};
+            const sB = scores[b.id] || {gf:0, ga:0};
+            const diffA = sA.gf - sA.ga;
+            const diffB = sB.gf - sB.ga;
+            if (diffA !== diffB) return diffB - diffA;
+
+            return 0;
         });
 
-        html += `<table class="points-table"><thead><tr><th scope="col" id="points-table-header" colspan="10"><h2>Týmy - Základní část ${groupLabel}</h2></th></tr><tr><th class="position">Místo</th><th>Tým</th><th class="points">Body</th><th>Skóre</th><th>Rozdíl</th><th>Z</th><th>V</th><th>Vpp</th><th>Ppp</th><th>P</th></tr></thead><tbody>`;
+
+        html += `
+<table class="points-table">
+<thead>
+<tr><th scope="col" id="points-table-header" colspan="10"><h2>Týmy - ${selectedLiga} ${selectedSeason} - Základní část ${leagueObj?.isMultigroup ? `(Skupina ${group})` : ''}</h2></th></tr>
+<tr><th class="position">Místo</th><th>Tým</th><th class="points">Body</th><th>Skóre</th><th>Rozdíl</th><th>Z</th><th>V</th><th>Vpp</th><th>Ppp</th><th>P</th></tr>
+</thead>
+<tbody>`;
+
+        const sorted = teamsInGroup;
+
+        // --- VÝPOČET ZÁPASŮ ---
+        let matchesPerTeam;
+        if (leagueObj.rounds) {
+            matchesPerTeam = (teamsInGroup.length - 1) * leagueObj.rounds;
+        } else if (leagueObj.isMultigroup) {
+            matchesPerTeam = Math.max(1, teamsInGroup.length - 1);
+        } else {
+            matchesPerTeam = Math.ceil((leagueObj.maxMatches * 2) / teamsInGroup.length);
+        }
+
+        //console.log(`\n=== DEBUG SKUPINA ${group} ===`);
+        //console.log(`MatchesPerTeam vypočteno jako: ${matchesPerTeam}`);
+
+        // --- ZÓNY A LIMITY ---
+        const qfLimit = leagueObj.quarterfinal || 0;
+        const playinLimit = leagueObj.playin || 0;
+        const relegationLimit = leagueObj.relegation || 0;
+
+        // Celkový počet postupujících (QF + Předkolo dohromady)
+        const totalAdvancing = playinLimit;
+
+        // Index, od kterého začíná sestupová zóna
+        const safeZoneIndex = sorted.length - relegationLimit - 1;
+
+        // Funkce pro zjištění maxima bodů, které může získat kdokoliv OD určité pozice dolů
+        const getMaxPotentialOfZone = (fromIndex) => {
+            let globalMax = 0;
+            // Pokud index je mimo tabulku, vracíme 0
+            if (fromIndex >= sorted.length) return 0;
+
+            for (let i = fromIndex; i < sorted.length; i++) {
+                const chaser = sorted[i];
+                const s = chaser.stats?.[selectedSeason] || {};
+                const played = (s.wins || 0) + (s.otWins || 0) + (s.otLosses || 0) + (s.losses || 0);
+                const remaining = Math.max(0, matchesPerTeam - played);
+                const potential = (s.points || 0) + (remaining * 3);
+                if (potential > globalMax) globalMax = potential;
+            }
+            return globalMax;
+        };
+
+        // 1. Práh pro QF: Kolik bodů může max. získat ten nejlepší tým, co by skončil POD čarou QF?
+        const thresholdQF = getMaxPotentialOfZone(qfLimit);
+
+        // 2. Práh pro Postup (Předkolo): Kolik bodů může max. získat ten nejlepší tým, co by nepostoupil VŮBEC?
+        const thresholdPlayin = getMaxPotentialOfZone(totalAdvancing);
+
+        //console.log(`Thresholds: QF > ${thresholdQF}, Playin > ${thresholdPlayin}`);
+
+        let safetyPoints = 0;
+        if (relegationLimit > 0 && safeZoneIndex >= 0 && sorted.length > safeZoneIndex) {
+            safetyPoints = sorted[safeZoneIndex].stats?.[selectedSeason]?.points || 0;
+            //console.log(`SafetyPoints (Relegation threshold): ${safetyPoints} (Tým na indexu ${safeZoneIndex})`);
+        }
 
         teamsInGroup.forEach((team, index) => {
-            const teamStats = scores[team.id];
-            const goalDiff = teamStats.gf - teamStats.ga;
-            const dbStats = team.stats?.[selectedSeason] || {};
-            const points = dbStats.points !== undefined ? dbStats.points : teamStats.points;
-            const numberMatches = (dbStats.wins || 0) + (dbStats.otWins || 0) + (dbStats.otLosses || 0) + (dbStats.losses || 0);
-            const zone = getTeamZone(index, teamsInGroup.length, zoneConfig);
-            const locked = isLockedPosition(index, teamsInGroup.length, sorted, zoneConfig, selectedSeason, matchesPerTeam, allTeamsFinished);
-            const rowClass = locked ? `${zone} locked` : zone;
+            const currentZone = getTeamZone(index, teamsInGroup.length, zoneConfig);
+            const stats = team.stats?.[selectedSeason] || {};
+            const myPoints = stats.points || 0;
+            const played = (stats.wins || 0) + (stats.otWins || 0) + (stats.otLosses || 0) + (stats.losses || 0);
+            const remaining = Math.max(0, matchesPerTeam - played);
+            const myMaxPoints = myPoints + (remaining * 3);
 
-            html += `<tr class="${rowClass}"> <td class="rank-cell ${zone}">${index + 1}.</td> <td>${team.name}</td><td class="points numbers">${points}</td><td class="numbers">${teamStats.gf}:${teamStats.ga}</td><td class="numbers">${goalDiff > 0 ? '+' + goalDiff : goalDiff}</td><td class="numbers">${numberMatches}</td><td class="numbers">${dbStats.wins || 0}</td><td class="numbers">${dbStats.otWins || 0}</td><td class="numbers">${dbStats.otLosses || 0}</td><td class="numbers">${dbStats.losses || 0}</td></tr>`;
+            //console.log(`--- TEAM: ${team.name} (${index + 1}.) ---`);
+            //console.log(`   Pts: ${myPoints}, Played: ${played}, Remaining: ${remaining}, MaxPts: ${myMaxPoints}`);
+
+            // --- STRICT LOCK LOGIKA (Tvoje verze - funguje správně) ---
+            let canDrop = false;
+            for (let i = index + 1; i < sorted.length; i++) {
+                const chaser = sorted[i];
+                const s = chaser.stats?.[selectedSeason] || {};
+                const p = (s.wins||0)+(s.otWins||0)+(s.otLosses||0)+(s.losses||0);
+                const rem = Math.max(0, matchesPerTeam - p);
+                const chaserMax = (s.points || 0) + (rem * 3);
+
+                // 1. Pokud mě může předběhnout na ČISTÉ BODY -> nejsem Locked
+                if (chaserMax > myPoints) {
+                    canDrop = true;
+                    break;
+                }
+
+                // 2. Pokud mě může DOROVNAT na body a ještě se hraje
+                if (chaserMax === myPoints) {
+                    if (rem > 0 || remaining > 0) {
+                        canDrop = true;
+                        break;
+                    }
+                }
+            }
+
+            let canRise = false;
+            if (index > 0) {
+                const leader = sorted[index - 1];
+                const leaderStats = leader.stats?.[selectedSeason] || {};
+                const leaderPoints = leaderStats.points || 0;
+                const pL = (leaderStats.wins||0)+(leaderStats.otWins||0)+(leaderStats.otLosses||0)+(leaderStats.losses||0);
+                const remL = Math.max(0, matchesPerTeam - pL);
+
+                if (myMaxPoints > leaderPoints) {
+                    canRise = true;
+                }
+                else if (myMaxPoints === leaderPoints) {
+                    if (remaining > 0 || remL > 0) {
+                        canRise = true;
+                    }
+                }
+            }
+
+            const locked = !canDrop && !canRise;
+            //console.log(`   Logic: CanDrop=${canDrop}, CanRise=${canRise} => LOCKED=${locked}`);
+
+            // --- CLINCHED (OPRAVENÁ LOGIKA) ---
+            // Zde rozdělujeme logiku:
+            // A) Pokud je tým LOCKED -> Barva se určí natvrdo podle pozice (indexu).
+            // B) Pokud tým NENÍ LOCKED -> Barva se určí podle bodů (matematická jistota).
+
+            let clinchedQF = false;
+            let clinchedPlayin = false;
+            let clinchedRelegation = false;
+
+            if (locked) {
+                // === VARIANTA A: TÝM JE ZAMČENÝ ===
+                // Už se nemůže pohnout, takže pokud je teď na postupovém místě, má to jisté.
+                if (qfLimit > 0 && index < qfLimit) {
+                    clinchedQF = true;
+                } else if (totalAdvancing > 0 && index < totalAdvancing) {
+                    clinchedPlayin = true;
+                }
+
+                // Sestup - pokud je zamčený v zóně sestupu
+                if (relegationLimit > 0 && index > safeZoneIndex) {
+                    clinchedRelegation = true;
+                }
+            } else {
+                // === VARIANTA B: TÝM JEŠTĚ MŮŽE MĚNIT POZICI ===
+                // Musíme použít body a thresholdy.
+
+                // Jistota QF: Mám víc bodů, než kolik může MAXIMÁLNĚ získat ten nejlepší, co by skončil MIMO QF?
+                if (qfLimit > 0 && myPoints > thresholdQF) {
+                    clinchedQF = true;
+                }
+
+                // Jistota Playin: Mám víc bodů, než kolik může MAXIMÁLNĚ získat ten, co by nepostoupil VŮBEC?
+                if (totalAdvancing > 0 && myPoints > thresholdPlayin) {
+                    clinchedPlayin = true;
+                }
+
+                // Jistota Sestupu: I když vše vyhraju, budu mít míň, než má ten poslední v bezpečí TEĎ
+                if (relegationLimit > 0 && index > safeZoneIndex) {
+                    if (myMaxPoints < safetyPoints) clinchedRelegation = true;
+                }
+            }
+
+            //console.log(`   Clinched: QF=${clinchedQF}, Playin=${clinchedPlayin}`);
+
+            // --- TŘÍDY ---
+            // Priorita: Sestup > QF > Playin
+            let rowClass = currentZone;
+            if (clinchedRelegation) rowClass = 'clinched-relegation';
+            else if (clinchedQF) rowClass = 'clinched-quarterfinal';
+            else if (clinchedPlayin) rowClass = 'clinched-playin';
+
+            if (locked) rowClass += ' locked';
+
+            //console.log(`   Final Class: ${rowClass}`);
+
+            const rankClass = currentZone;
+            const teamStats = scores[team.id] || {gf: 0, ga: 0};
+            const goalDiff = teamStats.gf - teamStats.ga;
+
+            html += `<tr class="${rowClass}">
+<td class="rank-cell ${rankClass}">${index + 1}.</td>
+<td>${team.name}</td>
+<td class="points numbers">${team.stats?.[selectedSeason]?.points || 0}</td>
+<td class="numbers">${teamStats.gf}:${teamStats.ga}</td>
+<td class="numbers">${goalDiff > 0 ? '+' + goalDiff : goalDiff}</td>
+<td class="numbers">${played}</td>
+<td class="numbers">${team.stats?.[selectedSeason]?.wins || 0}</td>
+<td class="numbers">${team.stats?.[selectedSeason]?.otWins || 0}</td>
+<td class="numbers">${team.stats?.[selectedSeason]?.otLosses || 0}</td>
+<td class="numbers">${team.stats?.[selectedSeason]?.losses || 0}</td>
+</tr>`;
         });
         html += `</tbody></table><br>`;
     }
@@ -1822,12 +2272,6 @@ const text = document.getElementById("progress-text");
 
     // --- PRAVÁ STRANA: ZÁPASY ---
     html += `
-<script>const globalStatsData = ${JSON.stringify(userStats)};
-        function showUserHistory(username) {
-            document.querySelectorAll('.history-item').forEach(el => el.style.display = 'none');
-            const safeName = username.replace(/[^a-zA-Z0-9]/g, '_');
-            document.querySelectorAll('.user-' + safeName).forEach(el => el.style.display = 'flex');
-        }</script>
         <section class="matches-container">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
                 <h2 style="margin: 0;">Historie tipů</h2>
@@ -1907,19 +2351,24 @@ const text = document.getElementById("progress-text");
                 html += `<tr class="match-row"><td>${homeCellHTML}</td><td class="vs">${match.result.scoreHome}</td><td class="vs">vs</td><td class="vs">${match.result.scoreAway}</td><td>${awayCellHTML}</td></tr><tr class="match-row"><td style="color: black" colspan="5">${scoreCellHTML}</td></tr>`;
             }
         }
-        match.result = undefined;
-        match.isPlayoff = undefined;
         html += `</tbody></table>`;
     }
 
     html += `</section></main>
-    </body></html>`;
+    <script>
+        const globalStatsData = ${JSON.stringify(userStats)};
+        function showUserHistory(username) {
+            document.querySelectorAll('.history-item').forEach(el => el.style.display = 'none');
+            const safeName = username.replace(/[^a-zA-Z0-9]/g, '_');
+            document.querySelectorAll('.user-' + safeName).forEach(el => el.style.display = 'flex');
+        }
+    </script></body></html>`;
     res.send(html);
 });
 router.get('/history/table', requireLogin, (req, res) => {
     const username = req.session.user;
     const selectedLiga = req.query.liga;
-    const selectedSeason = req.query.season;
+    const selectedSeason = req.query.sezona;
 
     if (!selectedLiga || !selectedSeason) return res.redirect('/history');
 
@@ -2070,72 +2519,339 @@ router.get('/history/table', requireLogin, (req, res) => {
     } catch (e) {
     }
 
-    // --- HTML ---
+    const sortedGroups = Object.keys(teamsByGroup).sort();
+
+// --- HTML START ---
     let html = `
-    <!DOCTYPE html>
-    <html lang="cs">
-    <head>
-        <meta charset="UTF-8">
-        <title>Historie Tabulky</title>
-        <link rel="stylesheet" href="../../css/styles.css" />
-        <link rel="icon" href="/images/logo.png">
-    </head>
-    <script>
-function showTable(which) {
-document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none';
-const p = document.getElementById('playoffTablePreview');
-p.style.display = which === 'playoff' ? 'block' : 'none';
-}
-const bar = document.getElementById("progress-bar");
-const text = document.getElementById("progress-text");
-</script>
-    <body class="usersite">
-    <header class="header">
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tipovačka</title>
+<link rel="stylesheet" href="../../css/styles.css" />
+<link rel="icon" href="./images/logo.png">
+</head>
+<body class="usersite">
+<header class="header">
         <div class="league-dropdown">
             <div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
             <a class="history-btn" href="/">Aktuální</a>
             <a class="history-btn" href="/history">Zpět na výběr</a>
             <a class="history-btn" href="/history/a/?liga=${encodeURIComponent(selectedLiga)}&sezona=${encodeURIComponent(selectedSeason)}">Tipy zápasů</a>
+            <a class="history-btn" style="background:orangered; color:black;" href="/history/table/?liga=${encodeURIComponent(selectedLiga)}&sezona=${encodeURIComponent(selectedSeason)}">Tipy tabulky</a>
         </div>
         <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
     </header>
-    <main class="main_page">
-        <section class="stats-container">
-            <div class="left-panel">
-                <div style="display: flex; flex-direction: row; justify-content: space-around; margin:20px 0; text-align:center;">
-                    <button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('regular')">Základní část</button>
-                    <button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('playoff')">Playoff</button>
-                </div>
-                <div id="regularTable">
-    `;
+<main class="main_page">
+<section class="stats-container">
+<div class="left-panel">
+<div style="display: flex; flex-direction: row; justify-content: space-around; margin:20px 0; text-align:center;">
+<button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('regular')">Základní část</button>
+<button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('playoff')">Playoff</button>
+</div>
+<div id="regularTable">
+`;
 
-    // TABULKA TÝMŮ
-    for (const gKey of sortedGroupKeys) {
-        const teamsInGroup = teamsByGroup[gKey];
-        const groupLabel = getGroupDisplayLabel(gKey);
-        teamsInGroup.sort((a, b) => realRankMaps[gKey][a.id] - realRankMaps[gKey][b.id]);
-        const sorted = teamsInGroup;
-        const matchesPerTeam = leagueObj ? (leagueObj.maxMatches * 2) / teamsInGroup.length : 0;
-        const zoneConfig = leagueObj ? {
-            quarterfinal: leagueObj.quarterfinal, playin: leagueObj.playin, relegation: leagueObj.relegation
-        } : {quarterfinal: 0, playin: 0, relegation: 0};
-        const allTeamsFinished = sorted.every(team => {
-            const stats = team.stats?.[selectedSeason] || {};
-            const played = (stats.wins || 0) + (stats.otWins || 0) + (stats.otLosses || 0) + (stats.losses || 0);
-            return played >= matchesPerTeam;
+    // --- ZPRACOVÁNÍ TABULEK ---
+    for (const group of sortedGroups) {
+        const teamsInGroup = teamsByGroup[group];
+        const zoneConfig = getLeagueZones(leagueObj);
+
+        // =========================================================
+        // === IIHF SORTING (FIX: IGNOROVAT PLAYOFF) ===
+        // =========================================================
+        teamsInGroup.sort((a, b) => {
+            const aStats = a.stats?.[selectedSeason] || {};
+            const bStats = b.stats?.[selectedSeason] || {};
+            const pA = aStats.points || 0;
+            const pB = bStats.points || 0;
+
+            // 1. Kritérium: BODY
+            if (pB !== pA) return pB - pA;
+
+            // --- MINITABULKA ---
+            // Najdeme týmy se stejným počtem bodů
+            const tiedTeamIds = teamsInGroup
+                .filter(t => (t.stats?.[selectedSeason]?.points || 0) === pA)
+                .map(t => Number(t.id));
+
+            // Funkce pro minitabulku
+            const getMiniStats = (teamId) => {
+                let mPts = 0, mDiff = 0, mGF = 0;
+
+                // FILTR: Jen tato sezóna, výsledek existuje, tým hraje A HLAVNĚ !isPlayoff
+                const groupMatches = matches.filter(m =>
+                    m.season === selectedSeason &&
+                    m.result &&
+                    !m.isPlayoff && // <--- TOTO JE TA OPRAVA!
+                    tiedTeamIds.includes(Number(m.homeTeamId)) &&
+                    tiedTeamIds.includes(Number(m.awayTeamId)) &&
+                    (Number(m.homeTeamId) === teamId || Number(m.awayTeamId) === teamId)
+                );
+
+                groupMatches.forEach(m => {
+                    const isHome = Number(m.homeTeamId) === teamId;
+
+                    let sH = m.result?.scoreHome !== undefined ? Number(m.result.scoreHome) : (m.scoreHome !== undefined ? Number(m.scoreHome) : 0);
+                    let sA = m.result?.scoreAway !== undefined ? Number(m.result.scoreAway) : (m.scoreAway !== undefined ? Number(m.scoreAway) : 0);
+                    const isOt = m.result?.ot || m.result?.so || m.ot || m.so;
+
+                    let hPts, aPts;
+                    if (sH > sA) { hPts = isOt ? 2 : 3; aPts = isOt ? 1 : 0; }
+                    else if (sA > sH) { aPts = isOt ? 2 : 3; hPts = isOt ? 1 : 0; }
+                    else { hPts=1; aPts=1; }
+
+                    let pts, gf, ga;
+                    if (isHome) { pts = hPts; gf = sH; ga = sA; }
+                    else { pts = aPts; gf = sA; ga = sH; }
+
+                    mPts += pts;
+                    mDiff += (gf - ga);
+                    mGF += gf;
+                });
+
+                return { pts: mPts, diff: mDiff, gf: mGF };
+            };
+
+            const msA = getMiniStats(Number(a.id));
+            const msB = getMiniStats(Number(b.id));
+
+            // 2. Kritérium: BODY V MINITABULCE
+            if (msB.pts !== msA.pts) return msB.pts - msA.pts;
+
+            // 3. Kritérium: ROZDÍL SKÓRE V MINITABULCE
+            if (msB.diff !== msA.diff) return msB.diff - msA.diff;
+
+            // 4. Kritérium: GÓLY V MINITABULCE
+            if (msB.gf !== msA.gf) return msB.gf - msA.gf;
+
+            // 5. Kritérium: PŘÍMÝ VZÁJEMNÝ ZÁPAS (Head-to-Head)
+            const directMatch = matches.find(m =>
+                m.season === selectedSeason &&
+                m.result &&
+                !m.isPlayoff && // <--- TOTO JE TA OPRAVA!
+                ((Number(m.homeTeamId) === Number(a.id) && Number(m.awayTeamId) === Number(b.id)) ||
+                    (Number(m.homeTeamId) === Number(b.id) && Number(m.awayTeamId) === Number(a.id)))
+            );
+
+            if (directMatch) {
+                const isAHome = Number(directMatch.homeTeamId) === Number(a.id);
+                let sH = directMatch.result?.scoreHome ?? directMatch.scoreHome ?? 0;
+                let sA = directMatch.result?.scoreAway ?? directMatch.scoreAway ?? 0;
+
+                if (isAHome) {
+                    if (sH > sA) return -1;
+                    if (sA > sH) return 1;
+                } else {
+                    if (sA > sH) return -1;
+                    if (sH > sA) return 1;
+                }
+            }
+
+            // 6. Kritérium: CELKOVÉ SKÓRE
+            const sA = scores[a.id] || {gf:0, ga:0};
+            const sB = scores[b.id] || {gf:0, ga:0};
+            const diffA = sA.gf - sA.ga;
+            const diffB = sB.gf - sB.ga;
+            if (diffA !== diffB) return diffB - diffA;
+
+            return 0;
         });
 
-        html += `<table class="points-table"><thead><tr><th scope="col" id="points-table-header" colspan="10"><h2>Týmy - Základní část ${groupLabel}</h2></th></tr><tr><th class="position">Místo</th><th>Tým</th><th class="points">Body</th><th>Skóre</th><th>Rozdíl</th><th>Z</th><th>V</th><th>Vpp</th><th>Ppp</th><th>P</th></tr></thead><tbody>`;
+
+        html += `
+<table class="points-table">
+<thead>
+<tr><th scope="col" id="points-table-header" colspan="10"><h2>Týmy - ${selectedLiga} ${selectedSeason} - Základní část ${leagueObj?.isMultigroup ? `(Skupina ${group})` : ''}</h2></th></tr>
+<tr><th class="position">Místo</th><th>Tým</th><th class="points">Body</th><th>Skóre</th><th>Rozdíl</th><th>Z</th><th>V</th><th>Vpp</th><th>Ppp</th><th>P</th></tr>
+</thead>
+<tbody>`;
+
+        const sorted = teamsInGroup;
+
+        // --- VÝPOČET ZÁPASŮ ---
+        let matchesPerTeam;
+        if (leagueObj.rounds) {
+            matchesPerTeam = (teamsInGroup.length - 1) * leagueObj.rounds;
+        } else if (leagueObj.isMultigroup) {
+            matchesPerTeam = Math.max(1, teamsInGroup.length - 1);
+        } else {
+            matchesPerTeam = Math.ceil((leagueObj.maxMatches * 2) / teamsInGroup.length);
+        }
+
+        //console.log(`\n=== DEBUG SKUPINA ${group} ===`);
+        //console.log(`MatchesPerTeam vypočteno jako: ${matchesPerTeam}`);
+
+        // --- ZÓNY A LIMITY ---
+        const qfLimit = leagueObj.quarterfinal || 0;
+        const playinLimit = leagueObj.playin || 0;
+        const relegationLimit = leagueObj.relegation || 0;
+
+        // Celkový počet postupujících (QF + Předkolo dohromady)
+        const totalAdvancing = playinLimit;
+
+        // Index, od kterého začíná sestupová zóna
+        const safeZoneIndex = sorted.length - relegationLimit - 1;
+
+        // Funkce pro zjištění maxima bodů, které může získat kdokoliv OD určité pozice dolů
+        const getMaxPotentialOfZone = (fromIndex) => {
+            let globalMax = 0;
+            // Pokud index je mimo tabulku, vracíme 0
+            if (fromIndex >= sorted.length) return 0;
+
+            for (let i = fromIndex; i < sorted.length; i++) {
+                const chaser = sorted[i];
+                const s = chaser.stats?.[selectedSeason] || {};
+                const played = (s.wins || 0) + (s.otWins || 0) + (s.otLosses || 0) + (s.losses || 0);
+                const remaining = Math.max(0, matchesPerTeam - played);
+                const potential = (s.points || 0) + (remaining * 3);
+                if (potential > globalMax) globalMax = potential;
+            }
+            return globalMax;
+        };
+
+        // 1. Práh pro QF: Kolik bodů může max. získat ten nejlepší tým, co by skončil POD čarou QF?
+        const thresholdQF = getMaxPotentialOfZone(qfLimit);
+
+        // 2. Práh pro Postup (Předkolo): Kolik bodů může max. získat ten nejlepší tým, co by nepostoupil VŮBEC?
+        const thresholdPlayin = getMaxPotentialOfZone(totalAdvancing);
+
+        //console.log(`Thresholds: QF > ${thresholdQF}, Playin > ${thresholdPlayin}`);
+
+        let safetyPoints = 0;
+        if (relegationLimit > 0 && safeZoneIndex >= 0 && sorted.length > safeZoneIndex) {
+            safetyPoints = sorted[safeZoneIndex].stats?.[selectedSeason]?.points || 0;
+            //console.log(`SafetyPoints (Relegation threshold): ${safetyPoints} (Tým na indexu ${safeZoneIndex})`);
+        }
+
         teamsInGroup.forEach((team, index) => {
-            const teamStats = scores[team.id];
+            const currentZone = getTeamZone(index, teamsInGroup.length, zoneConfig);
+            const stats = team.stats?.[selectedSeason] || {};
+            const myPoints = stats.points || 0;
+            const played = (stats.wins || 0) + (stats.otWins || 0) + (stats.otLosses || 0) + (stats.losses || 0);
+            const remaining = Math.max(0, matchesPerTeam - played);
+            const myMaxPoints = myPoints + (remaining * 3);
+
+            //console.log(`--- TEAM: ${team.name} (${index + 1}.) ---`);
+            //console.log(`   Pts: ${myPoints}, Played: ${played}, Remaining: ${remaining}, MaxPts: ${myMaxPoints}`);
+
+            // --- STRICT LOCK LOGIKA (Tvoje verze - funguje správně) ---
+            let canDrop = false;
+            for (let i = index + 1; i < sorted.length; i++) {
+                const chaser = sorted[i];
+                const s = chaser.stats?.[selectedSeason] || {};
+                const p = (s.wins||0)+(s.otWins||0)+(s.otLosses||0)+(s.losses||0);
+                const rem = Math.max(0, matchesPerTeam - p);
+                const chaserMax = (s.points || 0) + (rem * 3);
+
+                // 1. Pokud mě může předběhnout na ČISTÉ BODY -> nejsem Locked
+                if (chaserMax > myPoints) {
+                    canDrop = true;
+                    break;
+                }
+
+                // 2. Pokud mě může DOROVNAT na body a ještě se hraje
+                if (chaserMax === myPoints) {
+                    if (rem > 0 || remaining > 0) {
+                        canDrop = true;
+                        break;
+                    }
+                }
+            }
+
+            let canRise = false;
+            if (index > 0) {
+                const leader = sorted[index - 1];
+                const leaderStats = leader.stats?.[selectedSeason] || {};
+                const leaderPoints = leaderStats.points || 0;
+                const pL = (leaderStats.wins||0)+(leaderStats.otWins||0)+(leaderStats.otLosses||0)+(leaderStats.losses||0);
+                const remL = Math.max(0, matchesPerTeam - pL);
+
+                if (myMaxPoints > leaderPoints) {
+                    canRise = true;
+                }
+                else if (myMaxPoints === leaderPoints) {
+                    if (remaining > 0 || remL > 0) {
+                        canRise = true;
+                    }
+                }
+            }
+
+            const locked = !canDrop && !canRise;
+            //console.log(`   Logic: CanDrop=${canDrop}, CanRise=${canRise} => LOCKED=${locked}`);
+
+            // --- CLINCHED (OPRAVENÁ LOGIKA) ---
+            // Zde rozdělujeme logiku:
+            // A) Pokud je tým LOCKED -> Barva se určí natvrdo podle pozice (indexu).
+            // B) Pokud tým NENÍ LOCKED -> Barva se určí podle bodů (matematická jistota).
+
+            let clinchedQF = false;
+            let clinchedPlayin = false;
+            let clinchedRelegation = false;
+
+            if (locked) {
+                // === VARIANTA A: TÝM JE ZAMČENÝ ===
+                // Už se nemůže pohnout, takže pokud je teď na postupovém místě, má to jisté.
+                if (qfLimit > 0 && index < qfLimit) {
+                    clinchedQF = true;
+                } else if (totalAdvancing > 0 && index < totalAdvancing) {
+                    clinchedPlayin = true;
+                }
+
+                // Sestup - pokud je zamčený v zóně sestupu
+                if (relegationLimit > 0 && index > safeZoneIndex) {
+                    clinchedRelegation = true;
+                }
+            } else {
+                // === VARIANTA B: TÝM JEŠTĚ MŮŽE MĚNIT POZICI ===
+                // Musíme použít body a thresholdy.
+
+                // Jistota QF: Mám víc bodů, než kolik může MAXIMÁLNĚ získat ten nejlepší, co by skončil MIMO QF?
+                if (qfLimit > 0 && myPoints > thresholdQF) {
+                    clinchedQF = true;
+                }
+
+                // Jistota Playin: Mám víc bodů, než kolik může MAXIMÁLNĚ získat ten, co by nepostoupil VŮBEC?
+                if (totalAdvancing > 0 && myPoints > thresholdPlayin) {
+                    clinchedPlayin = true;
+                }
+
+                // Jistota Sestupu: I když vše vyhraju, budu mít míň, než má ten poslední v bezpečí TEĎ
+                if (relegationLimit > 0 && index > safeZoneIndex) {
+                    if (myMaxPoints < safetyPoints) clinchedRelegation = true;
+                }
+            }
+
+            //console.log(`   Clinched: QF=${clinchedQF}, Playin=${clinchedPlayin}`);
+
+            // --- TŘÍDY ---
+            // Priorita: Sestup > QF > Playin
+            let rowClass = currentZone;
+            if (clinchedRelegation) rowClass = 'clinched-relegation';
+            else if (clinchedQF) rowClass = 'clinched-quarterfinal';
+            else if (clinchedPlayin) rowClass = 'clinched-playin';
+
+            if (locked) rowClass += ' locked';
+
+            //console.log(`   Final Class: ${rowClass}`);
+
+            const rankClass = currentZone;
+            const teamStats = scores[team.id] || {gf: 0, ga: 0};
             const goalDiff = teamStats.gf - teamStats.ga;
-            const dbStats = team.stats?.[selectedSeason] || {};
-            const points = dbStats.points !== undefined ? dbStats.points : teamStats.points;
-            const numberMatches = (dbStats.wins || 0) + (dbStats.otWins || 0) + (dbStats.otLosses || 0) + (dbStats.losses || 0);
-            const zone = getTeamZone(index, teamsInGroup.length, zoneConfig);
-            const locked = isLockedPosition(index, teamsInGroup.length, sorted, zoneConfig, selectedSeason, matchesPerTeam, allTeamsFinished);
-            const rowClass = locked ? `${zone} locked` : zone;
-            html += `<tr class="${rowClass}"> <td class="rank-cell ${zone}">${index + 1}.</td> <td>${team.name}</td><td class="points numbers">${points}</td><td class="numbers">${teamStats.gf}:${teamStats.ga}</td><td class="numbers">${goalDiff > 0 ? '+' + goalDiff : goalDiff}</td><td class="numbers">${numberMatches}</td><td class="numbers">${dbStats.wins || 0}</td><td class="numbers">${dbStats.otWins || 0}</td><td class="numbers">${dbStats.otLosses || 0}</td><td class="numbers">${dbStats.losses || 0}</td></tr>`;
+
+            html += `<tr class="${rowClass}">
+<td class="rank-cell ${rankClass}">${index + 1}.</td>
+<td>${team.name}</td>
+<td class="points numbers">${team.stats?.[selectedSeason]?.points || 0}</td>
+<td class="numbers">${teamStats.gf}:${teamStats.ga}</td>
+<td class="numbers">${goalDiff > 0 ? '+' + goalDiff : goalDiff}</td>
+<td class="numbers">${played}</td>
+<td class="numbers">${team.stats?.[selectedSeason]?.wins || 0}</td>
+<td class="numbers">${team.stats?.[selectedSeason]?.otWins || 0}</td>
+<td class="numbers">${team.stats?.[selectedSeason]?.otLosses || 0}</td>
+<td class="numbers">${team.stats?.[selectedSeason]?.losses || 0}</td>
+</tr>`;
         });
         html += `</tbody></table><br>`;
     }
@@ -2149,7 +2865,8 @@ const text = document.getElementById("progress-text");
         });
         html += '</tr>';
     });
-    html += `</table></div><script>function showTable(which) { document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none'; const p = document.getElementById('playoffTablePreview'); p.style.display = which === 'playoff' ? 'block' : 'none'; }</script>`;
+    html += `</table></div><script>
+function showTable(which) { document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none'; const p = document.getElementById('playoffTablePreview'); p.style.display = which === 'playoff' ? 'block' : 'none'; }</script>`;
 
     // --- TVOJE STATISTIKY (PŘESNĚ JAKO V ROUTĚ /) ---
     if (username) {
@@ -2236,13 +2953,6 @@ const text = document.getElementById("progress-text");
 
     // --- PRAVÁ STRANA: TABULKA TIPŮ ---
     html += `
-<script>
-        function showUserTableHistory(username) {
-            document.querySelectorAll('.user-history-table-container').forEach(el => el.style.display = 'none');
-            const safeName = username.replace(/[^a-zA-Z0-9]/g, '_');
-            document.querySelectorAll('.user-table-' + safeName).forEach(el => el.style.display = 'block');
-        }
-    </script>
         <section class="matches-container">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
                 <h2 style="margin: 0;">Historie tipu tabulky</h2>
@@ -2330,7 +3040,13 @@ const text = document.getElementById("progress-text");
     }
 
     html += `</section></main>
-    </body></html>`;
+    <script>
+        function showUserTableHistory(username) {
+            document.querySelectorAll('.user-history-table-container').forEach(el => el.style.display = 'none');
+            const safeName = username.replace(/[^a-zA-Z0-9]/g, '_');
+            document.querySelectorAll('.user-table-' + safeName).forEach(el => el.style.display = 'block');
+        }
+    </script></body></html>`;
     res.send(html);
 });
 
@@ -2440,138 +3156,345 @@ router.get("/prestupy", requireLogin, (req, res) => {
     } catch (e) {
     }
     const statusStyle = isRegularSeasonFinished ? "color: lightgrey; font-weight: bold;" : "color: white; opacity: 0.7; background-color: black";
-    // --- ZAČÁTEK HTML ---
+
+// --- HTML START ---
     let html = `
-    <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="cs">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tipovačka</title>
-    <link rel="stylesheet" href="./css/styles.css" />
-    <link rel="icon" href="./images/logo.png">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tipovačka</title>
+<link rel="stylesheet" href="./css/styles.css" />
+<link rel="icon" href="./images/logo.png">
 </head>
-<script>
-function showTable(which) {
-document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none';
-const p = document.getElementById('playoffTablePreview');
-p.style.display = which === 'playoff' ? 'block' : 'none';
-}
-const bar = document.getElementById("progress-bar");
-const text = document.getElementById("progress-text");
-</script>
 <body class="usersite">
 <header class="header">
-    <form class="league-dropdown" method="GET" action="/">
-    <div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
-    <label class="league-select-name">
-        Liga:
-        <select id="league-select" name="liga" required onchange="this.form.submit()">
-        ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected' : ''}>${l}</option>`).join('')}
-        </select>
-    </label>
-        <a class="history-btn" href="/history">Historie</a>
-        <a class="history-btn changed" href="/?liga=${encodeURIComponent(selectedLiga)}">Tipovačka</a>
-        <a class="history-btn changed" href="/table-tip?liga=${encodeURIComponent(selectedLiga)}">Základní část</a>
-    </form>
-    <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
+<form class="league-dropdown" method="GET" action="/">
+<div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
+<label class="league-select-name">
+Liga:
+<select id="league-select" name="liga" required onchange="this.form.submit()">
+${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected' : ''}>${l}</option>`).join('')}
+</select>
+</label>
+<a class="history-btn" href="/history">Historie</a>
+<a class="history-btn changed" href="/?liga=${encodeURIComponent(selectedLiga)}">Tipovačka</a>
+<a class="history-btn changed" href="/table-tip?liga=${encodeURIComponent(selectedLiga)}">Základní část</a>
+</form>
+<p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
 <main class="main_page">
-    <section class="stats-container">
-        <div class="left-panel">
-        <div style="display: flex; flex-direction: row; justify-content: space-around; margin:20px 0; text-align:center;">
-            <button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('regular')">Základní část</button>
-            <button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('playoff')">Playoff</button>
-        </div>
-        <div id="regularTable">
-        `;
+<section class="stats-container">
+<div class="left-panel">
+<div style="display: flex; flex-direction: row; justify-content: space-around; margin:20px 0; text-align:center;">
+<button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('regular')">Základní část</button>
+<button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('playoff')">Playoff</button>
+</div>
+<div id="regularTable">
+`;
 
-    // ... (PONECHEJ TVŮJ KÓD GENERUJÍCÍ TABULKU TÝMŮ - teamsInGroup smyčka) ...
+    // --- ZPRACOVÁNÍ TABULEK ---
     for (const group of sortedGroups) {
         const teamsInGroup = teamsByGroup[group];
         const zoneConfig = getLeagueZones(leagueObj);
 
-        html += `
-    <table class="points-table">
-        <thead>
-            <tr>
-                <th scope="col" id="points-table-header" colspan="10">
-                    <h2>Týmy - ${selectedLiga} ${selectedSeason} - Základní část ${leagueObj?.isMultigroup ? `(Skupina ${group})` : ''}</h2>
-                </th>
-            </tr>
-            <tr>
-                <th class="position" scope="col">Místo</th>
-                <th scope="col">Tým</th>
-                <th class="points" scope="col">Body</th>
-                <th scope="col">Skóre</th>
-                <th scope="col">Rozdíl</th>
-                <th scope="col">Z</th>
-                <th scope="col">V</th>
-                <th scope="col">Vpp</th>
-                <th scope="col">Ppp</th>
-                <th scope="col">P</th>
-            </tr>
-        </thead>
-        <tbody>
-    `;
-
+        // =========================================================
+        // === IIHF SORTING (FIX: IGNOROVAT PLAYOFF) ===
+        // =========================================================
         teamsInGroup.sort((a, b) => {
             const aStats = a.stats?.[selectedSeason] || {};
             const bStats = b.stats?.[selectedSeason] || {};
-            const aPoints = aStats.points || 0;
-            const bPoints = bStats.points || 0;
-            const aScore = scores[a.id] || {gf: 0, ga: 0};
-            const bScore = scores[b.id] || {gf: 0, ga: 0};
-            const aDiff = aScore.gf - aScore.ga;
-            const bDiff = bScore.gf - bScore.ga;
-            const aMatches = (aStats.wins || 0) + (aStats.otWins || 0) + (aStats.otLosses || 0) + (aStats.losses || 0);
-            const bMatches = (bStats.wins || 0) + (bStats.otWins || 0) + (bStats.otLosses || 0) + (bStats.losses || 0);
+            const pA = aStats.points || 0;
+            const pB = bStats.points || 0;
 
-            if (bPoints !== aPoints) return bPoints - aPoints;
-            if (bDiff !== aDiff) return bDiff - aDiff;
-            return aMatches - bMatches;
+            // 1. Kritérium: BODY
+            if (pB !== pA) return pB - pA;
+
+            // --- MINITABULKA ---
+            // Najdeme týmy se stejným počtem bodů
+            const tiedTeamIds = teamsInGroup
+                .filter(t => (t.stats?.[selectedSeason]?.points || 0) === pA)
+                .map(t => Number(t.id));
+
+            // Funkce pro minitabulku
+            const getMiniStats = (teamId) => {
+                let mPts = 0, mDiff = 0, mGF = 0;
+
+                // FILTR: Jen tato sezóna, výsledek existuje, tým hraje A HLAVNĚ !isPlayoff
+                const groupMatches = matches.filter(m =>
+                    m.season === selectedSeason &&
+                    m.result &&
+                    !m.isPlayoff && // <--- TOTO JE TA OPRAVA!
+                    tiedTeamIds.includes(Number(m.homeTeamId)) &&
+                    tiedTeamIds.includes(Number(m.awayTeamId)) &&
+                    (Number(m.homeTeamId) === teamId || Number(m.awayTeamId) === teamId)
+                );
+
+                groupMatches.forEach(m => {
+                    const isHome = Number(m.homeTeamId) === teamId;
+
+                    let sH = m.result?.scoreHome !== undefined ? Number(m.result.scoreHome) : (m.scoreHome !== undefined ? Number(m.scoreHome) : 0);
+                    let sA = m.result?.scoreAway !== undefined ? Number(m.result.scoreAway) : (m.scoreAway !== undefined ? Number(m.scoreAway) : 0);
+                    const isOt = m.result?.ot || m.result?.so || m.ot || m.so;
+
+                    let hPts, aPts;
+                    if (sH > sA) { hPts = isOt ? 2 : 3; aPts = isOt ? 1 : 0; }
+                    else if (sA > sH) { aPts = isOt ? 2 : 3; hPts = isOt ? 1 : 0; }
+                    else { hPts=1; aPts=1; }
+
+                    let pts, gf, ga;
+                    if (isHome) { pts = hPts; gf = sH; ga = sA; }
+                    else { pts = aPts; gf = sA; ga = sH; }
+
+                    mPts += pts;
+                    mDiff += (gf - ga);
+                    mGF += gf;
+                });
+
+                return { pts: mPts, diff: mDiff, gf: mGF };
+            };
+
+            const msA = getMiniStats(Number(a.id));
+            const msB = getMiniStats(Number(b.id));
+
+            // 2. Kritérium: BODY V MINITABULCE
+            if (msB.pts !== msA.pts) return msB.pts - msA.pts;
+
+            // 3. Kritérium: ROZDÍL SKÓRE V MINITABULCE
+            if (msB.diff !== msA.diff) return msB.diff - msA.diff;
+
+            // 4. Kritérium: GÓLY V MINITABULCE
+            if (msB.gf !== msA.gf) return msB.gf - msA.gf;
+
+            // 5. Kritérium: PŘÍMÝ VZÁJEMNÝ ZÁPAS (Head-to-Head)
+            const directMatch = matches.find(m =>
+                m.season === selectedSeason &&
+                m.result &&
+                !m.isPlayoff && // <--- TOTO JE TA OPRAVA!
+                ((Number(m.homeTeamId) === Number(a.id) && Number(m.awayTeamId) === Number(b.id)) ||
+                    (Number(m.homeTeamId) === Number(b.id) && Number(m.awayTeamId) === Number(a.id)))
+            );
+
+            if (directMatch) {
+                const isAHome = Number(directMatch.homeTeamId) === Number(a.id);
+                let sH = directMatch.result?.scoreHome ?? directMatch.scoreHome ?? 0;
+                let sA = directMatch.result?.scoreAway ?? directMatch.scoreAway ?? 0;
+
+                if (isAHome) {
+                    if (sH > sA) return -1;
+                    if (sA > sH) return 1;
+                } else {
+                    if (sA > sH) return -1;
+                    if (sH > sA) return 1;
+                }
+            }
+
+            // 6. Kritérium: CELKOVÉ SKÓRE
+            const sA = scores[a.id] || {gf:0, ga:0};
+            const sB = scores[b.id] || {gf:0, ga:0};
+            const diffA = sA.gf - sA.ga;
+            const diffB = sB.gf - sB.ga;
+            if (diffA !== diffB) return diffB - diffA;
+
+            return 0;
         });
+
+
+        html += `
+<table class="points-table">
+<thead>
+<tr><th scope="col" id="points-table-header" colspan="10"><h2>Týmy - ${selectedLiga} ${selectedSeason} - Základní část ${leagueObj?.isMultigroup ? `(Skupina ${group})` : ''}</h2></th></tr>
+<tr><th class="position">Místo</th><th>Tým</th><th class="points">Body</th><th>Skóre</th><th>Rozdíl</th><th>Z</th><th>V</th><th>Vpp</th><th>Ppp</th><th>P</th></tr>
+</thead>
+<tbody>`;
 
         const sorted = teamsInGroup;
 
+        // --- VÝPOČET ZÁPASŮ ---
+        let matchesPerTeam;
+        if (leagueObj.rounds) {
+            matchesPerTeam = (teamsInGroup.length - 1) * leagueObj.rounds;
+        } else if (leagueObj.isMultigroup) {
+            matchesPerTeam = Math.max(1, teamsInGroup.length - 1);
+        } else {
+            matchesPerTeam = Math.ceil((leagueObj.maxMatches * 2) / teamsInGroup.length);
+        }
+
+        //console.log(`\n=== DEBUG SKUPINA ${group} ===`);
+        //console.log(`MatchesPerTeam vypočteno jako: ${matchesPerTeam}`);
+
+        // --- ZÓNY A LIMITY ---
+        const qfLimit = leagueObj.quarterfinal || 0;
+        const playinLimit = leagueObj.playin || 0;
+        const relegationLimit = leagueObj.relegation || 0;
+
+        // Celkový počet postupujících (QF + Předkolo dohromady)
+        const totalAdvancing = playinLimit;
+
+        // Index, od kterého začíná sestupová zóna
+        const safeZoneIndex = sorted.length - relegationLimit - 1;
+
+        // Funkce pro zjištění maxima bodů, které může získat kdokoliv OD určité pozice dolů
+        const getMaxPotentialOfZone = (fromIndex) => {
+            let globalMax = 0;
+            // Pokud index je mimo tabulku, vracíme 0
+            if (fromIndex >= sorted.length) return 0;
+
+            for (let i = fromIndex; i < sorted.length; i++) {
+                const chaser = sorted[i];
+                const s = chaser.stats?.[selectedSeason] || {};
+                const played = (s.wins || 0) + (s.otWins || 0) + (s.otLosses || 0) + (s.losses || 0);
+                const remaining = Math.max(0, matchesPerTeam - played);
+                const potential = (s.points || 0) + (remaining * 3);
+                if (potential > globalMax) globalMax = potential;
+            }
+            return globalMax;
+        };
+
+        // 1. Práh pro QF: Kolik bodů může max. získat ten nejlepší tým, co by skončil POD čarou QF?
+        const thresholdQF = getMaxPotentialOfZone(qfLimit);
+
+        // 2. Práh pro Postup (Předkolo): Kolik bodů může max. získat ten nejlepší tým, co by nepostoupil VŮBEC?
+        const thresholdPlayin = getMaxPotentialOfZone(totalAdvancing);
+
+        //console.log(`Thresholds: QF > ${thresholdQF}, Playin > ${thresholdPlayin}`);
+
+        let safetyPoints = 0;
+        if (relegationLimit > 0 && safeZoneIndex >= 0 && sorted.length > safeZoneIndex) {
+            safetyPoints = sorted[safeZoneIndex].stats?.[selectedSeason]?.points || 0;
+            //console.log(`SafetyPoints (Relegation threshold): ${safetyPoints} (Tým na indexu ${safeZoneIndex})`);
+        }
+
         teamsInGroup.forEach((team, index) => {
-            const zone = getTeamZone(index, teamsInGroup.length, zoneConfig);
-            const matchesPerTeam = (leagueObj.maxMatches * 2) / teamsInGroup.length;
-            const allTeamsFinished = sorted.every(team => {
-                const stats = team.stats?.[selectedSeason] || {};
-                const played = (stats.wins || 0) + (stats.otWins || 0) + (stats.otLosses || 0) + (stats.losses || 0);
-                return played >= matchesPerTeam;
-            });
-            const locked = isLockedPosition(index, teamsInGroup.length, sorted, zoneConfig, selectedSeason, matchesPerTeam, allTeamsFinished);
-            team.zone = zone;
-            team.locked = locked;
+            const currentZone = getTeamZone(index, teamsInGroup.length, zoneConfig);
+            const stats = team.stats?.[selectedSeason] || {};
+            const myPoints = stats.points || 0;
+            const played = (stats.wins || 0) + (stats.otWins || 0) + (stats.otLosses || 0) + (stats.losses || 0);
+            const remaining = Math.max(0, matchesPerTeam - played);
+            const myMaxPoints = myPoints + (remaining * 3);
 
-            const rowClass = locked ? `${zone} locked` : '';
-            const rankClass = zone;
+            //console.log(`--- TEAM: ${team.name} (${index + 1}.) ---`);
+            //console.log(`   Pts: ${myPoints}, Played: ${played}, Remaining: ${remaining}, MaxPts: ${myMaxPoints}`);
 
+            // --- STRICT LOCK LOGIKA (Tvoje verze - funguje správně) ---
+            let canDrop = false;
+            for (let i = index + 1; i < sorted.length; i++) {
+                const chaser = sorted[i];
+                const s = chaser.stats?.[selectedSeason] || {};
+                const p = (s.wins||0)+(s.otWins||0)+(s.otLosses||0)+(s.losses||0);
+                const rem = Math.max(0, matchesPerTeam - p);
+                const chaserMax = (s.points || 0) + (rem * 3);
+
+                // 1. Pokud mě může předběhnout na ČISTÉ BODY -> nejsem Locked
+                if (chaserMax > myPoints) {
+                    canDrop = true;
+                    break;
+                }
+
+                // 2. Pokud mě může DOROVNAT na body a ještě se hraje
+                if (chaserMax === myPoints) {
+                    if (rem > 0 || remaining > 0) {
+                        canDrop = true;
+                        break;
+                    }
+                }
+            }
+
+            let canRise = false;
+            if (index > 0) {
+                const leader = sorted[index - 1];
+                const leaderStats = leader.stats?.[selectedSeason] || {};
+                const leaderPoints = leaderStats.points || 0;
+                const pL = (leaderStats.wins||0)+(leaderStats.otWins||0)+(leaderStats.otLosses||0)+(leaderStats.losses||0);
+                const remL = Math.max(0, matchesPerTeam - pL);
+
+                if (myMaxPoints > leaderPoints) {
+                    canRise = true;
+                }
+                else if (myMaxPoints === leaderPoints) {
+                    if (remaining > 0 || remL > 0) {
+                        canRise = true;
+                    }
+                }
+            }
+
+            const locked = !canDrop && !canRise;
+            //console.log(`   Logic: CanDrop=${canDrop}, CanRise=${canRise} => LOCKED=${locked}`);
+
+            // --- CLINCHED (OPRAVENÁ LOGIKA) ---
+            // Zde rozdělujeme logiku:
+            // A) Pokud je tým LOCKED -> Barva se určí natvrdo podle pozice (indexu).
+            // B) Pokud tým NENÍ LOCKED -> Barva se určí podle bodů (matematická jistota).
+
+            let clinchedQF = false;
+            let clinchedPlayin = false;
+            let clinchedRelegation = false;
+
+            if (locked) {
+                // === VARIANTA A: TÝM JE ZAMČENÝ ===
+                // Už se nemůže pohnout, takže pokud je teď na postupovém místě, má to jisté.
+                if (qfLimit > 0 && index < qfLimit) {
+                    clinchedQF = true;
+                } else if (totalAdvancing > 0 && index < totalAdvancing) {
+                    clinchedPlayin = true;
+                }
+
+                // Sestup - pokud je zamčený v zóně sestupu
+                if (relegationLimit > 0 && index > safeZoneIndex) {
+                    clinchedRelegation = true;
+                }
+            } else {
+                // === VARIANTA B: TÝM JEŠTĚ MŮŽE MĚNIT POZICI ===
+                // Musíme použít body a thresholdy.
+
+                // Jistota QF: Mám víc bodů, než kolik může MAXIMÁLNĚ získat ten nejlepší, co by skončil MIMO QF?
+                if (qfLimit > 0 && myPoints > thresholdQF) {
+                    clinchedQF = true;
+                }
+
+                // Jistota Playin: Mám víc bodů, než kolik může MAXIMÁLNĚ získat ten, co by nepostoupil VŮBEC?
+                if (totalAdvancing > 0 && myPoints > thresholdPlayin) {
+                    clinchedPlayin = true;
+                }
+
+                // Jistota Sestupu: I když vše vyhraju, budu mít míň, než má ten poslední v bezpečí TEĎ
+                if (relegationLimit > 0 && index > safeZoneIndex) {
+                    if (myMaxPoints < safetyPoints) clinchedRelegation = true;
+                }
+            }
+
+            //console.log(`   Clinched: QF=${clinchedQF}, Playin=${clinchedPlayin}`);
+
+            // --- TŘÍDY ---
+            // Priorita: Sestup > QF > Playin
+            let rowClass = currentZone;
+            if (clinchedRelegation) rowClass = 'clinched-relegation';
+            else if (clinchedQF) rowClass = 'clinched-quarterfinal';
+            else if (clinchedPlayin) rowClass = 'clinched-playin';
+
+            if (locked) rowClass += ' locked';
+
+            //console.log(`   Final Class: ${rowClass}`);
+
+            const rankClass = currentZone;
             const teamStats = scores[team.id] || {gf: 0, ga: 0};
             const goalDiff = teamStats.gf - teamStats.ga;
-            const numberMatches = (team.stats?.[selectedSeason]?.wins || 0) + (team.stats?.[selectedSeason]?.otWins || 0) + (team.stats?.[selectedSeason]?.otLosses || 0) + (team.stats?.[selectedSeason]?.losses || 0);
 
-            html += `
-        <tr class="${rowClass}">
-            <td class="rank-cell ${rankClass}">${index + 1}.</td>
-            <td>${team.name}</td>
-            <td class="points numbers">${team.stats?.[selectedSeason]?.points || 0}</td>
-            <td class="numbers">${teamStats.gf}:${teamStats.ga}</td>
-            <td class="numbers">${goalDiff > 0 ? '+' + goalDiff : goalDiff}</td>
-            <td class="numbers">${numberMatches || 0}</td>
-            <td class="numbers">${team.stats?.[selectedSeason]?.wins || 0}</td>
-            <td class="numbers">${team.stats?.[selectedSeason]?.otWins || 0}</td>
-            <td class="numbers">${team.stats?.[selectedSeason]?.otLosses || 0}</td>
-            <td class="numbers">${team.stats?.[selectedSeason]?.losses || 0}</td>
-        </tr>
-        `;
+            html += `<tr class="${rowClass}">
+<td class="rank-cell ${rankClass}">${index + 1}.</td>
+<td>${team.name}</td>
+<td class="points numbers">${team.stats?.[selectedSeason]?.points || 0}</td>
+<td class="numbers">${teamStats.gf}:${teamStats.ga}</td>
+<td class="numbers">${goalDiff > 0 ? '+' + goalDiff : goalDiff}</td>
+<td class="numbers">${played}</td>
+<td class="numbers">${team.stats?.[selectedSeason]?.wins || 0}</td>
+<td class="numbers">${team.stats?.[selectedSeason]?.otWins || 0}</td>
+<td class="numbers">${team.stats?.[selectedSeason]?.otLosses || 0}</td>
+<td class="numbers">${team.stats?.[selectedSeason]?.losses || 0}</td>
+</tr>`;
         });
-        html += `
-        </tbody>
-    </table>
-    `;
+        html += `</tbody></table><br>`;
     }
 
     html += `
