@@ -51,7 +51,7 @@ app.use((req, res) => {
             </style>
         </head>
         <body>
-            <img src="/images/logo.png" style="width: 300px" alt="Logo" class="logo">
+            <img src="/images/logo.png" style="width: 400px" alt="Logo" class="logo">
             <h1>404</h1>
             <p>Jejda! Tuhle stránku jsme nenašli.</p>
             <p>Asi jsi zabloudil mimo mantinely.</p>

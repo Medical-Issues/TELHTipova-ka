@@ -69,8 +69,10 @@ function requireAdmin(req, res, next) {
                 </style>
             </head>
             <body>
-                <img src="/images/logo.png" alt="Logo" style="width: 300px; margin-bottom: 20px;">
+                <img src="/images/logo.png" alt="Logo" style="width: 400px; margin-bottom: 20px;">
                 <h1>403 - Přístup odepřen</h1>
+                <p>Gratuluji, našel jsi dveře pro Admina. Bohužel na to nemáš klíče ani mozek. Zkus to znova, až vyhraješ v loterii, ty žebráku.</p>
+                <p>Zároveň byl zaznamenán pokus o ojebání systému. Tvoje IP adresa byla odeslána na svaz a tvoje stará už ví, že jsi prohrál výplatu. Tady velí mafie, ne ty zmrde.</p>
                 <a href="/">Zpět na hlavní stránku</a>
             </body>
             </html>
