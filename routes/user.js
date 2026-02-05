@@ -134,7 +134,34 @@ router.get("/table-tip", requireLogin, (req, res) => {
         isTipsLocked = statusData?.[selectedSeason]?.[selectedLiga]?.tableTipsLocked || false;
     } catch (e) {
     }
+
+    let teamBonusData = {};
+    try {
+        teamBonusData = JSON.parse(fs.readFileSync('./data/teamBonuses.json', 'utf8'));
+    } catch (e) { teamBonusData = {}; }
+
+    teamsInSelectedLiga.forEach(t => {
+        // Inicializace, pokud neexistuje
+        if (!t.stats) t.stats = {};
+        if (!t.stats[selectedSeason]) t.stats[selectedSeason] = { points: 0, wins: 0, otWins: 0, otLosses: 0, losses: 0 };
+
+        // Získání reálných bodů ze zápasů
+        let naturalPoints = t.stats[selectedSeason].points || 0;
+
+        // Načtení dat z JSONu (ošetření starého formátu vs. nového objektu)
+        let bonusEntry = teamBonusData[selectedSeason]?.[selectedLiga]?.[t.id] || { points: 0, games: 0 };
+        if (typeof bonusEntry === 'number') bonusEntry = { points: bonusEntry, games: 0 };
+
+        // Aplikace bodů (přičteme k existujícím)
+        t.stats[selectedSeason].points = naturalPoints + (bonusEntry.points || 0);
+
+        // Uložení manuálních zápasů do dočasné proměnné (použijeme později u played a progress baru)
+        t.stats[selectedSeason].manualGames = bonusEntry.games || 0;
+    });
+    // =================================================================
+
     const teamsByGroup = {};
+
     teamsInSelectedLiga.forEach(team => {
         const group = team.group ? String.fromCharCode(team.group + 64) : 'X';
         if (!teamsByGroup[group]) teamsByGroup[group] = [];
@@ -340,7 +367,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
             for (let i = fromIndex; i < sorted.length; i++) {
                 const chaser = sorted[i];
                 const s = chaser.stats?.[selectedSeason] || {};
-                const played = (s.wins || 0) + (s.otWins || 0) + (s.otLosses || 0) + (s.losses || 0);
+                const played = (s.wins||0) + (s.otWins||0) + (s.otLosses||0) + (s.losses||0) + (s.manualGames || 0);
                 const remaining = Math.max(0, matchesPerTeam - played);
                 const potential = (s.points || 0) + (remaining * 3);
                 if (potential > globalMax) globalMax = potential;
@@ -366,7 +393,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
             const currentZone = getTeamZone(index, teamsInGroup.length, zoneConfig);
             const stats = team.stats?.[selectedSeason] || {};
             const myPoints = stats.points || 0;
-            const played = (stats.wins || 0) + (stats.otWins || 0) + (stats.otLosses || 0) + (stats.losses || 0);
+            const played = (stats.wins||0) + (stats.otWins||0) + (stats.otLosses||0) + (stats.losses||0) + (stats.manualGames || 0);
             const remaining = Math.max(0, matchesPerTeam - played);
             const myMaxPoints = myPoints + (remaining * 3);
 
@@ -378,7 +405,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
             for (let i = index + 1; i < sorted.length; i++) {
                 const chaser = sorted[i];
                 const s = chaser.stats?.[selectedSeason] || {};
-                const p = (s.wins||0)+(s.otWins||0)+(s.otLosses||0)+(s.losses||0);
+                const p = (s.wins||0) + (s.otWins||0) + (s.otLosses||0) + (s.losses||0) + (s.manualGames || 0);
                 const rem = Math.max(0, matchesPerTeam - p);
                 const chaserMax = (s.points || 0) + (rem * 3);
 
@@ -576,7 +603,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
             if (idx >= crossGroupTeams.length) return 0;
             const t = crossGroupTeams[idx];
             const s = t.stats?.[selectedSeason] || {};
-            const played = (s.wins||0)+(s.otWins||0)+(s.otLosses||0)+(s.losses||0);
+            const played = (s.wins||0) + (s.otWins||0) + (s.otLosses||0) + (s.losses||0) + (s.manualGames || 0);
 
             if (isRegularSeasonFinished) return s.points || 0;
 
@@ -608,7 +635,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
         crossGroupTeams.forEach((team, index) => {
             const stats = team.stats?.[selectedSeason] || {};
             const myPoints = stats.points || 0;
-            const played = (stats.wins||0)+(stats.otWins||0)+(stats.otLosses||0)+(stats.losses||0);
+            const played = (stats.wins||0) + (stats.otWins||0) + (stats.otLosses||0) + (stats.losses||0) + (stats.manualGames || 0);
 
             // Určení základní Zóny
             let currentZone = "neutral";
@@ -691,24 +718,29 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 
         html += `</tbody></table><br>`;
     }
-    const totalMatches = leagueObj.maxMatches
-    const filledMatches = matches.filter(m => m.result && m.liga === selectedLiga && m.season === selectedSeason).length;
+    const totalMatches = leagueObj.maxMatches; // Celkový počet zápasů v lize (dle nastavení)
+
+    // 1. Zápasy z databáze (matches.json)
+    let filledMatches = matches.filter(m => m.result && m.isPlayoff === false && m.liga === selectedLiga && m.season === selectedSeason).length;
+
+    // 2. NOVÉ: Připočítat manuální zápasy
+    // (Sečteme manuální zápasy všech týmů a vydělíme 2, protože jeden zápas hrají dva týmy)
+    const totalManualGames = teamsInSelectedLiga.reduce((sum, t) => sum + (t.stats?.[selectedSeason]?.manualGames || 0), 0);
+    filledMatches += Math.floor(totalManualGames / 2);
+
+    // Výpočet procenta
     const percentage = totalMatches > 0 ? Math.round((filledMatches / totalMatches) * 100) : 0;
-    // --- ZBYTEK LEVÉHO PANELU (Playoff) ---
+
     html += `
-            </div>
-            <div id="playoffTablePreview" style="display:none; overflow:auto; max-width:100%;">
-                <table class="points-table"><tr><th scope="col" id="points-table-header" colspan="20"><h2>Týmy - ${selectedLiga} ${selectedSeason} - Playoff</h2></th></tr>
-                ${playoffData.map(row => `<tr>${row.map(c => `<td style="${c.bgColor ? `background:${c.bgColor};` : ''}${c.textColor ? `color:${c.textColor}` : ''}">${c.text}</td>`).join('')}</tr>`).join('')}
-                </table>
-            </div>
-            <section class="progress-section">
-                <h3>Odehráno zápasů v základní části</h3>
-                <div class="progress-container">
-                <div class="progress-bar" style="width:${percentage}%;">${percentage}%</div>
-            </div>
-            <p id="progress-text"></p>
-            </section>
+</table>
+</div>
+<section class="progress-section">
+<h3>Odehráno zápasů v základní části</h3>
+<div class="progress-container">
+<div class="progress-bar" style="width:${percentage}%;">${percentage}%</div>
+</div>
+<p id="progress-text"></p>
+</section>
             <script>
                 function showTable(which) {
                     document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none';
@@ -1244,6 +1276,32 @@ router.get('/', requireLogin, (req, res) => {
     } catch (e) {
     }
 
+
+    let teamBonusData = {};
+    try {
+        teamBonusData = JSON.parse(fs.readFileSync('./data/teamBonuses.json', 'utf8'));
+    } catch (e) { teamBonusData = {}; }
+
+    teamsInSelectedLiga.forEach(t => {
+        // Inicializace, pokud neexistuje
+        if (!t.stats) t.stats = {};
+        if (!t.stats[selectedSeason]) t.stats[selectedSeason] = { points: 0, wins: 0, otWins: 0, otLosses: 0, losses: 0 };
+
+        // Získání reálných bodů ze zápasů
+        let naturalPoints = t.stats[selectedSeason].points || 0;
+
+        // Načtení dat z JSONu (ošetření starého formátu vs. nového objektu)
+        let bonusEntry = teamBonusData[selectedSeason]?.[selectedLiga]?.[t.id] || { points: 0, games: 0 };
+        if (typeof bonusEntry === 'number') bonusEntry = { points: bonusEntry, games: 0 };
+
+        // Aplikace bodů (přičteme k existujícím)
+        t.stats[selectedSeason].points = naturalPoints + (bonusEntry.points || 0);
+
+        // Uložení manuálních zápasů do dočasné proměnné (použijeme později u played a progress baru)
+        t.stats[selectedSeason].manualGames = bonusEntry.games || 0;
+    });
+    // =================================================================
+
     const teamsByGroup = {};
     teamsInSelectedLiga.forEach(team => {
         const group = team.group ? String.fromCharCode(team.group + 64) : 'X';
@@ -1453,7 +1511,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
             for (let i = fromIndex; i < sorted.length; i++) {
                 const chaser = sorted[i];
                 const s = chaser.stats?.[selectedSeason] || {};
-                const played = (s.wins || 0) + (s.otWins || 0) + (s.otLosses || 0) + (s.losses || 0);
+                const played = (s.wins||0) + (s.otWins||0) + (s.otLosses||0) + (s.losses||0) + (s.manualGames || 0);
                 const remaining = Math.max(0, matchesPerTeam - played);
                 const potential = (s.points || 0) + (remaining * 3);
                 if (potential > globalMax) globalMax = potential;
@@ -1479,7 +1537,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
             const currentZone = getTeamZone(index, teamsInGroup.length, zoneConfig);
             const stats = team.stats?.[selectedSeason] || {};
             const myPoints = stats.points || 0;
-            const played = (stats.wins || 0) + (stats.otWins || 0) + (stats.otLosses || 0) + (stats.losses || 0);
+            const played = (stats.wins||0) + (stats.otWins||0) + (stats.otLosses||0) + (stats.losses||0) + (stats.manualGames || 0);
             const remaining = Math.max(0, matchesPerTeam - played);
             const myMaxPoints = myPoints + (remaining * 3);
 
@@ -1491,7 +1549,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
             for (let i = index + 1; i < sorted.length; i++) {
                 const chaser = sorted[i];
                 const s = chaser.stats?.[selectedSeason] || {};
-                const p = (s.wins||0)+(s.otWins||0)+(s.otLosses||0)+(s.losses||0);
+                const p = (s.wins||0) + (s.otWins||0) + (s.otLosses||0) + (s.losses||0) + (s.manualGames || 0);
                 const rem = Math.max(0, matchesPerTeam - p);
                 const chaserMax = (s.points || 0) + (rem * 3);
 
@@ -1689,7 +1747,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
             if (idx >= crossGroupTeams.length) return 0;
             const t = crossGroupTeams[idx];
             const s = t.stats?.[selectedSeason] || {};
-            const played = (s.wins||0)+(s.otWins||0)+(s.otLosses||0)+(s.losses||0);
+            const played = (s.wins||0) + (s.otWins||0) + (s.otLosses||0) + (s.losses||0) + (s.manualGames || 0);
 
             if (isRegularSeasonFinished) return s.points || 0;
 
@@ -1721,7 +1779,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
         crossGroupTeams.forEach((team, index) => {
             const stats = team.stats?.[selectedSeason] || {};
             const myPoints = stats.points || 0;
-            const played = (stats.wins||0)+(stats.otWins||0)+(stats.otLosses||0)+(stats.losses||0);
+            const played = (stats.wins||0) + (stats.otWins||0) + (stats.otLosses||0) + (stats.losses||0) + (stats.manualGames || 0);
 
             // Určení základní Zóny
             let currentZone = "neutral";
@@ -1824,8 +1882,17 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
         html += '</tr>';
     });
 
-    const totalMatches = leagueObj.maxMatches
-    const filledMatches = matches.filter(m => m.result && m.isPlayoff === false && m.liga === selectedLiga && m.season === selectedSeason).length;
+    const totalMatches = leagueObj.maxMatches; // Celkový počet zápasů v lize (dle nastavení)
+
+    // 1. Zápasy z databáze (matches.json)
+    let filledMatches = matches.filter(m => m.result && m.isPlayoff === false && m.liga === selectedLiga && m.season === selectedSeason).length;
+
+    // 2. NOVÉ: Připočítat manuální zápasy
+    // (Sečteme manuální zápasy všech týmů a vydělíme 2, protože jeden zápas hrají dva týmy)
+    const totalManualGames = teamsInSelectedLiga.reduce((sum, t) => sum + (t.stats?.[selectedSeason]?.manualGames || 0), 0);
+    filledMatches += Math.floor(totalManualGames / 2);
+
+    // Výpočet procenta
     const percentage = totalMatches > 0 ? Math.round((filledMatches / totalMatches) * 100) : 0;
 
     html += `
@@ -2135,6 +2202,34 @@ router.get('/history/a', requireLogin, (req, res) => {
         teamIdsInLiga.add(m.awayTeamId);
     });
     const teamsInSelectedLiga = teams.filter(t => teamIdsInLiga.has(t.id));
+
+
+
+    let teamBonusData = {};
+    try {
+        teamBonusData = JSON.parse(fs.readFileSync('./data/teamBonuses.json', 'utf8'));
+    } catch (e) { teamBonusData = {}; }
+
+    teamsInSelectedLiga.forEach(t => {
+        // Inicializace, pokud neexistuje
+        if (!t.stats) t.stats = {};
+        if (!t.stats[selectedSeason]) t.stats[selectedSeason] = { points: 0, wins: 0, otWins: 0, otLosses: 0, losses: 0 };
+
+        // Získání reálných bodů ze zápasů
+        let naturalPoints = t.stats[selectedSeason].points || 0;
+
+        // Načtení dat z JSONu (ošetření starého formátu vs. nového objektu)
+        let bonusEntry = teamBonusData[selectedSeason]?.[selectedLiga]?.[t.id] || { points: 0, games: 0 };
+        if (typeof bonusEntry === 'number') bonusEntry = { points: bonusEntry, games: 0 };
+
+        // Aplikace bodů (přičteme k existujícím)
+        t.stats[selectedSeason].points = naturalPoints + (bonusEntry.points || 0);
+
+        // Uložení manuálních zápasů do dočasné proměnné (použijeme později u played a progress baru)
+        t.stats[selectedSeason].manualGames = bonusEntry.games || 0;
+    });
+    // =================================================================
+
 
     // 3. VÝPOČET REÁLNÉ TABULKY (Potřeba pro statistiky)
     const scores = {};
@@ -2456,7 +2551,7 @@ router.get('/history/a', requireLogin, (req, res) => {
             for (let i = fromIndex; i < sorted.length; i++) {
                 const chaser = sorted[i];
                 const s = chaser.stats?.[selectedSeason] || {};
-                const played = (s.wins || 0) + (s.otWins || 0) + (s.otLosses || 0) + (s.losses || 0);
+                const played = (s.wins||0) + (s.otWins||0) + (s.otLosses||0) + (s.losses||0) + (s.manualGames || 0);
                 const remaining = Math.max(0, matchesPerTeam - played);
                 const potential = (s.points || 0) + (remaining * 3);
                 if (potential > globalMax) globalMax = potential;
@@ -2482,7 +2577,7 @@ router.get('/history/a', requireLogin, (req, res) => {
             const currentZone = getTeamZone(index, teamsInGroup.length, zoneConfig);
             const stats = team.stats?.[selectedSeason] || {};
             const myPoints = stats.points || 0;
-            const played = (stats.wins || 0) + (stats.otWins || 0) + (stats.otLosses || 0) + (stats.losses || 0);
+            const played = (stats.wins||0) + (stats.otWins||0) + (stats.otLosses||0) + (stats.losses||0) + (stats.manualGames || 0);
             const remaining = Math.max(0, matchesPerTeam - played);
             const myMaxPoints = myPoints + (remaining * 3);
 
@@ -2494,7 +2589,7 @@ router.get('/history/a', requireLogin, (req, res) => {
             for (let i = index + 1; i < sorted.length; i++) {
                 const chaser = sorted[i];
                 const s = chaser.stats?.[selectedSeason] || {};
-                const p = (s.wins||0)+(s.otWins||0)+(s.otLosses||0)+(s.losses||0);
+                const p = (s.wins||0) + (s.otWins||0) + (s.otLosses||0) + (s.losses||0) + (s.manualGames || 0);
                 const rem = Math.max(0, matchesPerTeam - p);
                 const chaserMax = (s.points || 0) + (rem * 3);
 
@@ -2692,7 +2787,7 @@ router.get('/history/a', requireLogin, (req, res) => {
             if (idx >= crossGroupTeams.length) return 0;
             const t = crossGroupTeams[idx];
             const s = t.stats?.[selectedSeason] || {};
-            const played = (s.wins||0)+(s.otWins||0)+(s.otLosses||0)+(s.losses||0);
+            const played = (s.wins||0) + (s.otWins||0) + (s.otLosses||0) + (s.losses||0) + (s.manualGames || 0);
 
             if (isRegularSeasonFinished) return s.points || 0;
 
@@ -2724,7 +2819,7 @@ router.get('/history/a', requireLogin, (req, res) => {
         crossGroupTeams.forEach((team, index) => {
             const stats = team.stats?.[selectedSeason] || {};
             const myPoints = stats.points || 0;
-            const played = (stats.wins||0)+(stats.otWins||0)+(stats.otLosses||0)+(stats.losses||0);
+            const played = (stats.wins||0) + (stats.otWins||0) + (stats.otLosses||0) + (stats.losses||0) + (stats.manualGames || 0);
 
             // Určení základní Zóny
             let currentZone = "neutral";
@@ -3025,6 +3120,32 @@ router.get('/history/table', requireLogin, (req, res) => {
         teamIdsInLiga.add(m.awayTeamId);
     });
     const teamsInSelectedLiga = teams.filter(t => teamIdsInLiga.has(t.id));
+
+
+    let teamBonusData = {};
+    try {
+        teamBonusData = JSON.parse(fs.readFileSync('./data/teamBonuses.json', 'utf8'));
+    } catch (e) { teamBonusData = {}; }
+
+    teamsInSelectedLiga.forEach(t => {
+        // Inicializace, pokud neexistuje
+        if (!t.stats) t.stats = {};
+        if (!t.stats[selectedSeason]) t.stats[selectedSeason] = { points: 0, wins: 0, otWins: 0, otLosses: 0, losses: 0 };
+
+        // Získání reálných bodů ze zápasů
+        let naturalPoints = t.stats[selectedSeason].points || 0;
+
+        // Načtení dat z JSONu (ošetření starého formátu vs. nového objektu)
+        let bonusEntry = teamBonusData[selectedSeason]?.[selectedLiga]?.[t.id] || { points: 0, games: 0 };
+        if (typeof bonusEntry === 'number') bonusEntry = { points: bonusEntry, games: 0 };
+
+        // Aplikace bodů (přičteme k existujícím)
+        t.stats[selectedSeason].points = naturalPoints + (bonusEntry.points || 0);
+
+        // Uložení manuálních zápasů do dočasné proměnné (použijeme později u played a progress baru)
+        t.stats[selectedSeason].manualGames = bonusEntry.games || 0;
+    });
+    // =================================================================
 
     // 3. VÝPOČET REÁLNÉ TABULKY
     const scores = {};
@@ -3348,7 +3469,7 @@ router.get('/history/table', requireLogin, (req, res) => {
             for (let i = fromIndex; i < sorted.length; i++) {
                 const chaser = sorted[i];
                 const s = chaser.stats?.[selectedSeason] || {};
-                const played = (s.wins || 0) + (s.otWins || 0) + (s.otLosses || 0) + (s.losses || 0);
+                const played = (s.wins||0) + (s.otWins||0) + (s.otLosses||0) + (s.losses||0) + (s.manualGames || 0);
                 const remaining = Math.max(0, matchesPerTeam - played);
                 const potential = (s.points || 0) + (remaining * 3);
                 if (potential > globalMax) globalMax = potential;
@@ -3374,7 +3495,7 @@ router.get('/history/table', requireLogin, (req, res) => {
             const currentZone = getTeamZone(index, teamsInGroup.length, zoneConfig);
             const stats = team.stats?.[selectedSeason] || {};
             const myPoints = stats.points || 0;
-            const played = (stats.wins || 0) + (stats.otWins || 0) + (stats.otLosses || 0) + (stats.losses || 0);
+            const played = (stats.wins||0) + (stats.otWins||0) + (stats.otLosses||0) + (stats.losses||0) + (stats.manualGames || 0);
             const remaining = Math.max(0, matchesPerTeam - played);
             const myMaxPoints = myPoints + (remaining * 3);
 
@@ -3386,7 +3507,7 @@ router.get('/history/table', requireLogin, (req, res) => {
             for (let i = index + 1; i < sorted.length; i++) {
                 const chaser = sorted[i];
                 const s = chaser.stats?.[selectedSeason] || {};
-                const p = (s.wins||0)+(s.otWins||0)+(s.otLosses||0)+(s.losses||0);
+                const p = (s.wins||0) + (s.otWins||0) + (s.otLosses||0) + (s.losses||0) + (s.manualGames || 0);
                 const rem = Math.max(0, matchesPerTeam - p);
                 const chaserMax = (s.points || 0) + (rem * 3);
 
@@ -3584,7 +3705,7 @@ router.get('/history/table', requireLogin, (req, res) => {
             if (idx >= crossGroupTeams.length) return 0;
             const t = crossGroupTeams[idx];
             const s = t.stats?.[selectedSeason] || {};
-            const played = (s.wins||0)+(s.otWins||0)+(s.otLosses||0)+(s.losses||0);
+            const played = (s.wins||0) + (s.otWins||0) + (s.otLosses||0) + (s.losses||0) + (s.manualGames || 0);
 
             if (isRegularSeasonFinished) return s.points || 0;
 
@@ -3616,7 +3737,7 @@ router.get('/history/table', requireLogin, (req, res) => {
         crossGroupTeams.forEach((team, index) => {
             const stats = team.stats?.[selectedSeason] || {};
             const myPoints = stats.points || 0;
-            const played = (stats.wins||0)+(stats.otWins||0)+(stats.otLosses||0)+(stats.losses||0);
+            const played = (stats.wins||0) + (stats.otWins||0) + (stats.otLosses||0) + (stats.losses||0) + (stats.manualGames || 0);
 
             // Určení základní Zóny
             let currentZone = "neutral";
@@ -3975,6 +4096,33 @@ router.get("/prestupy", requireLogin, (req, res) => {
         console.error("Chyba při načítání playoff dat:", e);
     }
 
+
+
+    let teamBonusData = {};
+    try {
+        teamBonusData = JSON.parse(fs.readFileSync('./data/teamBonuses.json', 'utf8'));
+    } catch (e) { teamBonusData = {}; }
+
+    teamsInSelectedLiga.forEach(t => {
+        // Inicializace, pokud neexistuje
+        if (!t.stats) t.stats = {};
+        if (!t.stats[selectedSeason]) t.stats[selectedSeason] = { points: 0, wins: 0, otWins: 0, otLosses: 0, losses: 0 };
+
+        // Získání reálných bodů ze zápasů
+        let naturalPoints = t.stats[selectedSeason].points || 0;
+
+        // Načtení dat z JSONu (ošetření starého formátu vs. nového objektu)
+        let bonusEntry = teamBonusData[selectedSeason]?.[selectedLiga]?.[t.id] || { points: 0, games: 0 };
+        if (typeof bonusEntry === 'number') bonusEntry = { points: bonusEntry, games: 0 };
+
+        // Aplikace bodů (přičteme k existujícím)
+        t.stats[selectedSeason].points = naturalPoints + (bonusEntry.points || 0);
+
+        // Uložení manuálních zápasů do dočasné proměnné (použijeme později u played a progress baru)
+        t.stats[selectedSeason].manualGames = bonusEntry.games || 0;
+    });
+    // =================================================================
+
     const teamsByGroup = {};
     teamsInSelectedLiga.forEach(team => {
         const group = team.group ? String.fromCharCode(team.group + 64) : 'X';
@@ -4197,7 +4345,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
             for (let i = fromIndex; i < sorted.length; i++) {
                 const chaser = sorted[i];
                 const s = chaser.stats?.[selectedSeason] || {};
-                const played = (s.wins || 0) + (s.otWins || 0) + (s.otLosses || 0) + (s.losses || 0);
+                const played = (s.wins||0) + (s.otWins||0) + (s.otLosses||0) + (s.losses||0) + (s.manualGames || 0);
                 const remaining = Math.max(0, matchesPerTeam - played);
                 const potential = (s.points || 0) + (remaining * 3);
                 if (potential > globalMax) globalMax = potential;
@@ -4223,7 +4371,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
             const currentZone = getTeamZone(index, teamsInGroup.length, zoneConfig);
             const stats = team.stats?.[selectedSeason] || {};
             const myPoints = stats.points || 0;
-            const played = (stats.wins || 0) + (stats.otWins || 0) + (stats.otLosses || 0) + (stats.losses || 0);
+            const played = (stats.wins||0) + (stats.otWins||0) + (stats.otLosses||0) + (stats.losses||0) + (stats.manualGames || 0);
             const remaining = Math.max(0, matchesPerTeam - played);
             const myMaxPoints = myPoints + (remaining * 3);
 
@@ -4235,7 +4383,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
             for (let i = index + 1; i < sorted.length; i++) {
                 const chaser = sorted[i];
                 const s = chaser.stats?.[selectedSeason] || {};
-                const p = (s.wins||0)+(s.otWins||0)+(s.otLosses||0)+(s.losses||0);
+                const p = (s.wins||0) + (s.otWins||0) + (s.otLosses||0) + (s.losses||0) + (s.manualGames || 0);
                 const rem = Math.max(0, matchesPerTeam - p);
                 const chaserMax = (s.points || 0) + (rem * 3);
 
@@ -4433,7 +4581,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
             if (idx >= crossGroupTeams.length) return 0;
             const t = crossGroupTeams[idx];
             const s = t.stats?.[selectedSeason] || {};
-            const played = (s.wins||0)+(s.otWins||0)+(s.otLosses||0)+(s.losses||0);
+            const played = (s.wins||0) + (s.otWins||0) + (s.otLosses||0) + (s.losses||0) + (s.manualGames || 0);
 
             if (isRegularSeasonFinished) return s.points || 0;
 
@@ -4465,7 +4613,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
         crossGroupTeams.forEach((team, index) => {
             const stats = team.stats?.[selectedSeason] || {};
             const myPoints = stats.points || 0;
-            const played = (stats.wins||0)+(stats.otWins||0)+(stats.otLosses||0)+(stats.losses||0);
+            const played = (stats.wins||0) + (stats.otWins||0) + (stats.otLosses||0) + (stats.losses||0) + (stats.manualGames || 0);
 
             // Určení základní Zóny
             let currentZone = "neutral";
@@ -4568,20 +4716,29 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
         });
         html += '</tr>';
     });
-    const totalMatches = leagueObj.maxMatches
-    const filledMatches = matches.filter(m => m.result && m.liga === selectedLiga && m.season === selectedSeason).length;
+    const totalMatches = leagueObj.maxMatches; // Celkový počet zápasů v lize (dle nastavení)
+
+    // 1. Zápasy z databáze (matches.json)
+    let filledMatches = matches.filter(m => m.result && m.isPlayoff === false && m.liga === selectedLiga && m.season === selectedSeason).length;
+
+    // 2. NOVÉ: Připočítat manuální zápasy
+    // (Sečteme manuální zápasy všech týmů a vydělíme 2, protože jeden zápas hrají dva týmy)
+    const totalManualGames = teamsInSelectedLiga.reduce((sum, t) => sum + (t.stats?.[selectedSeason]?.manualGames || 0), 0);
+    filledMatches += Math.floor(totalManualGames / 2);
+
+    // Výpočet procenta
     const percentage = totalMatches > 0 ? Math.round((filledMatches / totalMatches) * 100) : 0;
 
     html += `
-      </table>
-    </div>
-    <section class="progress-section">
-        <h3>Odehráno zápasů v základní části</h3>
-        <div class="progress-container">
-            <div class="progress-bar" style="width:${percentage}%;">${percentage}%</div>
-        </div>
-        <p id="progress-text"></p>
-    </section>
+</table>
+</div>
+<section class="progress-section">
+<h3>Odehráno zápasů v základní části</h3>
+<div class="progress-container">
+<div class="progress-bar" style="width:${percentage}%;">${percentage}%</div>
+</div>
+<p id="progress-text"></p>
+</section>
 
     <script>
     function showTable(which) {

@@ -53,14 +53,7 @@
         "maxMatches": 6,
         "quarterfinal": 1,
         "playin": 3,
-        "relegation": 0,
-        "crossGroupTable": true,
-        "crossGroupPosition": 2,
-        "crossGroupConfig": {
-          "quarterfinal": 1,
-          "playin": 2,
-          "relegation": 0
-        }
+        "relegation": 0
       },
       {
         "name": "Olympiáda",
@@ -68,7 +61,7 @@
         "groupCount": 3,
         "maxMatches": 30,
         "quarterfinal": 1,
-        "playin": 2,
+        "playin": 4,
         "relegation": 0,
         "crossGroupTable": true,
         "crossGroupPosition": 2,

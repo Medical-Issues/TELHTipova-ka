@@ -102,6 +102,7 @@ router.get('/', requireAdmin, (req, res) => {
         <a href="/admin/new/team" class="btn new-btn-admin">Vytvořit nový tým</a>
         <a href="/admin/playoff" class="btn new-btn-admin">Playoff Tabulky</a>
         <a href="/admin/leagues/manage" class="btn new-btn-admin">Správa lig</a>
+        <a href="/admin/teams/points" class="btn new-btn-admin">Manuální body</a>
         <a id="backupBtn" class="btn new-btn-admin">Uložit data uživatelům (pouze pro administrativní účely)</a>
     </div>
   </div>
@@ -1532,6 +1533,134 @@ router.post("/toggle-table-tips-lock", requireAdmin, express.urlencoded({ extend
 
     fs.writeFileSync('./data/leagueStatus.json', JSON.stringify(statusData, null, 2));
     res.redirect('/admin/leagues/manage');
+});
+// ============================================================================
+// ADMIN: MANUÁLNÍ BODY A ZÁPASY TÝMŮ (OPRAVENO)
+// ============================================================================
+
+// GET: Formulář
+// ============================================================================
+// ADMIN: MANUÁLNÍ BODY A ZÁPASY TÝMŮ (ATOMOVÉ ŘEŠENÍ)
+// ============================================================================
+
+// GET: Formulář
+router.get('/teams/points', requireAdmin, (req, res) => {
+    const selectedSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
+    const allSeasonData = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf8'));
+    const teams = JSON.parse(fs.readFileSync('./data/teams.json', 'utf8'));
+
+    // Načteme existující bonusy
+    let bonusData = {};
+    try { bonusData = JSON.parse(fs.readFileSync('./data/teamBonuses.json', 'utf8')); } catch (e) { bonusData = {}; }
+
+    const seasonLeagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues)
+        ? allSeasonData[selectedSeason].leagues
+        : [];
+
+    const selectedLiga = req.query.liga || (seasonLeagues.length > 0 ? seasonLeagues[0].name : null);
+
+    // Filtrujeme týmy
+    const leagueTeams = teams.filter(t => t.liga === selectedLiga && t.active);
+
+    const html = `
+    <!DOCTYPE html>
+    <html lang="cs">
+    <head>
+        <meta charset="UTF-8">
+        <title>Body a Zápasy týmů</title>
+        <link rel="stylesheet" href="/css/styles.css">
+    </head>
+    <body>
+        <h1>Manuální úprava týmů (${selectedSeason})</h1>
+        <form method="GET" action="/admin/teams/points" style="margin-bottom: 20px;">
+            <label>Liga: <select name="liga" onchange="this.form.submit()">
+                ${seasonLeagues.map(l => `<option value="${l.name}" ${l.name === selectedLiga ? 'selected' : ''}>${l.name}</option>`).join('')}
+            </select></label>
+        </form>
+
+        <form method="POST" action="/admin/teams/points">
+            <input type="hidden" name="season" value="${selectedSeason}">
+            <input type="hidden" name="liga" value="${selectedLiga}">
+            <table class="points-table">
+                <thead>
+                    <tr>
+                        <th>Tým (ID)</th>
+                        <th>Extra body (+/-)</th>
+                        <th>Zápasy navíc (+/-)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${leagueTeams.map(t => {
+        const tId = String(t.id);
+
+        // Načtení uložených dat
+        let savedData = { points: 0, games: 0 };
+        if (bonusData[selectedSeason] &&
+            bonusData[selectedSeason][selectedLiga] &&
+            bonusData[selectedSeason][selectedLiga][tId]) {
+
+            let raw = bonusData[selectedSeason][selectedLiga][tId];
+            if (typeof raw === 'number') savedData.points = raw;
+            else savedData = raw;
+        }
+
+        // ZMĚNA: Používáme podtržítka místo závorek, aby to Express nepletl
+        return `
+                        <tr>
+                            <td>
+                                <b>${t.name}</b><br>
+                                <small style="color: grey;">ID: ${tId}</small>
+                            </td>
+                            <td>
+                                <input type="number" name="points_${tId}" value="${savedData.points}" style="width: 80px;">
+                            </td>
+                            <td>
+                                <input type="number" name="games_${tId}" value="${savedData.games}" style="width: 80px;">
+                            </td>
+                        </tr>`;
+    }).join('')}
+                </tbody>
+            </table>
+            <br>
+            <button class="action-btn edit-btn" type="submit">Uložit změny</button>
+        </form>
+        <br>
+        <a href="/admin">Zpět do admina</a>
+    </body>
+    </html>`;
+    res.send(html);
+});
+
+// POST: Uložení (Ruční parsování klíčů)
+router.post('/teams/points', requireAdmin, express.urlencoded({ extended: true }), (req, res) => {
+    const { season, liga } = req.body;
+
+    let bonusData = {};
+    try { bonusData = JSON.parse(fs.readFileSync('./data/teamBonuses.json', 'utf8')); } catch (e) { bonusData = {}; }
+
+    if (!bonusData[season]) bonusData[season] = {};
+    if (!bonusData[season][liga]) bonusData[season][liga] = {};
+
+    // Projdeme všechny položky formuláře
+    // Hledáme klíče, které začínají na "points_"
+    Object.keys(req.body).forEach(key => {
+        if (key.startsWith('points_')) {
+            // Získám ID týmu odříznutím "points_" (prvních 7 znaků)
+            const teamId = key.substring(7);
+
+            const pointsVal = Number(req.body[`points_${teamId}`]) || 0;
+            const gamesVal = Number(req.body[`games_${teamId}`]) || 0;
+
+            // Uložíme pod správné ID
+            bonusData[season][liga][teamId] = {
+                points: pointsVal,
+                games: gamesVal
+            };
+        }
+    });
+
+    fs.writeFileSync('./data/teamBonuses.json', JSON.stringify(bonusData, null, 2));
+    res.redirect(`/admin/teams/points?liga=${encodeURIComponent(liga)}`);
 });
 
 module.exports = router;
