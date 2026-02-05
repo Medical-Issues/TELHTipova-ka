@@ -9,14 +9,72 @@ function loadTeams() {
 
 function requireLogin(req, res, next) {
     if (!req.session.user) {
-        return res.redirect('/auth/login');
+        // Buď přesměrovat:
+        // return res.redirect('/login');
+
+        // Nebo hezká chybová hláška:
+        return res.status(401).send(`
+            <!DOCTYPE html>
+            <html lang="cs">
+            <head>
+                <meta charset="UTF-8">
+                <title>Přihlášení vyžadováno</title>
+                <link rel="icon" href="/images/logo.png">
+                <style>
+                    body { background-color: #121212; color: white; font-family: Arial, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+                    h1 { color: orangered; }
+                    .btn { background: orangered; color: black; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; margin-top: 20px; }
+                    .btn:hover { background: white; }
+                </style>
+            </head>
+            <body>
+                <img src="/images/logo.png" alt="Logo" style="width: 80px; margin-bottom: 20px;">
+                <h1>Musíš se přihlásit</h1>
+                <p>Pro zobrazení této stránky je nutné přihlášení.</p>
+                <a href="/login" class="btn">Přejít na přihlášení</a>
+            </body>
+            </html>
+        `);
     }
     next();
 }
 
 function requireAdmin(req, res, next) {
     if (!req.session.user || req.session.user !== 'Admin') {
-        return res.status(403).send('Přístup odepřen, nejsi admin.');
+        return res.status(403).send(`
+            <!DOCTYPE html>
+            <html lang="cs">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Přístup odepřen</title>
+                
+                <link rel="icon" href="/images/logo.png">
+                
+                <style>
+                    body {
+                        background-color: #121212;
+                        color: white;
+                        font-family: Arial, sans-serif;
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        justify-content: center;
+                        height: 100vh;
+                        margin: 0;
+                    }
+                    h1 { color: orangered; }
+                    a { color: white; text-decoration: underline; }
+                    a:hover { color: orangered; }
+                </style>
+            </head>
+            <body>
+                <img src="/images/logo.png" alt="Logo" style="width: 300px; margin-bottom: 20px;">
+                <h1>403 - Přístup odepřen</h1>
+                <a href="/">Zpět na hlavní stránku</a>
+            </body>
+            </html>
+        `);
     }
     next();
 }
@@ -334,26 +392,6 @@ function getTeamZone(index, totalTeams, cfg) {
     if (pos > totalTeams - cfg.relegation) return "relegation";
     return "neutral";
 }
-
-function getTeamStats(team, season, maxMatches) {
-    if (!team) {
-        return { points: 0, maxPoints: Number.MAX_SAFE_INTEGER, remaining: Number.MAX_SAFE_INTEGER };
-    }
-    const stats = team.stats?.[season] || {};
-    const points = stats.points || 0;
-    const played = (stats.wins || 0) + (stats.otWins || 0) + (stats.otLosses || 0) + (stats.losses || 0);
-
-    let remaining;
-    if (played > maxMatches) {
-        remaining = 0;
-    } else {
-        remaining = maxMatches - played;
-    }
-
-    const maxPoints = points + (remaining * 3);
-    return { points, maxPoints };
-}
-
 const paths = {
     allowedLeagues: path.join(__dirname, '../data/allowedLeagues.json'),
     leagues: path.join(__dirname, '../data/leagues.json'),
@@ -493,64 +531,6 @@ function renameLeagueGlobal(oldName, newName) {
     console.log('🏁 HOTOVO. Všechny ligy přejmenovány.');
 }
 
-function isLockedPosition(index, totalTeams, sortedTeams, cfg, season, maxMatches, allTeamsFinished) {
-    if (cfg.quarterfinal === 0 && cfg.playin === 0 && cfg.relegation === 0) {
-        return false;
-    }
-    if (allTeamsFinished) {
-        return true;
-    }
-    const myTeam = sortedTeams[index];
-    if (!myTeam) return false;
-
-    const { points: myPoints, maxPoints: myMaxPoints } = getTeamStats(myTeam, season, maxMatches);
-
-    const lastQfIndex = cfg.quarterfinal - 1;
-    const lastPlayinIndex = cfg.playin - 1;
-    const firstRelegationIndex = totalTeams - cfg.relegation;
-
-    if (index <= lastQfIndex) {
-        const chaser = sortedTeams[lastQfIndex + 1];
-        if (!chaser) return true;
-
-        const { maxPoints: chaserMaxPoints } = getTeamStats(chaser, season, maxMatches);
-
-        return chaserMaxPoints < myPoints;
-    }
-
-    else if (index <= lastPlayinIndex) {
-        const chaser = sortedTeams[lastPlayinIndex + 1];
-        const cannotFall = !chaser || (getTeamStats(chaser, season, maxMatches).maxPoints < myPoints);
-
-        const leader = sortedTeams[lastQfIndex];
-        const cannotRise = !leader || (myMaxPoints < getTeamStats(leader, season, maxMatches).points);
-
-        return cannotFall && cannotRise;
-    }
-
-    else if (index >= firstRelegationIndex) {
-        const leader = sortedTeams[firstRelegationIndex - 1];
-        if (!leader) return true;
-
-        const { points: leaderPoints } = getTeamStats(leader, season, maxMatches);
-
-        return myMaxPoints < leaderPoints;
-    }
-
-    else {
-        const chaser = sortedTeams[firstRelegationIndex];
-        const cannotFall = !chaser || (getTeamStats(chaser, season, maxMatches).maxPoints < myPoints);
-
-        const leader = sortedTeams[lastPlayinIndex];
-        const cannotRise = !leader || (myMaxPoints < getTeamStats(leader, season, maxMatches).points);
-
-        return cannotFall && cannotRise;
-    }
-}
-// utils/fileUtils.js
-
-// ... tvé existující importy ...
-
 function evaluateRegularSeasonTable(season, liga) {
     const fs = require('fs');
 
@@ -657,6 +637,34 @@ function evaluateRegularSeasonTable(season, liga) {
     fs.writeFileSync('./data/users.json', JSON.stringify(users, null, 2));
 }
 
+function renderErrorHtml(res, message, code = 500) {
+    res.status(code).send(`
+        <!DOCTYPE html>
+        <html lang="cs">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Chyba ${code}</title>
+            <link rel="icon" href="/images/logo.png">
+            <style>
+                body { background-color: #121212; color: white; font-family: Arial, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; }
+                h1 { color: orangered; margin-bottom: 20px; }
+                p { font-size: 1.2em; color: #ccc; margin-bottom: 30px; }
+                a { color: white; text-decoration: none; border: 1px solid orangered; padding: 10px 20px; border-radius: 5px; transition: 0.3s; }
+                a:hover { background-color: orangered; color: black; }
+                .logo { width: 80px; margin-bottom: 20px; }
+            </style>
+        </head>
+        <body>
+            <img src="/images/logo.png" alt="Logo" class="logo">
+            <h1>Jejda, chyba ${code}</h1>
+            <p>${message}</p>
+            <a href="javascript:history.back()">Zpět</a>
+        </body>
+        </html>
+    `);
+}
+
 module.exports = {
     requireLogin,
     requireAdmin,
@@ -668,7 +676,7 @@ module.exports = {
     calculateTeamScores,
     getLeagueZones,
     getTeamZone,
-    isLockedPosition,
     renameLeagueGlobal,
     evaluateRegularSeasonTable,
+    renderErrorHtml,
 }

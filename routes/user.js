@@ -179,8 +179,8 @@ router.get("/table-tip", requireLogin, (req, res) => {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tipovačka</title>
-<link rel="stylesheet" href="./css/styles.css" />
-<link rel="icon" href="./images/logo.png">
+<link rel="stylesheet" href="/css/styles.css" />
+<link rel="icon" href="/images/logo.png">
 </head>
 <body class="usersite">
 <header class="header">
@@ -1370,8 +1370,8 @@ router.get('/', requireLogin, (req, res) => {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tipovačka</title>
-<link rel="stylesheet" href="./css/styles.css" />
-<link rel="icon" href="./images/logo.png">
+<link rel="stylesheet" href="/css/styles.css" />
+<link rel="icon" href="/images/logo.png">
 </head>
 <body class="usersite">
 <header class="header">
@@ -2151,24 +2151,37 @@ sendTip(formData, null, null, null); }); }
 });
 
 router.get('/history', requireLogin, (req, res) => {
-    let matches;
-    try {
-        matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'));
-    } catch (err) {
-        console.error("Chyba při čtení matches.json:", err);
-        return res.status(500).send("Nastala chyba při čtení dat zápasů.");
-    }
+    // Načtení definic lig (aby byly vidět i ty bez zápasů)
+    let allSeasonData = {};
+    try { allSeasonData = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf8')); } catch (err) { console.error(err); }
 
-    const history = [];
+    // Načtení zápasů (pro zpětnou kompatibilitu)
+    let matches = [];
+    try { matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8')); } catch (err) { console.error(err); }
 
-    for (const match of matches) {
-        if (match.liga && match.season) {
-            const key = `${match.season}_${match.liga}`;
-            if (!history.some(entry => entry.key === key)) {
-                history.push({key, season: match.season, liga: match.liga});
+    const historyMap = new Map();
+
+    // 1. Primární zdroj: Definice v leagues.json
+    Object.keys(allSeasonData).forEach(season => {
+        if (allSeasonData[season].leagues) {
+            allSeasonData[season].leagues.forEach(l => {
+                const key = `${season}_${l.name}`;
+                historyMap.set(key, { season, liga: l.name });
+            });
+        }
+    });
+
+    // 2. Záložní zdroj: Zápasy (pokud by něco chybělo v definici)
+    matches.forEach(m => {
+        if (m.liga && m.season) {
+            const key = `${m.season}_${m.liga}`;
+            if (!historyMap.has(key)) {
+                historyMap.set(key, { season: m.season, liga: m.liga });
             }
         }
-    }
+    });
+
+    const history = Array.from(historyMap.values());
 
     let html = `
     <!DOCTYPE html>
@@ -2241,15 +2254,12 @@ router.get('/history/a', requireLogin, (req, res) => {
     } catch (e) {
     }
 
-    // 2. FILTRACE TÝMŮ (Aby tam nebyly týmy co nehrály)
+    // 2. FILTRACE TÝMŮ (Opraveno: Filtruje podle příslušnosti k lize, ne podle zápasů)
     const matchesInLiga = matches.filter(m => m.season === selectedSeason && m.liga === selectedLiga);
-    const teamIdsInLiga = new Set();
-    matchesInLiga.forEach(m => {
-        teamIdsInLiga.add(m.homeTeamId);
-        teamIdsInLiga.add(m.awayTeamId);
-    });
-    const teamsInSelectedLiga = teams.filter(t => teamIdsInLiga.has(t.id));
 
+    // Tady je ta změna: Nebereme ID ze zápasů, ale přímo z definice týmu.
+    // Díky tomu se zobrazí i týmy v lize, která nemá žádné zápasy v matches.json (např. MAXA).
+    const teamsInSelectedLiga = teams.filter(t => t.liga === selectedLiga && t.active);
 
 
     let teamBonusData = {};
@@ -2415,8 +2425,8 @@ router.get('/history/a', requireLogin, (req, res) => {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tipovačka</title>
-<link rel="stylesheet" href="../../css/styles.css" />
-<link rel="icon" href="./images/logo.png">
+<link rel="stylesheet" href="/css/styles.css" />
+<link rel="icon" href="/images/logo.png">
 </head>
 <body class="usersite">
 <header class="header">
@@ -3159,14 +3169,12 @@ router.get('/history/table', requireLogin, (req, res) => {
     } catch (e) {
     }
 
-    // 2. FILTRACE TÝMŮ
+    // 2. FILTRACE TÝMŮ A ZÁPASŮ
+    // Oprava: Filtrujeme týmy podle vlastnosti 'liga', aby se načetly i týmy v MAXA lize (bez zápasů)
+    const teamsInSelectedLiga = teams.filter(t => t.liga === selectedLiga && t.active);
+
+    // Zápasy filtrujeme zvlášť (pro výpočty bodů uživatelů)
     const matchesInLiga = matches.filter(m => m.season === selectedSeason && m.liga === selectedLiga);
-    const teamIdsInLiga = new Set();
-    matchesInLiga.forEach(m => {
-        teamIdsInLiga.add(m.homeTeamId);
-        teamIdsInLiga.add(m.awayTeamId);
-    });
-    const teamsInSelectedLiga = teams.filter(t => teamIdsInLiga.has(t.id));
 
 
     let teamBonusData = {};
@@ -3333,8 +3341,8 @@ router.get('/history/table', requireLogin, (req, res) => {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tipovačka</title>
-<link rel="stylesheet" href="../../css/styles.css" />
-<link rel="icon" href="./images/logo.png">
+<link rel="stylesheet" href="/css/styles.css" />
+<link rel="icon" href="/images/logo.png">
 </head>
 <body class="usersite">
 <header class="header">
@@ -4204,8 +4212,8 @@ router.get("/prestupy", requireLogin, (req, res) => {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tipovačka</title>
-<link rel="stylesheet" href="./css/styles.css" />
-<link rel="icon" href="./images/logo.png">
+<link rel="stylesheet" href="/css/styles.css" />
+<link rel="icon" href="/images/logo.png">
 </head>
 <body class="usersite">
 <header class="header">

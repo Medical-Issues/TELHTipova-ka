@@ -3,6 +3,7 @@ const fs = require("fs");
 const bcrypt = require("bcrypt");
 const express = require("express");
 const router = express.Router();
+const { renderErrorHtml } = require("../utils/fileUtils");
 
 router.get("/register", (req, res) => {
     res.sendFile(path.join(__dirname, "../views/register.html"));
@@ -29,7 +30,7 @@ router.post("/register", async (req, res) => {
         res.redirect('/auth/login');
     } catch (err) {
         console.error(err);
-        res.status(500).send("Něco se pokazilo.");
+        renderErrorHtml(res, "Při registraci nastala chyba. Zkuste to prosím později.");
     }
 });
 
@@ -57,9 +58,8 @@ router.post('/login', async (req, res) => {
     req.session.save((err) => {
         if (err) {
             console.error('Chyba při ukládání session:', err);
-            return res.status(500).send('Nastala chyba při přihlášení.');
+            return renderErrorHtml(res, "Nastala chyba při přihlášení.");
         }
-        res.redirect('/');
     });
 });
 

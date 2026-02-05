@@ -9,7 +9,9 @@ const {
     evaluateAndAssignPoints,
     generateSeasonRange,
     removeTipsForDeletedMatch,
-    renameLeagueGlobal, evaluateRegularSeasonTable,
+    renameLeagueGlobal,
+    evaluateRegularSeasonTable,
+    renderErrorHtml,
 } = require("../utils/fileUtils");
 router.post('/backup', async (req, res) => {
     try {
@@ -320,7 +322,7 @@ document.getElementById('backupBtn').addEventListener('click', async () => {
 
 router.post('/leagues', express.urlencoded({ extended: true }), requireAdmin, (req, res) => {
     const ligaName = req.body.name?.trim();
-    if (!ligaName) return res.send('<p style="color:red;">Název ligy je povinný. <a href="/admin/leagues/manage">Zpět</a></p>');
+    if (!ligaName) return renderErrorHtml(res, "Název ligy je povinný.", 400);
 
     const selectedSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
     const allSeasonData = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf-8'));
@@ -329,7 +331,7 @@ router.post('/leagues', express.urlencoded({ extended: true }), requireAdmin, (r
         : [];
 
     const exists = leagues.some(l => l.name.toLowerCase() === ligaName.toLowerCase());
-    if (exists) return res.send(`<p style="color:red;">Liga <strong>${ligaName}</strong> už existuje. <a href="/admin/leagues/manage">Zpět</a></p>`);
+    if (exists) return renderErrorHtml(res, `Liga ${ligaName} už existuje.`, 400);
 
     const multiGroup = req.body.multiGroup === 'on';
     const groupCount = multiGroup ? parseInt(req.body.groupCount) || 1 : 1;
@@ -360,7 +362,7 @@ router.get('/teams/edit/:id', requireAdmin, (req, res) => {
     const teams = loadTeams();
 
     const team = teams.find(t => t.id === teamId);
-    if (!team) return res.status(404).send("Tým nenalezen");
+    if (!team) return renderErrorHtml(res, "Tým s tímto ID nebyl nalezen.", 404);
     const selectedSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
     const allSeasonData = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf-8'));
     const leagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues)
@@ -433,7 +435,7 @@ router.post('/teams/edit/:id', requireAdmin, (req, res) => {
     const teams = loadTeams();
 
     const teamIndex = teams.findIndex(t => t.id === teamId);
-    if (teamIndex === -1) return res.status(404).send("Tým nenalezen");
+    if (!team) return renderErrorHtml(res, "Tým s tímto ID nebyl nalezen.", 404);
 
     const {name, liga, active, group} = req.body;
 
@@ -690,7 +692,7 @@ router.post('/new/team', requireAdmin, express.urlencoded({extended: true}), (re
     );
 
     if (exists) {
-        return res.send(`<p style="color:red;">Tým <strong>${name}</strong> už v lize <strong>${liga}</strong> existuje. <a href="">Zpět</a></p>`);
+        return renderErrorHtml(res, `Tým <strong>${name}</strong> už v lize <strong>${liga}</strong> existuje.`, 400);
     }
 
     const newTeam = {
@@ -715,7 +717,7 @@ router.get('/edit/:id', requireAdmin, (req, res) => {
     const teams = loadTeams().filter(t => t.active);
 
     const match = matches.find(m => m.id === matchId);
-    if (!match) return res.status(404).send("Zápas nenalezen");
+    if (!match) return renderErrorHtml(res, "Zápas nebyl nalezen.", 404);
 
     const seasonsFromTeams = teams.map(t => t.season).filter(Boolean);
     const seasonsFromMatches = matches.map(m => m.season).filter(Boolean);
@@ -822,7 +824,7 @@ router.post('/edit/:id', requireAdmin, (req, res) => {
     const {homeTeamId, awayTeamId, datetime, season, scoreHome, scoreAway} = req.body;
 
     const matchIndex = matches.findIndex(m => m.id === matchId);
-    if (matchIndex === -1) return res.status(404).send("Zápas nenalezen");
+    if (matchIndex === -1) return renderErrorHtml(res, "Zápas nebyl nalezen.", 404);
 
     const match = matches[matchIndex];
     const liga = match.liga;
@@ -1106,7 +1108,7 @@ router.post('/playoff/save', (req, res) => {
     const { tableData, league, season } = req.body;
 
     if (!tableData || !league || !season) {
-        return res.status(400).send('Chybí data k uložení');
+        return renderErrorHtml(res, "Chybí data k uložení.", 400);
     }
 
     const filePath = path.join(__dirname, '../data/playoff.json');
@@ -1179,7 +1181,7 @@ router.get('/togglePostponed/:id', requireAdmin, (req, res) => {
     const matchId = parseInt(req.params.id);
     const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'));
     const match = matches.find(m => m.id === matchId);
-    if (!match) return res.status(404).send("Zápas nenalezen");
+    if (!match) return renderErrorHtml(res, "Zápas nebyl nalezen.", 404);
 
     match.postponed = !match.postponed;
 
@@ -1468,7 +1470,7 @@ router.post('/leagues/delete', requireAdmin, express.urlencoded({ extended: true
     res.redirect('/admin/leagues/manage');
 });
 router.post("/toggle-regular-season", requireAdmin, (req, res) => {
-    if (req.session.user !== "Admin") return res.status(403).send("Chyba oprávnění.");
+    if (req.session.user !== "Admin") return renderErrorHtml(res, "Nemáte oprávnění k této akci.", 403);
 
     const { season, liga, finished } = req.body; // finished bude true/false
 
