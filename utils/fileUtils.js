@@ -28,10 +28,10 @@ function requireLogin(req, res, next) {
                 </style>
             </head>
             <body>
-                <img src="/images/logo.png" alt="Logo" style="width: 80px; margin-bottom: 20px;">
+                <img src="/images/logo.png" alt="Logo" style="width: 400px; margin-bottom: 20px;">
                 <h1>Musíš se přihlásit</h1>
                 <p>Pro zobrazení této stránky je nutné přihlášení.</p>
-                <a href="/login" class="btn">Přejít na přihlášení</a>
+                <a href="/auth/login" class="btn">Přejít na přihlášení</a>
             </body>
             </html>
         `);
