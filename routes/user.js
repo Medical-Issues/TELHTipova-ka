@@ -120,9 +120,7 @@ router.get("/table-tip", requireLogin, (req, res) => {
     try {
         const raw = fs.readFileSync(playoffPath, 'utf8');
         const allPlayoffs = JSON.parse(raw);
-        if (allPlayoffs[selectedSeason] && allPlayoffs[selectedSeason][selectedLiga]) {
-            playoffData = allPlayoffs[selectedSeason][selectedLiga];
-        }
+        if (allPlayoffs[selectedSeason] && allPlayoffs[selectedSeason][selectedLiga]) playoffData = allPlayoffs[selectedSeason][selectedLiga];
     } catch (e) {
     }
 
@@ -138,19 +136,21 @@ router.get("/table-tip", requireLogin, (req, res) => {
     let teamBonusData = {};
     try {
         teamBonusData = JSON.parse(fs.readFileSync('./data/teamBonuses.json', 'utf8'));
-    } catch (e) { teamBonusData = {}; }
+    } catch (e) {
+        teamBonusData = {};
+    }
 
     teamsInSelectedLiga.forEach(t => {
         // Inicializace, pokud neexistuje
         if (!t.stats) t.stats = {};
-        if (!t.stats[selectedSeason]) t.stats[selectedSeason] = { points: 0, wins: 0, otWins: 0, otLosses: 0, losses: 0 };
+        if (!t.stats[selectedSeason]) t.stats[selectedSeason] = {points: 0, wins: 0, otWins: 0, otLosses: 0, losses: 0};
 
         // Získání reálných bodů ze zápasů
         let naturalPoints = t.stats[selectedSeason].points || 0;
 
         // Načtení dat z JSONu (ošetření starého formátu vs. nového objektu)
-        let bonusEntry = teamBonusData[selectedSeason]?.[selectedLiga]?.[t.id] || { points: 0, games: 0 };
-        if (typeof bonusEntry === 'number') bonusEntry = { points: bonusEntry, games: 0 };
+        let bonusEntry = teamBonusData[selectedSeason]?.[selectedLiga]?.[t.id] || {points: 0, games: 0};
+        if (typeof bonusEntry === 'number') bonusEntry = {points: bonusEntry, games: 0};
 
         // Aplikace bodů (přičteme k existujícím)
         t.stats[selectedSeason].points = naturalPoints + (bonusEntry.points || 0);
@@ -255,20 +255,34 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
                     const isOt = m.result?.ot || m.result?.so || m.ot || m.so;
 
                     let hPts, aPts;
-                    if (sH > sA) { hPts = isOt ? 2 : 3; aPts = isOt ? 1 : 0; }
-                    else if (sA > sH) { aPts = isOt ? 2 : 3; hPts = isOt ? 1 : 0; }
-                    else { hPts=1; aPts=1; }
+                    if (sH > sA) {
+                        hPts = isOt ? 2 : 3;
+                        aPts = isOt ? 1 : 0;
+                    } else if (sA > sH) {
+                        aPts = isOt ? 2 : 3;
+                        hPts = isOt ? 1 : 0;
+                    } else {
+                        hPts = 1;
+                        aPts = 1;
+                    }
 
                     let pts, gf, ga;
-                    if (isHome) { pts = hPts; gf = sH; ga = sA; }
-                    else { pts = aPts; gf = sA; ga = sH; }
+                    if (isHome) {
+                        pts = hPts;
+                        gf = sH;
+                        ga = sA;
+                    } else {
+                        pts = aPts;
+                        gf = sA;
+                        ga = sH;
+                    }
 
                     mPts += pts;
                     mDiff += (gf - ga);
                     mGF += gf;
                 });
 
-                return { pts: mPts, diff: mDiff, gf: mGF };
+                return {pts: mPts, diff: mDiff, gf: mGF};
             };
 
             const msA = getMiniStats(Number(a.id));
@@ -307,8 +321,8 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
             }
 
             // 6. Kritérium: CELKOVÉ SKÓRE
-            const sA = scores[a.id] || {gf:0, ga:0};
-            const sB = scores[b.id] || {gf:0, ga:0};
+            const sA = scores[a.id] || {gf: 0, ga: 0};
+            const sB = scores[b.id] || {gf: 0, ga: 0};
             const diffA = sA.gf - sA.ga;
             const diffB = sB.gf - sB.ga;
             if (diffA !== diffB) return diffB - diffA;
@@ -367,7 +381,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
             for (let i = fromIndex; i < sorted.length; i++) {
                 const chaser = sorted[i];
                 const s = chaser.stats?.[selectedSeason] || {};
-                const played = (s.wins||0) + (s.otWins||0) + (s.otLosses||0) + (s.losses||0) + (s.manualGames || 0);
+                const played = (s.wins || 0) + (s.otWins || 0) + (s.otLosses || 0) + (s.losses || 0) + (s.manualGames || 0);
                 const remaining = Math.max(0, matchesPerTeam - played);
                 const potential = (s.points || 0) + (remaining * 3);
                 if (potential > globalMax) globalMax = potential;
@@ -393,7 +407,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
             const currentZone = getTeamZone(index, teamsInGroup.length, zoneConfig);
             const stats = team.stats?.[selectedSeason] || {};
             const myPoints = stats.points || 0;
-            const played = (stats.wins||0) + (stats.otWins||0) + (stats.otLosses||0) + (stats.losses||0) + (stats.manualGames || 0);
+            const played = (stats.wins || 0) + (stats.otWins || 0) + (stats.otLosses || 0) + (stats.losses || 0) + (stats.manualGames || 0);
             const remaining = Math.max(0, matchesPerTeam - played);
             const myMaxPoints = myPoints + (remaining * 3);
 
@@ -405,7 +419,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
             for (let i = index + 1; i < sorted.length; i++) {
                 const chaser = sorted[i];
                 const s = chaser.stats?.[selectedSeason] || {};
-                const p = (s.wins||0) + (s.otWins||0) + (s.otLosses||0) + (s.losses||0) + (s.manualGames || 0);
+                const p = (s.wins || 0) + (s.otWins || 0) + (s.otLosses || 0) + (s.losses || 0) + (s.manualGames || 0);
                 const rem = Math.max(0, matchesPerTeam - p);
                 const chaserMax = (s.points || 0) + (rem * 3);
 
@@ -429,13 +443,12 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
                 const leader = sorted[index - 1];
                 const leaderStats = leader.stats?.[selectedSeason] || {};
                 const leaderPoints = leaderStats.points || 0;
-                const pL = (leaderStats.wins||0)+(leaderStats.otWins||0)+(leaderStats.otLosses||0)+(leaderStats.losses||0);
+                const pL = (leaderStats.wins || 0) + (leaderStats.otWins || 0) + (leaderStats.otLosses || 0) + (leaderStats.losses || 0);
                 const remL = Math.max(0, matchesPerTeam - pL);
 
                 if (myMaxPoints > leaderPoints) {
                     canRise = true;
-                }
-                else if (myMaxPoints === leaderPoints) {
+                } else if (myMaxPoints === leaderPoints) {
                     if (remaining > 0 || remL > 0) {
                         canRise = true;
                     }
@@ -537,7 +550,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
     // =========================================================
     if (leagueObj.crossGroupTable && crossGroupTeams.length > 0) {
 
-        const crossConfig = leagueObj.crossGroupConfig || { quarterfinal: 0, playin: 0, relegation: 0 };
+        const crossConfig = leagueObj.crossGroupConfig || {quarterfinal: 0, playin: 0, relegation: 0};
 
         html += `<h2 style="text-align: center; margin-top: 30px; border-top: 2px solid #444; padding-top: 20px;">Tabulka týmů na ${leagueObj.crossGroupPosition}. místě</h2>`;
 
@@ -549,8 +562,8 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
             const pB = bStats.points || 0;
             if (pB !== pA) return pB - pA;
 
-            const sA = scores[a.id] || {gf:0, ga:0};
-            const sB = scores[b.id] || {gf:0, ga:0};
+            const sA = scores[a.id] || {gf: 0, ga: 0};
+            const sB = scores[b.id] || {gf: 0, ga: 0};
             const diffA = sA.gf - sA.ga;
             const diffB = sB.gf - sB.ga;
             if (diffA !== diffB) return diffB - diffA;
@@ -603,7 +616,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
             if (idx >= crossGroupTeams.length) return 0;
             const t = crossGroupTeams[idx];
             const s = t.stats?.[selectedSeason] || {};
-            const played = (s.wins||0) + (s.otWins||0) + (s.otLosses||0) + (s.losses||0) + (s.manualGames || 0);
+            const played = (s.wins || 0) + (s.otWins || 0) + (s.otLosses || 0) + (s.losses || 0) + (s.manualGames || 0);
 
             if (isRegularSeasonFinished) return s.points || 0;
 
@@ -635,7 +648,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
         crossGroupTeams.forEach((team, index) => {
             const stats = team.stats?.[selectedSeason] || {};
             const myPoints = stats.points || 0;
-            const played = (stats.wins||0) + (stats.otWins||0) + (stats.otLosses||0) + (stats.losses||0) + (stats.manualGames || 0);
+            const played = (stats.wins || 0) + (stats.otWins || 0) + (stats.otLosses || 0) + (stats.losses || 0) + (stats.manualGames || 0);
 
             // Určení základní Zóny
             let currentZone = "neutral";
@@ -645,19 +658,23 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 
             const remaining = Math.max(0, cMatchesPerTeam - played);
             const myMaxPoints = myPoints + (remaining * 3);
-            const teamStats = scores[team.id] || {gf:0, ga:0};
+            const teamStats = scores[team.id] || {gf: 0, ga: 0};
             const goalDiff = teamStats.gf - teamStats.ga;
 
             // --- STRICT LOCK LOGIKA ---
             let canDrop = false;
             for (let i = index + 1; i < crossGroupTeams.length; i++) {
                 const chaserMax = getCrossTeamPotential(i);
-                if (chaserMax > myPoints) { canDrop = true; break; }
-                const chaserPlayed = (crossGroupTeams[i].stats?.[selectedSeason]?.wins||0) + (crossGroupTeams[i].stats?.[selectedSeason]?.losses||0);
+                if (chaserMax > myPoints) {
+                    canDrop = true;
+                    break;
+                }
+                const chaserPlayed = (crossGroupTeams[i].stats?.[selectedSeason]?.wins || 0) + (crossGroupTeams[i].stats?.[selectedSeason]?.losses || 0);
 
                 // Opravená podmínka pro konec zápasů
                 if (chaserMax === myPoints && !isRegularSeasonFinished && (remaining > 0 || chaserPlayed < cMatchesPerTeam)) {
-                    canDrop = true; break;
+                    canDrop = true;
+                    break;
                 }
             }
 
@@ -718,22 +735,50 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 
         html += `</tbody></table><br>`;
     }
-    const totalMatches = leagueObj.maxMatches; // Celkový počet zápasů v lize (dle nastavení)
-
-    // 1. Zápasy z databáze (matches.json)
-    let filledMatches = matches.filter(m => m.result && m.isPlayoff === false && m.liga === selectedLiga && m.season === selectedSeason).length;
-
-    // 2. NOVÉ: Připočítat manuální zápasy
-    // (Sečteme manuální zápasy všech týmů a vydělíme 2, protože jeden zápas hrají dva týmy)
-    const totalManualGames = teamsInSelectedLiga.reduce((sum, t) => sum + (t.stats?.[selectedSeason]?.manualGames || 0), 0);
-    filledMatches += Math.floor(totalManualGames / 2);
-
-    // Výpočet procenta
-    const percentage = totalMatches > 0 ? Math.round((filledMatches / totalMatches) * 100) : 0;
-
     html += `
+    </div>
+    <div id="playoffTablePreview" style="display:none; overflow:auto; max-width:100%;">
+        <table class="points-table">
+            <tr>
+                <th scope="col" id="points-table-header" colSpan="20"><h2>Týmy - ${selectedLiga} ${selectedSeason} -
+                    Playoff</h2></th>
+            </tr>
+            `;
+            playoffData.forEach((row) => {
+            html += '<tr>';
+            row.forEach(cell => {
+            const bg = cell.bgColor || '';
+            const textColor = cell.textColor || '';
+            const styleParts = [];
+            if (bg) styleParts.push(`background-color:${bg}`);
+            if (textColor) styleParts.push(`color:${textColor}`);
+            const styleAttr = styleParts.length ? ` style="${styleParts.join(';')}"` : '';
+            html += `<td${styleAttr}>${cell.text || ''}</td>`;
+        });
+            html += '</tr>';
+        });
+
+            const totalMatches = leagueObj.maxMatches; // Celkový počet zápasů v lize (dle nastavení)
+
+            // 1. Zápasy z databáze (matches.json)
+            let filledMatches = matches.filter(m => m.result && m.isPlayoff === false && m.liga === selectedLiga &&
+            m.season === selectedSeason).length;
+
+            // 2. NOVÉ: Připočítat manuální zápasy
+            // (Sečteme manuální zápasy všech týmů a vydělíme 2, protože jeden zápas hrají dva týmy)
+            const totalManualGames = teamsInSelectedLiga.reduce((sum, t) => sum +
+            (t.stats?.[selectedSeason]?.manualGames || 0), 0);
+            filledMatches += Math.floor(totalManualGames / 2);
+
+            // Výpočet procenta
+            const percentage = totalMatches > 0 ? Math.round((filledMatches / totalMatches) * 100) : 0;
+
+            html += `
+        </table>
+    </div>
 </table>
 </div>
+
 <section class="progress-section">
 <h3>Odehráno zápasů v základní části</h3>
 <div class="progress-container">
@@ -964,102 +1009,104 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
     }
     // language=HTML
     html += `
-            </form>
+        </form>
         </section>
-    </main>
-    <script>
-        const currentUserUsername = "${username}";
-        const sortableLists = document.querySelectorAll('.sortable-list');
-        let draggedItem = null;
-        let sourceListId = null;
+        </main>
+        <script>
+            const currentUserUsername = "${username}";
+            const sortableLists = document.querySelectorAll('.sortable-list');
+            let draggedItem = null;
+            let sourceListId = null;
 
-        sortableLists.forEach(list => {
-            list.addEventListener('dragstart', (e) => {
-                const item = e.target.closest('.sortable-item');
-                const isDraggable = item && item.getAttribute('draggable') !== 'false';
+            sortableLists.forEach(list => {
+                list.addEventListener('dragstart', (e) => {
+                    const item = e.target.closest('.sortable-item');
+                    const isDraggable = item && item.getAttribute('draggable') !== 'false';
 
-                if (isDraggable) {
-                    draggedItem = item;
-                    sourceListId = list.id;
-                    item.classList.add('dragging');
-                } else {
-                    e.preventDefault();
-                }
-            });
-            
-            list.addEventListener('dragend', (e) => {
-                const item = e.target.closest('.sortable-item');
-                if (item) {
-                    item.classList.remove('dragging');
-                }
-                draggedItem = null;
-                sourceListId = null;
-                updateRanks(list);
-            });
-            
-            list.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                
-                if (list.id === sourceListId) {
-                    const afterElement = getDragAfterElement(list, e.clientY);
-                    if (afterElement == null) {
-                        list.appendChild(draggedItem);
+                    if (isDraggable) {
+                        draggedItem = item;
+                        sourceListId = list.id;
+                        item.classList.add('dragging');
                     } else {
-                        list.insertBefore(draggedItem, afterElement);
+                        e.preventDefault();
                     }
-                }
-            });
-        });
-
-        function getDragAfterElement(container, y) {
-            const draggableElements = [...container.querySelectorAll('.sortable-item:not(.dragging)')];
-            return draggableElements.reduce((closest, child) => {
-                const box = child.getBoundingClientRect();
-                const offset = y - box.top - box.height / 2;
-                if (offset < 0 && offset > closest.offset) return { offset: offset, element: child };
-                else return closest;
-            }, { offset: Number.NEGATIVE_INFINITY }).element;
-        }
-
-        function updateRanks(listContainer) {
-            const items = listContainer.querySelectorAll('.sortable-item');
-            items.forEach((item, index) => {
-                const rs = item.querySelector('.rank-number');
-                if (rs) rs.innerText = (index + 1) + '.';
-            });
-        }
-
-        const saveBtn = document.getElementById('saveBtn');
-        if (saveBtn) {
-            saveBtn.addEventListener('click', () => {
-                if (currentUserUsername === 'Admin') return alert('Admin netipuje.');
-
-                const payloadData = {};
-                document.querySelectorAll('.sortable-list').forEach(list => {
-                    const gKey = list.getAttribute('data-group');
-                    
-                    payloadData[gKey] = Array.from(list.querySelectorAll('.sortable-item'))
-                                     .map(i => parseInt(i.getAttribute('data-id')));
                 });
 
-                fetch('/table-tip', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        liga: '${selectedLiga}',
-                        season: '${selectedSeason}',
-                        teamOrder: payloadData
-                    })
-                }).then(res => {
-                    if(res.ok) { alert('Uloženo!'); location.reload(); }
-                    else if(res.status === 403) alert('Některá ze skupin je zamčena!');
-                    else alert('Chyba.');
+                list.addEventListener('dragend', (e) => {
+                    const item = e.target.closest('.sortable-item');
+                    if (item) {
+                        item.classList.remove('dragging');
+                    }
+                    draggedItem = null;
+                    sourceListId = null;
+                    updateRanks(list);
+                });
+
+                list.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+
+                    if (list.id === sourceListId) {
+                        const afterElement = getDragAfterElement(list, e.clientY);
+                        if (afterElement == null) {
+                            list.appendChild(draggedItem);
+                        } else {
+                            list.insertBefore(draggedItem, afterElement);
+                        }
+                    }
                 });
             });
-        }
-    </script>
-    </body>
-    </html>
+
+            function getDragAfterElement(container, y) {
+                const draggableElements = [...container.querySelectorAll('.sortable-item:not(.dragging)')];
+                return draggableElements.reduce((closest, child) => {
+                    const box = child.getBoundingClientRect();
+                    const offset = y - box.top - box.height / 2;
+                    if (offset < 0 && offset > closest.offset) return {offset: offset, element: child};
+                    else return closest;
+                }, {offset: Number.NEGATIVE_INFINITY}).element;
+            }
+
+            function updateRanks(listContainer) {
+                const items = listContainer.querySelectorAll('.sortable-item');
+                items.forEach((item, index) => {
+                    const rs = item.querySelector('.rank-number');
+                    if (rs) rs.innerText = (index + 1) + '.';
+                });
+            }
+
+            const saveBtn = document.getElementById('saveBtn');
+            if (saveBtn) {
+                saveBtn.addEventListener('click', () => {
+                    if (currentUserUsername === 'Admin') return alert('Admin netipuje.');
+
+                    const payloadData = {};
+                    document.querySelectorAll('.sortable-list').forEach(list => {
+                        const gKey = list.getAttribute('data-group');
+
+                        payloadData[gKey] = Array.from(list.querySelectorAll('.sortable-item'))
+                                .map(i => parseInt(i.getAttribute('data-id')));
+                    });
+
+                    fetch('/table-tip', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            liga: '${selectedLiga}',
+                            season: '${selectedSeason}',
+                            teamOrder: payloadData
+                        })
+                    }).then(res => {
+                        if (res.ok) {
+                            alert('Uloženo!');
+                            location.reload();
+                        } else if (res.status === 403) alert('Některá ze skupin je zamčena!');
+                        else alert('Chyba.');
+                    });
+                });
+            }
+        </script>
+        </body>
+        </html>
     `;
     res.send(html);
 });
