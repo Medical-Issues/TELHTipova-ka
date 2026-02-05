@@ -60,6 +60,9 @@ router.post('/login', async (req, res) => {
             console.error('Chyba při ukládání session:', err);
             return renderErrorHtml(res, "Nastala chyba při přihlášení.");
         }
+
+        res.redirect('/');
+
     });
 });
 
