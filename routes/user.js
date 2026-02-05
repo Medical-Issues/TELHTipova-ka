@@ -181,6 +181,8 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <div id="regularTable">
 `;
 
+    const crossGroupTeams = [];
+
     // --- ZPRACOVÁNÍ TABULEK ---
     for (const group of sortedGroups) {
         const teamsInGroup = teamsByGroup[group];
@@ -287,6 +289,13 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
             return 0;
         });
 
+        // --- ULOŽENÍ TÝMU DO CROSS-TABLE (POKUD JE ZAPNUTO) ---
+        if (leagueObj.crossGroupTable && leagueObj.crossGroupPosition > 0) {
+            const targetIndex = leagueObj.crossGroupPosition - 1;
+            if (teamsInGroup[targetIndex]) {
+                crossGroupTeams.push(teamsInGroup[targetIndex]);
+            }
+        }
 
         html += `
 <table class="points-table">
@@ -460,13 +469,25 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
             else if (clinchedQF) rowClass = 'clinched-quarterfinal';
             else if (clinchedPlayin) rowClass = 'clinched-playin';
 
+            if (leagueObj.crossGroupTable && (index + 1) === leagueObj.crossGroupPosition) {
+                if (locked) {
+                    rowClass = 'clinched-crosstable'; // Přebije 'clinched-playin' atd.
+                }
+            }
+
             if (locked) rowClass += ' locked';
 
             //console.log(`   Final Class: ${rowClass}`);
 
-            const rankClass = currentZone;
+            let rankClass = currentZone;
             const teamStats = scores[team.id] || {gf: 0, ga: 0};
             const goalDiff = teamStats.gf - teamStats.ga;
+
+            // --- SPECIÁLNÍ PODBARVENÍ PRO CROSS-TABLE RANK ---
+
+            if (leagueObj.crossGroupTable && (index + 1) === leagueObj.crossGroupPosition) {
+                rankClass = 'crosstable';
+            }
 
             html += `<tr class="${rowClass}">
 <td class="rank-cell ${rankClass}">${index + 1}.</td>
@@ -481,6 +502,193 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <td class="numbers">${team.stats?.[selectedSeason]?.losses || 0}</td>
 </tr>`;
         });
+        html += `</tbody></table><br>`;
+    }
+
+    // =========================================================
+    // === TABULKA X-TÝCH TÝMŮ (S OPRAVENÝM LOCKOVÁNÍM) ===
+    // =========================================================
+    if (leagueObj.crossGroupTable && crossGroupTeams.length > 0) {
+
+        const crossConfig = leagueObj.crossGroupConfig || { quarterfinal: 0, playin: 0, relegation: 0 };
+
+        html += `<h2 style="text-align: center; margin-top: 30px; border-top: 2px solid #444; padding-top: 20px;">Tabulka týmů na ${leagueObj.crossGroupPosition}. místě</h2>`;
+
+        // 1. Seřazení týmů
+        crossGroupTeams.sort((a, b) => {
+            const aStats = a.stats?.[selectedSeason] || {};
+            const bStats = b.stats?.[selectedSeason] || {};
+            const pA = aStats.points || 0;
+            const pB = bStats.points || 0;
+            if (pB !== pA) return pB - pA;
+
+            const sA = scores[a.id] || {gf:0, ga:0};
+            const sB = scores[b.id] || {gf:0, ga:0};
+            const diffA = sA.gf - sA.ga;
+            const diffB = sB.gf - sB.ga;
+            if (diffA !== diffB) return diffB - diffA;
+            if (sA.gf !== sB.gf) return sB.gf - sA.gf;
+            return 0;
+        });
+
+        html += `
+        <table class="points-table">
+        <thead>
+        <tr><th class="position">Místo</th><th>Tým</th><th class="points">Body</th><th>Skóre</th><th>Rozdíl</th><th>Z</th><th>V</th><th>Vpp</th><th>Ppp</th><th>P</th></tr>
+        </thead>
+        <tbody>`;
+
+        // 2. Limity pro Cross-Table
+        const cQfLimit = crossConfig.quarterfinal || 0;
+        const cPlayinLimit = crossConfig.playin || 0;
+        const cRelLimit = crossConfig.relegation || 0;
+
+        let cTotalAdvancing = 0;
+        if (cPlayinLimit > 0) cTotalAdvancing = cPlayinLimit;
+        else cTotalAdvancing = cQfLimit;
+        cTotalAdvancing = Math.min(cTotalAdvancing, crossGroupTeams.length);
+
+        const cSafeZoneIndex = crossGroupTeams.length - cRelLimit - 1;
+
+        // 3. SPRÁVNÝ VÝPOČET ZÁPASŮ (Stejný jako v horních tabulkách)
+        // Toto zajistí, že systém ví, že po 2 zápasech je konec a má zamknout.
+        let cMatchesPerTeam = 52;
+        if (leagueObj.rounds) {
+            // Pokud je definován počet kol, musíme odhadnout velikost skupiny.
+            // Pro cross-table bereme velikost první skupiny jako referenci, nebo fallback.
+            const estimatedGroupSize = teamsInSelectedLiga.length / (leagueObj.groupCount || 1);
+            cMatchesPerTeam = (Math.ceil(estimatedGroupSize) - 1) * leagueObj.rounds;
+        } else if (leagueObj.isMultigroup) {
+            // Pokud je to multigroup bez rounds, bývá to "každý s každým" ve skupině
+            const estimatedGroupSize = teamsInSelectedLiga.length / (leagueObj.groupCount || 1);
+            cMatchesPerTeam = Math.max(1, Math.ceil(estimatedGroupSize) - 1);
+        } else if (leagueObj.maxMatches) {
+            // Pokud je natvrdo nastaven maxMatches
+            if (leagueObj.maxMatches > 100) {
+                cMatchesPerTeam = Math.ceil((leagueObj.maxMatches * 2) / teamsInSelectedLiga.length);
+            } else {
+                cMatchesPerTeam = leagueObj.maxMatches;
+            }
+        }
+
+        // 4. Pomocné funkce pro potenciál (s opraveným počtem zápasů)
+        const getCrossTeamPotential = (idx) => {
+            if (idx >= crossGroupTeams.length) return 0;
+            const t = crossGroupTeams[idx];
+            const s = t.stats?.[selectedSeason] || {};
+            const played = (s.wins||0)+(s.otWins||0)+(s.otLosses||0)+(s.losses||0);
+
+            if (isRegularSeasonFinished) return s.points || 0;
+
+            const remaining = Math.max(0, cMatchesPerTeam - played);
+            return (s.points || 0) + (remaining * 3);
+        };
+
+        const getCrossMaxPotentialOfZone = (fromIndex) => {
+            let globalMax = 0;
+            if (fromIndex >= crossGroupTeams.length) return 0;
+            for (let i = fromIndex; i < crossGroupTeams.length; i++) {
+                globalMax = Math.max(globalMax, getCrossTeamPotential(i));
+            }
+            return globalMax;
+        };
+
+        // Thresholdy
+        let cThresholdQF = 0;
+        if (cQfLimit > 0 && cQfLimit < crossGroupTeams.length) {
+            cThresholdQF = getCrossMaxPotentialOfZone(cQfLimit);
+        }
+
+        let cThresholdPlayin = 0;
+        if (cTotalAdvancing > 0 && cTotalAdvancing < crossGroupTeams.length) {
+            cThresholdPlayin = getCrossMaxPotentialOfZone(cTotalAdvancing);
+        }
+
+        // 5. Hlavní cyklus
+        crossGroupTeams.forEach((team, index) => {
+            const stats = team.stats?.[selectedSeason] || {};
+            const myPoints = stats.points || 0;
+            const played = (stats.wins||0)+(stats.otWins||0)+(stats.otLosses||0)+(stats.losses||0);
+
+            // Určení základní Zóny
+            let currentZone = "neutral";
+            if (cRelLimit > 0 && index > cSafeZoneIndex) currentZone = "relegation";
+            else if (cQfLimit > 0 && index < cQfLimit) currentZone = "quarterfinal";
+            else if (cTotalAdvancing > 0 && index < cTotalAdvancing) currentZone = "playin";
+
+            const remaining = Math.max(0, cMatchesPerTeam - played);
+            const myMaxPoints = myPoints + (remaining * 3);
+            const teamStats = scores[team.id] || {gf:0, ga:0};
+            const goalDiff = teamStats.gf - teamStats.ga;
+
+            // --- STRICT LOCK LOGIKA ---
+            let canDrop = false;
+            for (let i = index + 1; i < crossGroupTeams.length; i++) {
+                const chaserMax = getCrossTeamPotential(i);
+                if (chaserMax > myPoints) { canDrop = true; break; }
+                const chaserPlayed = (crossGroupTeams[i].stats?.[selectedSeason]?.wins||0) + (crossGroupTeams[i].stats?.[selectedSeason]?.losses||0);
+
+                // Opravená podmínka pro konec zápasů
+                if (chaserMax === myPoints && !isRegularSeasonFinished && (remaining > 0 || chaserPlayed < cMatchesPerTeam)) {
+                    canDrop = true; break;
+                }
+            }
+
+            let canRise = false;
+            if (index > 0) {
+                const prevTeamCurrentPoints = crossGroupTeams[index - 1].stats?.[selectedSeason]?.points || 0;
+                if (myMaxPoints > prevTeamCurrentPoints) canRise = true;
+                if (myMaxPoints === prevTeamCurrentPoints && !isRegularSeasonFinished && remaining > 0) {
+                    canRise = true;
+                }
+            }
+
+            const cLocked = !canDrop && !canRise;
+
+            // --- CLINCHED LOGIKA ---
+            let cSafeQF = false;
+            let cSafePlayin = false;
+            let cRelegated = false;
+
+            if (cLocked) {
+                if (cQfLimit > 0 && index < cQfLimit) cSafeQF = true;
+                else if (cTotalAdvancing > 0 && index < cTotalAdvancing) cSafePlayin = true;
+
+                if (cRelLimit > 0 && index > cSafeZoneIndex) {
+                    if (!cSafeQF && !cSafePlayin) cRelegated = true;
+                }
+            } else {
+                if (cQfLimit > 0 && myPoints > cThresholdQF) cSafeQF = true;
+                else if (cTotalAdvancing > 0 && myPoints > cThresholdPlayin) cSafePlayin = true;
+
+                if (cRelLimit > 0 && index > cSafeZoneIndex) {
+                    const safetyTarget = crossGroupTeams[cSafeZoneIndex]?.stats?.[selectedSeason]?.points || 0;
+                    if (myMaxPoints < safetyTarget) cRelegated = true;
+                }
+            }
+
+            // Aplikace tříd
+            let rowClass = currentZone;
+            if (cRelegated) rowClass = "clinched-relegation";
+            else if (cSafeQF) rowClass = "clinched-quarterfinal";
+            else if (cSafePlayin) rowClass = "clinched-playin";
+
+            if (cLocked) rowClass += " locked";
+
+            html += `<tr class="${rowClass}">
+                <td class="rank-cell ${currentZone}">${index + 1}.</td>
+                <td>${team.name}</td>
+                <td class="points numbers">${myPoints}</td>
+                <td class="numbers">${teamStats.gf}:${teamStats.ga}</td>
+                <td class="numbers">${goalDiff > 0 ? '+' + goalDiff : goalDiff}</td>
+                <td class="numbers">${played}</td>
+                <td class="numbers">${stats.wins || 0}</td>
+                <td class="numbers">${stats.otWins || 0}</td>
+                <td class="numbers">${stats.otLosses || 0}</td>
+                <td class="numbers">${stats.losses || 0}</td>
+            </tr>`;
+        });
+
         html += `</tbody></table><br>`;
     }
     const totalMatches = leagueObj.maxMatches
@@ -1086,6 +1294,8 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <div id="regularTable">
 `;
 
+    const crossGroupTeams = [];
+
     // --- ZPRACOVÁNÍ TABULEK ---
     for (const group of sortedGroups) {
         const teamsInGroup = teamsByGroup[group];
@@ -1192,6 +1402,13 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
             return 0;
         });
 
+        // --- ULOŽENÍ TÝMU DO CROSS-TABLE (POKUD JE ZAPNUTO) ---
+        if (leagueObj.crossGroupTable && leagueObj.crossGroupPosition > 0) {
+            const targetIndex = leagueObj.crossGroupPosition - 1;
+            if (teamsInGroup[targetIndex]) {
+                crossGroupTeams.push(teamsInGroup[targetIndex]);
+            }
+        }
 
         html += `
 <table class="points-table">
@@ -1365,13 +1582,25 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
             else if (clinchedQF) rowClass = 'clinched-quarterfinal';
             else if (clinchedPlayin) rowClass = 'clinched-playin';
 
+            if (leagueObj.crossGroupTable && (index + 1) === leagueObj.crossGroupPosition) {
+                if (locked) {
+                    rowClass = 'clinched-crosstable'; // Přebije 'clinched-playin' atd.
+                }
+            }
+
             if (locked) rowClass += ' locked';
 
             //console.log(`   Final Class: ${rowClass}`);
 
-            const rankClass = currentZone;
+            let rankClass = currentZone;
             const teamStats = scores[team.id] || {gf: 0, ga: 0};
             const goalDiff = teamStats.gf - teamStats.ga;
+
+            // --- SPECIÁLNÍ PODBARVENÍ PRO CROSS-TABLE RANK ---
+
+            if (leagueObj.crossGroupTable && (index + 1) === leagueObj.crossGroupPosition) {
+                rankClass = 'crosstable';
+            }
 
             html += `<tr class="${rowClass}">
 <td class="rank-cell ${rankClass}">${index + 1}.</td>
@@ -1386,6 +1615,193 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <td class="numbers">${team.stats?.[selectedSeason]?.losses || 0}</td>
 </tr>`;
         });
+        html += `</tbody></table><br>`;
+    }
+
+    // =========================================================
+    // === TABULKA X-TÝCH TÝMŮ (S OPRAVENÝM LOCKOVÁNÍM) ===
+    // =========================================================
+    if (leagueObj.crossGroupTable && crossGroupTeams.length > 0) {
+
+        const crossConfig = leagueObj.crossGroupConfig || { quarterfinal: 0, playin: 0, relegation: 0 };
+
+        html += `<h2 style="text-align: center; margin-top: 30px; border-top: 2px solid #444; padding-top: 20px;">Tabulka týmů na ${leagueObj.crossGroupPosition}. místě</h2>`;
+
+        // 1. Seřazení týmů
+        crossGroupTeams.sort((a, b) => {
+            const aStats = a.stats?.[selectedSeason] || {};
+            const bStats = b.stats?.[selectedSeason] || {};
+            const pA = aStats.points || 0;
+            const pB = bStats.points || 0;
+            if (pB !== pA) return pB - pA;
+
+            const sA = scores[a.id] || {gf:0, ga:0};
+            const sB = scores[b.id] || {gf:0, ga:0};
+            const diffA = sA.gf - sA.ga;
+            const diffB = sB.gf - sB.ga;
+            if (diffA !== diffB) return diffB - diffA;
+            if (sA.gf !== sB.gf) return sB.gf - sA.gf;
+            return 0;
+        });
+
+        html += `
+        <table class="points-table">
+        <thead>
+        <tr><th class="position">Místo</th><th>Tým</th><th class="points">Body</th><th>Skóre</th><th>Rozdíl</th><th>Z</th><th>V</th><th>Vpp</th><th>Ppp</th><th>P</th></tr>
+        </thead>
+        <tbody>`;
+
+        // 2. Limity pro Cross-Table
+        const cQfLimit = crossConfig.quarterfinal || 0;
+        const cPlayinLimit = crossConfig.playin || 0;
+        const cRelLimit = crossConfig.relegation || 0;
+
+        let cTotalAdvancing = 0;
+        if (cPlayinLimit > 0) cTotalAdvancing = cPlayinLimit;
+        else cTotalAdvancing = cQfLimit;
+        cTotalAdvancing = Math.min(cTotalAdvancing, crossGroupTeams.length);
+
+        const cSafeZoneIndex = crossGroupTeams.length - cRelLimit - 1;
+
+        // 3. SPRÁVNÝ VÝPOČET ZÁPASŮ (Stejný jako v horních tabulkách)
+        // Toto zajistí, že systém ví, že po 2 zápasech je konec a má zamknout.
+        let cMatchesPerTeam = 52;
+        if (leagueObj.rounds) {
+            // Pokud je definován počet kol, musíme odhadnout velikost skupiny.
+            // Pro cross-table bereme velikost první skupiny jako referenci, nebo fallback.
+            const estimatedGroupSize = teamsInSelectedLiga.length / (leagueObj.groupCount || 1);
+            cMatchesPerTeam = (Math.ceil(estimatedGroupSize) - 1) * leagueObj.rounds;
+        } else if (leagueObj.isMultigroup) {
+            // Pokud je to multigroup bez rounds, bývá to "každý s každým" ve skupině
+            const estimatedGroupSize = teamsInSelectedLiga.length / (leagueObj.groupCount || 1);
+            cMatchesPerTeam = Math.max(1, Math.ceil(estimatedGroupSize) - 1);
+        } else if (leagueObj.maxMatches) {
+            // Pokud je natvrdo nastaven maxMatches
+            if (leagueObj.maxMatches > 100) {
+                cMatchesPerTeam = Math.ceil((leagueObj.maxMatches * 2) / teamsInSelectedLiga.length);
+            } else {
+                cMatchesPerTeam = leagueObj.maxMatches;
+            }
+        }
+
+        // 4. Pomocné funkce pro potenciál (s opraveným počtem zápasů)
+        const getCrossTeamPotential = (idx) => {
+            if (idx >= crossGroupTeams.length) return 0;
+            const t = crossGroupTeams[idx];
+            const s = t.stats?.[selectedSeason] || {};
+            const played = (s.wins||0)+(s.otWins||0)+(s.otLosses||0)+(s.losses||0);
+
+            if (isRegularSeasonFinished) return s.points || 0;
+
+            const remaining = Math.max(0, cMatchesPerTeam - played);
+            return (s.points || 0) + (remaining * 3);
+        };
+
+        const getCrossMaxPotentialOfZone = (fromIndex) => {
+            let globalMax = 0;
+            if (fromIndex >= crossGroupTeams.length) return 0;
+            for (let i = fromIndex; i < crossGroupTeams.length; i++) {
+                globalMax = Math.max(globalMax, getCrossTeamPotential(i));
+            }
+            return globalMax;
+        };
+
+        // Thresholdy
+        let cThresholdQF = 0;
+        if (cQfLimit > 0 && cQfLimit < crossGroupTeams.length) {
+            cThresholdQF = getCrossMaxPotentialOfZone(cQfLimit);
+        }
+
+        let cThresholdPlayin = 0;
+        if (cTotalAdvancing > 0 && cTotalAdvancing < crossGroupTeams.length) {
+            cThresholdPlayin = getCrossMaxPotentialOfZone(cTotalAdvancing);
+        }
+
+        // 5. Hlavní cyklus
+        crossGroupTeams.forEach((team, index) => {
+            const stats = team.stats?.[selectedSeason] || {};
+            const myPoints = stats.points || 0;
+            const played = (stats.wins||0)+(stats.otWins||0)+(stats.otLosses||0)+(stats.losses||0);
+
+            // Určení základní Zóny
+            let currentZone = "neutral";
+            if (cRelLimit > 0 && index > cSafeZoneIndex) currentZone = "relegation";
+            else if (cQfLimit > 0 && index < cQfLimit) currentZone = "quarterfinal";
+            else if (cTotalAdvancing > 0 && index < cTotalAdvancing) currentZone = "playin";
+
+            const remaining = Math.max(0, cMatchesPerTeam - played);
+            const myMaxPoints = myPoints + (remaining * 3);
+            const teamStats = scores[team.id] || {gf:0, ga:0};
+            const goalDiff = teamStats.gf - teamStats.ga;
+
+            // --- STRICT LOCK LOGIKA ---
+            let canDrop = false;
+            for (let i = index + 1; i < crossGroupTeams.length; i++) {
+                const chaserMax = getCrossTeamPotential(i);
+                if (chaserMax > myPoints) { canDrop = true; break; }
+                const chaserPlayed = (crossGroupTeams[i].stats?.[selectedSeason]?.wins||0) + (crossGroupTeams[i].stats?.[selectedSeason]?.losses||0);
+
+                // Opravená podmínka pro konec zápasů
+                if (chaserMax === myPoints && !isRegularSeasonFinished && (remaining > 0 || chaserPlayed < cMatchesPerTeam)) {
+                    canDrop = true; break;
+                }
+            }
+
+            let canRise = false;
+            if (index > 0) {
+                const prevTeamCurrentPoints = crossGroupTeams[index - 1].stats?.[selectedSeason]?.points || 0;
+                if (myMaxPoints > prevTeamCurrentPoints) canRise = true;
+                if (myMaxPoints === prevTeamCurrentPoints && !isRegularSeasonFinished && remaining > 0) {
+                    canRise = true;
+                }
+            }
+
+            const cLocked = !canDrop && !canRise;
+
+            // --- CLINCHED LOGIKA ---
+            let cSafeQF = false;
+            let cSafePlayin = false;
+            let cRelegated = false;
+
+            if (cLocked) {
+                if (cQfLimit > 0 && index < cQfLimit) cSafeQF = true;
+                else if (cTotalAdvancing > 0 && index < cTotalAdvancing) cSafePlayin = true;
+
+                if (cRelLimit > 0 && index > cSafeZoneIndex) {
+                    if (!cSafeQF && !cSafePlayin) cRelegated = true;
+                }
+            } else {
+                if (cQfLimit > 0 && myPoints > cThresholdQF) cSafeQF = true;
+                else if (cTotalAdvancing > 0 && myPoints > cThresholdPlayin) cSafePlayin = true;
+
+                if (cRelLimit > 0 && index > cSafeZoneIndex) {
+                    const safetyTarget = crossGroupTeams[cSafeZoneIndex]?.stats?.[selectedSeason]?.points || 0;
+                    if (myMaxPoints < safetyTarget) cRelegated = true;
+                }
+            }
+
+            // Aplikace tříd
+            let rowClass = currentZone;
+            if (cRelegated) rowClass = "clinched-relegation";
+            else if (cSafeQF) rowClass = "clinched-quarterfinal";
+            else if (cSafePlayin) rowClass = "clinched-playin";
+
+            if (cLocked) rowClass += " locked";
+
+            html += `<tr class="${rowClass}">
+                <td class="rank-cell ${currentZone}">${index + 1}.</td>
+                <td>${team.name}</td>
+                <td class="points numbers">${myPoints}</td>
+                <td class="numbers">${teamStats.gf}:${teamStats.ga}</td>
+                <td class="numbers">${goalDiff > 0 ? '+' + goalDiff : goalDiff}</td>
+                <td class="numbers">${played}</td>
+                <td class="numbers">${stats.wins || 0}</td>
+                <td class="numbers">${stats.otWins || 0}</td>
+                <td class="numbers">${stats.otLosses || 0}</td>
+                <td class="numbers">${stats.losses || 0}</td>
+            </tr>`;
+        });
+
         html += `</tbody></table><br>`;
     }
 
@@ -1843,6 +2259,12 @@ router.get('/history/a', requireLogin, (req, res) => {
 
     const sortedGroups = Object.keys(teamsByGroup).sort();
 
+    let isRegularSeasonFinished = false;
+    try {
+        const statusData = JSON.parse(fs.readFileSync('./data/leagueStatus.json', 'utf8'));
+        isRegularSeasonFinished = statusData?.[selectedSeason]?.[selectedLiga]?.regularSeasonFinished || false;
+    } catch (e) {
+    }
 // --- HTML START ---
     let html = `
 <!DOCTYPE html>
@@ -1874,6 +2296,8 @@ router.get('/history/a', requireLogin, (req, res) => {
 </div>
 <div id="regularTable">
 `;
+
+    const crossGroupTeams = [];
 
     // --- ZPRACOVÁNÍ TABULEK ---
     for (const group of sortedGroups) {
@@ -1981,6 +2405,13 @@ router.get('/history/a', requireLogin, (req, res) => {
             return 0;
         });
 
+        // --- ULOŽENÍ TÝMU DO CROSS-TABLE (POKUD JE ZAPNUTO) ---
+        if (leagueObj.crossGroupTable && leagueObj.crossGroupPosition > 0) {
+            const targetIndex = leagueObj.crossGroupPosition - 1;
+            if (teamsInGroup[targetIndex]) {
+                crossGroupTeams.push(teamsInGroup[targetIndex]);
+            }
+        }
 
         html += `
 <table class="points-table">
@@ -2154,13 +2585,25 @@ router.get('/history/a', requireLogin, (req, res) => {
             else if (clinchedQF) rowClass = 'clinched-quarterfinal';
             else if (clinchedPlayin) rowClass = 'clinched-playin';
 
+            if (leagueObj.crossGroupTable && (index + 1) === leagueObj.crossGroupPosition) {
+                if (locked) {
+                    rowClass = 'clinched-crosstable'; // Přebije 'clinched-playin' atd.
+                }
+            }
+
             if (locked) rowClass += ' locked';
 
             //console.log(`   Final Class: ${rowClass}`);
 
-            const rankClass = currentZone;
+            let rankClass = currentZone;
             const teamStats = scores[team.id] || {gf: 0, ga: 0};
             const goalDiff = teamStats.gf - teamStats.ga;
+
+            // --- SPECIÁLNÍ PODBARVENÍ PRO CROSS-TABLE RANK ---
+
+            if (leagueObj.crossGroupTable && (index + 1) === leagueObj.crossGroupPosition) {
+                rankClass = 'crosstable';
+            }
 
             html += `<tr class="${rowClass}">
 <td class="rank-cell ${rankClass}">${index + 1}.</td>
@@ -2175,6 +2618,193 @@ router.get('/history/a', requireLogin, (req, res) => {
 <td class="numbers">${team.stats?.[selectedSeason]?.losses || 0}</td>
 </tr>`;
         });
+        html += `</tbody></table><br>`;
+    }
+
+    // =========================================================
+    // === TABULKA X-TÝCH TÝMŮ (S OPRAVENÝM LOCKOVÁNÍM) ===
+    // =========================================================
+    if (leagueObj.crossGroupTable && crossGroupTeams.length > 0) {
+
+        const crossConfig = leagueObj.crossGroupConfig || { quarterfinal: 0, playin: 0, relegation: 0 };
+
+        html += `<h2 style="text-align: center; margin-top: 30px; border-top: 2px solid #444; padding-top: 20px;">Tabulka týmů na ${leagueObj.crossGroupPosition}. místě</h2>`;
+
+        // 1. Seřazení týmů
+        crossGroupTeams.sort((a, b) => {
+            const aStats = a.stats?.[selectedSeason] || {};
+            const bStats = b.stats?.[selectedSeason] || {};
+            const pA = aStats.points || 0;
+            const pB = bStats.points || 0;
+            if (pB !== pA) return pB - pA;
+
+            const sA = scores[a.id] || {gf:0, ga:0};
+            const sB = scores[b.id] || {gf:0, ga:0};
+            const diffA = sA.gf - sA.ga;
+            const diffB = sB.gf - sB.ga;
+            if (diffA !== diffB) return diffB - diffA;
+            if (sA.gf !== sB.gf) return sB.gf - sA.gf;
+            return 0;
+        });
+
+        html += `
+        <table class="points-table">
+        <thead>
+        <tr><th class="position">Místo</th><th>Tým</th><th class="points">Body</th><th>Skóre</th><th>Rozdíl</th><th>Z</th><th>V</th><th>Vpp</th><th>Ppp</th><th>P</th></tr>
+        </thead>
+        <tbody>`;
+
+        // 2. Limity pro Cross-Table
+        const cQfLimit = crossConfig.quarterfinal || 0;
+        const cPlayinLimit = crossConfig.playin || 0;
+        const cRelLimit = crossConfig.relegation || 0;
+
+        let cTotalAdvancing = 0;
+        if (cPlayinLimit > 0) cTotalAdvancing = cPlayinLimit;
+        else cTotalAdvancing = cQfLimit;
+        cTotalAdvancing = Math.min(cTotalAdvancing, crossGroupTeams.length);
+
+        const cSafeZoneIndex = crossGroupTeams.length - cRelLimit - 1;
+
+        // 3. SPRÁVNÝ VÝPOČET ZÁPASŮ (Stejný jako v horních tabulkách)
+        // Toto zajistí, že systém ví, že po 2 zápasech je konec a má zamknout.
+        let cMatchesPerTeam = 52;
+        if (leagueObj.rounds) {
+            // Pokud je definován počet kol, musíme odhadnout velikost skupiny.
+            // Pro cross-table bereme velikost první skupiny jako referenci, nebo fallback.
+            const estimatedGroupSize = teamsInSelectedLiga.length / (leagueObj.groupCount || 1);
+            cMatchesPerTeam = (Math.ceil(estimatedGroupSize) - 1) * leagueObj.rounds;
+        } else if (leagueObj.isMultigroup) {
+            // Pokud je to multigroup bez rounds, bývá to "každý s každým" ve skupině
+            const estimatedGroupSize = teamsInSelectedLiga.length / (leagueObj.groupCount || 1);
+            cMatchesPerTeam = Math.max(1, Math.ceil(estimatedGroupSize) - 1);
+        } else if (leagueObj.maxMatches) {
+            // Pokud je natvrdo nastaven maxMatches
+            if (leagueObj.maxMatches > 100) {
+                cMatchesPerTeam = Math.ceil((leagueObj.maxMatches * 2) / teamsInSelectedLiga.length);
+            } else {
+                cMatchesPerTeam = leagueObj.maxMatches;
+            }
+        }
+
+        // 4. Pomocné funkce pro potenciál (s opraveným počtem zápasů)
+        const getCrossTeamPotential = (idx) => {
+            if (idx >= crossGroupTeams.length) return 0;
+            const t = crossGroupTeams[idx];
+            const s = t.stats?.[selectedSeason] || {};
+            const played = (s.wins||0)+(s.otWins||0)+(s.otLosses||0)+(s.losses||0);
+
+            if (isRegularSeasonFinished) return s.points || 0;
+
+            const remaining = Math.max(0, cMatchesPerTeam - played);
+            return (s.points || 0) + (remaining * 3);
+        };
+
+        const getCrossMaxPotentialOfZone = (fromIndex) => {
+            let globalMax = 0;
+            if (fromIndex >= crossGroupTeams.length) return 0;
+            for (let i = fromIndex; i < crossGroupTeams.length; i++) {
+                globalMax = Math.max(globalMax, getCrossTeamPotential(i));
+            }
+            return globalMax;
+        };
+
+        // Thresholdy
+        let cThresholdQF = 0;
+        if (cQfLimit > 0 && cQfLimit < crossGroupTeams.length) {
+            cThresholdQF = getCrossMaxPotentialOfZone(cQfLimit);
+        }
+
+        let cThresholdPlayin = 0;
+        if (cTotalAdvancing > 0 && cTotalAdvancing < crossGroupTeams.length) {
+            cThresholdPlayin = getCrossMaxPotentialOfZone(cTotalAdvancing);
+        }
+
+        // 5. Hlavní cyklus
+        crossGroupTeams.forEach((team, index) => {
+            const stats = team.stats?.[selectedSeason] || {};
+            const myPoints = stats.points || 0;
+            const played = (stats.wins||0)+(stats.otWins||0)+(stats.otLosses||0)+(stats.losses||0);
+
+            // Určení základní Zóny
+            let currentZone = "neutral";
+            if (cRelLimit > 0 && index > cSafeZoneIndex) currentZone = "relegation";
+            else if (cQfLimit > 0 && index < cQfLimit) currentZone = "quarterfinal";
+            else if (cTotalAdvancing > 0 && index < cTotalAdvancing) currentZone = "playin";
+
+            const remaining = Math.max(0, cMatchesPerTeam - played);
+            const myMaxPoints = myPoints + (remaining * 3);
+            const teamStats = scores[team.id] || {gf:0, ga:0};
+            const goalDiff = teamStats.gf - teamStats.ga;
+
+            // --- STRICT LOCK LOGIKA ---
+            let canDrop = false;
+            for (let i = index + 1; i < crossGroupTeams.length; i++) {
+                const chaserMax = getCrossTeamPotential(i);
+                if (chaserMax > myPoints) { canDrop = true; break; }
+                const chaserPlayed = (crossGroupTeams[i].stats?.[selectedSeason]?.wins||0) + (crossGroupTeams[i].stats?.[selectedSeason]?.losses||0);
+
+                // Opravená podmínka pro konec zápasů
+                if (chaserMax === myPoints && !isRegularSeasonFinished && (remaining > 0 || chaserPlayed < cMatchesPerTeam)) {
+                    canDrop = true; break;
+                }
+            }
+
+            let canRise = false;
+            if (index > 0) {
+                const prevTeamCurrentPoints = crossGroupTeams[index - 1].stats?.[selectedSeason]?.points || 0;
+                if (myMaxPoints > prevTeamCurrentPoints) canRise = true;
+                if (myMaxPoints === prevTeamCurrentPoints && !isRegularSeasonFinished && remaining > 0) {
+                    canRise = true;
+                }
+            }
+
+            const cLocked = !canDrop && !canRise;
+
+            // --- CLINCHED LOGIKA ---
+            let cSafeQF = false;
+            let cSafePlayin = false;
+            let cRelegated = false;
+
+            if (cLocked) {
+                if (cQfLimit > 0 && index < cQfLimit) cSafeQF = true;
+                else if (cTotalAdvancing > 0 && index < cTotalAdvancing) cSafePlayin = true;
+
+                if (cRelLimit > 0 && index > cSafeZoneIndex) {
+                    if (!cSafeQF && !cSafePlayin) cRelegated = true;
+                }
+            } else {
+                if (cQfLimit > 0 && myPoints > cThresholdQF) cSafeQF = true;
+                else if (cTotalAdvancing > 0 && myPoints > cThresholdPlayin) cSafePlayin = true;
+
+                if (cRelLimit > 0 && index > cSafeZoneIndex) {
+                    const safetyTarget = crossGroupTeams[cSafeZoneIndex]?.stats?.[selectedSeason]?.points || 0;
+                    if (myMaxPoints < safetyTarget) cRelegated = true;
+                }
+            }
+
+            // Aplikace tříd
+            let rowClass = currentZone;
+            if (cRelegated) rowClass = "clinched-relegation";
+            else if (cSafeQF) rowClass = "clinched-quarterfinal";
+            else if (cSafePlayin) rowClass = "clinched-playin";
+
+            if (cLocked) rowClass += " locked";
+
+            html += `<tr class="${rowClass}">
+                <td class="rank-cell ${currentZone}">${index + 1}.</td>
+                <td>${team.name}</td>
+                <td class="points numbers">${myPoints}</td>
+                <td class="numbers">${teamStats.gf}:${teamStats.ga}</td>
+                <td class="numbers">${goalDiff > 0 ? '+' + goalDiff : goalDiff}</td>
+                <td class="numbers">${played}</td>
+                <td class="numbers">${stats.wins || 0}</td>
+                <td class="numbers">${stats.otWins || 0}</td>
+                <td class="numbers">${stats.otLosses || 0}</td>
+                <td class="numbers">${stats.losses || 0}</td>
+            </tr>`;
+        });
+
         html += `</tbody></table><br>`;
     }
     html += `</div><div id="playoffTablePreview" style="display:none; overflow:auto; max-width:100%;"><table class="points-table"><tr><th scope="col" id="points-table-header" colspan="20"><h2>Týmy - Playoff</h2></th></tr>`;
@@ -2521,6 +3151,12 @@ router.get('/history/table', requireLogin, (req, res) => {
 
     const sortedGroups = Object.keys(teamsByGroup).sort();
 
+    let isRegularSeasonFinished = false;
+    try {
+        const statusData = JSON.parse(fs.readFileSync('./data/leagueStatus.json', 'utf8'));
+        isRegularSeasonFinished = statusData?.[selectedSeason]?.[selectedLiga]?.regularSeasonFinished || false;
+    } catch (e) {
+    }
 // --- HTML START ---
     let html = `
 <!DOCTYPE html>
@@ -2552,6 +3188,8 @@ router.get('/history/table', requireLogin, (req, res) => {
 </div>
 <div id="regularTable">
 `;
+
+    const crossGroupTeams = [];
 
     // --- ZPRACOVÁNÍ TABULEK ---
     for (const group of sortedGroups) {
@@ -2659,6 +3297,13 @@ router.get('/history/table', requireLogin, (req, res) => {
             return 0;
         });
 
+        // --- ULOŽENÍ TÝMU DO CROSS-TABLE (POKUD JE ZAPNUTO) ---
+        if (leagueObj.crossGroupTable && leagueObj.crossGroupPosition > 0) {
+            const targetIndex = leagueObj.crossGroupPosition - 1;
+            if (teamsInGroup[targetIndex]) {
+                crossGroupTeams.push(teamsInGroup[targetIndex]);
+            }
+        }
 
         html += `
 <table class="points-table">
@@ -2832,13 +3477,25 @@ router.get('/history/table', requireLogin, (req, res) => {
             else if (clinchedQF) rowClass = 'clinched-quarterfinal';
             else if (clinchedPlayin) rowClass = 'clinched-playin';
 
+            if (leagueObj.crossGroupTable && (index + 1) === leagueObj.crossGroupPosition) {
+                if (locked) {
+                    rowClass = 'clinched-crosstable'; // Přebije 'clinched-playin' atd.
+                }
+            }
+
             if (locked) rowClass += ' locked';
 
             //console.log(`   Final Class: ${rowClass}`);
 
-            const rankClass = currentZone;
+            let rankClass = currentZone;
             const teamStats = scores[team.id] || {gf: 0, ga: 0};
             const goalDiff = teamStats.gf - teamStats.ga;
+
+            // --- SPECIÁLNÍ PODBARVENÍ PRO CROSS-TABLE RANK ---
+
+            if (leagueObj.crossGroupTable && (index + 1) === leagueObj.crossGroupPosition) {
+                rankClass = 'crosstable';
+            }
 
             html += `<tr class="${rowClass}">
 <td class="rank-cell ${rankClass}">${index + 1}.</td>
@@ -2853,6 +3510,193 @@ router.get('/history/table', requireLogin, (req, res) => {
 <td class="numbers">${team.stats?.[selectedSeason]?.losses || 0}</td>
 </tr>`;
         });
+        html += `</tbody></table><br>`;
+    }
+
+    // =========================================================
+    // === TABULKA X-TÝCH TÝMŮ (S OPRAVENÝM LOCKOVÁNÍM) ===
+    // =========================================================
+    if (leagueObj.crossGroupTable && crossGroupTeams.length > 0) {
+
+        const crossConfig = leagueObj.crossGroupConfig || { quarterfinal: 0, playin: 0, relegation: 0 };
+
+        html += `<h2 style="text-align: center; margin-top: 30px; border-top: 2px solid #444; padding-top: 20px;">Tabulka týmů na ${leagueObj.crossGroupPosition}. místě</h2>`;
+
+        // 1. Seřazení týmů
+        crossGroupTeams.sort((a, b) => {
+            const aStats = a.stats?.[selectedSeason] || {};
+            const bStats = b.stats?.[selectedSeason] || {};
+            const pA = aStats.points || 0;
+            const pB = bStats.points || 0;
+            if (pB !== pA) return pB - pA;
+
+            const sA = scores[a.id] || {gf:0, ga:0};
+            const sB = scores[b.id] || {gf:0, ga:0};
+            const diffA = sA.gf - sA.ga;
+            const diffB = sB.gf - sB.ga;
+            if (diffA !== diffB) return diffB - diffA;
+            if (sA.gf !== sB.gf) return sB.gf - sA.gf;
+            return 0;
+        });
+
+        html += `
+        <table class="points-table">
+        <thead>
+        <tr><th class="position">Místo</th><th>Tým</th><th class="points">Body</th><th>Skóre</th><th>Rozdíl</th><th>Z</th><th>V</th><th>Vpp</th><th>Ppp</th><th>P</th></tr>
+        </thead>
+        <tbody>`;
+
+        // 2. Limity pro Cross-Table
+        const cQfLimit = crossConfig.quarterfinal || 0;
+        const cPlayinLimit = crossConfig.playin || 0;
+        const cRelLimit = crossConfig.relegation || 0;
+
+        let cTotalAdvancing = 0;
+        if (cPlayinLimit > 0) cTotalAdvancing = cPlayinLimit;
+        else cTotalAdvancing = cQfLimit;
+        cTotalAdvancing = Math.min(cTotalAdvancing, crossGroupTeams.length);
+
+        const cSafeZoneIndex = crossGroupTeams.length - cRelLimit - 1;
+
+        // 3. SPRÁVNÝ VÝPOČET ZÁPASŮ (Stejný jako v horních tabulkách)
+        // Toto zajistí, že systém ví, že po 2 zápasech je konec a má zamknout.
+        let cMatchesPerTeam = 52;
+        if (leagueObj.rounds) {
+            // Pokud je definován počet kol, musíme odhadnout velikost skupiny.
+            // Pro cross-table bereme velikost první skupiny jako referenci, nebo fallback.
+            const estimatedGroupSize = teamsInSelectedLiga.length / (leagueObj.groupCount || 1);
+            cMatchesPerTeam = (Math.ceil(estimatedGroupSize) - 1) * leagueObj.rounds;
+        } else if (leagueObj.isMultigroup) {
+            // Pokud je to multigroup bez rounds, bývá to "každý s každým" ve skupině
+            const estimatedGroupSize = teamsInSelectedLiga.length / (leagueObj.groupCount || 1);
+            cMatchesPerTeam = Math.max(1, Math.ceil(estimatedGroupSize) - 1);
+        } else if (leagueObj.maxMatches) {
+            // Pokud je natvrdo nastaven maxMatches
+            if (leagueObj.maxMatches > 100) {
+                cMatchesPerTeam = Math.ceil((leagueObj.maxMatches * 2) / teamsInSelectedLiga.length);
+            } else {
+                cMatchesPerTeam = leagueObj.maxMatches;
+            }
+        }
+
+        // 4. Pomocné funkce pro potenciál (s opraveným počtem zápasů)
+        const getCrossTeamPotential = (idx) => {
+            if (idx >= crossGroupTeams.length) return 0;
+            const t = crossGroupTeams[idx];
+            const s = t.stats?.[selectedSeason] || {};
+            const played = (s.wins||0)+(s.otWins||0)+(s.otLosses||0)+(s.losses||0);
+
+            if (isRegularSeasonFinished) return s.points || 0;
+
+            const remaining = Math.max(0, cMatchesPerTeam - played);
+            return (s.points || 0) + (remaining * 3);
+        };
+
+        const getCrossMaxPotentialOfZone = (fromIndex) => {
+            let globalMax = 0;
+            if (fromIndex >= crossGroupTeams.length) return 0;
+            for (let i = fromIndex; i < crossGroupTeams.length; i++) {
+                globalMax = Math.max(globalMax, getCrossTeamPotential(i));
+            }
+            return globalMax;
+        };
+
+        // Thresholdy
+        let cThresholdQF = 0;
+        if (cQfLimit > 0 && cQfLimit < crossGroupTeams.length) {
+            cThresholdQF = getCrossMaxPotentialOfZone(cQfLimit);
+        }
+
+        let cThresholdPlayin = 0;
+        if (cTotalAdvancing > 0 && cTotalAdvancing < crossGroupTeams.length) {
+            cThresholdPlayin = getCrossMaxPotentialOfZone(cTotalAdvancing);
+        }
+
+        // 5. Hlavní cyklus
+        crossGroupTeams.forEach((team, index) => {
+            const stats = team.stats?.[selectedSeason] || {};
+            const myPoints = stats.points || 0;
+            const played = (stats.wins||0)+(stats.otWins||0)+(stats.otLosses||0)+(stats.losses||0);
+
+            // Určení základní Zóny
+            let currentZone = "neutral";
+            if (cRelLimit > 0 && index > cSafeZoneIndex) currentZone = "relegation";
+            else if (cQfLimit > 0 && index < cQfLimit) currentZone = "quarterfinal";
+            else if (cTotalAdvancing > 0 && index < cTotalAdvancing) currentZone = "playin";
+
+            const remaining = Math.max(0, cMatchesPerTeam - played);
+            const myMaxPoints = myPoints + (remaining * 3);
+            const teamStats = scores[team.id] || {gf:0, ga:0};
+            const goalDiff = teamStats.gf - teamStats.ga;
+
+            // --- STRICT LOCK LOGIKA ---
+            let canDrop = false;
+            for (let i = index + 1; i < crossGroupTeams.length; i++) {
+                const chaserMax = getCrossTeamPotential(i);
+                if (chaserMax > myPoints) { canDrop = true; break; }
+                const chaserPlayed = (crossGroupTeams[i].stats?.[selectedSeason]?.wins||0) + (crossGroupTeams[i].stats?.[selectedSeason]?.losses||0);
+
+                // Opravená podmínka pro konec zápasů
+                if (chaserMax === myPoints && !isRegularSeasonFinished && (remaining > 0 || chaserPlayed < cMatchesPerTeam)) {
+                    canDrop = true; break;
+                }
+            }
+
+            let canRise = false;
+            if (index > 0) {
+                const prevTeamCurrentPoints = crossGroupTeams[index - 1].stats?.[selectedSeason]?.points || 0;
+                if (myMaxPoints > prevTeamCurrentPoints) canRise = true;
+                if (myMaxPoints === prevTeamCurrentPoints && !isRegularSeasonFinished && remaining > 0) {
+                    canRise = true;
+                }
+            }
+
+            const cLocked = !canDrop && !canRise;
+
+            // --- CLINCHED LOGIKA ---
+            let cSafeQF = false;
+            let cSafePlayin = false;
+            let cRelegated = false;
+
+            if (cLocked) {
+                if (cQfLimit > 0 && index < cQfLimit) cSafeQF = true;
+                else if (cTotalAdvancing > 0 && index < cTotalAdvancing) cSafePlayin = true;
+
+                if (cRelLimit > 0 && index > cSafeZoneIndex) {
+                    if (!cSafeQF && !cSafePlayin) cRelegated = true;
+                }
+            } else {
+                if (cQfLimit > 0 && myPoints > cThresholdQF) cSafeQF = true;
+                else if (cTotalAdvancing > 0 && myPoints > cThresholdPlayin) cSafePlayin = true;
+
+                if (cRelLimit > 0 && index > cSafeZoneIndex) {
+                    const safetyTarget = crossGroupTeams[cSafeZoneIndex]?.stats?.[selectedSeason]?.points || 0;
+                    if (myMaxPoints < safetyTarget) cRelegated = true;
+                }
+            }
+
+            // Aplikace tříd
+            let rowClass = currentZone;
+            if (cRelegated) rowClass = "clinched-relegation";
+            else if (cSafeQF) rowClass = "clinched-quarterfinal";
+            else if (cSafePlayin) rowClass = "clinched-playin";
+
+            if (cLocked) rowClass += " locked";
+
+            html += `<tr class="${rowClass}">
+                <td class="rank-cell ${currentZone}">${index + 1}.</td>
+                <td>${team.name}</td>
+                <td class="points numbers">${myPoints}</td>
+                <td class="numbers">${teamStats.gf}:${teamStats.ga}</td>
+                <td class="numbers">${goalDiff > 0 ? '+' + goalDiff : goalDiff}</td>
+                <td class="numbers">${played}</td>
+                <td class="numbers">${stats.wins || 0}</td>
+                <td class="numbers">${stats.otWins || 0}</td>
+                <td class="numbers">${stats.otLosses || 0}</td>
+                <td class="numbers">${stats.losses || 0}</td>
+            </tr>`;
+        });
+
         html += `</tbody></table><br>`;
     }
     html += `</div><div id="playoffTablePreview" style="display:none; overflow:auto; max-width:100%;"><table class="points-table"><tr><th scope="col" id="points-table-header" colspan="20"><h2>Týmy - Playoff</h2></th></tr>`;
@@ -3194,6 +4038,8 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <div id="regularTable">
 `;
 
+    const crossGroupTeams = [];
+
     // --- ZPRACOVÁNÍ TABULEK ---
     for (const group of sortedGroups) {
         const teamsInGroup = teamsByGroup[group];
@@ -3300,6 +4146,13 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
             return 0;
         });
 
+        // --- ULOŽENÍ TÝMU DO CROSS-TABLE (POKUD JE ZAPNUTO) ---
+        if (leagueObj.crossGroupTable && leagueObj.crossGroupPosition > 0) {
+            const targetIndex = leagueObj.crossGroupPosition - 1;
+            if (teamsInGroup[targetIndex]) {
+                crossGroupTeams.push(teamsInGroup[targetIndex]);
+            }
+        }
 
         html += `
 <table class="points-table">
@@ -3473,13 +4326,25 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
             else if (clinchedQF) rowClass = 'clinched-quarterfinal';
             else if (clinchedPlayin) rowClass = 'clinched-playin';
 
+            if (leagueObj.crossGroupTable && (index + 1) === leagueObj.crossGroupPosition) {
+                if (locked) {
+                    rowClass = 'clinched-crosstable'; // Přebije 'clinched-playin' atd.
+                }
+            }
+
             if (locked) rowClass += ' locked';
 
             //console.log(`   Final Class: ${rowClass}`);
 
-            const rankClass = currentZone;
+            let rankClass = currentZone;
             const teamStats = scores[team.id] || {gf: 0, ga: 0};
             const goalDiff = teamStats.gf - teamStats.ga;
+
+            // --- SPECIÁLNÍ PODBARVENÍ PRO CROSS-TABLE RANK ---
+
+            if (leagueObj.crossGroupTable && (index + 1) === leagueObj.crossGroupPosition) {
+                rankClass = 'crosstable';
+            }
 
             html += `<tr class="${rowClass}">
 <td class="rank-cell ${rankClass}">${index + 1}.</td>
@@ -3494,6 +4359,193 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <td class="numbers">${team.stats?.[selectedSeason]?.losses || 0}</td>
 </tr>`;
         });
+        html += `</tbody></table><br>`;
+    }
+
+    // =========================================================
+    // === TABULKA X-TÝCH TÝMŮ (S OPRAVENÝM LOCKOVÁNÍM) ===
+    // =========================================================
+    if (leagueObj.crossGroupTable && crossGroupTeams.length > 0) {
+
+        const crossConfig = leagueObj.crossGroupConfig || { quarterfinal: 0, playin: 0, relegation: 0 };
+
+        html += `<h2 style="text-align: center; margin-top: 30px; border-top: 2px solid #444; padding-top: 20px;">Tabulka týmů na ${leagueObj.crossGroupPosition}. místě</h2>`;
+
+        // 1. Seřazení týmů
+        crossGroupTeams.sort((a, b) => {
+            const aStats = a.stats?.[selectedSeason] || {};
+            const bStats = b.stats?.[selectedSeason] || {};
+            const pA = aStats.points || 0;
+            const pB = bStats.points || 0;
+            if (pB !== pA) return pB - pA;
+
+            const sA = scores[a.id] || {gf:0, ga:0};
+            const sB = scores[b.id] || {gf:0, ga:0};
+            const diffA = sA.gf - sA.ga;
+            const diffB = sB.gf - sB.ga;
+            if (diffA !== diffB) return diffB - diffA;
+            if (sA.gf !== sB.gf) return sB.gf - sA.gf;
+            return 0;
+        });
+
+        html += `
+        <table class="points-table">
+        <thead>
+        <tr><th class="position">Místo</th><th>Tým</th><th class="points">Body</th><th>Skóre</th><th>Rozdíl</th><th>Z</th><th>V</th><th>Vpp</th><th>Ppp</th><th>P</th></tr>
+        </thead>
+        <tbody>`;
+
+        // 2. Limity pro Cross-Table
+        const cQfLimit = crossConfig.quarterfinal || 0;
+        const cPlayinLimit = crossConfig.playin || 0;
+        const cRelLimit = crossConfig.relegation || 0;
+
+        let cTotalAdvancing = 0;
+        if (cPlayinLimit > 0) cTotalAdvancing = cPlayinLimit;
+        else cTotalAdvancing = cQfLimit;
+        cTotalAdvancing = Math.min(cTotalAdvancing, crossGroupTeams.length);
+
+        const cSafeZoneIndex = crossGroupTeams.length - cRelLimit - 1;
+
+        // 3. SPRÁVNÝ VÝPOČET ZÁPASŮ (Stejný jako v horních tabulkách)
+        // Toto zajistí, že systém ví, že po 2 zápasech je konec a má zamknout.
+        let cMatchesPerTeam = 52;
+        if (leagueObj.rounds) {
+            // Pokud je definován počet kol, musíme odhadnout velikost skupiny.
+            // Pro cross-table bereme velikost první skupiny jako referenci, nebo fallback.
+            const estimatedGroupSize = teamsInSelectedLiga.length / (leagueObj.groupCount || 1);
+            cMatchesPerTeam = (Math.ceil(estimatedGroupSize) - 1) * leagueObj.rounds;
+        } else if (leagueObj.isMultigroup) {
+            // Pokud je to multigroup bez rounds, bývá to "každý s každým" ve skupině
+            const estimatedGroupSize = teamsInSelectedLiga.length / (leagueObj.groupCount || 1);
+            cMatchesPerTeam = Math.max(1, Math.ceil(estimatedGroupSize) - 1);
+        } else if (leagueObj.maxMatches) {
+            // Pokud je natvrdo nastaven maxMatches
+            if (leagueObj.maxMatches > 100) {
+                cMatchesPerTeam = Math.ceil((leagueObj.maxMatches * 2) / teamsInSelectedLiga.length);
+            } else {
+                cMatchesPerTeam = leagueObj.maxMatches;
+            }
+        }
+
+        // 4. Pomocné funkce pro potenciál (s opraveným počtem zápasů)
+        const getCrossTeamPotential = (idx) => {
+            if (idx >= crossGroupTeams.length) return 0;
+            const t = crossGroupTeams[idx];
+            const s = t.stats?.[selectedSeason] || {};
+            const played = (s.wins||0)+(s.otWins||0)+(s.otLosses||0)+(s.losses||0);
+
+            if (isRegularSeasonFinished) return s.points || 0;
+
+            const remaining = Math.max(0, cMatchesPerTeam - played);
+            return (s.points || 0) + (remaining * 3);
+        };
+
+        const getCrossMaxPotentialOfZone = (fromIndex) => {
+            let globalMax = 0;
+            if (fromIndex >= crossGroupTeams.length) return 0;
+            for (let i = fromIndex; i < crossGroupTeams.length; i++) {
+                globalMax = Math.max(globalMax, getCrossTeamPotential(i));
+            }
+            return globalMax;
+        };
+
+        // Thresholdy
+        let cThresholdQF = 0;
+        if (cQfLimit > 0 && cQfLimit < crossGroupTeams.length) {
+            cThresholdQF = getCrossMaxPotentialOfZone(cQfLimit);
+        }
+
+        let cThresholdPlayin = 0;
+        if (cTotalAdvancing > 0 && cTotalAdvancing < crossGroupTeams.length) {
+            cThresholdPlayin = getCrossMaxPotentialOfZone(cTotalAdvancing);
+        }
+
+        // 5. Hlavní cyklus
+        crossGroupTeams.forEach((team, index) => {
+            const stats = team.stats?.[selectedSeason] || {};
+            const myPoints = stats.points || 0;
+            const played = (stats.wins||0)+(stats.otWins||0)+(stats.otLosses||0)+(stats.losses||0);
+
+            // Určení základní Zóny
+            let currentZone = "neutral";
+            if (cRelLimit > 0 && index > cSafeZoneIndex) currentZone = "relegation";
+            else if (cQfLimit > 0 && index < cQfLimit) currentZone = "quarterfinal";
+            else if (cTotalAdvancing > 0 && index < cTotalAdvancing) currentZone = "playin";
+
+            const remaining = Math.max(0, cMatchesPerTeam - played);
+            const myMaxPoints = myPoints + (remaining * 3);
+            const teamStats = scores[team.id] || {gf:0, ga:0};
+            const goalDiff = teamStats.gf - teamStats.ga;
+
+            // --- STRICT LOCK LOGIKA ---
+            let canDrop = false;
+            for (let i = index + 1; i < crossGroupTeams.length; i++) {
+                const chaserMax = getCrossTeamPotential(i);
+                if (chaserMax > myPoints) { canDrop = true; break; }
+                const chaserPlayed = (crossGroupTeams[i].stats?.[selectedSeason]?.wins||0) + (crossGroupTeams[i].stats?.[selectedSeason]?.losses||0);
+
+                // Opravená podmínka pro konec zápasů
+                if (chaserMax === myPoints && !isRegularSeasonFinished && (remaining > 0 || chaserPlayed < cMatchesPerTeam)) {
+                    canDrop = true; break;
+                }
+            }
+
+            let canRise = false;
+            if (index > 0) {
+                const prevTeamCurrentPoints = crossGroupTeams[index - 1].stats?.[selectedSeason]?.points || 0;
+                if (myMaxPoints > prevTeamCurrentPoints) canRise = true;
+                if (myMaxPoints === prevTeamCurrentPoints && !isRegularSeasonFinished && remaining > 0) {
+                    canRise = true;
+                }
+            }
+
+            const cLocked = !canDrop && !canRise;
+
+            // --- CLINCHED LOGIKA ---
+            let cSafeQF = false;
+            let cSafePlayin = false;
+            let cRelegated = false;
+
+            if (cLocked) {
+                if (cQfLimit > 0 && index < cQfLimit) cSafeQF = true;
+                else if (cTotalAdvancing > 0 && index < cTotalAdvancing) cSafePlayin = true;
+
+                if (cRelLimit > 0 && index > cSafeZoneIndex) {
+                    if (!cSafeQF && !cSafePlayin) cRelegated = true;
+                }
+            } else {
+                if (cQfLimit > 0 && myPoints > cThresholdQF) cSafeQF = true;
+                else if (cTotalAdvancing > 0 && myPoints > cThresholdPlayin) cSafePlayin = true;
+
+                if (cRelLimit > 0 && index > cSafeZoneIndex) {
+                    const safetyTarget = crossGroupTeams[cSafeZoneIndex]?.stats?.[selectedSeason]?.points || 0;
+                    if (myMaxPoints < safetyTarget) cRelegated = true;
+                }
+            }
+
+            // Aplikace tříd
+            let rowClass = currentZone;
+            if (cRelegated) rowClass = "clinched-relegation";
+            else if (cSafeQF) rowClass = "clinched-quarterfinal";
+            else if (cSafePlayin) rowClass = "clinched-playin";
+
+            if (cLocked) rowClass += " locked";
+
+            html += `<tr class="${rowClass}">
+                <td class="rank-cell ${currentZone}">${index + 1}.</td>
+                <td>${team.name}</td>
+                <td class="points numbers">${myPoints}</td>
+                <td class="numbers">${teamStats.gf}:${teamStats.ga}</td>
+                <td class="numbers">${goalDiff > 0 ? '+' + goalDiff : goalDiff}</td>
+                <td class="numbers">${played}</td>
+                <td class="numbers">${stats.wins || 0}</td>
+                <td class="numbers">${stats.otWins || 0}</td>
+                <td class="numbers">${stats.otLosses || 0}</td>
+                <td class="numbers">${stats.losses || 0}</td>
+            </tr>`;
+        });
+
         html += `</tbody></table><br>`;
     }
 

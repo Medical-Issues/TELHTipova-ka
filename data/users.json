@@ -3832,6 +3832,98 @@
             "scoreHome": 4,
             "scoreAway": 2
           }
+        ],
+        "Olympiáda": [
+          {
+            "matchId": 398,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 396,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 397,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 402,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 399,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 400,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 401,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 403,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 404,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 405,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 406,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 407,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 408,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 409,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 410,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 411,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 412,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 413,
+            "winner": "home",
+            "loserWins": 0
+          }
         ]
       }
     },

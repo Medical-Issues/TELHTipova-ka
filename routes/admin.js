@@ -1210,11 +1210,29 @@ router.get('/leagues/manage', requireAdmin, (req, res) => {
         <title>Správa lig</title>
         <link rel="stylesheet" href="/css/styles.css">
         <link rel="icon" href="/images/logo.png">
+        <style>
+            /* Styl pro boxík s nastavením X-tých týmů */
+            .cross-table-settings {
+                flex-basis: 100%;
+                background-color: #1a1a1a;
+                border: 1px dashed #555;
+                padding: 10px;
+                margin-top: 10px;
+                margin-bottom: 5px;
+                display: flex;
+                align-items: center;
+                gap: 15px;
+                flex-wrap: wrap;
+                font-size: 0.9em;
+            }
+            .cross-table-settings h4 { margin: 0; color: #ffa500; font-size: 1em; margin-right: 10px; }
+            .separator { border-left: 1px solid #444; height: 20px; margin: 0 5px; }
+        </style>
     </head>
     <body>
         <h1>Správa lig (pro sezónu: ${selectedSeason})</h1>
         
-        <h2>Přidat novou ligu (do sezóny ${selectedSeason})</h2>
+        <h2>Přidat novou ligu</h2>
         <form method="POST" action="/admin/leagues/manage">
              <label>Nová liga: <input type="text" class="league-select" name="newLeague[ligaName]" required style="width: 200px;"></label>
              <label style="display: flex; align-items: center; gap: 10px;">Více skupin: <input type="checkbox" id="multiGroupCheckbox" name="newLeague[multigroup]" onchange="toggleGroupInput()"></label>
@@ -1231,16 +1249,13 @@ router.get('/leagues/manage', requireAdmin, (req, res) => {
             ${seasonLeagues.map(l => {
         // Načtení dat ligy
         let isFinished = false;
-        let lockedStatus = false; // Může být true, false, nebo Array
+        let lockedStatus = false;
         if (statusData[selectedSeason] && statusData[selectedSeason][l.name]) {
             isFinished = statusData[selectedSeason][l.name].regularSeasonFinished;
             lockedStatus = statusData[selectedSeason][l.name].tableTipsLocked;
         }
 
-        // Je globálně zamčeno? (buď je true, nebo pole obsahuje všechny skupiny)
         const isGloballyLocked = (lockedStatus === true);
-
-        // Styly pro globální tlačítka
         const statusStyle = isFinished ? "color: green; font-weight: bold;" : "color: orange;";
         const globalLockStyle = isGloballyLocked ? "color: red; font-weight: bold;" : "color: green;";
 
@@ -1248,34 +1263,28 @@ router.get('/leagues/manage', requireAdmin, (req, res) => {
         let groupLocksHTML = '';
         if (l.isMultigroup && l.groupCount > 0) {
             groupLocksHTML += '<div style="flex-basis: 100%; display: flex; gap: 15px; margin-left: 20px; margin-top: 5px; padding-top:5px; border-top:1px dotted #444;">';
-
             for (let i = 1; i <= l.groupCount; i++) {
                 const gKey = String(i);
-                
                 const gLabel = `Skupina ${String.fromCharCode(64 + i)}`;
-
-                let lockedStatus = false;
+                let gLocked = false;
                 if (statusData[selectedSeason] && statusData[selectedSeason][l.name]) {
-                    lockedStatus = statusData[selectedSeason][l.name].tableTipsLocked;
+                    gLocked = statusData[selectedSeason][l.name].tableTipsLocked;
                 }
-                
-                const isThisGroupLocked = (lockedStatus === true) || (Array.isArray(lockedStatus) && lockedStatus.includes(gKey));
+                const isThisGroupLocked = (gLocked === true) || (Array.isArray(gLocked) && gLocked.includes(gKey));
                 const gStyle = isThisGroupLocked ? "color: red; font-weight: bold;" : "color: green;";
 
                 groupLocksHTML += `
-                            <form method="POST" action="/admin/toggle-table-tips-lock" style="display:inline-flex; align-items:center;">
-                                <input type="hidden" name="season" value="${selectedSeason}">
-                                <input type="hidden" name="liga" value="${l.name}">
-                                
-                                <input type="hidden" name="group" value="${gKey}">
-                                <input type="hidden" name="totalGroups" value="${l.groupCount}">
-                                
-                                <label style="cursor: pointer; display: flex; align-items: center; gap: 3px; font-size: 0.9em; ${gStyle}">
-                                    <input type="checkbox" name="locked" value="true" ${isThisGroupLocked ? 'checked' : ''} onchange="this.form.submit()">
-                                    ${gLabel}
-                                </label>
-                            </form>
-                        `;
+                    <form method="POST" action="/admin/toggle-table-tips-lock" style="display:inline-flex; align-items:center;">
+                        <input type="hidden" name="season" value="${selectedSeason}">
+                        <input type="hidden" name="liga" value="${l.name}">
+                        <input type="hidden" name="group" value="${gKey}">
+                        <input type="hidden" name="totalGroups" value="${l.groupCount}">
+                        <label style="cursor: pointer; display: flex; align-items: center; gap: 3px; font-size: 0.9em; ${gStyle}">
+                            <input type="checkbox" name="locked" value="true" ${isThisGroupLocked ? 'checked' : ''} onchange="this.form.submit()">
+                            ${gLabel}
+                        </label>
+                    </form>
+                `;
             }
             groupLocksHTML += '</div>';
         }
@@ -1283,41 +1292,70 @@ router.get('/leagues/manage', requireAdmin, (req, res) => {
         return `
                 <li style="margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px;">
                     
-                    <form method="POST" action="/admin/leagues/update" style="display:inline-flex; align-items:center; gap:10px; flex-wrap: wrap;">
+                    <form method="POST" action="/admin/leagues/update" style="display:flex; flex-wrap: wrap; align-items:center; gap:10px; width: 100%;">
                         <input type="hidden" name="originalLeagueName" value="${l.name}">
-                        <input type="text" name="leagueName" class="league-select" style="width: 150px" value="${l.name}">
-                        <label>Max: <input type="number" name="maxMatches" value="${l.maxMatches || 0}" min="0" style="width:50px;"></label>
-                        <label>ČF: <input type="number" name="quarterfinal" value="${l.quarterfinal || 0}" min="0" style="width:40px;"></label>
-                        <label>P-in: <input type="number" name="playin" value="${l.playin || 0}" min="0" style="width:40px;"></label>
-                        <label>Bar: <input type="number" name="relegation" value="${l.relegation || 0}" min="0" style="width:40px;"></label>
-                        <button class="action-btn edit-btn" type="submit">OK</button>
-                    </form>
-
-                    <form method="POST" action="/admin/toggle-table-tips-lock" style="display:inline-flex; align-items:center; padding-left: 10px; border-left: 1px solid #555;">
-                        <input type="hidden" name="season" value="${selectedSeason}">
-                        <input type="hidden" name="liga" value="${l.name}">
-                        <input type="hidden" name="totalGroups" value="${l.groupCount || 0}">
                         
-                        <label style="cursor: pointer; display: flex; align-items: center; gap: 5px; ${globalLockStyle}">
-                            <input type="checkbox" name="locked" value="true" ${isGloballyLocked ? 'checked' : ''} onchange="this.form.submit()">
-                            ${isGloballyLocked ? 'Tabulky ZAMČENY (Vše)' : 'Zamknout Vše'}
-                        </label>
+                        <div style="display:inline-flex; align-items:center; gap:10px;">
+                            <input type="text" name="leagueName" class="league-select" style="width: 150px" value="${l.name}">
+                            <label>Max: <input type="number" name="maxMatches" value="${l.maxMatches || 0}" min="0" style="width:50px;"></label>
+                            <label>ČF: <input type="number" name="quarterfinal" value="${l.quarterfinal || 0}" min="0" style="width:40px;"></label>
+                            <label>P-in: <input type="number" name="playin" value="${l.playin || 0}" min="0" style="width:40px;"></label>
+                            <label>Bar: <input type="number" name="relegation" value="${l.relegation || 0}" min="0" style="width:40px;"></label>
+                        </div>
+
+                        <div class="cross-table-settings">
+                            <h4>Tabulka X-tých týmů:</h4>
+                            
+                            <label style="cursor:pointer; display:flex; align-items:center; gap:5px;">
+                                <input type="checkbox" name="crossGroupEnabled" ${l.crossGroupTable ? 'checked' : ''}> Zapnout
+                            </label>
+
+                            <label title="Kterou pozici porovnávat? (např. 4 = čtvrté týmy)">
+                                Pozice (X): <input type="number" name="crossGroupPosition" value="${l.crossGroupPosition || ''}" min="1" style="width: 40px;" placeholder="X">
+                            </label>
+                            
+                            <div class="separator"></div>
+                            
+                            <span style="color:#aaa;">Postup/Sestup z této tabulky:</span>
+                            <label title="Kolik týmů z této tabulky jde do ČF">
+                                ČF: <input type="number" name="crossQuarterfinal" value="${l.crossGroupConfig?.quarterfinal || 0}" min="0" style="width: 40px;">
+                            </label>
+                            <label title="Kolik týmů z této tabulky jde do Předkola">
+                                P-in: <input type="number" name="crossPlayin" value="${l.crossGroupConfig?.playin || 0}" min="0" style="width: 40px;">
+                            </label>
+                            <label title="Kolik týmů z této tabulky sestupuje">
+                                Bar: <input type="number" name="crossRelegation" value="${l.crossGroupConfig?.relegation || 0}" min="0" style="width: 40px;">
+                            </label>
+                        </div>
+
+                        <button class="action-btn edit-btn" type="submit" style="margin-left: auto;">Uložit změny</button>
                     </form>
 
-                    <form method="POST" action="/admin/toggle-regular-season" style="display:inline-flex; align-items:center; padding-left: 10px; border-left: 1px solid #555;">
-                        <input type="hidden" name="season" value="${selectedSeason}">
-                        <input type="hidden" name="liga" value="${l.name}">
-                        
-                        <label style="cursor: pointer; display: flex; align-items: center; gap: 5px; ${statusStyle}">
-                            <input type="checkbox" name="finished" value="true" ${isFinished ? 'checked' : ''} onchange="this.form.submit()">
-                            ${isFinished ? 'Body Aktivní' : 'Body Neaktivní'}
-                        </label>
-                    </form>
+                    <div style="display: flex; gap: 15px; width: 100%; align-items: center; justify-content: flex-end; margin-top: 5px;">
+                        <form method="POST" action="/admin/toggle-table-tips-lock" style="display:inline-flex;">
+                            <input type="hidden" name="season" value="${selectedSeason}">
+                            <input type="hidden" name="liga" value="${l.name}">
+                            <input type="hidden" name="totalGroups" value="${l.groupCount || 0}">
+                            <label style="cursor: pointer; display: flex; align-items: center; gap: 5px; ${globalLockStyle}">
+                                <input type="checkbox" name="locked" value="true" ${isGloballyLocked ? 'checked' : ''} onchange="this.form.submit()">
+                                ${isGloballyLocked ? 'Tabulky ZAMČENY (Vše)' : 'Zamknout Vše'}
+                            </label>
+                        </form>
 
-                    <form method="POST" action="/admin/leagues/delete" style="display:inline; margin-left: auto;">
-                        <input type="hidden" name="league" value="${l.name}">
-                        <button class="action-btn delete-btn" type="submit" onclick="return confirm('Smazat?')">X</button>
-                    </form>
+                        <form method="POST" action="/admin/toggle-regular-season" style="display:inline-flex;">
+                            <input type="hidden" name="season" value="${selectedSeason}">
+                            <input type="hidden" name="liga" value="${l.name}">
+                            <label style="cursor: pointer; display: flex; align-items: center; gap: 5px; ${statusStyle}">
+                                <input type="checkbox" name="finished" value="true" ${isFinished ? 'checked' : ''} onchange="this.form.submit()">
+                                ${isFinished ? 'Body Aktivní' : 'Body Neaktivní'}
+                            </label>
+                        </form>
+
+                        <form method="POST" action="/admin/leagues/delete" style="display:inline;">
+                            <input type="hidden" name="league" value="${l.name}">
+                            <button class="action-btn delete-btn" type="submit" onclick="return confirm('Smazat ligu?')">Smazat</button>
+                        </form>
+                    </div>
 
                     ${groupLocksHTML}
 
@@ -1370,7 +1408,12 @@ router.post('/leagues/manage', requireAdmin, express.urlencoded({ extended: true
 });
 
 router.post('/leagues/update', requireAdmin, express.urlencoded({ extended: true }), (req, res) => {
-    const { originalLeagueName, leagueName, maxMatches, quarterfinal, playin, relegation } = req.body;
+    const {
+        originalLeagueName, leagueName, maxMatches, quarterfinal, playin, relegation,
+        // Nová pole z formuláře
+        crossGroupEnabled, crossGroupPosition, crossQuarterfinal, crossPlayin, crossRelegation
+    } = req.body;
+
     const allSeasonData = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf8'));
     const selectedSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
 
@@ -1378,18 +1421,29 @@ router.post('/leagues/update', requireAdmin, express.urlencoded({ extended: true
         const index = allSeasonData[selectedSeason].leagues.findIndex(l => l.name === originalLeagueName);
 
         if (index !== -1) {
+            // 1. Změna názvu
             if (originalLeagueName !== leagueName) {
                 console.log(`Změna názvu ligy z ${originalLeagueName} na ${leagueName}`);
-
                 renameLeagueGlobal(originalLeagueName, leagueName);
-
                 allSeasonData[selectedSeason].leagues[index].name = leagueName;
             }
 
+            // 2. Základní nastavení
             allSeasonData[selectedSeason].leagues[index].maxMatches = Number(maxMatches) || 0;
             allSeasonData[selectedSeason].leagues[index].quarterfinal = Number(quarterfinal) || 0;
             allSeasonData[selectedSeason].leagues[index].playin = Number(playin) || 0;
             allSeasonData[selectedSeason].leagues[index].relegation = Number(relegation) || 0;
+
+            // 3. Nastavení X-tých týmů
+            allSeasonData[selectedSeason].leagues[index].crossGroupTable = (crossGroupEnabled === 'on');
+            allSeasonData[selectedSeason].leagues[index].crossGroupPosition = Number(crossGroupPosition) || 0;
+
+            // Uložíme konfiguraci pro tuto speciální tabulku
+            allSeasonData[selectedSeason].leagues[index].crossGroupConfig = {
+                quarterfinal: Number(crossQuarterfinal) || 0,
+                playin: Number(crossPlayin) || 0,
+                relegation: Number(crossRelegation) || 0
+            };
 
             fs.writeFileSync('./data/leagues.json', JSON.stringify(allSeasonData, null, 2));
         }

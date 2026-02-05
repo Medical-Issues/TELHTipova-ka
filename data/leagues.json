@@ -14,10 +14,10 @@
         "name": "MAXA",
         "isMultigroup": false,
         "groupCount": 1,
-        "maxMatches": 0,
-        "quarterfinal": 0,
-        "playin": 0,
-        "relegation": 0
+        "maxMatches": 364,
+        "quarterfinal": 6,
+        "playin": 10,
+        "relegation": 1
       },
       {
         "name": "MS",
@@ -41,19 +41,26 @@
         "name": "MSJ",
         "isMultigroup": true,
         "groupCount": 2,
-        "maxMatches": 29,
+        "maxMatches": 20,
         "quarterfinal": 4,
-        "playin": 4,
+        "playin": 0,
         "relegation": 1
       },
       {
         "name": "Spengler Cup",
         "isMultigroup": true,
         "groupCount": 2,
-        "maxMatches": 11,
+        "maxMatches": 6,
         "quarterfinal": 1,
         "playin": 3,
-        "relegation": 3
+        "relegation": 0,
+        "crossGroupTable": true,
+        "crossGroupPosition": 2,
+        "crossGroupConfig": {
+          "quarterfinal": 1,
+          "playin": 2,
+          "relegation": 0
+        }
       },
       {
         "name": "Olympiáda",
@@ -62,7 +69,14 @@
         "maxMatches": 30,
         "quarterfinal": 1,
         "playin": 2,
-        "relegation": 0
+        "relegation": 0,
+        "crossGroupTable": true,
+        "crossGroupPosition": 2,
+        "crossGroupConfig": {
+          "quarterfinal": 1,
+          "playin": 3,
+          "relegation": 0
+        }
       }
     ]
   }

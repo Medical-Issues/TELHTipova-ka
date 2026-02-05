@@ -636,6 +636,11 @@ tr.postponed {
     color: white;
 }
 
+.rank-cell.crosstable {
+    background-color: rgba(255, 255, 0, 1);
+    color: white;
+}
+
 .rank-cell.neutral {
 
 }
@@ -662,8 +667,10 @@ tr.postponed {
     color: white !important;
 }
 
-.neutral.locked {
-    background-color: rgba(200, 200, 200, 0.35);
+.clinched-crosstable.locked, .crosstable.locked {
+    background-color: rgba(255, 255, 0, 1) !important;
+    border: 2px solid white;
+    color: black; !important
 }
 
 .clinched-quarterfinal {
@@ -672,7 +679,7 @@ tr.postponed {
 }
 
 .clinched-playin {
-    background-color: rgba(0, 255, 0, 0.35) !important;
+    background-color: rgba(0, 255, 0, 0.60) !important;
     color: white !important;
 }
 
@@ -682,26 +689,37 @@ tr.postponed {
 }
 
 .clinched-neutral {
-    background-color: #808080 !important; /* Šedá */
+    background-color: #808080 !important;
     color: white !important;
-    font-weight: bold;
+}
+
+.clinched-crosstable {
+    background-color: rgba(255, 255, 0, 0.35) !important;
+    color: black !important;
 }
 
 .locked {
     border: 2px solid white;
 }
 
+.crosstable {
+    background-color: rgba(255, 255, 0, 1) !important;
+    color: black !important;
+}
+
 tr.clinched-quarterfinal td.points,
 tr.clinched-playin td.points,
 tr.clinched-relegation td.points,
-tr.clinched-neutral td.points {
+tr.clinched-neutral td.points,
+tr.clinched-crosstable td.points {
     color: white !important;
     text-shadow: none;
 }
 tr.clinched-quarterfinal.locked td.points,
 tr.clinched-playin.locked td.points,
 tr.clinched-relegation.locked td.points,
-tr.clinched-neutral.locked td.points {
+tr.clinched-neutral.locked td.points,
+tr.clinched-crosstable.locked td.points {
     color: white !important;
     font-weight: bold;
     text-shadow: none;
