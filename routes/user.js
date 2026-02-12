@@ -490,7 +490,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
                 }
 
                 // Jistota Playin: Mám víc bodů, než kolik může MAXIMÁLNĚ získat ten, co by nepostoupil VŮBEC?
-                if (totalAdvancing > 0 && myPoints > thresholdPlayin) {
+                if (totalAdvancing > 0 && myPoints > thresholdPlayin || totalAdvancing >= sorted.length) {
                     clinchedPlayin = true;
                 }
 
@@ -3230,12 +3230,9 @@ router.get('/history/table', requireLogin, (req, res) => {
     const leagueObj = (allSeasonData[selectedSeason]?.leagues || []).find(l => l.name === selectedLiga) || {isMultigroup: false};
     const teamsByGroup = {};
     teamsInSelectedLiga.forEach(team => {
-        let gKey = "default";
-        if (leagueObj.isMultigroup) {
-            gKey = String(team.group || 1);
-        }
-        if (!teamsByGroup[gKey]) teamsByGroup[gKey] = [];
-        teamsByGroup[gKey].push(team);
+        const group = team.group ? String.fromCharCode(team.group + 64) : 'X';
+        if (!teamsByGroup[group]) teamsByGroup[group] = [];
+        teamsByGroup[group].push(team);
     });
     const sortedGroupKeys = Object.keys(teamsByGroup).sort((a, b) => (a === 'default' ? -1 : parseInt(a) - parseInt(b)));
     const getGroupDisplayLabel = (gKey) => (gKey === 'default' ? '' : `Skupina ${String.fromCharCode(64 + parseInt(gKey))}`);
@@ -3631,7 +3628,7 @@ router.get('/history/table', requireLogin, (req, res) => {
                 }
 
                 // Jistota Playin: Mám víc bodů, než kolik může MAXIMÁLNĚ získat ten, co by nepostoupil VŮBEC?
-                if (totalAdvancing > 0 && myPoints > thresholdPlayin) {
+                if (totalAdvancing > 0 && myPoints > thresholdPlayin || totalAdvancing >= sorted.length) {
                     clinchedPlayin = true;
                 }
 
@@ -4507,7 +4504,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
                 }
 
                 // Jistota Playin: Mám víc bodů, než kolik může MAXIMÁLNĚ získat ten, co by nepostoupil VŮBEC?
-                if (totalAdvancing > 0 && myPoints > thresholdPlayin) {
+                if (totalAdvancing > 0 && myPoints > thresholdPlayin || totalAdvancing >= sorted.length) {
                     clinchedPlayin = true;
                 }
 
