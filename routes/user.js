@@ -1668,7 +1668,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
                 }
 
                 // Jistota Playin: Mám víc bodů, než kolik může MAXIMÁLNĚ získat ten, co by nepostoupil VŮBEC?
-                if (totalAdvancing > 0 && myPoints > thresholdPlayin) {
+                if (totalAdvancing > 0 && myPoints > thresholdPlayin || totalAdvancing >= sorted.length) {
                     clinchedPlayin = true;
                 }
 
