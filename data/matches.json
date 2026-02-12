@@ -6197,7 +6197,14 @@
     "datetime": "2026-02-11T16:40",
     "liga": "Olympiáda",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 4,
+      "scoreAway": 1,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 397,
@@ -6206,16 +6213,30 @@
     "datetime": "2026-02-11T21:10",
     "liga": "Olympiáda",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 5,
+      "scoreAway": 2,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 398,
     "homeTeamId": 86,
     "awayTeamId": 85,
-    "datetime": "2026-02-11T12:10",
+    "datetime": "2026-02-12T12:10",
     "liga": "Olympiáda",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 4,
+      "scoreAway": 0,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 399,
@@ -6224,7 +6245,14 @@
     "datetime": "2026-02-12T16:40",
     "liga": "Olympiáda",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 0,
+      "scoreAway": 5,
+      "ot": false,
+      "winner": "away"
+    }
   },
   {
     "id": 400,
@@ -6233,7 +6261,14 @@
     "datetime": "2026-02-12T21:10",
     "liga": "Olympiáda",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 1,
+      "scoreAway": 5,
+      "ot": false,
+      "winner": "away"
+    }
   },
   {
     "id": 401,
@@ -6242,16 +6277,24 @@
     "datetime": "2026-02-12T21:10",
     "liga": "Olympiáda",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 3,
+      "scoreAway": 1,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 402,
     "homeTeamId": 88,
     "awayTeamId": 91,
-    "datetime": "2026-02-12T12:10",
+    "datetime": "2026-02-13T12:10",
     "liga": "Olympiáda",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false
   },
   {
     "id": 403,

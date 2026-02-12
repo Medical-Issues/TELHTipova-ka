@@ -18,6 +18,9 @@
     },
     "MSJ": {
       "regularSeasonFinished": true
+    },
+    "Olympiáda": {
+      "tableTipsLocked": true
     }
   }
 }

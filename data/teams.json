@@ -981,7 +981,15 @@
     "liga": "Olympiáda",
     "active": true,
     "group": 1,
-    "stats": {}
+    "stats": {
+      "25/26": {
+        "points": 0,
+        "wins": 0,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 1
+      }
+    }
   },
   {
     "id": 85,
@@ -989,7 +997,15 @@
     "liga": "Olympiáda",
     "active": true,
     "group": 1,
-    "stats": {}
+    "stats": {
+      "25/26": {
+        "points": 0,
+        "wins": 0,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 1
+      }
+    }
   },
   {
     "id": 86,
@@ -997,7 +1013,15 @@
     "liga": "Olympiáda",
     "active": true,
     "group": 1,
-    "stats": {}
+    "stats": {
+      "25/26": {
+        "points": 3,
+        "wins": 1,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 0
+      }
+    }
   },
   {
     "id": 87,
@@ -1005,7 +1029,15 @@
     "liga": "Olympiáda",
     "active": true,
     "group": 1,
-    "stats": {}
+    "stats": {
+      "25/26": {
+        "points": 3,
+        "wins": 1,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 0
+      }
+    }
   },
   {
     "id": 88,
@@ -1013,7 +1045,15 @@
     "liga": "Olympiáda",
     "active": true,
     "group": 2,
-    "stats": {}
+    "stats": {
+      "25/26": {
+        "points": 0,
+        "wins": 0,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 1
+      }
+    }
   },
   {
     "id": 89,
@@ -1021,7 +1061,15 @@
     "liga": "Olympiáda",
     "active": true,
     "group": 2,
-    "stats": {}
+    "stats": {
+      "25/26": {
+        "points": 0,
+        "wins": 0,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 1
+      }
+    }
   },
   {
     "id": 90,
@@ -1029,7 +1077,15 @@
     "liga": "Olympiáda",
     "active": true,
     "group": 2,
-    "stats": {}
+    "stats": {
+      "25/26": {
+        "points": 3,
+        "wins": 1,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 0
+      }
+    }
   },
   {
     "id": 91,
@@ -1037,7 +1093,15 @@
     "liga": "Olympiáda",
     "active": true,
     "group": 2,
-    "stats": {}
+    "stats": {
+      "25/26": {
+        "points": 3,
+        "wins": 1,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 0
+      }
+    }
   },
   {
     "id": 92,
@@ -1045,7 +1109,15 @@
     "liga": "Olympiáda",
     "active": true,
     "group": 3,
-    "stats": {}
+    "stats": {
+      "25/26": {
+        "points": 0,
+        "wins": 0,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 1
+      }
+    }
   },
   {
     "id": 93,
@@ -1053,7 +1125,15 @@
     "liga": "Olympiáda",
     "active": true,
     "group": 3,
-    "stats": {}
+    "stats": {
+      "25/26": {
+        "points": 3,
+        "wins": 1,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 0
+      }
+    }
   },
   {
     "id": 94,
@@ -1061,7 +1141,15 @@
     "liga": "Olympiáda",
     "active": true,
     "group": 3,
-    "stats": {}
+    "stats": {
+      "25/26": {
+        "points": 0,
+        "wins": 0,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 1
+      }
+    }
   },
   {
     "id": 95,
@@ -1069,6 +1157,14 @@
     "liga": "Olympiáda",
     "active": true,
     "group": 3,
-    "stats": {}
+    "stats": {
+      "25/26": {
+        "points": 3,
+        "wins": 1,
+        "otWins": 0,
+        "otLosses": 0,
+        "losses": 0
+      }
+    }
   }
 ]
