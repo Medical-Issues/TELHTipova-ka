@@ -458,60 +458,57 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
             const locked = !canDrop && !canRise;
             //console.log(`   Logic: CanDrop=${canDrop}, CanRise=${canRise} => LOCKED=${locked}`);
 
-            // --- CLINCHED (OPRAVENÁ LOGIKA) ---
-            // Zde rozdělujeme logiku:
-            // A) Pokud je tým LOCKED -> Barva se určí natvrdo podle pozice (indexu).
-            // B) Pokud tým NENÍ LOCKED -> Barva se určí podle bodů (matematická jistota).
-
+            // --- CLINCHED (OPRAVENÁ LOGIKA VČETNĚ NEUTRAL - JISTOTY) ---
             let clinchedQF = false;
             let clinchedPlayin = false;
             let clinchedRelegation = false;
+            let clinchedNeutral = false;
+
+            // Práh pro záchranu: Kolik bodů může maximálně získat nejlepší tým v sestupovém pásmu?
+            let thresholdRelegation = 0;
+            if (relegationLimit > 0 && safeZoneIndex >= 0 && safeZoneIndex + 1 < sorted.length) {
+                thresholdRelegation = getMaxPotentialOfZone(safeZoneIndex + 1);
+            }
 
             if (locked) {
-                // === VARIANTA A: TÝM JE ZAMČENÝ ===
-                // Už se nemůže pohnout, takže pokud je teď na postupovém místě, má to jisté.
-                if (qfLimit > 0 && index < qfLimit) {
-                    clinchedQF = true;
-                } else if (totalAdvancing > 0 && index < totalAdvancing) {
-                    clinchedPlayin = true;
-                }
-
-                // Sestup - pokud je zamčený v zóně sestupu
-                if (relegationLimit > 0 && index > safeZoneIndex) {
-                    clinchedRelegation = true;
-                }
+                // Tým už dohrál nebo se nemůže hnout ze své pozice
+                if (qfLimit > 0 && index < qfLimit) clinchedQF = true;
+                else if (totalAdvancing > 0 && index < totalAdvancing) clinchedPlayin = true;
+                else if (relegationLimit > 0 && index > safeZoneIndex) clinchedRelegation = true;
+                else clinchedNeutral = true;
             } else {
-                // === VARIANTA B: TÝM JEŠTĚ MŮŽE MĚNIT POZICI ===
-                // Musíme použít body a thresholdy.
+                // Jistota QF
+                if (qfLimit > 0 && myPoints > thresholdQF) clinchedQF = true;
 
-                // Jistota QF: Mám víc bodů, než kolik může MAXIMÁLNĚ získat ten nejlepší, co by skončil MIMO QF?
-                if (qfLimit > 0 && myPoints > thresholdQF) {
-                    clinchedQF = true;
+                // Jistota Play-in
+                if (totalAdvancing > 0 && myPoints > thresholdPlayin || totalAdvancing >= sorted.length) clinchedPlayin = true;
+
+                // Jistota Neutral (Záchrana - tým už matematicky nemůže spadnout)
+                if (relegationLimit > 0 && myPoints > thresholdRelegation) {
+                    clinchedNeutral = true;
+                } else if (relegationLimit === 0) {
+                    // Pokud se vůbec nesestupuje, každý tým má automaticky jistotu záchrany (neutral)
+                    clinchedNeutral = true;
                 }
 
-                // Jistota Playin: Mám víc bodů, než kolik může MAXIMÁLNĚ získat ten, co by nepostoupil VŮBEC?
-                if (totalAdvancing > 0 && myPoints > thresholdPlayin || totalAdvancing >= sorted.length) {
-                    clinchedPlayin = true;
-                }
-
-                // Jistota Sestupu: I když vše vyhraju, budu mít míň, než má ten poslední v bezpečí TEĎ
+                // Jistota sestupu (Můj absolutní bodový strop nestačí ani na aktuální body posledního zachráněného)
                 if (relegationLimit > 0 && index > safeZoneIndex) {
                     if (myMaxPoints < safetyPoints) clinchedRelegation = true;
                 }
             }
 
-            //console.log(`   Clinched: QF=${clinchedQF}, Playin=${clinchedPlayin}`);
-
-            // --- TŘÍDY ---
-            // Priorita: Sestup > QF > Playin
+            // --- TŘÍDY (TVOJE KASKÁDA JISTOT) ---
+            // Třída se nastaví podle aktuální zóny, ale PŘEPÍŠE SE tou nejlepší metu, kterou má tým JISTOU.
             let rowClass = currentZone;
+
             if (clinchedRelegation) rowClass = 'clinched-relegation';
             else if (clinchedQF) rowClass = 'clinched-quarterfinal';
             else if (clinchedPlayin) rowClass = 'clinched-playin';
+            else if (clinchedNeutral) rowClass = 'clinched-neutral'; // Aplikace jistoty záchrany
 
             if (leagueObj.crossGroupTable && (index + 1) === leagueObj.crossGroupPosition) {
                 if (locked) {
-                    rowClass = 'clinched-crosstable'; // Přebije 'clinched-playin' atd.
+                    rowClass = 'clinched-crosstable';
                 }
             }
 
@@ -689,21 +686,33 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 
             const cLocked = !canDrop && !canRise;
 
-            // --- CLINCHED LOGIKA ---
+            // Práh pro záchranu (Cross-table)
+            let cThresholdRelegation = 0;
+            if (cRelLimit > 0 && cSafeZoneIndex + 1 < crossGroupTeams.length) {
+                cThresholdRelegation = getCrossMaxPotentialOfZone(cSafeZoneIndex + 1);
+            }
+
+            // --- CLINCHED LOGIKA VČETNĚ NEUTRAL (Cross-Table) ---
             let cSafeQF = false;
             let cSafePlayin = false;
             let cRelegated = false;
+            let cNeutralLocked = false;
 
             if (cLocked) {
                 if (cQfLimit > 0 && index < cQfLimit) cSafeQF = true;
                 else if (cTotalAdvancing > 0 && index < cTotalAdvancing) cSafePlayin = true;
-
-                if (cRelLimit > 0 && index > cSafeZoneIndex) {
-                    if (!cSafeQF && !cSafePlayin) cRelegated = true;
-                }
+                else if (cRelLimit > 0 && index > cSafeZoneIndex) cRelegated = true;
+                else cNeutralLocked = true;
             } else {
                 if (cQfLimit > 0 && myPoints > cThresholdQF) cSafeQF = true;
                 else if (cTotalAdvancing > 0 && myPoints > cThresholdPlayin) cSafePlayin = true;
+
+                // Jistota Neutral (Cross-table)
+                if (cRelLimit > 0 && myPoints > cThresholdRelegation) {
+                    cNeutralLocked = true;
+                } else if (cRelLimit === 0) {
+                    cNeutralLocked = true;
+                }
 
                 if (cRelLimit > 0 && index > cSafeZoneIndex) {
                     const safetyTarget = crossGroupTeams[cSafeZoneIndex]?.stats?.[selectedSeason]?.points || 0;
@@ -711,11 +720,13 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
                 }
             }
 
-            // Aplikace tříd
+            // Aplikace tříd (Kaskáda)
             let rowClass = currentZone;
+
             if (cRelegated) rowClass = "clinched-relegation";
             else if (cSafeQF) rowClass = "clinched-quarterfinal";
             else if (cSafePlayin) rowClass = "clinched-playin";
+            else if (cNeutralLocked) rowClass = "clinched-neutral";
 
             if (cLocked) rowClass += " locked";
 
@@ -1636,60 +1647,57 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
             const locked = !canDrop && !canRise;
             //console.log(`   Logic: CanDrop=${canDrop}, CanRise=${canRise} => LOCKED=${locked}`);
 
-            // --- CLINCHED (OPRAVENÁ LOGIKA) ---
-            // Zde rozdělujeme logiku:
-            // A) Pokud je tým LOCKED -> Barva se určí natvrdo podle pozice (indexu).
-            // B) Pokud tým NENÍ LOCKED -> Barva se určí podle bodů (matematická jistota).
-
+            // --- CLINCHED (OPRAVENÁ LOGIKA VČETNĚ NEUTRAL - JISTOTY) ---
             let clinchedQF = false;
             let clinchedPlayin = false;
             let clinchedRelegation = false;
+            let clinchedNeutral = false;
+
+            // Práh pro záchranu: Kolik bodů může maximálně získat nejlepší tým v sestupovém pásmu?
+            let thresholdRelegation = 0;
+            if (relegationLimit > 0 && safeZoneIndex >= 0 && safeZoneIndex + 1 < sorted.length) {
+                thresholdRelegation = getMaxPotentialOfZone(safeZoneIndex + 1);
+            }
 
             if (locked) {
-                // === VARIANTA A: TÝM JE ZAMČENÝ ===
-                // Už se nemůže pohnout, takže pokud je teď na postupovém místě, má to jisté.
-                if (qfLimit > 0 && index < qfLimit) {
-                    clinchedQF = true;
-                } else if (totalAdvancing > 0 && index < totalAdvancing) {
-                    clinchedPlayin = true;
-                }
-
-                // Sestup - pokud je zamčený v zóně sestupu
-                if (relegationLimit > 0 && index > safeZoneIndex) {
-                    clinchedRelegation = true;
-                }
+                // Tým už dohrál nebo se nemůže hnout ze své pozice
+                if (qfLimit > 0 && index < qfLimit) clinchedQF = true;
+                else if (totalAdvancing > 0 && index < totalAdvancing) clinchedPlayin = true;
+                else if (relegationLimit > 0 && index > safeZoneIndex) clinchedRelegation = true;
+                else clinchedNeutral = true;
             } else {
-                // === VARIANTA B: TÝM JEŠTĚ MŮŽE MĚNIT POZICI ===
-                // Musíme použít body a thresholdy.
+                // Jistota QF
+                if (qfLimit > 0 && myPoints > thresholdQF) clinchedQF = true;
 
-                // Jistota QF: Mám víc bodů, než kolik může MAXIMÁLNĚ získat ten nejlepší, co by skončil MIMO QF?
-                if (qfLimit > 0 && myPoints > thresholdQF) {
-                    clinchedQF = true;
+                // Jistota Play-in
+                if (totalAdvancing > 0 && myPoints > thresholdPlayin || totalAdvancing >= sorted.length) clinchedPlayin = true;
+
+                // Jistota Neutral (Záchrana - tým už matematicky nemůže spadnout)
+                if (relegationLimit > 0 && myPoints > thresholdRelegation) {
+                    clinchedNeutral = true;
+                } else if (relegationLimit === 0) {
+                    // Pokud se vůbec nesestupuje, každý tým má automaticky jistotu záchrany (neutral)
+                    clinchedNeutral = true;
                 }
 
-                // Jistota Playin: Mám víc bodů, než kolik může MAXIMÁLNĚ získat ten, co by nepostoupil VŮBEC?
-                if (totalAdvancing > 0 && myPoints > thresholdPlayin || totalAdvancing >= sorted.length) {
-                    clinchedPlayin = true;
-                }
-
-                // Jistota Sestupu: I když vše vyhraju, budu mít míň, než má ten poslední v bezpečí TEĎ
+                // Jistota sestupu (Můj absolutní bodový strop nestačí ani na aktuální body posledního zachráněného)
                 if (relegationLimit > 0 && index > safeZoneIndex) {
                     if (myMaxPoints < safetyPoints) clinchedRelegation = true;
                 }
             }
 
-            //console.log(`   Clinched: QF=${clinchedQF}, Playin=${clinchedPlayin}`);
-
-            // --- TŘÍDY ---
-            // Priorita: Sestup > QF > Playin
+            // --- TŘÍDY (TVOJE KASKÁDA JISTOT) ---
+            // Třída se nastaví podle aktuální zóny, ale PŘEPÍŠE SE tou nejlepší metu, kterou má tým JISTOU.
             let rowClass = currentZone;
+
             if (clinchedRelegation) rowClass = 'clinched-relegation';
             else if (clinchedQF) rowClass = 'clinched-quarterfinal';
             else if (clinchedPlayin) rowClass = 'clinched-playin';
+            else if (clinchedNeutral) rowClass = 'clinched-neutral'; // Aplikace jistoty záchrany
 
             if (leagueObj.crossGroupTable && (index + 1) === leagueObj.crossGroupPosition) {
                 if (locked) {
-                    rowClass = 'clinched-crosstable'; // Přebije 'clinched-playin' atd.
+                    rowClass = 'clinched-crosstable';
                 }
             }
 
@@ -1863,21 +1871,33 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 
             const cLocked = !canDrop && !canRise;
 
-            // --- CLINCHED LOGIKA ---
+            // Práh pro záchranu (Cross-table)
+            let cThresholdRelegation = 0;
+            if (cRelLimit > 0 && cSafeZoneIndex + 1 < crossGroupTeams.length) {
+                cThresholdRelegation = getCrossMaxPotentialOfZone(cSafeZoneIndex + 1);
+            }
+
+            // --- CLINCHED LOGIKA VČETNĚ NEUTRAL (Cross-Table) ---
             let cSafeQF = false;
             let cSafePlayin = false;
             let cRelegated = false;
+            let cNeutralLocked = false;
 
             if (cLocked) {
                 if (cQfLimit > 0 && index < cQfLimit) cSafeQF = true;
                 else if (cTotalAdvancing > 0 && index < cTotalAdvancing) cSafePlayin = true;
-
-                if (cRelLimit > 0 && index > cSafeZoneIndex) {
-                    if (!cSafeQF && !cSafePlayin) cRelegated = true;
-                }
+                else if (cRelLimit > 0 && index > cSafeZoneIndex) cRelegated = true;
+                else cNeutralLocked = true;
             } else {
                 if (cQfLimit > 0 && myPoints > cThresholdQF) cSafeQF = true;
                 else if (cTotalAdvancing > 0 && myPoints > cThresholdPlayin) cSafePlayin = true;
+
+                // Jistota Neutral (Cross-table)
+                if (cRelLimit > 0 && myPoints > cThresholdRelegation) {
+                    cNeutralLocked = true;
+                } else if (cRelLimit === 0) {
+                    cNeutralLocked = true;
+                }
 
                 if (cRelLimit > 0 && index > cSafeZoneIndex) {
                     const safetyTarget = crossGroupTeams[cSafeZoneIndex]?.stats?.[selectedSeason]?.points || 0;
@@ -1885,11 +1905,13 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
                 }
             }
 
-            // Aplikace tříd
+            // Aplikace tříd (Kaskáda)
             let rowClass = currentZone;
+
             if (cRelegated) rowClass = "clinched-relegation";
             else if (cSafeQF) rowClass = "clinched-quarterfinal";
             else if (cSafePlayin) rowClass = "clinched-playin";
+            else if (cNeutralLocked) rowClass = "clinched-neutral";
 
             if (cLocked) rowClass += " locked";
 
@@ -2683,60 +2705,57 @@ router.get('/history/a', requireLogin, (req, res) => {
             const locked = !canDrop && !canRise;
             //console.log(`   Logic: CanDrop=${canDrop}, CanRise=${canRise} => LOCKED=${locked}`);
 
-            // --- CLINCHED (OPRAVENÁ LOGIKA) ---
-            // Zde rozdělujeme logiku:
-            // A) Pokud je tým LOCKED -> Barva se určí natvrdo podle pozice (indexu).
-            // B) Pokud tým NENÍ LOCKED -> Barva se určí podle bodů (matematická jistota).
-
+            // --- CLINCHED (OPRAVENÁ LOGIKA VČETNĚ NEUTRAL - JISTOTY) ---
             let clinchedQF = false;
             let clinchedPlayin = false;
             let clinchedRelegation = false;
+            let clinchedNeutral = false;
+
+            // Práh pro záchranu: Kolik bodů může maximálně získat nejlepší tým v sestupovém pásmu?
+            let thresholdRelegation = 0;
+            if (relegationLimit > 0 && safeZoneIndex >= 0 && safeZoneIndex + 1 < sorted.length) {
+                thresholdRelegation = getMaxPotentialOfZone(safeZoneIndex + 1);
+            }
 
             if (locked) {
-                // === VARIANTA A: TÝM JE ZAMČENÝ ===
-                // Už se nemůže pohnout, takže pokud je teď na postupovém místě, má to jisté.
-                if (qfLimit > 0 && index < qfLimit) {
-                    clinchedQF = true;
-                } else if (totalAdvancing > 0 && index < totalAdvancing) {
-                    clinchedPlayin = true;
-                }
-
-                // Sestup - pokud je zamčený v zóně sestupu
-                if (relegationLimit > 0 && index > safeZoneIndex) {
-                    clinchedRelegation = true;
-                }
+                // Tým už dohrál nebo se nemůže hnout ze své pozice
+                if (qfLimit > 0 && index < qfLimit) clinchedQF = true;
+                else if (totalAdvancing > 0 && index < totalAdvancing) clinchedPlayin = true;
+                else if (relegationLimit > 0 && index > safeZoneIndex) clinchedRelegation = true;
+                else clinchedNeutral = true;
             } else {
-                // === VARIANTA B: TÝM JEŠTĚ MŮŽE MĚNIT POZICI ===
-                // Musíme použít body a thresholdy.
+                // Jistota QF
+                if (qfLimit > 0 && myPoints > thresholdQF) clinchedQF = true;
 
-                // Jistota QF: Mám víc bodů, než kolik může MAXIMÁLNĚ získat ten nejlepší, co by skončil MIMO QF?
-                if (qfLimit > 0 && myPoints > thresholdQF) {
-                    clinchedQF = true;
+                // Jistota Play-in
+                if (totalAdvancing > 0 && myPoints > thresholdPlayin || totalAdvancing >= sorted.length) clinchedPlayin = true;
+
+                // Jistota Neutral (Záchrana - tým už matematicky nemůže spadnout)
+                if (relegationLimit > 0 && myPoints > thresholdRelegation) {
+                    clinchedNeutral = true;
+                } else if (relegationLimit === 0) {
+                    // Pokud se vůbec nesestupuje, každý tým má automaticky jistotu záchrany (neutral)
+                    clinchedNeutral = true;
                 }
 
-                // Jistota Playin: Mám víc bodů, než kolik může MAXIMÁLNĚ získat ten, co by nepostoupil VŮBEC?
-                if (totalAdvancing > 0 && myPoints > thresholdPlayin || totalAdvancing >= sorted.length) {
-                    clinchedPlayin = true;
-                }
-
-                // Jistota Sestupu: I když vše vyhraju, budu mít míň, než má ten poslední v bezpečí TEĎ
+                // Jistota sestupu (Můj absolutní bodový strop nestačí ani na aktuální body posledního zachráněného)
                 if (relegationLimit > 0 && index > safeZoneIndex) {
                     if (myMaxPoints < safetyPoints) clinchedRelegation = true;
                 }
             }
 
-            //console.log(`   Clinched: QF=${clinchedQF}, Playin=${clinchedPlayin}`);
-
-            // --- TŘÍDY ---
-            // Priorita: Sestup > QF > Playin
+            // --- TŘÍDY (TVOJE KASKÁDA JISTOT) ---
+            // Třída se nastaví podle aktuální zóny, ale PŘEPÍŠE SE tou nejlepší metu, kterou má tým JISTOU.
             let rowClass = currentZone;
+
             if (clinchedRelegation) rowClass = 'clinched-relegation';
             else if (clinchedQF) rowClass = 'clinched-quarterfinal';
             else if (clinchedPlayin) rowClass = 'clinched-playin';
+            else if (clinchedNeutral) rowClass = 'clinched-neutral'; // Aplikace jistoty záchrany
 
             if (leagueObj.crossGroupTable && (index + 1) === leagueObj.crossGroupPosition) {
                 if (locked) {
-                    rowClass = 'clinched-crosstable'; // Přebije 'clinched-playin' atd.
+                    rowClass = 'clinched-crosstable';
                 }
             }
 
@@ -2910,21 +2929,33 @@ router.get('/history/a', requireLogin, (req, res) => {
 
             const cLocked = !canDrop && !canRise;
 
-            // --- CLINCHED LOGIKA ---
+            // Práh pro záchranu (Cross-table)
+            let cThresholdRelegation = 0;
+            if (cRelLimit > 0 && cSafeZoneIndex + 1 < crossGroupTeams.length) {
+                cThresholdRelegation = getCrossMaxPotentialOfZone(cSafeZoneIndex + 1);
+            }
+
+            // --- CLINCHED LOGIKA VČETNĚ NEUTRAL (Cross-Table) ---
             let cSafeQF = false;
             let cSafePlayin = false;
             let cRelegated = false;
+            let cNeutralLocked = false;
 
             if (cLocked) {
                 if (cQfLimit > 0 && index < cQfLimit) cSafeQF = true;
                 else if (cTotalAdvancing > 0 && index < cTotalAdvancing) cSafePlayin = true;
-
-                if (cRelLimit > 0 && index > cSafeZoneIndex) {
-                    if (!cSafeQF && !cSafePlayin) cRelegated = true;
-                }
+                else if (cRelLimit > 0 && index > cSafeZoneIndex) cRelegated = true;
+                else cNeutralLocked = true;
             } else {
                 if (cQfLimit > 0 && myPoints > cThresholdQF) cSafeQF = true;
                 else if (cTotalAdvancing > 0 && myPoints > cThresholdPlayin) cSafePlayin = true;
+
+                // Jistota Neutral (Cross-table)
+                if (cRelLimit > 0 && myPoints > cThresholdRelegation) {
+                    cNeutralLocked = true;
+                } else if (cRelLimit === 0) {
+                    cNeutralLocked = true;
+                }
 
                 if (cRelLimit > 0 && index > cSafeZoneIndex) {
                     const safetyTarget = crossGroupTeams[cSafeZoneIndex]?.stats?.[selectedSeason]?.points || 0;
@@ -2932,11 +2963,13 @@ router.get('/history/a', requireLogin, (req, res) => {
                 }
             }
 
-            // Aplikace tříd
+            // Aplikace tříd (Kaskáda)
             let rowClass = currentZone;
+
             if (cRelegated) rowClass = "clinched-relegation";
             else if (cSafeQF) rowClass = "clinched-quarterfinal";
             else if (cSafePlayin) rowClass = "clinched-playin";
+            else if (cNeutralLocked) rowClass = "clinched-neutral";
 
             if (cLocked) rowClass += " locked";
 
@@ -3596,60 +3629,57 @@ router.get('/history/table', requireLogin, (req, res) => {
             const locked = !canDrop && !canRise;
             //console.log(`   Logic: CanDrop=${canDrop}, CanRise=${canRise} => LOCKED=${locked}`);
 
-            // --- CLINCHED (OPRAVENÁ LOGIKA) ---
-            // Zde rozdělujeme logiku:
-            // A) Pokud je tým LOCKED -> Barva se určí natvrdo podle pozice (indexu).
-            // B) Pokud tým NENÍ LOCKED -> Barva se určí podle bodů (matematická jistota).
-
+            // --- CLINCHED (OPRAVENÁ LOGIKA VČETNĚ NEUTRAL - JISTOTY) ---
             let clinchedQF = false;
             let clinchedPlayin = false;
             let clinchedRelegation = false;
+            let clinchedNeutral = false;
+
+            // Práh pro záchranu: Kolik bodů může maximálně získat nejlepší tým v sestupovém pásmu?
+            let thresholdRelegation = 0;
+            if (relegationLimit > 0 && safeZoneIndex >= 0 && safeZoneIndex + 1 < sorted.length) {
+                thresholdRelegation = getMaxPotentialOfZone(safeZoneIndex + 1);
+            }
 
             if (locked) {
-                // === VARIANTA A: TÝM JE ZAMČENÝ ===
-                // Už se nemůže pohnout, takže pokud je teď na postupovém místě, má to jisté.
-                if (qfLimit > 0 && index < qfLimit) {
-                    clinchedQF = true;
-                } else if (totalAdvancing > 0 && index < totalAdvancing) {
-                    clinchedPlayin = true;
-                }
-
-                // Sestup - pokud je zamčený v zóně sestupu
-                if (relegationLimit > 0 && index > safeZoneIndex) {
-                    clinchedRelegation = true;
-                }
+                // Tým už dohrál nebo se nemůže hnout ze své pozice
+                if (qfLimit > 0 && index < qfLimit) clinchedQF = true;
+                else if (totalAdvancing > 0 && index < totalAdvancing) clinchedPlayin = true;
+                else if (relegationLimit > 0 && index > safeZoneIndex) clinchedRelegation = true;
+                else clinchedNeutral = true;
             } else {
-                // === VARIANTA B: TÝM JEŠTĚ MŮŽE MĚNIT POZICI ===
-                // Musíme použít body a thresholdy.
+                // Jistota QF
+                if (qfLimit > 0 && myPoints > thresholdQF) clinchedQF = true;
 
-                // Jistota QF: Mám víc bodů, než kolik může MAXIMÁLNĚ získat ten nejlepší, co by skončil MIMO QF?
-                if (qfLimit > 0 && myPoints > thresholdQF) {
-                    clinchedQF = true;
+                // Jistota Play-in
+                if (totalAdvancing > 0 && myPoints > thresholdPlayin || totalAdvancing >= sorted.length) clinchedPlayin = true;
+
+                // Jistota Neutral (Záchrana - tým už matematicky nemůže spadnout)
+                if (relegationLimit > 0 && myPoints > thresholdRelegation) {
+                    clinchedNeutral = true;
+                } else if (relegationLimit === 0) {
+                    // Pokud se vůbec nesestupuje, každý tým má automaticky jistotu záchrany (neutral)
+                    clinchedNeutral = true;
                 }
 
-                // Jistota Playin: Mám víc bodů, než kolik může MAXIMÁLNĚ získat ten, co by nepostoupil VŮBEC?
-                if (totalAdvancing > 0 && myPoints > thresholdPlayin || totalAdvancing >= sorted.length) {
-                    clinchedPlayin = true;
-                }
-
-                // Jistota Sestupu: I když vše vyhraju, budu mít míň, než má ten poslední v bezpečí TEĎ
+                // Jistota sestupu (Můj absolutní bodový strop nestačí ani na aktuální body posledního zachráněného)
                 if (relegationLimit > 0 && index > safeZoneIndex) {
                     if (myMaxPoints < safetyPoints) clinchedRelegation = true;
                 }
             }
 
-            //console.log(`   Clinched: QF=${clinchedQF}, Playin=${clinchedPlayin}`);
-
-            // --- TŘÍDY ---
-            // Priorita: Sestup > QF > Playin
+            // --- TŘÍDY (TVOJE KASKÁDA JISTOT) ---
+            // Třída se nastaví podle aktuální zóny, ale PŘEPÍŠE SE tou nejlepší metu, kterou má tým JISTOU.
             let rowClass = currentZone;
+
             if (clinchedRelegation) rowClass = 'clinched-relegation';
             else if (clinchedQF) rowClass = 'clinched-quarterfinal';
             else if (clinchedPlayin) rowClass = 'clinched-playin';
+            else if (clinchedNeutral) rowClass = 'clinched-neutral'; // Aplikace jistoty záchrany
 
             if (leagueObj.crossGroupTable && (index + 1) === leagueObj.crossGroupPosition) {
                 if (locked) {
-                    rowClass = 'clinched-crosstable'; // Přebije 'clinched-playin' atd.
+                    rowClass = 'clinched-crosstable';
                 }
             }
 
@@ -3823,21 +3853,33 @@ router.get('/history/table', requireLogin, (req, res) => {
 
             const cLocked = !canDrop && !canRise;
 
-            // --- CLINCHED LOGIKA ---
+            // Práh pro záchranu (Cross-table)
+            let cThresholdRelegation = 0;
+            if (cRelLimit > 0 && cSafeZoneIndex + 1 < crossGroupTeams.length) {
+                cThresholdRelegation = getCrossMaxPotentialOfZone(cSafeZoneIndex + 1);
+            }
+
+            // --- CLINCHED LOGIKA VČETNĚ NEUTRAL (Cross-Table) ---
             let cSafeQF = false;
             let cSafePlayin = false;
             let cRelegated = false;
+            let cNeutralLocked = false;
 
             if (cLocked) {
                 if (cQfLimit > 0 && index < cQfLimit) cSafeQF = true;
                 else if (cTotalAdvancing > 0 && index < cTotalAdvancing) cSafePlayin = true;
-
-                if (cRelLimit > 0 && index > cSafeZoneIndex) {
-                    if (!cSafeQF && !cSafePlayin) cRelegated = true;
-                }
+                else if (cRelLimit > 0 && index > cSafeZoneIndex) cRelegated = true;
+                else cNeutralLocked = true;
             } else {
                 if (cQfLimit > 0 && myPoints > cThresholdQF) cSafeQF = true;
                 else if (cTotalAdvancing > 0 && myPoints > cThresholdPlayin) cSafePlayin = true;
+
+                // Jistota Neutral (Cross-table)
+                if (cRelLimit > 0 && myPoints > cThresholdRelegation) {
+                    cNeutralLocked = true;
+                } else if (cRelLimit === 0) {
+                    cNeutralLocked = true;
+                }
 
                 if (cRelLimit > 0 && index > cSafeZoneIndex) {
                     const safetyTarget = crossGroupTeams[cSafeZoneIndex]?.stats?.[selectedSeason]?.points || 0;
@@ -3845,11 +3887,13 @@ router.get('/history/table', requireLogin, (req, res) => {
                 }
             }
 
-            // Aplikace tříd
+            // Aplikace tříd (Kaskáda)
             let rowClass = currentZone;
+
             if (cRelegated) rowClass = "clinched-relegation";
             else if (cSafeQF) rowClass = "clinched-quarterfinal";
             else if (cSafePlayin) rowClass = "clinched-playin";
+            else if (cNeutralLocked) rowClass = "clinched-neutral";
 
             if (cLocked) rowClass += " locked";
 
@@ -4472,60 +4516,57 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
             const locked = !canDrop && !canRise;
             //console.log(`   Logic: CanDrop=${canDrop}, CanRise=${canRise} => LOCKED=${locked}`);
 
-            // --- CLINCHED (OPRAVENÁ LOGIKA) ---
-            // Zde rozdělujeme logiku:
-            // A) Pokud je tým LOCKED -> Barva se určí natvrdo podle pozice (indexu).
-            // B) Pokud tým NENÍ LOCKED -> Barva se určí podle bodů (matematická jistota).
-
+            // --- CLINCHED (OPRAVENÁ LOGIKA VČETNĚ NEUTRAL - JISTOTY) ---
             let clinchedQF = false;
             let clinchedPlayin = false;
             let clinchedRelegation = false;
+            let clinchedNeutral = false;
+
+            // Práh pro záchranu: Kolik bodů může maximálně získat nejlepší tým v sestupovém pásmu?
+            let thresholdRelegation = 0;
+            if (relegationLimit > 0 && safeZoneIndex >= 0 && safeZoneIndex + 1 < sorted.length) {
+                thresholdRelegation = getMaxPotentialOfZone(safeZoneIndex + 1);
+            }
 
             if (locked) {
-                // === VARIANTA A: TÝM JE ZAMČENÝ ===
-                // Už se nemůže pohnout, takže pokud je teď na postupovém místě, má to jisté.
-                if (qfLimit > 0 && index < qfLimit) {
-                    clinchedQF = true;
-                } else if (totalAdvancing > 0 && index < totalAdvancing) {
-                    clinchedPlayin = true;
-                }
-
-                // Sestup - pokud je zamčený v zóně sestupu
-                if (relegationLimit > 0 && index > safeZoneIndex) {
-                    clinchedRelegation = true;
-                }
+                // Tým už dohrál nebo se nemůže hnout ze své pozice
+                if (qfLimit > 0 && index < qfLimit) clinchedQF = true;
+                else if (totalAdvancing > 0 && index < totalAdvancing) clinchedPlayin = true;
+                else if (relegationLimit > 0 && index > safeZoneIndex) clinchedRelegation = true;
+                else clinchedNeutral = true;
             } else {
-                // === VARIANTA B: TÝM JEŠTĚ MŮŽE MĚNIT POZICI ===
-                // Musíme použít body a thresholdy.
+                // Jistota QF
+                if (qfLimit > 0 && myPoints > thresholdQF) clinchedQF = true;
 
-                // Jistota QF: Mám víc bodů, než kolik může MAXIMÁLNĚ získat ten nejlepší, co by skončil MIMO QF?
-                if (qfLimit > 0 && myPoints > thresholdQF) {
-                    clinchedQF = true;
+                // Jistota Play-in
+                if (totalAdvancing > 0 && myPoints > thresholdPlayin || totalAdvancing >= sorted.length) clinchedPlayin = true;
+
+                // Jistota Neutral (Záchrana - tým už matematicky nemůže spadnout)
+                if (relegationLimit > 0 && myPoints > thresholdRelegation) {
+                    clinchedNeutral = true;
+                } else if (relegationLimit === 0) {
+                    // Pokud se vůbec nesestupuje, každý tým má automaticky jistotu záchrany (neutral)
+                    clinchedNeutral = true;
                 }
 
-                // Jistota Playin: Mám víc bodů, než kolik může MAXIMÁLNĚ získat ten, co by nepostoupil VŮBEC?
-                if (totalAdvancing > 0 && myPoints > thresholdPlayin || totalAdvancing >= sorted.length) {
-                    clinchedPlayin = true;
-                }
-
-                // Jistota Sestupu: I když vše vyhraju, budu mít míň, než má ten poslední v bezpečí TEĎ
+                // Jistota sestupu (Můj absolutní bodový strop nestačí ani na aktuální body posledního zachráněného)
                 if (relegationLimit > 0 && index > safeZoneIndex) {
                     if (myMaxPoints < safetyPoints) clinchedRelegation = true;
                 }
             }
 
-            //console.log(`   Clinched: QF=${clinchedQF}, Playin=${clinchedPlayin}`);
-
-            // --- TŘÍDY ---
-            // Priorita: Sestup > QF > Playin
+            // --- TŘÍDY (TVOJE KASKÁDA JISTOT) ---
+            // Třída se nastaví podle aktuální zóny, ale PŘEPÍŠE SE tou nejlepší metu, kterou má tým JISTOU.
             let rowClass = currentZone;
+
             if (clinchedRelegation) rowClass = 'clinched-relegation';
             else if (clinchedQF) rowClass = 'clinched-quarterfinal';
             else if (clinchedPlayin) rowClass = 'clinched-playin';
+            else if (clinchedNeutral) rowClass = 'clinched-neutral'; // Aplikace jistoty záchrany
 
             if (leagueObj.crossGroupTable && (index + 1) === leagueObj.crossGroupPosition) {
                 if (locked) {
-                    rowClass = 'clinched-crosstable'; // Přebije 'clinched-playin' atd.
+                    rowClass = 'clinched-crosstable';
                 }
             }
 
@@ -4699,21 +4740,34 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 
             const cLocked = !canDrop && !canRise;
 
-            // --- CLINCHED LOGIKA ---
+
+            // Práh pro záchranu (Cross-table)
+            let cThresholdRelegation = 0;
+            if (cRelLimit > 0 && cSafeZoneIndex + 1 < crossGroupTeams.length) {
+                cThresholdRelegation = getCrossMaxPotentialOfZone(cSafeZoneIndex + 1);
+            }
+
+            // --- CLINCHED LOGIKA VČETNĚ NEUTRAL (Cross-Table) ---
             let cSafeQF = false;
             let cSafePlayin = false;
             let cRelegated = false;
+            let cNeutralLocked = false;
 
             if (cLocked) {
                 if (cQfLimit > 0 && index < cQfLimit) cSafeQF = true;
                 else if (cTotalAdvancing > 0 && index < cTotalAdvancing) cSafePlayin = true;
-
-                if (cRelLimit > 0 && index > cSafeZoneIndex) {
-                    if (!cSafeQF && !cSafePlayin) cRelegated = true;
-                }
+                else if (cRelLimit > 0 && index > cSafeZoneIndex) cRelegated = true;
+                else cNeutralLocked = true;
             } else {
                 if (cQfLimit > 0 && myPoints > cThresholdQF) cSafeQF = true;
                 else if (cTotalAdvancing > 0 && myPoints > cThresholdPlayin) cSafePlayin = true;
+
+                // Jistota Neutral (Cross-table)
+                if (cRelLimit > 0 && myPoints > cThresholdRelegation) {
+                    cNeutralLocked = true;
+                } else if (cRelLimit === 0) {
+                    cNeutralLocked = true;
+                }
 
                 if (cRelLimit > 0 && index > cSafeZoneIndex) {
                     const safetyTarget = crossGroupTeams[cSafeZoneIndex]?.stats?.[selectedSeason]?.points || 0;
@@ -4721,11 +4775,13 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
                 }
             }
 
-            // Aplikace tříd
+            // Aplikace tříd (Kaskáda)
             let rowClass = currentZone;
+
             if (cRelegated) rowClass = "clinched-relegation";
             else if (cSafeQF) rowClass = "clinched-quarterfinal";
             else if (cSafePlayin) rowClass = "clinched-playin";
+            else if (cNeutralLocked) rowClass = "clinched-neutral";
 
             if (cLocked) rowClass += " locked";
 

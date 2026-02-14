@@ -6294,7 +6294,13 @@
     "liga": "Olympiáda",
     "season": "25/26",
     "isPlayoff": false,
-    "postponed": false
+    "postponed": false,
+    "result": {
+      "scoreHome": 4,
+      "scoreAway": 1,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 403,
@@ -6303,7 +6309,14 @@
     "datetime": "2026-02-13T12:10",
     "liga": "Olympiáda",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 2,
+      "scoreAway": 3,
+      "ot": false,
+      "winner": "away"
+    }
   },
   {
     "id": 404,
@@ -6312,7 +6325,14 @@
     "datetime": "2026-02-13T16:40",
     "liga": "Olympiáda",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 3,
+      "scoreAway": 6,
+      "ot": false,
+      "winner": "away"
+    }
   },
   {
     "id": 405,
@@ -6321,7 +6341,14 @@
     "datetime": "2026-02-13T21:10",
     "liga": "Olympiáda",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 5,
+      "scoreAway": 1,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 406,
@@ -6330,7 +6357,14 @@
     "datetime": "2026-02-14T12:10",
     "liga": "Olympiáda",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 3,
+      "scoreAway": 4,
+      "ot": false,
+      "winner": "away"
+    }
   },
   {
     "id": 407,
@@ -6339,7 +6373,14 @@
     "datetime": "2026-02-14T12:10",
     "liga": "Olympiáda",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 5,
+      "scoreAway": 3,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 408,
@@ -6348,7 +6389,14 @@
     "datetime": "2026-02-14T16:40",
     "liga": "Olympiáda",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 11,
+      "scoreAway": 0,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 409,

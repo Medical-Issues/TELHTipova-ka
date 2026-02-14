@@ -983,8 +983,8 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 0,
-        "wins": 0,
+        "points": 3,
+        "wins": 1,
         "otWins": 0,
         "otLosses": 0,
         "losses": 1
@@ -1003,7 +1003,7 @@
         "wins": 0,
         "otWins": 0,
         "otLosses": 0,
-        "losses": 1
+        "losses": 2
       }
     }
   },
@@ -1019,7 +1019,7 @@
         "wins": 1,
         "otWins": 0,
         "otLosses": 0,
-        "losses": 0
+        "losses": 1
       }
     }
   },
@@ -1031,8 +1031,8 @@
     "group": 1,
     "stats": {
       "25/26": {
-        "points": 3,
-        "wins": 1,
+        "points": 6,
+        "wins": 2,
         "otWins": 0,
         "otLosses": 0,
         "losses": 0
@@ -1047,8 +1047,8 @@
     "group": 2,
     "stats": {
       "25/26": {
-        "points": 0,
-        "wins": 0,
+        "points": 6,
+        "wins": 2,
         "otWins": 0,
         "otLosses": 0,
         "losses": 1
@@ -1067,7 +1067,7 @@
         "wins": 0,
         "otWins": 0,
         "otLosses": 0,
-        "losses": 1
+        "losses": 3
       }
     }
   },
@@ -1079,11 +1079,11 @@
     "group": 2,
     "stats": {
       "25/26": {
-        "points": 3,
-        "wins": 1,
+        "points": 6,
+        "wins": 2,
         "otWins": 0,
         "otLosses": 0,
-        "losses": 0
+        "losses": 1
       }
     }
   },
@@ -1095,11 +1095,11 @@
     "group": 2,
     "stats": {
       "25/26": {
-        "points": 3,
-        "wins": 1,
+        "points": 6,
+        "wins": 2,
         "otWins": 0,
         "otLosses": 0,
-        "losses": 0
+        "losses": 1
       }
     }
   },
@@ -1131,7 +1131,7 @@
         "wins": 1,
         "otWins": 0,
         "otLosses": 0,
-        "losses": 0
+        "losses": 1
       }
     }
   },
@@ -1143,8 +1143,8 @@
     "group": 3,
     "stats": {
       "25/26": {
-        "points": 0,
-        "wins": 0,
+        "points": 3,
+        "wins": 1,
         "otWins": 0,
         "otLosses": 0,
         "losses": 1
