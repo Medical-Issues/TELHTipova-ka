@@ -177,6 +177,102 @@ router.get("/table-tip", requireLogin, (req, res) => {
     });
 
     const sortedGroups = Object.keys(teamsByGroup).sort();
+    // =========================================================
+    // === CENTRALIZOVANÉ IIHF SORTING PRO OBĚ STRANY ===
+    // =========================================================
+    for (const group of sortedGroups) {
+        teamsByGroup[group].sort((a, b) => {
+            const aStats = a.stats?.[selectedSeason] || {};
+            const bStats = b.stats?.[selectedSeason] || {};
+            const pA = aStats.points || 0;
+            const pB = bStats.points || 0;
+
+            // 1. Kritérium: BODY
+            if (pB !== pA) return pB - pA;
+
+            // --- MINITABULKA ---
+            const tiedTeamIds = teamsByGroup[group]
+                .filter(t => (t.stats?.[selectedSeason]?.points || 0) === pA)
+                .map(t => Number(t.id));
+
+            const getMiniStats = (teamId) => {
+                let mPts = 0, mDiff = 0, mGF = 0;
+                const groupMatches = matches.filter(m =>
+                    m.season === selectedSeason &&
+                    m.result &&
+                    !m.isPlayoff &&
+                    tiedTeamIds.includes(Number(m.homeTeamId)) &&
+                    tiedTeamIds.includes(Number(m.awayTeamId)) &&
+                    (Number(m.homeTeamId) === teamId || Number(m.awayTeamId) === teamId)
+                );
+
+                groupMatches.forEach(m => {
+                    const isHome = Number(m.homeTeamId) === teamId;
+                    let sH = m.result?.scoreHome !== undefined ? Number(m.result.scoreHome) : (m.scoreHome !== undefined ? Number(m.scoreHome) : 0);
+                    let sA = m.result?.scoreAway !== undefined ? Number(m.result.scoreAway) : (m.scoreAway !== undefined ? Number(m.scoreAway) : 0);
+                    const isOt = m.result?.ot || m.result?.so || m.ot || m.so;
+
+                    let hPts, aPts;
+                    if (sH > sA) { hPts = isOt ? 2 : 3; aPts = isOt ? 1 : 0; }
+                    else if (sA > sH) { aPts = isOt ? 2 : 3; hPts = isOt ? 1 : 0; }
+                    else { hPts = 1; aPts = 1; }
+
+                    let pts, gf, ga;
+                    if (isHome) { pts = hPts; gf = sH; ga = sA; }
+                    else { pts = aPts; gf = sA; ga = sH; }
+
+                    mPts += pts;
+                    mDiff += (gf - ga);
+                    mGF += gf;
+                });
+                return {pts: mPts, diff: mDiff, gf: mGF};
+            };
+
+            const msA = getMiniStats(Number(a.id));
+            const msB = getMiniStats(Number(b.id));
+
+            // 2. Kritérium: BODY V MINITABULCE
+            if (msB.pts !== msA.pts) return msB.pts - msA.pts;
+
+            // 3. Kritérium: ROZDÍL SKÓRE V MINITABULCE
+            if (msB.diff !== msA.diff) return msB.diff - msA.diff;
+
+            // 4. Kritérium: GÓLY V MINITABULCE
+            if (msB.gf !== msA.gf) return msB.gf - msA.gf;
+
+            // 5. Kritérium: PŘÍMÝ VZÁJEMNÝ ZÁPAS
+            const directMatch = matches.find(m =>
+                m.season === selectedSeason &&
+                m.result &&
+                !m.isPlayoff &&
+                ((Number(m.homeTeamId) === Number(a.id) && Number(m.awayTeamId) === Number(b.id)) ||
+                    (Number(m.homeTeamId) === Number(b.id) && Number(m.awayTeamId) === Number(a.id)))
+            );
+
+            if (directMatch) {
+                const isAHome = Number(directMatch.homeTeamId) === Number(a.id);
+                let sH = directMatch.result?.scoreHome ?? directMatch.scoreHome ?? 0;
+                let sA = directMatch.result?.scoreAway ?? directMatch.scoreAway ?? 0;
+
+                if (isAHome) {
+                    if (sH > sA) return -1;
+                    if (sA > sH) return 1;
+                } else {
+                    if (sA > sH) return -1;
+                    if (sH > sA) return 1;
+                }
+            }
+
+            // 6. Kritérium: CELKOVÉ SKÓRE
+            const sA = scores[a.id] || {gf: 0, ga: 0};
+            const sB = scores[b.id] || {gf: 0, ga: 0};
+            const diffA = sA.gf - sA.ga;
+            const diffB = sB.gf - sB.ga;
+            if (diffA !== diffB) return diffB - diffA;
+
+            return 0;
+        });
+    }
     const statusStyle = isRegularSeasonFinished ? "color: lightgrey; font-weight: bold;" : "color: white; opacity: 0.7; background-color: black";
 
 // --- HTML START ---
@@ -843,12 +939,11 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
         </table>
     </div>
 </table>
-</div>
 
 <section class="progress-section">
 <h3>Odehráno zápasů v základní části</h3>
 <div class="progress-container">
-<div class="progress-bar" style="width:${percentage}%;">${percentage}%</div>
+<div class="progress-bar" style="width:100%;">${percentage}%</div>
 </div>
 <p id="progress-text"></p>
 </section>
@@ -859,7 +954,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
                     p.style.display = which === 'playoff' ? 'block' : 'none';
                 }
             </script>
-        </div>`;
+        </div></div>`;
 
     // --- STATISTIKY (OBNOVENO V PLNÉ PARÁDĚ) ---
     if (username) {
@@ -943,6 +1038,18 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
         </section>`;
     }
 
+    // =========================================================
+    // 1. ZÍSKÁNÍ SKUTEČNÉHO POŘADÍ Z LEVÉ TABULKY
+    // =========================================================
+    // Levá tabulka už pole v teamsByGroup správně seřadila podle IIHF,
+    // takže si jen uložíme výsledné pozice každého týmu, abychom je vpravo nemuseli složitě počítat.
+    const globalRealRankMap = {};
+    for (const group of sortedGroups) {
+        teamsByGroup[group].forEach((t, i) => {
+            globalRealRankMap[t.id] = i + 1;
+        });
+    }
+
     // --- PRAVÝ PANEL: TIPOVÁNÍ TABULKY ---
     html += `
         <section class="matches-container">
@@ -957,7 +1064,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
         const groupLabel = getGroupDisplayLabel(gKey);
         const isGroupLocked = (isTipsLocked === true) || (Array.isArray(isTipsLocked) && isTipsLocked.includes(gKey));
 
-        // Načtení tipu
+        // Načtení tipu uživatele
         let currentGroupTipIds = [];
         if (userTipData) {
             if (Array.isArray(userTipData)) {
@@ -968,35 +1075,13 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
         }
         const hasTipForGroup = currentGroupTipIds.length > 0;
 
-        const realRankMap = {};
-        const realStandings = [...teamsInGroup].sort((a, b) => {
-            // 1. Body bereme z ULOŽENÝCH STATISTIK (team.stats), ne z live výpočtu
-            const statsA = a.stats?.[selectedSeason] || {};
-            const statsB = b.stats?.[selectedSeason] || {};
-            const pointsA = statsA.points || 0;
-            const pointsB = statsB.points || 0;
+        // Vytvoříme bezpečnou KOPII pole, aby řazení vpravo nerozbilo nic dalšího!
+        const teamsForTip = [...teamsInGroup];
 
-            // 2. Skóre bereme z live výpočtu (stejně jako v levé tabulce)
-            const scoreA = scores[a.id] || {gf: 0, ga: 0};
-            const scoreB = scores[b.id] || {gf: 0, ga: 0};
-            const diffA = scoreA.gf - scoreA.ga;
-            const diffB = scoreB.gf - scoreB.ga;
-
-            // 3. Počet zápasů (pro přesnou shodu s levou tabulkou)
-            const matchesA = (statsA.wins || 0) + (statsA.otWins || 0) + (statsA.otLosses || 0) + (statsA.losses || 0);
-            const matchesB = (statsB.wins || 0) + (statsB.otWins || 0) + (statsB.otLosses || 0) + (statsB.losses || 0);
-
-            // Samotné porovnání
-            if (pointsB !== pointsA) return pointsB - pointsA; // Kdo má víc bodů
-            if (diffB !== diffA) return diffB - diffA;         // Kdo má lepší skóre
-            return matchesA - matchesB;                        // Kdo má méně zápasů (volitelné)
-        });
-
-        realStandings.forEach((t, i) => realRankMap[t.id] = i + 1);
-        // Řazení pro zobrazení
-        // Řazení pro zobrazení (Smart Sort nebo User Tip)
+        // Seřadíme týmy pro zobrazení v pravém panelu:
         if (hasTipForGroup) {
-            teamsInGroup.sort((a, b) => {
+            // A) Pokud uživatel už tipoval, seřadíme podle jeho tipu
+            teamsForTip.sort((a, b) => {
                 const indexA = currentGroupTipIds.indexOf(a.id);
                 const indexB = currentGroupTipIds.indexOf(b.id);
                 if (indexA === -1) return 1;
@@ -1004,15 +1089,11 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
                 return indexA - indexB;
             });
         } else {
-            // Pokud netipoval, seřadíme to stejně jako realStandings (Smart Sort)
-            teamsInGroup.sort((a, b) => {
-                const statsA = a.stats?.[selectedSeason] || {};
-                const statsB = b.stats?.[selectedSeason] || {};
-                if ((statsB.points || 0) !== (statsA.points || 0)) return (statsB.points || 0) - (statsA.points || 0);
-
-                const sA = scores[a.id] || {gf: 0, ga: 0};
-                const sB = scores[b.id] || {gf: 0, ga: 0};
-                return (sB.gf - sB.ga) - (sA.gf - sA.ga);
+            // B) Pokud ještě netipoval, ukážeme mu výchozí správné pořadí (vezmeme ho z naší mapy levé tabulky)
+            teamsForTip.sort((a, b) => {
+                const rankA = globalRealRankMap[a.id] || 99;
+                const rankB = globalRealRankMap[b.id] || 99;
+                return rankA - rankB;
             });
         }
 
@@ -1023,9 +1104,10 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
                 ${isGroupLocked ? `<div style="background-color:#330000; color:#ffcccc; padding:5px; border:1px solid red; font-size:0.8em; margin-bottom:5px;">Skupina uzamčena</div>` : ''}
                 
                 <ul class="sortable-list" id="list-${gKey}" data-group="${gKey}">
-                    ${teamsInGroup.map((team, index) => {
+                    ${teamsForTip.map((team, index) => {
             const userRank = index + 1;
-            const realRank = realRankMap[team.id];
+            // ZDE se bere to jediné oficiální a správné pořadí
+            const realRank = globalRealRankMap[team.id] || '?';
             const diff = userRank - realRank;
             const isCorrect = (diff === 0);
 
@@ -2080,7 +2162,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <section class="progress-section">
 <h3>Odehráno zápasů v základní části</h3>
 <div class="progress-container">
-<div class="progress-bar" style="width:${percentage}%;">${percentage}%</div>
+<div class="progress-bar" style="width:100%;">${percentage}%</div>
 </div>
 <p id="progress-text"></p>
 </section>
@@ -5115,7 +5197,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <section class="progress-section">
 <h3>Odehráno zápasů v základní části</h3>
 <div class="progress-container">
-<div class="progress-bar" style="width:${percentage}%;">${percentage}%</div>
+<div class="progress-bar" style="width:100%;">${percentage}%</div>
 </div>
 <p id="progress-text"></p>
 </section>
