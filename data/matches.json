@@ -6405,7 +6405,14 @@
     "datetime": "2026-02-14T21:10",
     "liga": "Olympiáda",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 6,
+      "scoreAway": 3,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 410,

@@ -59,7 +59,7 @@
         "name": "Olympiáda",
         "isMultigroup": true,
         "groupCount": 3,
-        "maxMatches": 30,
+        "maxMatches": 18,
         "quarterfinal": 1,
         "playin": 4,
         "relegation": 0,

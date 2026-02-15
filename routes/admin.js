@@ -34,6 +34,14 @@ router.get('/', requireAdmin, (req, res) => {
         : [];
     const chosenSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
 
+    let clinchMode = 'strict';
+    try {
+        const settingsData = JSON.parse(fs.readFileSync('./data/settings.json', 'utf8'));
+        if (settingsData.clinchMode) clinchMode = settingsData.clinchMode;
+    } catch (e) {
+        // Soubor neexistuje, použije se 'strict'
+    }
+
     const leaguesFromMatches = [...new Set(matches.map(m => m.liga))];
     const leaguesFromTeams = [...new Set(teams.map(t => t.liga))];
     const leaguesFromLeagues = [... new Set(leagues.map(t => t.name))];
@@ -251,6 +259,24 @@ router.get('/', requireAdmin, (req, res) => {
     html += `
       </div>
       <button type="submit" class="action-btn edit-btn" style="margin-top: 10px;">Uložit viditelnost lig</button>
+      </form>
+    <h2 style="margin-top: 20px;">Logika zamykání tabulky</h2>
+    <form method="POST" action="/admin/settings/clinch">
+      <div class="season-choose" style="margin-bottom: 10px;">
+        <label>
+          <input type="radio" name="mode" value="strict" ${clinchMode === 'strict' ? 'checked' : ''} />
+          <strong>Striktní (Doporučeno)</strong>
+          <span style="display:block; font-size: 0.8em; color: gray;">Tým se obarví až když je pevně uzamčen ve svém patře.</span>
+        </label>
+      </div>
+      <div class="season-choose" style="margin-bottom: 10px;">
+        <label>
+          <input type="radio" name="mode" value="cascade" ${clinchMode === 'cascade' ? 'checked' : ''} />
+          <strong>Kaskádové (Nejvyšší meta)</strong>
+          <span style="display:block; font-size: 0.8em; color: gray;">Tým se obarví barvou nejvyššího patra, do kterého má už jistý přístup.</span>
+        </label>
+      </div>
+      <button type="submit" class="action-btn edit-btn" style="width: 100%;">Uložit logiku</button>
     </form>
   </div>
   </section>
@@ -1663,6 +1689,46 @@ router.post('/teams/points', requireAdmin, express.urlencoded({ extended: true }
 
     fs.writeFileSync('./data/teamBonuses.json', JSON.stringify(bonusData, null, 2));
     res.redirect(`/admin/teams/points?liga=${encodeURIComponent(liga)}`);
+});
+
+// POZOR: Pokud máš tento soubor už pod prefixem '/admin', změň URL jen na '/settings/clinch'
+router.post('/settings/clinch', requireAdmin, (req, res) => {
+    // 1. Zkontrolujeme, co přesně přišlo z formuláře
+    console.log("--- UKLÁDÁNÍ NASTAVENÍ ---");
+    console.log("Přijatá data v req.body:", req.body);
+
+    const mode = req.body.mode;
+    let settings = {};
+
+    // 2. Bezpečné načtení existujícího souboru
+    try {
+        if (fs.existsSync('./data/settings.json')) {
+            const rawData = fs.readFileSync('./data/settings.json', 'utf8');
+            if (rawData.trim() !== "") {
+                settings = JSON.parse(rawData);
+            }
+        }
+    } catch (e) {
+        console.error("Chyba při čtení settings.json:", e);
+    }
+
+    console.log("Aktuální stav před změnou:", settings);
+
+    // 3. Nastavení nové hodnoty
+    settings.clinchMode = (mode === 'cascade') ? 'cascade' : 'strict';
+
+    console.log("Nový stav k uložení:", settings);
+
+    // 4. Uložení
+    try {
+        fs.writeFileSync('./data/settings.json', JSON.stringify(settings, null, 2));
+        console.log("Úspěšně uloženo do ./data/settings.json");
+    } catch (err) {
+        console.error("Kritická chyba při zápisu do souboru:", err);
+    }
+
+    // Návrat na předchozí stránku (odkud se formulář odeslal)
+    res.redirect('/admin');
 });
 
 module.exports = router;

@@ -91,8 +91,8 @@
           "totalPlayoff": 9
         },
         "Olympiáda": {
-          "correct": 10,
-          "totalRegular": 13,
+          "correct": 11,
+          "totalRegular": 14,
           "totalPlayoff": 0,
           "tableCorrect": 7,
           "tableDeviation": 6
@@ -2051,6 +2051,26 @@
           },
           {
             "matchId": 409,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 411,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 410,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 412,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 413,
             "winner": "home",
             "loserWins": 0
           }
@@ -4041,8 +4061,8 @@
           "totalPlayoff": 9
         },
         "Olympiáda": {
-          "correct": 11,
-          "totalRegular": 13,
+          "correct": 12,
+          "totalRegular": 14,
           "totalPlayoff": 0,
           "tableCorrect": 8,
           "tableDeviation": 4
@@ -6009,6 +6029,26 @@
             "matchId": 409,
             "winner": "home",
             "loserWins": 0
+          },
+          {
+            "matchId": 410,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 411,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 412,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 413,
+            "winner": "home",
+            "loserWins": 0
           }
         ]
       }
@@ -6041,13 +6081,19 @@
           "totalPlayoff": 9
         },
         "Olympiáda": {
-          "correct": 10,
-          "totalRegular": 13,
+          "correct": 11,
+          "totalRegular": 14,
           "totalPlayoff": 0,
           "tableCorrect": 5,
           "tableDeviation": 8
         }
       }
     }
+  },
+  {
+    "username": "Nuimi",
+    "password": "$2b$10$uG7xmFZz.u1won5TtsIERem.vgyGARs1/X8XUzDHXX5s.x5Z6zqkm",
+    "correct": 0,
+    "total": 0
   }
 ]
