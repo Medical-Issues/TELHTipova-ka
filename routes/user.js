@@ -3447,12 +3447,8 @@ router.get('/history/table', requireLogin, (req, res) => {
     }
 
     // 2. FILTRACE TÝMŮ A ZÁPASŮ
-    // Oprava: Filtrujeme týmy podle vlastnosti 'liga', aby se načetly i týmy v MAXA lize (bez zápasů)
     const teamsInSelectedLiga = teams.filter(t => t.liga === selectedLiga && t.active);
-
-    // Zápasy filtrujeme zvlášť (pro výpočty bodů uživatelů)
     const matchesInLiga = matches.filter(m => m.season === selectedSeason && m.liga === selectedLiga);
-
 
     let teamBonusData = {};
     try {
@@ -3460,35 +3456,26 @@ router.get('/history/table', requireLogin, (req, res) => {
     } catch (e) { teamBonusData = {}; }
 
     teamsInSelectedLiga.forEach(t => {
-        // Inicializace, pokud neexistuje
         if (!t.stats) t.stats = {};
         if (!t.stats[selectedSeason]) t.stats[selectedSeason] = { points: 0, wins: 0, otWins: 0, otLosses: 0, losses: 0 };
 
-        // Získání reálných bodů ze zápasů
         let naturalPoints = t.stats[selectedSeason].points || 0;
-
-        // Načtení dat z JSONu (ošetření starého formátu vs. nového objektu)
         let bonusEntry = teamBonusData[selectedSeason]?.[selectedLiga]?.[t.id] || { points: 0, games: 0 };
         if (typeof bonusEntry === 'number') bonusEntry = { points: bonusEntry, games: 0 };
 
-        // Aplikace bodů (přičteme k existujícím)
         t.stats[selectedSeason].points = naturalPoints + (bonusEntry.points || 0);
-
-        // Uložení manuálních zápasů do dočasné proměnné (použijeme později u played a progress baru)
         t.stats[selectedSeason].manualGames = bonusEntry.games || 0;
     });
-    // =================================================================
 
     // 3. VÝPOČET REÁLNÉ TABULKY
     const scores = {};
-    // --- NAČTENÍ NASTAVENÍ VIZUÁLU (STRICT vs CASCADE) ---
-    let clinchMode = 'strict'; // Výchozí chování (striktní zamykání)
+    let clinchMode = 'strict';
     try {
         const settingsData = JSON.parse(fs.readFileSync('./data/settings.json', 'utf8'));
         if (settingsData.clinchMode) clinchMode = settingsData.clinchMode;
     } catch (e) {
-        // Pokud soubor ještě neexistuje, použije se výchozí 'strict'
     }
+
     teamsInSelectedLiga.forEach(t => scores[t.id] = {points: 0, gf: 0, ga: 0});
     matchesInLiga.forEach(m => {
         if (m.result) {
@@ -3515,36 +3502,143 @@ router.get('/history/table', requireLogin, (req, res) => {
         }
     });
 
-    const leagueObj = (allSeasonData[selectedSeason]?.leagues || []).find(l => l.name === selectedLiga) || {isMultigroup: false};
-    const teamsByGroup = {};
-    teamsInSelectedLiga.forEach(team => {
-        const group = team.group ? String.fromCharCode(team.group + 64) : 'X';
-        if (!teamsByGroup[group]) teamsByGroup[group] = [];
-        teamsByGroup[group].push(team);
-    });
-    const sortedGroupKeys = Object.keys(teamsByGroup).sort((a, b) => (a === 'default' ? -1 : parseInt(a) - parseInt(b)));
-    const getGroupDisplayLabel = (gKey) => (gKey === 'default' ? '' : `Skupina ${String.fromCharCode(64 + parseInt(gKey))}`);
+    const leagueObj = (allSeasonData[selectedSeason]?.leagues || []).find(l => l.name === selectedLiga) || {
+        name: selectedLiga,
+        isMultigroup: false,
+        maxMatches: 0,
+        quarterfinal: 0,
+        playin: 0,
+        relegation: 0
+    };
 
-    const realRankMaps = {};
-    for (const gKey of sortedGroupKeys) {
-        const groupTeams = [...teamsByGroup[gKey]];
-        groupTeams.sort((a, b) => {
+    // --- DVĚ STRUKTURY PRO SKUPINY (Levá vs Pravá strana) ---
+    const teamsByGroup = {}; // Pro levou stranu ('A', 'B', 'C')
+    const groupedTeams = {}; // Pro pravou stranu ('1', '2', '3')
+
+    teamsInSelectedLiga.forEach(team => {
+        // Levá strana (Tabulka)
+        const groupLetter = team.group ? String.fromCharCode(team.group + 64) : 'X';
+        if (!teamsByGroup[groupLetter]) teamsByGroup[groupLetter] = [];
+        teamsByGroup[groupLetter].push(team);
+
+        // Pravá strana (Tipy uživatelů)
+        let gKey = "default";
+        if (leagueObj.isMultigroup) {
+            gKey = String(team.group || 1);
+        }
+        if (!groupedTeams[gKey]) groupedTeams[gKey] = [];
+        groupedTeams[gKey].push(team);
+    });
+
+    const sortedGroups = Object.keys(teamsByGroup).sort();
+    const sortedGroupKeys = Object.keys(groupedTeams).sort((a, b) => {
+        if (a === 'default') return -1;
+        return parseInt(a) - parseInt(b);
+    });
+
+    const getGroupDisplayLabel = (gKey) => {
+        if (gKey === 'default') return '';
+        const num = parseInt(gKey);
+        return `Skupina ${String.fromCharCode(64 + num)}`;
+    };
+
+    // =========================================================
+    // === CENTRALIZOVANÉ IIHF SORTING (JEDNOU PRO VŽDY) ===
+    // =========================================================
+    const globalRealRankMap = {};
+
+    for (const group of sortedGroups) {
+        teamsByGroup[group].sort((a, b) => {
             const aStats = a.stats?.[selectedSeason] || {};
             const bStats = b.stats?.[selectedSeason] || {};
             const pA = aStats.points !== undefined ? aStats.points : scores[a.id].points;
             const pB = bStats.points !== undefined ? bStats.points : scores[b.id].points;
+
             if (pB !== pA) return pB - pA;
-            const sA = scores[a.id];
-            const sB = scores[b.id];
-            return (sB.gf - sB.ga) - (sA.gf - sA.ga);
+
+            const tiedTeamIds = teamsByGroup[group]
+                .filter(t => {
+                    const tPts = t.stats?.[selectedSeason]?.points !== undefined ? t.stats[selectedSeason].points : scores[t.id].points;
+                    return tPts === pA;
+                })
+                .map(t => Number(t.id));
+
+            const getMiniStats = (teamId) => {
+                let mPts = 0, mDiff = 0, mGF = 0;
+                const groupMatches = matchesInLiga.filter(m =>
+                    m.result &&
+                    !m.isPlayoff &&
+                    tiedTeamIds.includes(Number(m.homeTeamId)) &&
+                    tiedTeamIds.includes(Number(m.awayTeamId)) &&
+                    (Number(m.homeTeamId) === teamId || Number(m.awayTeamId) === teamId)
+                );
+
+                groupMatches.forEach(m => {
+                    const isHome = Number(m.homeTeamId) === teamId;
+                    let sH = m.result?.scoreHome !== undefined ? Number(m.result.scoreHome) : (m.scoreHome !== undefined ? Number(m.scoreHome) : 0);
+                    let sA = m.result?.scoreAway !== undefined ? Number(m.result.scoreAway) : (m.scoreAway !== undefined ? Number(m.scoreAway) : 0);
+                    const isOt = m.result?.ot || m.result?.so || m.ot || m.so;
+
+                    let hPts, aPts;
+                    if (sH > sA) { hPts = isOt ? 2 : 3; aPts = isOt ? 1 : 0; }
+                    else if (sA > sH) { aPts = isOt ? 2 : 3; hPts = isOt ? 1 : 0; }
+                    else { hPts = 1; aPts = 1; }
+
+                    let pts, gf, ga;
+                    if (isHome) { pts = hPts; gf = sH; ga = sA; }
+                    else { pts = aPts; gf = sA; ga = sH; }
+
+                    mPts += pts;
+                    mDiff += (gf - ga);
+                    mGF += gf;
+                });
+                return {pts: mPts, diff: mDiff, gf: mGF};
+            };
+
+            const msA = getMiniStats(Number(a.id));
+            const msB = getMiniStats(Number(b.id));
+
+            if (msB.pts !== msA.pts) return msB.pts - msA.pts;
+            if (msB.diff !== msA.diff) return msB.diff - msA.diff;
+            if (msB.gf !== msA.gf) return msB.gf - msA.gf;
+
+            const directMatch = matchesInLiga.find(m =>
+                m.result &&
+                !m.isPlayoff &&
+                ((Number(m.homeTeamId) === Number(a.id) && Number(m.awayTeamId) === Number(b.id)) ||
+                    (Number(m.homeTeamId) === Number(b.id) && Number(m.awayTeamId) === Number(a.id)))
+            );
+
+            if (directMatch) {
+                const isAHome = Number(directMatch.homeTeamId) === Number(a.id);
+                let sH = directMatch.result?.scoreHome ?? directMatch.scoreHome ?? 0;
+                let sA = directMatch.result?.scoreAway ?? directMatch.scoreAway ?? 0;
+
+                if (isAHome) {
+                    if (sH > sA) return -1;
+                    if (sA > sH) return 1;
+                } else {
+                    if (sA > sH) return -1;
+                    if (sH > sA) return 1;
+                }
+            }
+
+            const sA = scores[a.id] || {gf: 0, ga: 0};
+            const sB = scores[b.id] || {gf: 0, ga: 0};
+            const diffA = sA.gf - sA.ga;
+            const diffB = sB.gf - sB.ga;
+            if (diffA !== diffB) return diffB - diffA;
+
+            return 0;
         });
-        realRankMaps[gKey] = {};
-        groupTeams.forEach((t, i) => {
-            realRankMaps[gKey][t.id] = i + 1;
+
+        // MAPOVÁNÍ SKUTEČNÉHO POŘADÍ PRO OSTATNÍ VÝPOČTY
+        teamsByGroup[group].forEach((t, i) => {
+            globalRealRankMap[t.id] = i + 1;
         });
     }
 
-    // 4. VÝPOČET STATISTIK
+    // 4. VÝPOČET STATISTIK UŽIVATELŮ
     const userStats = allUsers
         .filter(u => {
             const stats = u.stats?.[selectedSeason]?.[selectedLiga];
@@ -3557,13 +3651,15 @@ router.get('/history/table', requireLogin, (req, res) => {
 
             let tCorrect = stats.tableCorrect || 0;
             let tDeviation = stats.tableDeviation || 0;
+
+            // Ošetření počítání naživo
             if (tCorrect === 0 && tDeviation === 0) {
                 const userTableTip = tableTips?.[selectedSeason]?.[selectedLiga]?.[u.username];
                 if (userTableTip) {
                     for (const gKey of sortedGroupKeys) {
                         let tipIds = Array.isArray(userTableTip) ? userTableTip : (userTableTip[gKey] || []);
                         tipIds.forEach((tid, idx) => {
-                            const realRank = realRankMaps[gKey][tid];
+                            const realRank = globalRealRankMap[tid];
                             if (realRank) {
                                 const diff = Math.abs((idx + 1) - realRank);
                                 tDeviation += diff;
@@ -3607,14 +3703,13 @@ router.get('/history/table', requireLogin, (req, res) => {
     } catch (e) {
     }
 
-    const sortedGroups = Object.keys(teamsByGroup).sort();
-
     let isRegularSeasonFinished = false;
     try {
         const statusData = JSON.parse(fs.readFileSync('./data/leagueStatus.json', 'utf8'));
         isRegularSeasonFinished = statusData?.[selectedSeason]?.[selectedLiga]?.regularSeasonFinished || false;
     } catch (e) {
     }
+
 // --- HTML START ---
     let html = `
 <!DOCTYPE html>
@@ -3654,108 +3749,7 @@ router.get('/history/table', requireLogin, (req, res) => {
         const teamsInGroup = teamsByGroup[group];
         const zoneConfig = getLeagueZones(leagueObj);
 
-        // =========================================================
-        // === IIHF SORTING (FIX: IGNOROVAT PLAYOFF) ===
-        // =========================================================
-        teamsInGroup.sort((a, b) => {
-            const aStats = a.stats?.[selectedSeason] || {};
-            const bStats = b.stats?.[selectedSeason] || {};
-            const pA = aStats.points || 0;
-            const pB = bStats.points || 0;
-
-            // 1. Kritérium: BODY
-            if (pB !== pA) return pB - pA;
-
-            // --- MINITABULKA ---
-            // Najdeme týmy se stejným počtem bodů
-            const tiedTeamIds = teamsInGroup
-                .filter(t => (t.stats?.[selectedSeason]?.points || 0) === pA)
-                .map(t => Number(t.id));
-
-            // Funkce pro minitabulku
-            const getMiniStats = (teamId) => {
-                let mPts = 0, mDiff = 0, mGF = 0;
-
-                // FILTR: Jen tato sezóna, výsledek existuje, tým hraje A HLAVNĚ !isPlayoff
-                const groupMatches = matches.filter(m =>
-                    m.season === selectedSeason &&
-                    m.result &&
-                    !m.isPlayoff && // <--- TOTO JE TA OPRAVA!
-                    tiedTeamIds.includes(Number(m.homeTeamId)) &&
-                    tiedTeamIds.includes(Number(m.awayTeamId)) &&
-                    (Number(m.homeTeamId) === teamId || Number(m.awayTeamId) === teamId)
-                );
-
-                groupMatches.forEach(m => {
-                    const isHome = Number(m.homeTeamId) === teamId;
-
-                    let sH = m.result?.scoreHome !== undefined ? Number(m.result.scoreHome) : (m.scoreHome !== undefined ? Number(m.scoreHome) : 0);
-                    let sA = m.result?.scoreAway !== undefined ? Number(m.result.scoreAway) : (m.scoreAway !== undefined ? Number(m.scoreAway) : 0);
-                    const isOt = m.result?.ot || m.result?.so || m.ot || m.so;
-
-                    let hPts, aPts;
-                    if (sH > sA) { hPts = isOt ? 2 : 3; aPts = isOt ? 1 : 0; }
-                    else if (sA > sH) { aPts = isOt ? 2 : 3; hPts = isOt ? 1 : 0; }
-                    else { hPts=1; aPts=1; }
-
-                    let pts, gf, ga;
-                    if (isHome) { pts = hPts; gf = sH; ga = sA; }
-                    else { pts = aPts; gf = sA; ga = sH; }
-
-                    mPts += pts;
-                    mDiff += (gf - ga);
-                    mGF += gf;
-                });
-
-                return { pts: mPts, diff: mDiff, gf: mGF };
-            };
-
-            const msA = getMiniStats(Number(a.id));
-            const msB = getMiniStats(Number(b.id));
-
-            // 2. Kritérium: BODY V MINITABULCE
-            if (msB.pts !== msA.pts) return msB.pts - msA.pts;
-
-            // 3. Kritérium: ROZDÍL SKÓRE V MINITABULCE
-            if (msB.diff !== msA.diff) return msB.diff - msA.diff;
-
-            // 4. Kritérium: GÓLY V MINITABULCE
-            if (msB.gf !== msA.gf) return msB.gf - msA.gf;
-
-            // 5. Kritérium: PŘÍMÝ VZÁJEMNÝ ZÁPAS (Head-to-Head)
-            const directMatch = matches.find(m =>
-                m.season === selectedSeason &&
-                m.result &&
-                !m.isPlayoff && // <--- TOTO JE TA OPRAVA!
-                ((Number(m.homeTeamId) === Number(a.id) && Number(m.awayTeamId) === Number(b.id)) ||
-                    (Number(m.homeTeamId) === Number(b.id) && Number(m.awayTeamId) === Number(a.id)))
-            );
-
-            if (directMatch) {
-                const isAHome = Number(directMatch.homeTeamId) === Number(a.id);
-                let sH = directMatch.result?.scoreHome ?? directMatch.scoreHome ?? 0;
-                let sA = directMatch.result?.scoreAway ?? directMatch.scoreAway ?? 0;
-
-                if (isAHome) {
-                    if (sH > sA) return -1;
-                    if (sA > sH) return 1;
-                } else {
-                    if (sA > sH) return -1;
-                    if (sH > sA) return 1;
-                }
-            }
-
-            // 6. Kritérium: CELKOVÉ SKÓRE
-            const sA = scores[a.id] || {gf:0, ga:0};
-            const sB = scores[b.id] || {gf:0, ga:0};
-            const diffA = sA.gf - sA.ga;
-            const diffB = sB.gf - sB.ga;
-            if (diffA !== diffB) return diffB - diffA;
-
-            return 0;
-        });
-
-        // --- ULOŽENÍ TÝMU DO CROSS-TABLE (POKUD JE ZAPNUTO) ---
+        // ULOŽENÍ TÝMU DO CROSS-TABLE
         if (leagueObj.crossGroupTable && leagueObj.crossGroupPosition > 0) {
             const targetIndex = leagueObj.crossGroupPosition - 1;
             if (teamsInGroup[targetIndex]) {
@@ -3783,24 +3777,16 @@ router.get('/history/table', requireLogin, (req, res) => {
             matchesPerTeam = Math.ceil((leagueObj.maxMatches * 2) / teamsInGroup.length);
         }
 
-        //console.log(`\n=== DEBUG SKUPINA ${group} ===`);
-        //console.log(`MatchesPerTeam vypočteno jako: ${matchesPerTeam}`);
-
         // --- ZÓNY A LIMITY ---
         const qfLimit = leagueObj.quarterfinal || 0;
         const playinLimit = leagueObj.playin || 0;
         const relegationLimit = leagueObj.relegation || 0;
 
-        // Celkový počet postupujících (QF + Předkolo dohromady)
         const totalAdvancing = playinLimit;
-
-        // Index, od kterého začíná sestupová zóna
         const safeZoneIndex = sorted.length - relegationLimit - 1;
 
-        // Funkce pro zjištění maxima bodů, které může získat kdokoliv OD určité pozice dolů
         const getMaxPotentialOfZone = (fromIndex) => {
             let globalMax = 0;
-            // Pokud index je mimo tabulku, vracíme 0
             if (fromIndex >= sorted.length) return 0;
 
             for (let i = fromIndex; i < sorted.length; i++) {
@@ -3814,18 +3800,12 @@ router.get('/history/table', requireLogin, (req, res) => {
             return globalMax;
         };
 
-        // 1. Práh pro QF: Kolik bodů může max. získat ten nejlepší tým, co by skončil POD čarou QF?
         const thresholdQF = getMaxPotentialOfZone(qfLimit);
-
-        // 2. Práh pro Postup (Předkolo): Kolik bodů může max. získat ten nejlepší tým, co by nepostoupil VŮBEC?
         const thresholdPlayin = getMaxPotentialOfZone(totalAdvancing);
-
-        //console.log(`Thresholds: QF > ${thresholdQF}, Playin > ${thresholdPlayin}`);
 
         let safetyPoints = 0;
         if (relegationLimit > 0 && safeZoneIndex >= 0 && sorted.length > safeZoneIndex) {
             safetyPoints = sorted[safeZoneIndex].stats?.[selectedSeason]?.points || 0;
-            //console.log(`SafetyPoints (Relegation threshold): ${safetyPoints} (Tým na indexu ${safeZoneIndex})`);
         }
 
         teamsInGroup.forEach((team, index) => {
@@ -3836,10 +3816,6 @@ router.get('/history/table', requireLogin, (req, res) => {
             const remaining = Math.max(0, matchesPerTeam - played);
             const myMaxPoints = myPoints + (remaining * 3);
 
-            //console.log(`--- TEAM: ${team.name} (${index + 1}.) ---`);
-            //console.log(`   Pts: ${myPoints}, Played: ${played}, Remaining: ${remaining}, MaxPts: ${myMaxPoints}`);
-
-            // --- STRICT LOCK LOGIKA (Tvoje verze - funguje správně) ---
             let canDrop = false;
             for (let i = index + 1; i < sorted.length; i++) {
                 const chaser = sorted[i];
@@ -3848,18 +3824,9 @@ router.get('/history/table', requireLogin, (req, res) => {
                 const rem = Math.max(0, matchesPerTeam - p);
                 const chaserMax = (s.points || 0) + (rem * 3);
 
-                // 1. Pokud mě může předběhnout na ČISTÉ BODY -> nejsem Locked
-                if (chaserMax > myPoints) {
-                    canDrop = true;
-                    break;
-                }
-
-                // 2. Pokud mě může DOROVNAT na body a ještě se hraje
+                if (chaserMax > myPoints) { canDrop = true; break; }
                 if (chaserMax === myPoints) {
-                    if (rem > 0 || remaining > 0) {
-                        canDrop = true;
-                        break;
-                    }
+                    if (rem > 0 || remaining > 0) { canDrop = true; break; }
                 }
             }
 
@@ -3871,20 +3838,14 @@ router.get('/history/table', requireLogin, (req, res) => {
                 const pL = (leaderStats.wins||0)+(leaderStats.otWins||0)+(leaderStats.otLosses||0)+(leaderStats.losses||0);
                 const remL = Math.max(0, matchesPerTeam - pL);
 
-                if (myMaxPoints > leaderPoints) {
-                    canRise = true;
-                }
+                if (myMaxPoints > leaderPoints) canRise = true;
                 else if (myMaxPoints === leaderPoints) {
-                    if (remaining > 0 || remL > 0) {
-                        canRise = true;
-                    }
+                    if (remaining > 0 || remL > 0) canRise = true;
                 }
             }
 
             const locked = !canDrop && !canRise;
-            //console.log(`   Logic: CanDrop=${canDrop}, CanRise=${canRise} => LOCKED=${locked}`);
 
-            // Společné proměnné pro obě logiky
             let thresholdRelegation = 0;
             if (relegationLimit > 0 && safeZoneIndex >= 0 && safeZoneIndex + 1 < sorted.length) {
                 thresholdRelegation = getMaxPotentialOfZone(safeZoneIndex + 1);
@@ -3897,9 +3858,6 @@ router.get('/history/table', requireLogin, (req, res) => {
             let rowClass = currentZone;
 
             if (clinchMode === 'strict') {
-                // =========================================================
-                // LOGIKA 1: STRIKTNÍ ZAMYKÁNÍ (Uvěznění v daném patře)
-                // =========================================================
                 const ptsGatekeeperQF = (qfLimit > 0 && sorted[qfLimit - 1]) ? (sorted[qfLimit - 1].stats?.[selectedSeason]?.points || 0) : 0;
                 const ptsGatekeeperPlayin = (totalAdvancing > 0 && sorted[totalAdvancing - 1]) ? (sorted[totalAdvancing - 1].stats?.[selectedSeason]?.points || 0) : 0;
                 const ptsGatekeeperSafe = (safeZoneIndex >= 0 && sorted[safeZoneIndex]) ? (sorted[safeZoneIndex].stats?.[selectedSeason]?.points || 0) : 0;
@@ -3923,16 +3881,12 @@ router.get('/history/table', requireLogin, (req, res) => {
                     if (relegationLimit > 0 && myMaxPoints < ptsGatekeeperSafe) clinchedRelegation = true;
                 }
 
-                // Třídy pro Strict
                 if (clinchedRelegation) rowClass = 'clinched-relegation';
                 else if (clinchedNeutral) rowClass = 'clinched-neutral';
                 else if (clinchedPlayin) rowClass = 'clinched-playin';
                 else if (clinchedQF) rowClass = 'clinched-quarterfinal';
 
             } else {
-                // =========================================================
-                // LOGIKA 2: KASKÁDA (Nejvyšší dosažená meta)
-                // =========================================================
                 if (locked) {
                     if (qfLimit > 0 && index < qfLimit) clinchedQF = true;
                     else if (totalAdvancing > 0 && index < totalAdvancing) clinchedPlayin = true;
@@ -3948,26 +3902,20 @@ router.get('/history/table', requireLogin, (req, res) => {
                     if (relegationLimit > 0 && index > safeZoneIndex && myMaxPoints < safetyPoints) clinchedRelegation = true;
                 }
 
-                // Třídy pro Kaskádu
                 if (clinchedRelegation) rowClass = 'clinched-relegation';
                 else if (clinchedQF) rowClass = 'clinched-quarterfinal';
                 else if (clinchedPlayin) rowClass = 'clinched-playin';
                 else if (clinchedNeutral) rowClass = 'clinched-neutral';
             }
 
-            // Aplikace Cross-table a Locked
             if (leagueObj.crossGroupTable && (index + 1) === leagueObj.crossGroupPosition && locked) {
                 rowClass = 'clinched-crosstable';
             }
             if (locked) rowClass += ' locked';
 
-            //console.log(`   Final Class: ${rowClass}`);
-
             let rankClass = currentZone;
-            const teamStats = scores[team.id] || {gf: 0, ga: 0};
+            const teamStats = scores[team.id] || {gf:0, ga:0};
             const goalDiff = teamStats.gf - teamStats.ga;
-
-            // --- SPECIÁLNÍ PODBARVENÍ PRO CROSS-TABLE RANK ---
 
             if (leagueObj.crossGroupTable && (index + 1) === leagueObj.crossGroupPosition) {
                 rankClass = 'crosstable';
@@ -3990,15 +3938,12 @@ router.get('/history/table', requireLogin, (req, res) => {
     }
 
     // =========================================================
-    // === TABULKA X-TÝCH TÝMŮ (S OPRAVENÝM LOCKOVÁNÍM) ===
+    // === TABULKA X-TÝCH TÝMŮ ===
     // =========================================================
     if (leagueObj.crossGroupTable && crossGroupTeams.length > 0) {
-
         const crossConfig = leagueObj.crossGroupConfig || { quarterfinal: 0, playin: 0, relegation: 0 };
-
         html += `<h2 style="text-align: center; margin-top: 30px; border-top: 2px solid #444; padding-top: 20px;">Tabulka týmů na ${leagueObj.crossGroupPosition}. místě</h2>`;
 
-        // 1. Seřazení týmů
         crossGroupTeams.sort((a, b) => {
             const aStats = a.stats?.[selectedSeason] || {};
             const bStats = b.stats?.[selectedSeason] || {};
@@ -4015,14 +3960,12 @@ router.get('/history/table', requireLogin, (req, res) => {
             return 0;
         });
 
-        html += `
-        <table class="points-table">
+        html += `<table class="points-table">
         <thead>
         <tr><th class="position">Místo</th><th>Tým</th><th class="points">Body</th><th>Skóre</th><th>Rozdíl</th><th>Z</th><th>V</th><th>Vpp</th><th>Ppp</th><th>P</th></tr>
         </thead>
         <tbody>`;
 
-        // 2. Limity pro Cross-Table
         const cQfLimit = crossConfig.quarterfinal || 0;
         const cPlayinLimit = crossConfig.playin || 0;
         const cRelLimit = crossConfig.relegation || 0;
@@ -4034,20 +3977,14 @@ router.get('/history/table', requireLogin, (req, res) => {
 
         const cSafeZoneIndex = crossGroupTeams.length - cRelLimit - 1;
 
-        // 3. SPRÁVNÝ VÝPOČET ZÁPASŮ (Stejný jako v horních tabulkách)
-        // Toto zajistí, že systém ví, že po 2 zápasech je konec a má zamknout.
         let cMatchesPerTeam = 52;
         if (leagueObj.rounds) {
-            // Pokud je definován počet kol, musíme odhadnout velikost skupiny.
-            // Pro cross-table bereme velikost první skupiny jako referenci, nebo fallback.
             const estimatedGroupSize = teamsInSelectedLiga.length / (leagueObj.groupCount || 1);
             cMatchesPerTeam = (Math.ceil(estimatedGroupSize) - 1) * leagueObj.rounds;
         } else if (leagueObj.isMultigroup) {
-            // Pokud je to multigroup bez rounds, bývá to "každý s každým" ve skupině
             const estimatedGroupSize = teamsInSelectedLiga.length / (leagueObj.groupCount || 1);
             cMatchesPerTeam = Math.max(1, Math.ceil(estimatedGroupSize) - 1);
         } else if (leagueObj.maxMatches) {
-            // Pokud je natvrdo nastaven maxMatches
             if (leagueObj.maxMatches > 100) {
                 cMatchesPerTeam = Math.ceil((leagueObj.maxMatches * 2) / teamsInSelectedLiga.length);
             } else {
@@ -4055,15 +3992,12 @@ router.get('/history/table', requireLogin, (req, res) => {
             }
         }
 
-        // 4. Pomocné funkce pro potenciál (s opraveným počtem zápasů)
         const getCrossTeamPotential = (idx) => {
             if (idx >= crossGroupTeams.length) return 0;
             const t = crossGroupTeams[idx];
             const s = t.stats?.[selectedSeason] || {};
             const played = (s.wins||0) + (s.otWins||0) + (s.otLosses||0) + (s.losses||0) + (s.manualGames || 0);
-
             if (isRegularSeasonFinished) return s.points || 0;
-
             const remaining = Math.max(0, cMatchesPerTeam - played);
             return (s.points || 0) + (remaining * 3);
         };
@@ -4077,7 +4011,6 @@ router.get('/history/table', requireLogin, (req, res) => {
             return globalMax;
         };
 
-        // Thresholdy
         let cThresholdQF = 0;
         if (cQfLimit > 0 && cQfLimit < crossGroupTeams.length) {
             cThresholdQF = getCrossMaxPotentialOfZone(cQfLimit);
@@ -4088,13 +4021,11 @@ router.get('/history/table', requireLogin, (req, res) => {
             cThresholdPlayin = getCrossMaxPotentialOfZone(cTotalAdvancing);
         }
 
-        // 5. Hlavní cyklus
         crossGroupTeams.forEach((team, index) => {
             const stats = team.stats?.[selectedSeason] || {};
             const myPoints = stats.points || 0;
             const played = (stats.wins||0) + (stats.otWins||0) + (stats.otLosses||0) + (stats.losses||0) + (stats.manualGames || 0);
 
-            // Určení základní Zóny
             let currentZone = "neutral";
             if (cRelLimit > 0 && index > cSafeZoneIndex) currentZone = "relegation";
             else if (cQfLimit > 0 && index < cQfLimit) currentZone = "quarterfinal";
@@ -4105,14 +4036,11 @@ router.get('/history/table', requireLogin, (req, res) => {
             const teamStats = scores[team.id] || {gf:0, ga:0};
             const goalDiff = teamStats.gf - teamStats.ga;
 
-            // --- STRICT LOCK LOGIKA ---
             let canDrop = false;
             for (let i = index + 1; i < crossGroupTeams.length; i++) {
                 const chaserMax = getCrossTeamPotential(i);
                 if (chaserMax > myPoints) { canDrop = true; break; }
                 const chaserPlayed = (crossGroupTeams[i].stats?.[selectedSeason]?.wins||0) + (crossGroupTeams[i].stats?.[selectedSeason]?.losses||0);
-
-                // Opravená podmínka pro konec zápasů
                 if (chaserMax === myPoints && !isRegularSeasonFinished && (remaining > 0 || chaserPlayed < cMatchesPerTeam)) {
                     canDrop = true; break;
                 }
@@ -4129,7 +4057,6 @@ router.get('/history/table', requireLogin, (req, res) => {
 
             const cLocked = !canDrop && !canRise;
 
-            // Společné pro Cross-table
             let cThresholdRelegation = 0;
             if (cRelLimit > 0 && cSafeZoneIndex >= 0 && cSafeZoneIndex + 1 < crossGroupTeams.length) {
                 cThresholdRelegation = getCrossMaxPotentialOfZone(cSafeZoneIndex + 1);
@@ -4142,7 +4069,6 @@ router.get('/history/table', requireLogin, (req, res) => {
             let rowClass = currentZone;
 
             if (clinchMode === 'strict') {
-                // --- STRICT LOGIKA CROSS-TABLE ---
                 const cPtsGatekeeperQF = (cQfLimit > 0 && crossGroupTeams[cQfLimit - 1]) ? (crossGroupTeams[cQfLimit - 1].stats?.[selectedSeason]?.points || 0) : 0;
                 const cPtsGatekeeperPlayin = (cTotalAdvancing > 0 && crossGroupTeams[cTotalAdvancing - 1]) ? (crossGroupTeams[cTotalAdvancing - 1].stats?.[selectedSeason]?.points || 0) : 0;
                 const cPtsGatekeeperSafe = (cSafeZoneIndex >= 0 && crossGroupTeams[cSafeZoneIndex]) ? (crossGroupTeams[cSafeZoneIndex].stats?.[selectedSeason]?.points || 0) : 0;
@@ -4172,7 +4098,6 @@ router.get('/history/table', requireLogin, (req, res) => {
                 else if (cSafeQF) rowClass = "clinched-quarterfinal";
 
             } else {
-                // --- KASKÁDOVÁ LOGIKA CROSS-TABLE ---
                 if (cLocked) {
                     if (cQfLimit > 0 && index < cQfLimit) cSafeQF = true;
                     else if (cTotalAdvancing > 0 && index < cTotalAdvancing) cSafePlayin = true;
@@ -4228,7 +4153,7 @@ router.get('/history/table', requireLogin, (req, res) => {
     html += `</table></div><script>
 function showTable(which) { document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none'; const p = document.getElementById('playoffTablePreview'); p.style.display = which === 'playoff' ? 'block' : 'none'; }</script>`;
 
-    // --- TVOJE STATISTIKY (PŘESNĚ JAKO V ROUTĚ /) ---
+    // --- TVOJE STATISTIKY ---
     if (username) {
         html += `
         <section class="user_stats">
@@ -4272,16 +4197,10 @@ function showTable(which) { document.getElementById('regularTable').style.displa
 
         userStats.sort((a, b) => {
             if (b.correct !== a.correct) return b.correct - a.correct;
-            return a.maxFromTips - b.maxFromTips;
+            return a.tableDeviation - b.tableDeviation;
         }).forEach((user, index) => {
             const successRateOverall = user.maxFromTips > 0 ? ((user.correct / user.maxFromTips) * 100).toFixed(2) : '0.00';
             const successRate = user.total > 0 ? ((user.correct / user.total) * 100).toFixed(2) : '0.00';
-            let isRegularSeasonFinished = false;
-            try {
-                const statusData = JSON.parse(fs.readFileSync('./data/leagueStatus.json', 'utf8'));
-                isRegularSeasonFinished = statusData?.[selectedSeason]?.[selectedLiga]?.regularSeasonFinished || false;
-            } catch (e) {
-            }
             const statusStyle = isRegularSeasonFinished ? "color: lightgrey; font-weight: bold;" : "color: white; opacity: 0.7; background-color: black";
 
             html += `<tr>
@@ -4341,13 +4260,16 @@ function showTable(which) { document.getElementById('regularTable').style.displa
             html += `<div class="user-history-table-container user-table-${safeName}" style="display:${isVisible};">`;
             for (const gKey of sortedGroupKeys) {
                 const groupLabel = getGroupDisplayLabel(gKey);
-                const teamsInGroup = [...teamsByGroup[gKey]];
+
+                // KOPIE SKUPINY ABYCHOM NEROZBILI LEVOU STRANU
+                const teamsForTip = [...groupedTeams[gKey]];
+
                 let userGroupTipIds = [];
                 if (Array.isArray(userTipData)) userGroupTipIds = userTipData; else userGroupTipIds = userTipData[gKey] || [];
                 const hasTip = userGroupTipIds.length > 0;
 
                 if (hasTip) {
-                    teamsInGroup.sort((a, b) => {
+                    teamsForTip.sort((a, b) => {
                         const idxA = userGroupTipIds.indexOf(a.id);
                         const idxB = userGroupTipIds.indexOf(b.id);
                         if (idxA === -1) return 1;
@@ -4355,17 +4277,18 @@ function showTable(which) { document.getElementById('regularTable').style.displa
                         return idxA - idxB;
                     });
                 } else {
-                    teamsInGroup.sort((a, b) => realRankMaps[gKey][a.id] - realRankMaps[gKey][b.id]);
+                    teamsForTip.sort((a, b) => (globalRealRankMap[a.id] || 99) - (globalRealRankMap[b.id] || 99));
                 }
 
                 html += `<div style="margin-top: 20px;">
                     ${groupLabel ? `<h3 style="border-bottom:1px solid #555;">${groupLabel}</h3>` : ''}
                     <ul style="list-style: none; padding: 0;">`;
 
-                teamsInGroup.forEach((team, index) => {
+                teamsForTip.forEach((team, index) => {
                     const userRank = index + 1;
-                    const realRank = realRankMaps[gKey][team.id];
+                    const realRank = globalRealRankMap[team.id] || '?';
                     const diff = userRank - realRank;
+
                     let bgStyle = "background-color: #1a1a1a; border: 1px solid #444;";
                     let diffText;
                     let diffColor = "gray";
