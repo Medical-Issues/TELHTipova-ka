@@ -943,7 +943,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <section class="progress-section">
 <h3>Odehráno zápasů v základní části</h3>
 <div class="progress-container">
-<div class="progress-bar" style="width:100%;">${percentage}%</div>
+<div class="progress-bar" style="width:${percentage}%;">${percentage}%</div>
 </div>
 <p id="progress-text"></p>
 </section>
@@ -2162,7 +2162,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <section class="progress-section">
 <h3>Odehráno zápasů v základní části</h3>
 <div class="progress-container">
-<div class="progress-bar" style="width:100%;">${percentage}%</div>
+<div class="progress-bar" style="width:${percentage}%;">${percentage}%</div>
 </div>
 <p id="progress-text"></p>
 </section>
@@ -5120,7 +5120,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <section class="progress-section">
 <h3>Odehráno zápasů v základní části</h3>
 <div class="progress-container">
-<div class="progress-bar" style="width:100%;">${percentage}%</div>
+<div class="progress-bar" style="width:${percentage}%;">${percentage}%</div>
 </div>
 <p id="progress-text"></p>
 </section>
