@@ -10027,7 +10027,7 @@
           "textColor": "lightgrey"
         },
         {
-          "text": "1.",
+          "text": "Kanada",
           "bgColor": "rgb(255, 60, 0)",
           "textColor": "rgb(0, 0, 0)"
         },
@@ -10119,7 +10119,7 @@
       ],
       [
         {
-          "text": "8.",
+          "text": "Česko",
           "bgColor": "rgb(255, 255, 0)",
           "textColor": "rgb(0, 0, 0)"
         },
@@ -10323,7 +10323,7 @@
       ],
       [
         {
-          "text": "9.",
+          "text": "Dánsko",
           "bgColor": "rgb(255, 255, 0)",
           "textColor": "rgb(0, 0, 0)"
         },
@@ -10435,7 +10435,7 @@
           "textColor": "lightgrey"
         },
         {
-          "text": "2.",
+          "text": "USA",
           "bgColor": "rgb(255, 60, 0)",
           "textColor": "rgb(0, 0, 0)"
         },
@@ -10527,415 +10527,7 @@
       ],
       [
         {
-          "text": "7.",
-          "bgColor": "rgb(255, 255, 0)",
-          "textColor": "rgb(0, 0, 0)"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(0, 0, 0)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(92, 92, 92)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(92, 92, 92)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(92, 92, 92)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(92, 92, 92)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(92, 92, 92)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        }
-      ],
-      [
-        {
-          "text": "",
-          "bgColor": "rgb(92, 92, 92)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(92, 92, 92)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(255, 60, 0)",
-          "textColor": "rgb(0, 0, 0)"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(0, 0, 0)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(92, 92, 92)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(255, 60, 0)",
-          "textColor": "rgb(0, 0, 0)"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(0, 0, 0)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        }
-      ],
-      [
-        {
-          "text": "10.",
-          "bgColor": "rgb(255, 255, 0)",
-          "textColor": "rgb(0, 0, 0)"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(0, 0, 0)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(92, 92, 92)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(92, 92, 92)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(92, 92, 92)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        }
-      ],
-      [
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "3.",
-          "bgColor": "rgb(255, 60, 0)",
-          "textColor": "rgb(0, 0, 0)"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(0, 0, 0)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(92, 92, 92)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(255, 60, 0)",
-          "textColor": "rgb(0, 0, 0)"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(0, 0, 0)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        },
-        {
-          "text": "",
-          "bgColor": "rgb(51, 51, 51)",
-          "textColor": "lightgrey"
-        }
-      ],
-      [
-        {
-          "text": "6.",
+          "text": "Švédsko",
           "bgColor": "rgb(255, 255, 0)",
           "textColor": "rgb(0, 0, 0)"
         },
@@ -11063,6 +10655,414 @@
         },
         {
           "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(92, 92, 92)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 60, 0)",
+          "textColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        }
+      ],
+      [
+        {
+          "text": "Lotyšsko",
+          "bgColor": "rgb(255, 255, 0)",
+          "textColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(92, 92, 92)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(92, 92, 92)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(92, 92, 92)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        }
+      ],
+      [
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "Slovensko",
+          "bgColor": "rgb(255, 60, 0)",
+          "textColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(92, 92, 92)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 60, 0)",
+          "textColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        }
+      ],
+      [
+        {
+          "text": "Německo",
+          "bgColor": "rgb(255, 255, 0)",
+          "textColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(92, 92, 92)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(92, 92, 92)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(92, 92, 92)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(92, 92, 92)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(92, 92, 92)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        }
+      ],
+      [
+        {
+          "text": "",
+          "bgColor": "rgb(92, 92, 92)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(92, 92, 92)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(255, 60, 0)",
+          "textColor": "rgb(0, 0, 0)"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(0, 0, 0)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
+          "bgColor": "rgb(51, 51, 51)",
+          "textColor": "lightgrey"
+        },
+        {
+          "text": "",
           "bgColor": "rgb(92, 92, 92)",
           "textColor": "lightgrey"
         },
@@ -11139,7 +11139,7 @@
       ],
       [
         {
-          "text": "11.",
+          "text": "Francie",
           "bgColor": "rgb(255, 255, 0)",
           "textColor": "rgb(0, 0, 0)"
         },
@@ -11251,7 +11251,7 @@
           "textColor": "lightgrey"
         },
         {
-          "text": "4.",
+          "text": "Finsko",
           "bgColor": "rgb(255, 60, 0)",
           "textColor": "rgb(0, 0, 0)"
         },
@@ -11343,7 +11343,7 @@
       ],
       [
         {
-          "text": "5.",
+          "text": "Švýcarsko",
           "bgColor": "rgb(255, 255, 0)",
           "textColor": "rgb(0, 0, 0)"
         },
@@ -11547,7 +11547,7 @@
       ],
       [
         {
-          "text": "12.",
+          "text": "Itálie",
           "bgColor": "rgb(255, 255, 0)",
           "textColor": "rgb(0, 0, 0)"
         },

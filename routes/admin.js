@@ -807,7 +807,7 @@ router.get('/edit/:id', requireAdmin, (req, res) => {
 
     <div id="boField" style="display:none;">
       <label for="bo">Počet vítězných zápasů v sérii (bo):
-        <input type="number" id="bo" name="bo" min="1" max="9" value="${match.bo ?? ''}" />
+        <input class="league-select" type="number" id="bo" name="bo" min="1" max="9" value="${match.bo ?? ''}" />
       </label>
     </div>
 
@@ -824,20 +824,23 @@ router.get('/edit/:id', requireAdmin, (req, res) => {
         Rozhodnuto v prodloužení?
       </label>
     </fieldset>
-
     <button class="action-btn edit-btn" type="submit">Uložit změny</button>
   </form>
   <a href="/admin" class="back-link">← Zpět na správu zápasů</a>
 </main>
 </body>
 <script>
-        function toggleBOInput() {
-            const checkbox = document.getElementById('boCheckbox');
-            const boField = document.getElementById('boField');
+    function toggleBOInput() {
+        // Opraveno ID z 'boCheckbox' na 'isPlayoff'
+        const checkbox = document.getElementById('isPlayoff');
+        const boField = document.getElementById('boField');
+        if (checkbox && boField) {
             boField.style.display = checkbox.checked ? 'block' : 'none';
         }
-        window.addEventListener('DOMContentLoaded', toggleBOInput);
-    </script>
+    }
+    // Zavoláme hned při načtení, aby se pole ukázalo, pokud už je zápas uložen jako playoff
+    window.addEventListener('DOMContentLoaded', toggleBOInput);
+</script>
 </html>
     `;
     res.send(html);
@@ -911,12 +914,28 @@ router.post('/delete/:id', requireAdmin, (req, res) => {
     const matchId = parseInt(req.params.id);
     let matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'));
 
-    matches = matches.filter(m => m.id !== matchId);
-    updateTeamsPoints(matches)
+    // 1. NAJÍT ZÁPAS PŘEDTÍM, NEŽ HO SMAŽEME
+    const matchToDelete = matches.find(m => m.id === matchId);
 
+    // Pojistka: Pokud už zápas neexistuje (např. dvojklik), rovnou přesměruj
+    if (!matchToDelete) {
+        return res.redirect('/admin');
+    }
+
+    // 2. ULOŽIT SI LIGU A SEZÓNU (pro pozdější přepočet)
+    const matchLiga = matchToDelete.liga;
+    const matchSeason = matchToDelete.season;
+
+    // 3. SMAZÁNÍ A ULOŽENÍ
+    matches = matches.filter(m => m.id !== matchId);
+    updateTeamsPoints(matches);
     fs.writeFileSync('./data/matches.json', JSON.stringify(matches, null, 2));
+
     removeTipsForDeletedMatch(matchId);
-    evaluateAndAssignPoints(matches[matchIndex].liga, matches[matchIndex].season);
+
+    // 4. PŘEPOČET BODŮ POMOCÍ ULOŽENÝCH PROMĚNNÝCH
+    evaluateAndAssignPoints(matchLiga, matchSeason);
+
     res.redirect('/admin');
 });
 

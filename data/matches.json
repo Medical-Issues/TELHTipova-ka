@@ -6421,7 +6421,14 @@
     "datetime": "2026-02-15T12:10",
     "liga": "Olympiáda",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 4,
+      "scoreAway": 3,
+      "ot": true,
+      "winner": "home"
+    }
   },
   {
     "id": 411,
@@ -6430,7 +6437,14 @@
     "datetime": "2026-02-15T16:40",
     "liga": "Olympiáda",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 10,
+      "scoreAway": 2,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 412,
@@ -6439,7 +6453,14 @@
     "datetime": "2026-02-15T19:10",
     "liga": "Olympiáda",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 4,
+      "scoreAway": 2,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 413,
@@ -6448,6 +6469,55 @@
     "datetime": "2026-02-15T21:10",
     "liga": "Olympiáda",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false,
+    "result": {
+      "scoreHome": 5,
+      "scoreAway": 1,
+      "ot": false,
+      "winner": "home"
+    }
+  },
+  {
+    "id": 414,
+    "homeTeamId": 84,
+    "awayTeamId": 92,
+    "datetime": "2026-02-17T16:40",
+    "liga": "Olympiáda",
+    "season": "25/26",
+    "isPlayoff": true,
+    "bo": 1,
+    "postponed": false
+  },
+  {
+    "id": 415,
+    "homeTeamId": 91,
+    "awayTeamId": 94,
+    "datetime": "2026-02-17T21:10",
+    "liga": "Olympiáda",
+    "season": "25/26",
+    "isPlayoff": true,
+    "bo": 1,
+    "postponed": false
+  },
+  {
+    "id": 416,
+    "homeTeamId": 93,
+    "awayTeamId": 85,
+    "datetime": "2026-02-17T12:10",
+    "liga": "Olympiáda",
+    "season": "25/26",
+    "isPlayoff": true,
+    "bo": 1
+  },
+  {
+    "id": 417,
+    "homeTeamId": 86,
+    "awayTeamId": 89,
+    "datetime": "2026-02-17T12:10",
+    "liga": "Olympiáda",
+    "season": "25/26",
+    "isPlayoff": true,
+    "bo": 1
   }
 ]

@@ -91,11 +91,11 @@
           "totalPlayoff": 9
         },
         "Olympiáda": {
-          "correct": 11,
-          "totalRegular": 14,
+          "correct": 13,
+          "totalRegular": 18,
           "totalPlayoff": 0,
-          "tableCorrect": 7,
-          "tableDeviation": 6
+          "tableCorrect": 4,
+          "tableDeviation": 10
         }
       }
     },
@@ -4027,6 +4027,18 @@
             "matchId": 413,
             "winner": "home",
             "loserWins": 0
+          },
+          {
+            "matchId": 414,
+            "winner": "home",
+            "scoreHome": 6,
+            "scoreAway": 2
+          },
+          {
+            "matchId": 415,
+            "winner": "home",
+            "scoreHome": 7,
+            "scoreAway": 1
           }
         ]
       }
@@ -4061,11 +4073,11 @@
           "totalPlayoff": 9
         },
         "Olympiáda": {
-          "correct": 12,
-          "totalRegular": 14,
+          "correct": 14,
+          "totalRegular": 18,
           "totalPlayoff": 0,
-          "tableCorrect": 8,
-          "tableDeviation": 4
+          "tableCorrect": 5,
+          "tableDeviation": 8
         }
       }
     }
@@ -6081,8 +6093,8 @@
           "totalPlayoff": 9
         },
         "Olympiáda": {
-          "correct": 11,
-          "totalRegular": 14,
+          "correct": 13,
+          "totalRegular": 18,
           "totalPlayoff": 0,
           "tableCorrect": 5,
           "tableDeviation": 8
@@ -6094,6 +6106,15 @@
     "username": "Nuimi",
     "password": "$2b$10$uG7xmFZz.u1won5TtsIERem.vgyGARs1/X8XUzDHXX5s.x5Z6zqkm",
     "correct": 0,
-    "total": 0
+    "total": 0,
+    "stats": {
+      "25/26": {
+        "Olympiáda": {
+          "correct": 0,
+          "totalRegular": 0,
+          "totalPlayoff": 0
+        }
+      }
+    }
   }
 ]
