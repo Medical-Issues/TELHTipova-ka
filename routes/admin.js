@@ -273,7 +273,7 @@ router.get('/', requireAdmin, (req, res) => {
         <label>
           <input type="radio" name="mode" value="cascade" ${clinchMode === 'cascade' ? 'checked' : ''} />
           <strong>Kaskádové (Nejvyšší meta)</strong>
-          <span style="display:block; font-size: 0.8em; color: gray;">Tým se obarví barvou nejvyššího patra, do kterého má už jistý přístup.</span>
+          <span style="display:block; font-size: 0.8em; color: gray;">Tým se obarví barvou nejvyššího patra, pod který už nemůže slézt.</span>
         </label>
       </div>
       <button type="submit" class="action-btn edit-btn" style="width: 100%;">Uložit logiku</button>
