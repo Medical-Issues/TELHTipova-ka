@@ -2073,6 +2073,30 @@
             "matchId": 413,
             "winner": "home",
             "loserWins": 0
+          },
+          {
+            "matchId": 416,
+            "winner": "home",
+            "scoreHome": 4,
+            "scoreAway": 1
+          },
+          {
+            "matchId": 417,
+            "winner": "home",
+            "scoreHome": 5,
+            "scoreAway": 0
+          },
+          {
+            "matchId": 415,
+            "winner": "home",
+            "scoreHome": 5,
+            "scoreAway": 2
+          },
+          {
+            "matchId": 414,
+            "winner": "home",
+            "scoreHome": 4,
+            "scoreAway": 2
           }
         ]
       }
@@ -6073,6 +6097,30 @@
             "matchId": 413,
             "winner": "home",
             "loserWins": 0
+          },
+          {
+            "matchId": 416,
+            "winner": "away",
+            "scoreHome": 3,
+            "scoreAway": 4
+          },
+          {
+            "matchId": 417,
+            "winner": "home",
+            "scoreHome": 7,
+            "scoreAway": 2
+          },
+          {
+            "matchId": 414,
+            "winner": "home",
+            "scoreHome": 4,
+            "scoreAway": 1
+          },
+          {
+            "matchId": 415,
+            "winner": "home",
+            "scoreHome": 5,
+            "scoreAway": 1
           }
         ]
       }

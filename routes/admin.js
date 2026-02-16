@@ -953,47 +953,74 @@ router.post('/season', express.urlencoded({ extended: true }), requireAdmin, (re
     res.redirect('/admin');
 });
 
-const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'));
-const teams = loadTeams();
-const SEASON = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
-const selectedSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
-const leaguesFromMatches = [...new Set(matches.map(m => m.liga))];
-const leaguesFromTeams = [...new Set(teams.map(t => t.liga))];
-const allSeasonData = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf-8'));
-const leagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues)
-    ? allSeasonData[selectedSeason].leagues
-    : [];
-const leaguesFromLeagues = [... new Set(leagues.map(t => t.name))];
-const allLeagues = [...new Set([...leaguesFromTeams, ...leaguesFromMatches, ...leaguesFromLeagues])];
-router.get('/playoff',requireAdmin ,(req, res) => {
-    const selectedLeague = req.query.league || allLeagues[0];
+router.get('/playoff', requireAdmin, (req, res) => {
+    // Načtení sezóny
+    const selectedSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
 
-    const filePath = path.join(__dirname, '../data/playoff.json');
-    fs.readFile(filePath, 'utf-8', (err, jsonData) => {
-        let playoffData = {};
+    // Získání lig
+    const allSeasonData = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf-8'));
+    const leagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues) ? allSeasonData[selectedSeason].leagues : [];
+    const allLeagues = leagues.map(l => l.name);
+    const selectedLeague = req.query.league || allLeagues[0] || "Neurčeno";
 
-        if (!err && jsonData) {
-            try {
-                playoffData = JSON.parse(jsonData);
-            } catch {
-                playoffData = {};
+    // 1. NAČTENÍ ZÁPASŮ A TÝMŮ PRO AUTOMATIZACI
+    const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'));
+    const teams = JSON.parse(fs.readFileSync('./data/teams.json', 'utf8'));
+
+    // Týmy vybrané ligy pro rychlé vložení "čekajících"
+    const teamsInSelectedLiga = teams.filter(t => t.liga === selectedLeague && t.active);
+
+    // Vyfiltrujeme POUZE playoff zápasy pro vybranou ligu a sezónu
+    const playoffMatches = matches.filter(m => m.season === selectedSeason && m.liga === selectedLeague && m.isPlayoff);
+
+    // 2. VÝPOČET STAVU SÉRIÍ (Zahrnuje i neodehrané a řeší BO1)
+    const seriesMap = {};
+    playoffMatches.forEach(m => {
+        // Vytvoříme unikátní klíč série (vždy menší ID - větší ID)
+        const idA = Math.min(m.homeTeamId, m.awayTeamId);
+        const idB = Math.max(m.homeTeamId, m.awayTeamId);
+        const sKey = `${idA}-${idB}`;
+
+        if (!seriesMap[sKey]) {
+            seriesMap[sKey] = {
+                teamA_Id: idA, teamA_Name: teams.find(t => t.id === idA)?.name || 'Neznámý',
+                teamB_Id: idB, teamB_Name: teams.find(t => t.id === idB)?.name || 'Neznámý',
+                winsA: 0, winsB: 0, scoreA: null, scoreB: null, bo: m.bo || 4, isBo1: m.bo === 1
+            };
+        }
+
+        if (m.result) {
+            if (seriesMap[sKey].isBo1) {
+                if (m.homeTeamId === idA) { seriesMap[sKey].scoreA = m.result.scoreHome; seriesMap[sKey].scoreB = m.result.scoreAway; }
+                else { seriesMap[sKey].scoreA = m.result.scoreAway; seriesMap[sKey].scoreB = m.result.scoreHome; }
+            }
+            if (m.result.winner === 'home') {
+                if (m.homeTeamId === idA) seriesMap[sKey].winsA++; else seriesMap[sKey].winsB++;
+            } else if (m.result.winner === 'away') {
+                if (m.awayTeamId === idA) seriesMap[sKey].winsA++; else seriesMap[sKey].winsB++;
             }
         }
+    });
 
-        if (!playoffData[SEASON]) playoffData[SEASON] = {};
-        if (!playoffData[SEASON][selectedLeague]) {
-            playoffData[SEASON][selectedLeague] = Array.from({ length: 20 }, () =>
-                Array.from({ length: 20 }, () => ({ text: '', bgColor: '' }))
-            );
-        }
+    // 3. NAČTENÍ TABULKY A ŠABLON
+    const filePath = path.join(__dirname, '../data/playoff.json');
+    let playoffData = {};
+    try { if (fs.existsSync(filePath)) playoffData = JSON.parse(fs.readFileSync(filePath, 'utf-8')); } catch (e) { playoffData = {}; }
 
-        const tableData = playoffData[SEASON][selectedLeague];
+    if (!playoffData[selectedSeason]) playoffData[selectedSeason] = {};
+    if (!playoffData[selectedSeason][selectedLeague]) {
+        playoffData[selectedSeason][selectedLeague] = Array.from({ length: 20 }, () => Array.from({ length: 20 }, () => ({ text: '', bgColor: '' })));
+    }
+    const tableData = playoffData[selectedSeason][selectedLeague];
 
-        const leagueOptions = allLeagues
-            .map(liga => `<option value="${liga}" ${liga === selectedLeague ? 'selected' : ''}>${liga}</option>`)
-            .join('\n');
+    // Načtení databáze šablon (pokud existuje)
+    const tplPath = path.join(__dirname, '../data/playoffTemplates.json');
+    let templatesDB = {};
+    try { if (fs.existsSync(tplPath)) templatesDB = JSON.parse(fs.readFileSync(tplPath, 'utf8')); } catch (e) {}
 
-        let html = `
+    const leagueOptions = allLeagues.map(liga => `<option value="${liga}" ${liga === selectedLeague ? 'selected' : ''}>${liga}</option>`).join('\n');
+
+    let html = `
 <!DOCTYPE html>
 <html lang="cs">
 <head>
@@ -1002,151 +1029,439 @@ router.get('/playoff',requireAdmin ,(req, res) => {
   <title>Admin - Správa playoff tabulky</title>
   <link rel="stylesheet" href="/css/styles.css" />
   <link rel="icon" href="/images/logo.png">
-<style>
-  body { background: #222;}
-  form { padding: 10px; }
-  label { color: orangered; }
-  select { margin-left: 10px; }
-  table { border-collapse: collapse; width: 100%; margin-top: 20px; user-select: none; }
-  td { border: 1px solid orangered; width: 60px; height: 20px; text-align: center; padding: 5px; cursor: pointer; background-color: #333; color: lightgrey; font-weight: 600; transition: background-color 0.3s ease, color 0.3s ease; }
-  td:focus { outline: 2px solid orangered; background-color: orangered; color: black; }
-  td[contenteditable="true"]:empty::before { content: attr(data-placeholder); color: #666; }
-</style>
 </head>
-<body>
+<body style="background: #222;">
 
 <header>
   <div class="logo_title"><img class="image_logo" src="/images/logo.png" alt="Logo"><h1 id="title">Tipovačka</h1></div>
-  <h1>Playoff tabulka - sezóna: ${SEASON}</h1>
-  <form id="leagueForm" method="GET" action="/admin/playoff">
-    <label for="leagueSelect">Vyber ligu:</label>
-    <select name="league" class="league-select" onchange="this.form.submit()">
+  <h1>Playoff tabulka - sezóna: ${selectedSeason}</h1>
+  <form id="leagueForm" method="GET" action="/admin/playoff" style="padding: 10px;">
+    <label for="leagueSelect" style="color: orangered;">Vyber ligu:</label>
+    <select name="league" class="league-select" style="margin-left: 10px;" onchange="this.form.submit()">
       ${leagueOptions}
     </select>
   </form>
 </header>
 
-<form id="saveForm" action="/admin/playoff/save" method="POST">
-  <input type="hidden" name="season" value="${SEASON}">
-  <input type="hidden" name="league" value="${selectedLeague}">
-  <input type="hidden" name="tableData" id="tableData" />
-  <table id="playoffTable">
+<div style="display: flex; padding: 0 20px;">
+  
+  <div style="flex: 3; overflow-x: auto;">
+      <form id="saveForm" action="/admin/playoff/save" method="POST">
+        <input type="hidden" name="season" value="${selectedSeason}">
+        <input type="hidden" name="league" value="${selectedLeague}">
+        <input type="hidden" name="tableData" id="tableData" />
+        
+        <div style="display: flex; align-items: center; background: #111; padding: 10px; border: 1px solid #444; margin-bottom: 10px;">
+          <button type="submit" class="action-btn edit-btn" style="padding:5px 15px; font-size: 1.1em;">Uložit tabulku</button>
+          <label for="colorPicker" style="margin-left: 20px; color: orangered; font-weight: 600;">Vyber barvu:</label>
+          <input type="color" id="colorPicker" value="#FF0000" style="vertical-align: middle; margin-left: 5px;">
+          <label for="textColorPicker" style="margin-left: 20px; color: orangered; font-weight: 600;">Barva textu:</label>
+          <input type="color" id="textColorPicker" value="#FFFFFF" style="vertical-align: middle; margin-left: 5px;">
+        </div>
+
+        <table id="playoffTable">
 `;
 
-        for (let i = 0; i < 20; i++) {
-            html += '<tr>';
-            for (let j = 0; j < 20; j++) {
-                const cell = tableData[i][j] || { text: '', bgColor: '' };
-                const style = `style="background-color:${cell.bgColor || '#333'};color:${cell.textColor || 'lightgrey'}"`;
-                const content = cell.text || '';
-                html += `<td contenteditable="true" data-placeholder="…" ${style}>${content}</td>`;
-            }
-            html += '</tr>';
+    for (let i = 0; i < 20; i++) {
+        html += '<tr>';
+        for (let j = 0; j < 20; j++) {
+            const cell = tableData[i][j] || { text: '', bgColor: '' };
+            const style = `style="background-color:${cell.bgColor || '#333'};color:${cell.textColor || 'lightgrey'}"`;
+            const content = cell.text || '';
+            html += `<td contenteditable="true" data-placeholder="…" ${style}>${content}</td>`;
         }
+        html += '</tr>';
+    }
 
-        html += `
-  </table>
-  <div style="display: flex; align-items: center;">
-  <button type="submit" class="action-btn edit-btn" style="margin-top:10px; margin-bottom: 10px; padding:5px 10px;">Uložit</button>
-</form>
-  <form action="/admin/playoff/delete" method="POST" onsubmit="return confirm('Opravdu chceš smazat celou playoff tabulku? Tohle nelze vrátit zpět!');">
-  <input type="hidden" name="season" value="${SEASON}">
-  <input type="hidden" name="league" value="${selectedLeague}">
-  <button type="submit" class="action-btn delete-btn" style="margin-left: 20px; padding:5px 10px;">Smazat celou tabulku</button>
-  </form>
-  <label for="colorPicker" style="margin-left: 20px; color: orangered; font-weight: 600;">Vyber barvu:</label>
-  <input type="color" id="colorPicker" value="#FF0000" style="vertical-align: middle; margin-left: 5px;">
-  <label for="textColorPicker" style="margin-left: 20px; color: orangered; font-weight: 600;">Barva textu:</label>
-  <input type="color" id="textColorPicker" value="#FFFFFF" style="vertical-align: middle; margin-left: 5px;">
+    html += `
+        </table>
+      </form>
+      
+      <div style="margin-top: 30px; background: #1a1a1a; padding: 15px; border-radius: 8px; border: 1px solid #444;">
+          <h3 style="color: orangered; margin-top: 0;">Generátor a Šablony</h3>
+          
+          <div style="display: flex; gap: 30px; flex-wrap: wrap;">
+              
+              <div style="flex: 1; border-right: 1px solid #333; padding-right: 15px;">
+                  <label style="color: lightgrey; font-size: 0.9em; display:block; margin-bottom:5px;">Automaticky vygenerovat pavouka:</label>
+                  <div style="display: flex; gap: 10px;">
+                      <select id="autoGeneratorSelect" style="background:#333; color:white; border:1px solid #555; padding: 5px; flex: 1;">
+                          <option value="4">4 týmy (Jen SF a Finále)</option>
+                          <option value="6">6 týmů (Spengler Cup)</option>
+                          <option value="8">8 týmů (Klasika QF, SF, Finále)</option>
+                          <option value="8_bronz">8 týmů + Zápas o bronz (MS/OH)</option>
+                          <option value="10">10 týmů (Maxa liga)</option>
+                          <option value="12">12 týmů (Extraliga)</option>
+                          <option value="olympics">Olympiáda (8 týmů + Bronz)</option>
+                      </select>
+                      <button type="button" class="action-btn" style="background:#555; padding:5px 10px;" onclick="generateBracket()">Generovat</button>
+                  </div>
+              </div>
+
+              <div style="flex: 1;">
+                  <form action="/admin/playoff/save-template" method="POST" id="saveTemplateForm" onsubmit="return prepareTemplateData()">
+                      <input type="hidden" name="league" value="${selectedLeague}">
+                      <input type="hidden" name="templateData" id="templateDataInput">
+                      <label style="color: lightgrey; font-size: 0.9em; display:block; margin-bottom:5px;">Uložit mřížku jako novou šablonu:</label>
+                      <div style="display:flex; gap: 10px;">
+                          <input type="text" name="templateName" placeholder="Název šablony..." required style="background:#333; color:white; border:1px solid #555; padding: 5px; flex: 1;">
+                          <button type="submit" class="action-btn edit-btn" style="padding:5px 10px;">Uložit šablonu</button>
+                      </div>
+                  </form>
+                  
+                  <div style="display:flex; gap: 10px; margin-top: 15px;">
+                      <select id="templateSelect" style="background:#333; color:white; border:1px solid #555; padding: 5px; flex: 1;">
+                          <option value="">-- Vyber uloženou šablonu --</option>
+                          ${Object.keys(templatesDB).map(k => `<option value="${k}">${k}</option>`).join('')}
+                      </select>
+                      <button type="button" class="action-btn" style="background: #555; padding:5px 10px;" onclick="loadSelectedTemplate()">Načíst šablonu</button>
+                  </div>
+              </div>
+              
+          </div>
+      </div>
+
+      <form action="/admin/playoff/delete" method="POST" style="margin-top: 30px;" onsubmit="return confirm('Opravdu chceš smazat celou playoff tabulku? Tohle nelze vrátit zpět!');">
+        <input type="hidden" name="season" value="${selectedSeason}">
+        <input type="hidden" name="league" value="${selectedLeague}">
+        <button type="submit" class="action-btn delete-btn" style="padding:5px 10px;">Smazat celou tabulku (Reset)</button>
+      </form>
+      <p style="margin-top:20px;"><a href="/admin" style="color: orangered;">Zpět na administraci</a></p>
   </div>
-  <div style="margin-left: 10px">
-  <div>Pravé tlačítko myši = Aplikování barvy z výběru do buňky</div>
-  <div>CTRL + Pravé tlačítko myši = Zrušení obarvení pole</div>
-  <div>SHIFT + Pravé tlačítko myši = Aplikování barvy z výběru do textu</div>
-  <div>CTRL + SHIFT + Pravé tlačítko myši = Zrušení obarvení textu</div>
-  <p><a href="/admin">Zpět na hlavní stránku</a></p>
+
+  <div class="assistant-panel">
+    <h2 style="margin-top: 0; color: orangered;">Automatické stavy sérií</h2>
+    <p style="font-size: 0.85em; color: lightgrey; margin-bottom: 10px;">
+      1. Klikni na buňku pro <strong>TÝM</strong> (buňka se označí zeleně).<br>
+      2. Klikni na tým vpravo. Skript vloží jméno a do <strong>vedlejší buňky doprava</strong> vloží skóre!
+    </p>
+    
+    <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85em; margin-bottom: 20px; color: lightgrey; cursor: pointer;">
+      <input type="checkbox" id="autoColorCheck" checked>
+      Automaticky přepisovat barvu pozadí buňky (Zelená/Červená)
+    </label>
+    
+    <div style="max-height: 50vh; overflow-y: auto; padding-right: 10px;">
+`;
+
+    if (Object.keys(seriesMap).length === 0) {
+        html += `<p style="color: gray;">Zatím nejsou vytvořeny žádné zápasy playoff pro tuto ligu a sezónu.</p>`;
+    } else {
+        Object.values(seriesMap).forEach(series => {
+            const isBo1 = series.isBo1;
+            const winsNeeded = isBo1 ? 1 : series.bo;
+            const isFinished = series.winsA >= winsNeeded || series.winsB >= winsNeeded;
+
+            let colorA = "#333333"; let classA = "btn-ongoing";
+            let colorB = "#333333"; let classB = "btn-ongoing";
+
+            if (isFinished) {
+                if (series.winsA >= winsNeeded) { colorA = "#006400"; classA = "btn-advancing"; colorB = "#8b0000"; classB = "btn-eliminated"; }
+                else { colorB = "#006400"; classB = "btn-advancing"; colorA = "#8b0000"; classA = "btn-eliminated"; }
+            }
+
+            let scoreValueA, scoreValueB, displayA, displayB;
+
+            if (isBo1) {
+                scoreValueA = series.scoreA !== null ? series.scoreA : '-';
+                scoreValueB = series.scoreB !== null ? series.scoreB : '-';
+                displayA = `<strong>${series.teamA_Name}</strong> - Skóre: ${scoreValueA}`;
+                displayB = `<strong>${series.teamB_Name}</strong> - Skóre: ${scoreValueB}`;
+            } else {
+                scoreValueA = series.winsA;
+                scoreValueB = series.winsB;
+                displayA = `<strong>${series.teamA_Name}</strong> - ${series.winsA} výher`;
+                displayB = `<strong>${series.teamB_Name}</strong> - ${series.winsB} výher`;
+            }
+
+            html += `
+            <div class="series-card">
+              <div style="font-size: 0.8em; color: gray; margin-bottom: 5px; text-align: center;">
+                ${isBo1 ? 'Hraje se na 1 zápas (BO1)' : `Série na ${winsNeeded} vítězné`}
+              </div>
+              <button type="button" class="${classA}" onclick="applyToCell('${series.teamA_Name}', '${scoreValueA}', '${colorA}')">
+                ${displayA}
+              </button>
+              <button type="button" class="${classB}" onclick="applyToCell('${series.teamB_Name}', '${scoreValueB}', '${colorB}')">
+                ${displayB}
+              </button>
+            </div>
+            `;
+        });
+    }
+
+    html += `
+    </div>
+    
+    <h3 style="color: orangered; margin-top: 30px; border-top: 1px solid #444; padding-top: 15px;">Čekající týmy</h3>
+    <div style="display: flex; flex-wrap: wrap;">
+    `;
+
+    teamsInSelectedLiga.forEach(t => {
+        html += `<button type="button" class="quick-team-btn" onclick="applyToCell('${t.name}', '', '#333333')">${t.name}</button>`;
+    });
+
+    html += `
+    </div>
   </div>
+</div>
 
 <script>
+  // --- ZÁKLADNÍ DATA ---
+  const frontendTemplates = ${JSON.stringify(templatesDB)};
+  let selectedBgColor = document.getElementById('colorPicker').value;
+  let selectedTextColor = document.getElementById('textColorPicker').value;
+  let activeCell = null;
 
-  let selectedBgColor = colorPicker.value;
-let selectedTextColor = textColorPicker.value;
+  document.getElementById('colorPicker').addEventListener('input', e => selectedBgColor = e.target.value);
+  document.getElementById('textColorPicker').addEventListener('input', e => selectedTextColor = e.target.value);
 
-colorPicker.addEventListener('input', e => selectedBgColor = e.target.value);
-textColorPicker.addEventListener('input', e => selectedTextColor = e.target.value);
+  // --- OVLÁDÁNÍ MŘÍŽKY ---
+  document.querySelectorAll('#playoffTable td').forEach(cell => {
+    cell.addEventListener('click', () => {
+        document.querySelectorAll('#playoffTable td').forEach(c => c.classList.remove('selected'));
+        cell.classList.add('selected');
+        activeCell = cell;
+    });
 
-document.querySelectorAll('td').forEach(cell => {
-  cell.addEventListener('keydown', e => {
-    if ((e.key === 'Backspace' || e.key === 'Delete') && cell.innerText.trim() === '') {
+    cell.addEventListener('keydown', e => {
+      if ((e.key === 'Backspace' || e.key === 'Delete') && cell.innerText.trim() === '') {
+        e.preventDefault(); cell.innerText = '';
+      }
+      if (e.key === 'Enter') e.preventDefault();
+    });
+
+    cell.addEventListener('contextmenu', e => {
       e.preventDefault();
-      cell.innerText = '';
-    }
-    if (e.key === 'Enter') e.preventDefault();
-  });
-
-  cell.addEventListener('paste', e => {
-    e.preventDefault();
-    const text = (e.clipboardData || window.clipboardData).getData('text');
-    document.execCommand('insertText', false, text);
-  });
-
-  cell.addEventListener('contextmenu', e => {
-    e.preventDefault();
-    if (e.shiftKey) {
-      // SHIFT + Pravý klik → mění barvu textu
-      if (e.ctrlKey || e.metaKey) {
-        cell.style.color = 'lightgrey';
+      if (e.shiftKey) {
+        if (e.ctrlKey || e.metaKey) cell.style.color = 'lightgrey'; else cell.style.color = selectedTextColor;
       } else {
-        cell.style.color = selectedTextColor;
+        if (e.ctrlKey || e.metaKey) cell.style.backgroundColor = '#333'; else cell.style.backgroundColor = selectedBgColor;
       }
-    } else {
-      // normální pravý klik → mění pozadí
-      if (e.ctrlKey || e.metaKey) {
-        cell.style.backgroundColor = '#333';
-      } else {
-        cell.style.backgroundColor = selectedBgColor;
-      }
-    }
+    });
   });
-});
 
+  // --- FUNKCE PRO ASISTENTA VKLÁDÁNÍ ---
+  function applyToCell(teamName, score, bgColor) {
+      if (!activeCell) { alert('Nejprve klikni do tabulky na buňku!'); return; }
+      const shouldColor = document.getElementById('autoColorCheck').checked;
+      
+      activeCell.innerText = teamName;
+      if (shouldColor) { activeCell.style.backgroundColor = bgColor; activeCell.style.color = '#FFFFFF'; }
+      
+      if (score !== '') {
+          const nextCell = activeCell.nextElementSibling;
+          if (nextCell && nextCell.tagName === 'TD') {
+              nextCell.innerText = score;
+              if (shouldColor) { nextCell.style.backgroundColor = bgColor; nextCell.style.color = '#FFFFFF'; }
+          }
+      }
+  }
 
+  // --- ULOŽENÍ A NAČTENÍ VLASTNÍ ŠABLONY ---
+  function prepareTemplateData() {
+      const table = document.getElementById('playoffTable');
+      const data = [];
+      for (let row of table.rows) {
+        const rowData = [];
+        for (let cell of row.cells) {
+          rowData.push({ text: '', bgColor: cell.style.backgroundColor || '', textColor: cell.style.color || '' });
+        }
+        data.push(rowData);
+      }
+      document.getElementById('templateDataInput').value = JSON.stringify(data);
+      return true;
+  }
+
+  function loadSelectedTemplate() {
+      const tName = document.getElementById('templateSelect').value;
+      if (!tName || !frontendTemplates[tName]) return alert('Vyberte šablonu ze seznamu.');
+      if (!confirm('Opravdu načíst šablonu? Současná mřížka se přepíše.')) return;
+      
+      const table = document.getElementById('playoffTable');
+      const grid = frontendTemplates[tName];
+      for (let i = 0; i < 20; i++) {
+          for (let j = 0; j < 20; j++) {
+              if (grid[i] && grid[i][j]) {
+                  const cell = table.rows[i].cells[j];
+                  cell.innerText = ''; 
+                  cell.style.backgroundColor = grid[i][j].bgColor || '#333';
+                  cell.style.color = grid[i][j].textColor || 'lightgrey';
+              }
+          }
+      }
+  }
+
+  // --- MAGICKÝ GENERÁTOR (ALGORITMY) ---
+  function generateBracket() {
+      if (!confirm('Opravdu vygenerovat nového pavouka? Současná mřížka bude ZCELA smazána!')) return;
+      
+      const type = document.getElementById('autoGeneratorSelect').value;
+      const table = document.getElementById('playoffTable');
+      const tBox = "#333333"; 
+      const tLine = "#ff4500"; 
+      const tWin = "#FFD700"; 
+      const tBronze = "#CD7F32";
+
+      // 1. Vyčištění mřížky
+      for (let r = 0; r < 20; r++) {
+          for (let c = 0; c < 20; c++) {
+              if (table.rows[r] && table.rows[r].cells[c]) {
+                  table.rows[r].cells[c].style.backgroundColor = ''; 
+                  table.rows[r].cells[c].innerText = '';
+              }
+          }
+      }
+
+      function box(r, c, w, color) { for(let i=0; i<w; i++) if(c+i<20 && table.rows[r]) table.rows[r].cells[c+i].style.backgroundColor=color; }
+      function lineH(r, sc, ec, color) { for(let c=Math.min(sc,ec); c<=Math.max(sc,ec); c++) if(c<20 && table.rows[r]) table.rows[r].cells[c].style.backgroundColor=color; }
+      function lineV(c, sr, er, color) { for(let r=Math.min(sr,er); r<=Math.max(sr,er); r++) if(r<20 && table.rows[r]) table.rows[r].cells[c].style.backgroundColor=color; }
+
+      if (type === 'olympics') {
+          // --- PŘEDKOLO (Qualification Playoffs) ---
+          box(1, 0, 2, tBox); box(2, 0, 2, tBox);   // P1
+          box(4, 0, 2, tBox); box(5, 0, 2, tBox);   // P2
+          box(14, 0, 2, tBox); box(15, 0, 2, tBox); // P3
+          box(17, 0, 2, tBox); box(18, 0, 2, tBox); // P4
+
+          // --- ČTVRTFINÁLE (4 týmy čekaly, 4 postoupily) ---
+          box(1, 4, 2, tBox); box(3, 4, 2, tBox);   // QF1 (nasazený vs P1)
+          box(6, 4, 2, tBox); box(8, 4, 2, tBox);   // QF2 (nasazený vs P2)
+          box(11, 4, 2, tBox); box(13, 4, 2, tBox); // QF3 (nasazený vs P3)
+          box(16, 4, 2, tBox); box(18, 4, 2, tBox); // QF4 (nasazený vs P4)
+
+          // --- SEMIFINÁLE ---
+          box(4, 9, 2, tBox); box(5, 9, 2, tBox);   // SF1
+          box(14, 9, 2, tBox); box(15, 9, 2, tBox); // SF2
+
+          // --- FINÁLE A BRONZ ---
+          box(9, 14, 2, tBox); box(10, 14, 2, tBox); // FINÁLE
+          box(14, 14, 2, tBox); box(15, 14, 2, tBox);// O BRONZ
+
+          // --- VÍTĚZOVÉ ---
+          box(9, 18, 2, tWin);    // ZLATO
+          box(14, 18, 2, tBronze); // BRONZ
+
+          // --- ČÁRY (Postupové cesty) ---
+          lineH(2, 2, 3, tLine); lineH(5, 2, 3, tLine); lineH(14, 2, 3, tLine); lineH(18, 2, 3, tLine);
+          lineH(3, 6, 7, tLine); lineV(7, 3, 4, tLine); lineH(4, 7, 8, tLine);
+          lineH(7, 6, 7, tLine); lineV(7, 5, 7, tLine); lineH(5, 7, 8, tLine);
+          lineH(12, 6, 7, tLine); lineV(7, 12, 14, tLine); lineH(14, 7, 8, tLine);
+          lineH(17, 6, 7, tLine); lineV(7, 15, 17, tLine); lineH(15, 7, 8, tLine);
+          lineH(4, 11, 12, tLine); lineV(12, 4, 9, tLine); lineH(9, 12, 13, tLine);
+          lineH(15, 11, 12, tLine); lineV(12, 10, 15, tLine); lineH(10, 12, 13, tLine);
+          lineH(9, 16, 17, tLine); lineH(14, 16, 17, tLine);
+      }
+      if (type === '4') {
+          box(4, 3, 2, tBox); box(5, 3, 2, tBox); box(12, 3, 2, tBox); box(13, 3, 2, tBox);
+          box(8, 9, 2, tBox); box(9, 9, 2, tBox); box(8, 14, 2, tWin);
+          lineH(4, 5, 6, tLine); lineV(6, 4, 8, tLine); lineH(8, 6, 8, tLine);
+          lineH(12, 5, 6, tLine); lineV(6, 9, 12, tLine); lineH(9, 6, 8, tLine);
+          lineH(8, 11, 13, tLine);
+      } else if (type === '6') {
+          box(5, 2, 2, tBox); box(6, 2, 2, tBox); box(13, 2, 2, tBox); box(14, 2, 2, tBox);
+          box(3, 7, 2, tBox); box(5, 7, 2, tBox); box(14, 7, 2, tBox); box(16, 7, 2, tBox);
+          box(9, 12, 2, tBox); box(10, 12, 2, tBox); box(9, 16, 2, tWin);
+          lineH(5, 4, 6, tLine); lineH(14, 4, 6, tLine);
+          lineH(4, 9, 10, tLine); lineV(10, 4, 9, tLine); lineH(9, 10, 11, tLine);
+          lineH(15, 9, 10, tLine); lineV(10, 10, 15, tLine); lineH(10, 10, 11, tLine);
+          lineH(9, 14, 15, tLine);
+      } else if (type === '8' || type === '8_bronz') {
+          box(2, 1, 2, tBox); box(3, 1, 2, tBox); box(6, 1, 2, tBox); box(7, 1, 2, tBox);
+          box(12, 1, 2, tBox); box(13, 1, 2, tBox); box(16, 1, 2, tBox); box(17, 1, 2, tBox);
+          box(4, 6, 2, tBox); box(5, 6, 2, tBox); box(14, 6, 2, tBox); box(15, 6, 2, tBox);
+          lineH(2, 3, 4, tLine); lineV(4, 2, 4, tLine); lineH(4, 4, 5, tLine);
+          lineH(7, 3, 4, tLine); lineV(4, 5, 7, tLine); lineH(5, 4, 5, tLine);
+          lineH(12, 3, 4, tLine); lineV(4, 12, 14, tLine); lineH(14, 4, 5, tLine);
+          lineH(17, 3, 4, tLine); lineV(4, 15, 17, tLine); lineH(15, 4, 5, tLine);
+          if (type === '8') {
+              box(9, 11, 2, tBox); box(10, 11, 2, tBox); box(9, 15, 2, tWin);
+              lineH(4, 8, 9, tLine); lineV(9, 4, 9, tLine); lineH(9, 9, 10, tLine);
+              lineH(15, 8, 9, tLine); lineV(9, 10, 15, tLine); lineH(10, 9, 10, tLine);
+              lineH(9, 13, 14, tLine);
+          } else {
+              box(7, 11, 2, tBox); box(8, 11, 2, tBox); box(12, 11, 2, tBox); box(13, 11, 2, tBox);
+              box(7, 15, 2, tWin); box(12, 15, 2, tBronze);
+              lineH(4, 8, 9, tLine); lineV(9, 4, 7, tLine); lineH(7, 9, 10, tLine);
+              lineH(15, 8, 9, tLine); lineV(9, 8, 15, tLine); lineH(8, 9, 10, tLine);
+              lineH(7, 13, 14, tLine); lineH(12, 13, 14, tLine);
+          }
+      } else if (type === '10') {
+          box(1, 0, 2, tBox); box(2, 0, 2, tBox); box(17, 0, 2, tBox); box(18, 0, 2, tBox);
+          box(1, 4, 2, tBox); box(3, 4, 2, tBox); box(6, 4, 2, tBox); box(7, 4, 2, tBox);
+          box(12, 4, 2, tBox); box(13, 4, 2, tBox); box(16, 4, 2, tBox); box(18, 4, 2, tBox);
+          box(4, 9, 2, tBox); box(5, 9, 2, tBox); box(14, 9, 2, tBox); box(15, 9, 2, tBox);
+          box(9, 14, 2, tBox); box(10, 14, 2, tBox); box(9, 18, 2, tWin);
+          lineH(1, 2, 3, tLine); lineH(18, 2, 3, tLine);
+          lineH(2, 6, 7, tLine); lineV(7, 2, 4, tLine); lineH(4, 7, 8, tLine);
+          lineH(6, 6, 7, tLine); lineV(7, 5, 6, tLine); lineH(5, 7, 8, tLine);
+          lineH(13, 6, 7, tLine); lineV(7, 13, 14, tLine); lineH(14, 7, 8, tLine);
+          lineH(17, 6, 7, tLine); lineV(7, 15, 17, tLine); lineH(15, 7, 8, tLine);
+          lineH(4, 11, 12, tLine); lineV(12, 4, 9, tLine); lineH(9, 12, 13, tLine);
+          lineH(15, 11, 12, tLine); lineV(12, 10, 15, tLine); lineH(10, 12, 13, tLine);
+          lineH(9, 16, 17, tLine);
+      } else if (type === '12') {
+          box(1, 0, 2, tBox); box(2, 0, 2, tBox); box(5, 0, 2, tBox); box(6, 0, 2, tBox);
+          box(13, 0, 2, tBox); box(14, 0, 2, tBox); box(17, 0, 2, tBox); box(18, 0, 2, tBox);
+          box(3, 4, 2, tBox); box(4, 4, 2, tBox); box(7, 4, 2, tBox); box(8, 4, 2, tBox);
+          box(11, 4, 2, tBox); box(12, 4, 2, tBox); box(15, 4, 2, tBox); box(16, 4, 2, tBox);
+          box(5, 9, 2, tBox); box(6, 9, 2, tBox); box(13, 9, 2, tBox); box(14, 9, 2, tBox);
+          box(9, 14, 2, tBox); box(10, 14, 2, tBox); box(9, 18, 2, tWin);
+          lineH(2, 2, 2, tLine); lineV(2, 2, 4, tLine); lineH(4, 2, 3, tLine);
+          lineH(6, 2, 2, tLine); lineV(2, 6, 8, tLine); lineH(8, 2, 3, tLine);
+          lineH(13, 2, 2, tLine); lineV(2, 11, 13, tLine); lineH(11, 2, 3, tLine);
+          lineH(17, 2, 2, tLine); lineV(2, 15, 17, tLine); lineH(15, 2, 3, tLine);
+          lineH(3, 6, 7, tLine); lineV(7, 3, 5, tLine); lineH(5, 7, 8, tLine);
+          lineH(8, 6, 7, tLine); lineV(7, 6, 8, tLine); lineH(6, 7, 8, tLine);
+          lineH(11, 6, 7, tLine); lineV(7, 11, 13, tLine); lineH(13, 7, 8, tLine);
+          lineH(16, 6, 7, tLine); lineV(7, 14, 16, tLine); lineH(14, 7, 8, tLine);
+          lineH(5, 11, 12, tLine); lineV(12, 5, 9, tLine); lineH(9, 12, 13, tLine);
+          lineH(14, 11, 12, tLine); lineV(12, 10, 14, tLine); lineH(10, 12, 13, tLine);
+          lineH(9, 16, 17, tLine);
+      }
+      document.getElementById('saveForm').dispatchEvent(new Event('submit'));
+  }
+
+  // Uložení aktuální mřížky zápasů
   document.getElementById('saveForm').addEventListener('submit', () => {
     const table = document.getElementById('playoffTable');
     const data = [];
     for (let row of table.rows) {
-    const rowData = [];
-    for (let cell of row.cells) {
-    rowData.push({
-        text: cell.innerText.trim(),
-        bgColor: cell.style.backgroundColor || '',
-        textColor: cell.style.color || ''
-        });
+      const rowData = [];
+      for (let cell of row.cells) {
+        rowData.push({ text: cell.innerText.trim(), bgColor: cell.style.backgroundColor || '', textColor: cell.style.color || '' });
+      }
+      data.push(rowData);
     }
-  data.push(rowData);
-}
     document.getElementById('tableData').value = JSON.stringify(data);
   });
-  
-   document.getElementById('clearButton').addEventListener('click', () => {
-    if (confirm('Opravdu chceš smazat celou tabulku? Tohle je nevratné!')) {
-      const table = document.getElementById('playoffTable');
-      for (let row of table.rows) {
-        for (let cell of row.cells) {
-          cell.innerText = '';
-          cell.style.backgroundColor = '#333';
-        }
-      }
-    }
-  });
-  
 </script>
 
 </body>
 </html>`;
 
-        res.send(html);
-    });
+    res.send(html);
+});
+
+// =====================================================================
+// === ROUTA PRO ULOŽENÍ VLASTNÍ ŠABLONY PLAYOFF ===
+// =====================================================================
+router.post('/playoff/save-template', requireAdmin, (req, res) => {
+    const { templateName, templateData, league } = req.body;
+    if (!templateName || !templateData) return res.status(400).send("Chybí data šablony.");
+
+    const tplPath = path.join(__dirname, '../data/playoffTemplates.json');
+    let templates = {};
+    try { if (fs.existsSync(tplPath)) templates = JSON.parse(fs.readFileSync(tplPath, 'utf8')); } catch(e) {}
+
+    try {
+        templates[templateName] = JSON.parse(templateData);
+        fs.writeFileSync(tplPath, JSON.stringify(templates, null, 2));
+    } catch(e) {
+        console.error("Chyba při zápisu šablony", e);
+        return res.status(500).send("Chyba při ukládání šablony.");
+    }
+    res.redirect('/admin/playoff?league=' + encodeURIComponent(league));
 });
 
 router.post('/playoff/save', (req, res) => {
