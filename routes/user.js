@@ -28,12 +28,22 @@ router.get("/table-tip", requireLogin, (req, res) => {
 
     const scores = calculateTeamScores(matches, selectedSeason, selectedLiga);
     // --- NAČTENÍ NASTAVENÍ VIZUÁLU (STRICT vs CASCADE) ---
-    let clinchMode = 'strict'; // Výchozí chování (striktní zamykání)
+    let clinchMode = 'strict'; // Výchozí hard-kódovaný stav
+
+    // 1. Zkusíme načíst globální výchozí nastavení z Adminu
     try {
         const settingsData = JSON.parse(fs.readFileSync('./data/settings.json', 'utf8'));
         if (settingsData.clinchMode) clinchMode = settingsData.clinchMode;
-    } catch (e) {
-        // Pokud soubor ještě neexistuje, použije se výchozí 'strict'
+    } catch (e) {}
+
+    // 2. Pokud uživatel kliknul na přepínač na stránce, uložíme mu to do jeho relace
+    if (req.query.mode === 'strict' || req.query.mode === 'cascade') {
+        req.session.userClinchMode = req.query.mode;
+    }
+
+    // 3. Pokud má uživatel ve své relaci už něco vybráno, přebije to to globální nastavení
+    if (req.session && req.session.userClinchMode) {
+        clinchMode = req.session.userClinchMode;
     }
 
     const leagueObj = leagues.find(l => l.name === selectedLiga) || {
@@ -313,6 +323,20 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 `;
 
     const crossGroupTeams = [];
+
+    html += `
+    <div style="display: flex; justify-content: flex-start; align-items: center; margin-bottom: 10px; gap: 10px;">
+        <span style="color: gray; font-size: 0.85em;">Logika obarvování:</span>
+        <a href="?liga=${encodeURIComponent(selectedLiga)}&mode=strict" 
+           style="${clinchMode === 'strict' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; border-radius: 4px; text-decoration: none; font-size: 0.85em;">
+           Striktní (Jistá meta)
+        </a>
+        <a href="?liga=${encodeURIComponent(selectedLiga)}&mode=cascade" 
+           style="${clinchMode === 'cascade' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; border-radius: 4px; text-decoration: none; font-size: 0.85em;">
+           Kaskádová (Minimální meta)
+        </a>
+    </div>
+    `;
 
     // --- ZPRACOVÁNÍ TABULEK ---
     for (const group of sortedGroups) {
@@ -1406,12 +1430,23 @@ router.get('/', requireLogin, (req, res) => {
 
     const scores = calculateTeamScores(matches, selectedSeason, selectedLiga);
     // --- NAČTENÍ NASTAVENÍ VIZUÁLU (STRICT vs CASCADE) ---
-    let clinchMode = 'strict'; // Výchozí chování (striktní zamykání)
+    // --- NAČTENÍ NASTAVENÍ VIZUÁLU (STRICT vs CASCADE) ---
+    let clinchMode = 'strict'; // Výchozí hard-kódovaný stav
+
+    // 1. Zkusíme načíst globální výchozí nastavení z Adminu
     try {
         const settingsData = JSON.parse(fs.readFileSync('./data/settings.json', 'utf8'));
         if (settingsData.clinchMode) clinchMode = settingsData.clinchMode;
-    } catch (e) {
-        // Pokud soubor ještě neexistuje, použije se výchozí 'strict'
+    } catch (e) {}
+
+    // 2. Pokud uživatel kliknul na přepínač na stránce, uložíme mu to do jeho relace
+    if (req.query.mode === 'strict' || req.query.mode === 'cascade') {
+        req.session.userClinchMode = req.query.mode;
+    }
+
+    // 3. Pokud má uživatel ve své relaci už něco vybráno, přebije to to globální nastavení
+    if (req.session && req.session.userClinchMode) {
+        clinchMode = req.session.userClinchMode;
     }
 
     // --- 2. DEFINICE statusStyle ---
@@ -1554,6 +1589,20 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 </div>
 <div id="regularTable">
 `;
+
+    html += `
+    <div style="display: flex; justify-content: flex-start; align-items: center; margin-bottom: 10px; gap: 10px;">
+        <span style="color: gray; font-size: 0.85em;">Logika obarvování:</span>
+        <a href="?liga=${encodeURIComponent(selectedLiga)}&mode=strict" 
+           style="${clinchMode === 'strict' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; border-radius: 4px; text-decoration: none; font-size: 0.85em;">
+           Striktní (Jistá meta)
+        </a>
+        <a href="?liga=${encodeURIComponent(selectedLiga)}&mode=cascade" 
+           style="${clinchMode === 'cascade' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; border-radius: 4px; text-decoration: none; font-size: 0.85em;">
+           Kaskádová (Minimální meta)
+        </a>
+    </div>
+    `;
 
     const crossGroupTeams = [];
 
@@ -2505,13 +2554,25 @@ router.get('/history/a', requireLogin, (req, res) => {
     // 3. VÝPOČET REÁLNÉ TABULKY (Potřeba pro statistiky)
     const scores = {};
     // --- NAČTENÍ NASTAVENÍ VIZUÁLU (STRICT vs CASCADE) ---
-    let clinchMode = 'strict'; // Výchozí chování (striktní zamykání)
+    // --- NAČTENÍ NASTAVENÍ VIZUÁLU (STRICT vs CASCADE) ---
+    let clinchMode = 'strict'; // Výchozí hard-kódovaný stav
+
+    // 1. Zkusíme načíst globální výchozí nastavení z Adminu
     try {
         const settingsData = JSON.parse(fs.readFileSync('./data/settings.json', 'utf8'));
         if (settingsData.clinchMode) clinchMode = settingsData.clinchMode;
-    } catch (e) {
-        // Pokud soubor ještě neexistuje, použije se výchozí 'strict'
+    } catch (e) {}
+
+    // 2. Pokud uživatel kliknul na přepínač na stránce, uložíme mu to do jeho relace
+    if (req.query.mode === 'strict' || req.query.mode === 'cascade') {
+        req.session.userClinchMode = req.query.mode;
     }
+
+    // 3. Pokud má uživatel ve své relaci už něco vybráno, přebije to to globální nastavení
+    if (req.session && req.session.userClinchMode) {
+        clinchMode = req.session.userClinchMode;
+    }
+
     teamsInSelectedLiga.forEach(t => scores[t.id] = {points: 0, gf: 0, ga: 0});
     matchesInLiga.forEach(m => {
         if (m.result) {
@@ -2667,6 +2728,20 @@ router.get('/history/a', requireLogin, (req, res) => {
 </div>
 <div id="regularTable">
 `;
+
+    html += `
+    <div style="display: flex; justify-content: flex-start; align-items: center; margin-bottom: 10px; gap: 10px;">
+        <span style="color: gray; font-size: 0.85em;">Logika obarvování:</span>
+        <a href="?liga=${encodeURIComponent(selectedLiga)}&mode=strict" 
+           style="${clinchMode === 'strict' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; border-radius: 4px; text-decoration: none; font-size: 0.85em;">
+           Striktní (Jistá meta)
+        </a>
+        <a href="?liga=${encodeURIComponent(selectedLiga)}&mode=cascade" 
+           style="${clinchMode === 'cascade' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; border-radius: 4px; text-decoration: none; font-size: 0.85em;">
+           Kaskádová (Minimální meta)
+        </a>
+    </div>
+    `;
 
     const crossGroupTeams = [];
 
@@ -3469,11 +3544,23 @@ router.get('/history/table', requireLogin, (req, res) => {
 
     // 3. VÝPOČET REÁLNÉ TABULKY
     const scores = {};
-    let clinchMode = 'strict';
+    // --- NAČTENÍ NASTAVENÍ VIZUÁLU (STRICT vs CASCADE) ---
+    let clinchMode = 'strict'; // Výchozí hard-kódovaný stav
+
+    // 1. Zkusíme načíst globální výchozí nastavení z Adminu
     try {
         const settingsData = JSON.parse(fs.readFileSync('./data/settings.json', 'utf8'));
         if (settingsData.clinchMode) clinchMode = settingsData.clinchMode;
-    } catch (e) {
+    } catch (e) {}
+
+    // 2. Pokud uživatel kliknul na přepínač na stránce, uložíme mu to do jeho relace
+    if (req.query.mode === 'strict' || req.query.mode === 'cascade') {
+        req.session.userClinchMode = req.query.mode;
+    }
+
+    // 3. Pokud má uživatel ve své relaci už něco vybráno, přebije to to globální nastavení
+    if (req.session && req.session.userClinchMode) {
+        clinchMode = req.session.userClinchMode;
     }
 
     teamsInSelectedLiga.forEach(t => scores[t.id] = {points: 0, gf: 0, ga: 0});
@@ -3741,6 +3828,20 @@ router.get('/history/table', requireLogin, (req, res) => {
 </div>
 <div id="regularTable">
 `;
+
+    html += `
+    <div style="display: flex; justify-content: flex-start; align-items: center; margin-bottom: 10px; gap: 10px;">
+        <span style="color: gray; font-size: 0.85em;">Logika obarvování:</span>
+        <a href="?liga=${encodeURIComponent(selectedLiga)}&mode=strict" 
+           style="${clinchMode === 'strict' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; border-radius: 4px; text-decoration: none; font-size: 0.85em;">
+           Striktní (Jistá meta)
+        </a>
+        <a href="?liga=${encodeURIComponent(selectedLiga)}&mode=cascade" 
+           style="${clinchMode === 'cascade' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; border-radius: 4px; text-decoration: none; font-size: 0.85em;">
+           Kaskádová (Minimální meta)
+        </a>
+    </div>
+    `;
 
     const crossGroupTeams = [];
 
@@ -4352,12 +4453,23 @@ router.get("/prestupy", requireLogin, (req, res) => {
 
     const scores = calculateTeamScores(matches, selectedSeason, selectedLiga);
     // --- NAČTENÍ NASTAVENÍ VIZUÁLU (STRICT vs CASCADE) ---
-    let clinchMode = 'strict'; // Výchozí chování (striktní zamykání)
+    // --- NAČTENÍ NASTAVENÍ VIZUÁLU (STRICT vs CASCADE) ---
+    let clinchMode = 'strict'; // Výchozí hard-kódovaný stav
+
+    // 1. Zkusíme načíst globální výchozí nastavení z Adminu
     try {
         const settingsData = JSON.parse(fs.readFileSync('./data/settings.json', 'utf8'));
         if (settingsData.clinchMode) clinchMode = settingsData.clinchMode;
-    } catch (e) {
-        // Pokud soubor ještě neexistuje, použije se výchozí 'strict'
+    } catch (e) {}
+
+    // 2. Pokud uživatel kliknul na přepínač na stránce, uložíme mu to do jeho relace
+    if (req.query.mode === 'strict' || req.query.mode === 'cascade') {
+        req.session.userClinchMode = req.query.mode;
+    }
+
+    // 3. Pokud má uživatel ve své relaci už něco vybráno, přebije to to globální nastavení
+    if (req.session && req.session.userClinchMode) {
+        clinchMode = req.session.userClinchMode;
     }
 
     // --- NAČÍTÁNÍ STATISTIK VČETNĚ TABULKY ---
@@ -4511,6 +4623,20 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 </div>
 <div id="regularTable">
 `;
+
+    html += `
+    <div style="display: flex; justify-content: flex-start; align-items: center; margin-bottom: 10px; gap: 10px;">
+        <span style="color: gray; font-size: 0.85em;">Logika obarvování:</span>
+        <a href="?liga=${encodeURIComponent(selectedLiga)}&mode=strict" 
+           style="${clinchMode === 'strict' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; border-radius: 4px; text-decoration: none; font-size: 0.85em;">
+           Striktní (Jistá meta)
+        </a>
+        <a href="?liga=${encodeURIComponent(selectedLiga)}&mode=cascade" 
+           style="${clinchMode === 'cascade' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; border-radius: 4px; text-decoration: none; font-size: 0.85em;">
+           Kaskádová (Minimální meta)
+        </a>
+    </div>
+    `;
 
     const crossGroupTeams = [];
 
