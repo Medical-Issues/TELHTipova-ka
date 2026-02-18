@@ -349,6 +349,7 @@ function removeTipsForDeletedMatch(matchId) {
 function calculateTeamScores(matches, selectedSeason, selectedLiga) {
     const scores = {};
 
+    // 1. Spočítání gólů z reálných zápasů (matches.json)
     matches.forEach(match => {
         const result = match.result;
 
@@ -375,6 +376,26 @@ function calculateTeamScores(matches, selectedSeason, selectedLiga) {
         scores[awayId].gf += result.scoreAway;
         scores[awayId].ga += result.scoreHome;
     });
+
+    // 2. PŘIDÁNO: Přičtení manuálních gólů z teamBonuses.json
+    try {
+        const fs = require('fs');
+        const teamBonusData = JSON.parse(fs.readFileSync('./data/teamBonuses.json', 'utf8'));
+        const leagueBonuses = teamBonusData[selectedSeason]?.[selectedLiga] || {};
+
+        for (const teamId in leagueBonuses) {
+            const bonus = leagueBonuses[teamId];
+            if (!scores[teamId]) scores[teamId] = { gf: 0, ga: 0 };
+
+            // Ošetříme, pokud jsou bonusy zadané jako objekt (nový formát)
+            if (bonus && typeof bonus === 'object') {
+                scores[teamId].gf += (bonus.gf || 0); // Vstřelené
+                scores[teamId].ga += (bonus.ga || 0); // Obdržené
+            }
+        }
+    } catch (e) {
+        // Pokud soubor neexistuje, nic se neděje
+    }
 
     return scores;
 }
@@ -573,6 +594,24 @@ function evaluateRegularSeasonTable(season, liga) {
         }
     });
 
+    // PŘIDÁNO: Načtení manuálních bodů a skóre pro vyhodnocení
+    try {
+        const teamBonusData = JSON.parse(fs.readFileSync('./data/teamBonuses.json', 'utf8'));
+        const leagueBonuses = teamBonusData[season]?.[liga] || {};
+        for (const teamId in leagueBonuses) {
+            const bonus = leagueBonuses[teamId];
+            if (scores[teamId]) {
+                if (bonus && typeof bonus === 'object') {
+                    scores[teamId].points += (bonus.points || 0);
+                    scores[teamId].gf += (bonus.gf || 0);
+                    scores[teamId].ga += (bonus.ga || 0);
+                } else if (typeof bonus === 'number') {
+                    scores[teamId].points += bonus;
+                }
+            }
+        }
+    } catch(e) {}
+
     // 3. Příprava "Reálných skupin" (abychom věděli, kdo patří do Skupiny A, kdo do B)
     const groupedTeamsReal = {};
     teams.forEach(t => {
@@ -599,7 +638,7 @@ function evaluateRegularSeasonTable(season, liga) {
         Object.keys(groupedTeamsReal).forEach(gKey => {
             const realTeamsInGroup = groupedTeamsReal[gKey];
 
-            // Seřadíme reálné týmy ve skupině podle bodů
+            // Seřadíme reálné týmy ve skupině podle bodů a SKÓRE
             const realOrderIds = realTeamsInGroup.sort((a, b) => {
                 const sa = scores[a.id];
                 const sb = scores[b.id];

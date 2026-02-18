@@ -6487,7 +6487,13 @@
     "season": "25/26",
     "isPlayoff": true,
     "bo": 1,
-    "postponed": false
+    "postponed": false,
+    "result": {
+      "scoreHome": 3,
+      "scoreAway": 2,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 415,
@@ -6498,7 +6504,13 @@
     "season": "25/26",
     "isPlayoff": true,
     "bo": 1,
-    "postponed": false
+    "postponed": false,
+    "result": {
+      "scoreHome": 5,
+      "scoreAway": 1,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 416,
@@ -6508,13 +6520,88 @@
     "liga": "Olympiáda",
     "season": "25/26",
     "isPlayoff": true,
-    "bo": 1
+    "bo": 1,
+    "postponed": false,
+    "result": {
+      "scoreHome": 5,
+      "scoreAway": 1,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 417,
     "homeTeamId": 86,
     "awayTeamId": 89,
     "datetime": "2026-02-17T12:10",
+    "liga": "Olympiáda",
+    "season": "25/26",
+    "isPlayoff": true,
+    "bo": 1,
+    "postponed": false,
+    "result": {
+      "scoreHome": 3,
+      "scoreAway": 0,
+      "ot": false,
+      "winner": "home"
+    }
+  },
+  {
+    "id": 418,
+    "homeTeamId": 90,
+    "awayTeamId": 93,
+    "datetime": "2026-02-18T12:10",
+    "liga": "Olympiáda",
+    "season": "25/26",
+    "isPlayoff": true,
+    "postponed": false,
+    "bo": 1,
+    "result": {
+      "scoreHome": 6,
+      "scoreAway": 2,
+      "ot": false,
+      "winner": "home"
+    }
+  },
+  {
+    "id": 419,
+    "homeTeamId": 88,
+    "awayTeamId": 86,
+    "datetime": "2026-02-18T18:10",
+    "liga": "Olympiáda",
+    "season": "25/26",
+    "isPlayoff": true,
+    "bo": 1,
+    "postponed": false,
+    "result": {
+      "scoreHome": 3,
+      "scoreAway": 2,
+      "ot": true,
+      "winner": "home"
+    }
+  },
+  {
+    "id": 420,
+    "homeTeamId": 87,
+    "awayTeamId": 84,
+    "datetime": "2026-02-18T16:40",
+    "liga": "Olympiáda",
+    "season": "25/26",
+    "isPlayoff": true,
+    "postponed": false,
+    "bo": 1,
+    "result": {
+      "scoreHome": 4,
+      "scoreAway": 3,
+      "ot": true,
+      "winner": "home"
+    }
+  },
+  {
+    "id": 421,
+    "homeTeamId": 95,
+    "awayTeamId": 91,
+    "datetime": "2026-02-18T21:10",
     "liga": "Olympiáda",
     "season": "25/26",
     "isPlayoff": true,

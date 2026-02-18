@@ -1581,17 +1581,9 @@ router.post("/toggle-table-tips-lock", requireAdmin, express.urlencoded({ extend
     fs.writeFileSync('./data/leagueStatus.json', JSON.stringify(statusData, null, 2));
     res.redirect('/admin/leagues/manage');
 });
-// ============================================================================
-// ADMIN: MANUÁLNÍ BODY A ZÁPASY TÝMŮ (OPRAVENO)
-// ============================================================================
 
-// GET: Formulář
-// ============================================================================
-// ADMIN: MANUÁLNÍ BODY A ZÁPASY TÝMŮ (ATOMOVÉ ŘEŠENÍ)
-// ============================================================================
-
-// GET: Formulář
 router.get('/teams/points', requireAdmin, (req, res) => {
+    const fs = require('fs');
     const selectedSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
     const allSeasonData = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf8'));
     const teams = JSON.parse(fs.readFileSync('./data/teams.json', 'utf8'));
@@ -1608,6 +1600,13 @@ router.get('/teams/points', requireAdmin, (req, res) => {
 
     // Filtrujeme týmy
     const leagueTeams = teams.filter(t => t.liga === selectedLiga && t.active);
+    leagueTeams.sort((a, b) => {
+        const getPts = (team) => {
+            const raw = bonusData[selectedSeason]?.[selectedLiga]?.[team.id];
+            return typeof raw === 'number' ? raw : (raw?.points || 0);
+        };
+        return getPts(b) - getPts(a);
+    });
 
     const html = `
     <!DOCTYPE html>
@@ -1616,11 +1615,12 @@ router.get('/teams/points', requireAdmin, (req, res) => {
         <meta charset="UTF-8">
         <title>Body a Zápasy týmů</title>
         <link rel="stylesheet" href="/css/styles.css">
+        <link rel="icon" href="/images/logo.png">
     </head>
-    <body>
+    <body style="background-color: #222; color: white; margin: 20px">
         <h1>Manuální úprava týmů (${selectedSeason})</h1>
         <form method="GET" action="/admin/teams/points" style="margin-bottom: 20px;">
-            <label>Liga: <select name="liga" onchange="this.form.submit()">
+            <label>Liga: <select name="liga" class="league-select" onchange="this.form.submit()">
                 ${seasonLeagues.map(l => `<option value="${l.name}" ${l.name === selectedLiga ? 'selected' : ''}>${l.name}</option>`).join('')}
             </select></label>
         </form>
@@ -1628,57 +1628,66 @@ router.get('/teams/points', requireAdmin, (req, res) => {
         <form method="POST" action="/admin/teams/points">
             <input type="hidden" name="season" value="${selectedSeason}">
             <input type="hidden" name="liga" value="${selectedLiga}">
-            <table class="points-table">
+            <table class="points-table" style="width: 100%; max-width: 800px; text-align: center;">
                 <thead>
                     <tr>
-                        <th>Tým (ID)</th>
+                        <th style="text-align: left;">Tým (ID)</th>
                         <th>Extra body (+/-)</th>
                         <th>Zápasy navíc (+/-)</th>
+                        <th>Vstřelené góly (GF)</th>
+                        <th>Obdržené góly (GA)</th>
                     </tr>
                 </thead>
                 <tbody>
                     ${leagueTeams.map(t => {
         const tId = String(t.id);
 
-        // Načtení uložených dat
-        let savedData = { points: 0, games: 0 };
+        // Načtení uložených dat a přidání GF a GA
+        let savedData = { points: 0, games: 0, gf: 0, ga: 0 };
         if (bonusData[selectedSeason] &&
             bonusData[selectedSeason][selectedLiga] &&
             bonusData[selectedSeason][selectedLiga][tId]) {
 
             let raw = bonusData[selectedSeason][selectedLiga][tId];
-            if (typeof raw === 'number') savedData.points = raw;
-            else savedData = raw;
+            if (typeof raw === 'number') {
+                savedData.points = raw;
+            } else {
+                savedData = { ...savedData, ...raw }; // Sloučí uložená data
+            }
         }
 
-        // ZMĚNA: Používáme podtržítka místo závorek, aby to Express nepletl
         return `
                         <tr>
-                            <td>
+                            <td style="text-align: left;">
                                 <b>${t.name}</b><br>
                                 <small style="color: grey;">ID: ${tId}</small>
                             </td>
                             <td>
-                                <input type="number" name="points_${tId}" value="${savedData.points}" style="width: 80px;">
+                                <input type="number" name="points_${tId}" value="${savedData.points || 0}" style="width: 70px; text-align: center;">
                             </td>
                             <td>
-                                <input type="number" name="games_${tId}" value="${savedData.games}" style="width: 80px;">
+                                <input type="number" name="games_${tId}" value="${savedData.games || 0}" style="width: 70px; text-align: center;">
+                            </td>
+                            <td>
+                                <input type="number" name="gf_${tId}" value="${savedData.gf || 0}" style="width: 70px; text-align: center; border: 1px solid #00ff00;">
+                            </td>
+                            <td>
+                                <input type="number" name="ga_${tId}" value="${savedData.ga || 0}" style="width: 70px; text-align: center; border: 1px solid #ff4500;">
                             </td>
                         </tr>`;
     }).join('')}
                 </tbody>
             </table>
             <br>
-            <button class="action-btn edit-btn" type="submit">Uložit změny</button>
+            <button class="action-btn edit-btn" type="submit" style="padding: 10px 20px; font-size: 1.1em;">Uložit změny</button>
         </form>
         <br>
-        <a href="/admin">Zpět do admina</a>
+        <a href="/admin" style="color: orangered;">Zpět do admina</a>
     </body>
     </html>`;
     res.send(html);
 });
 
-// POST: Uložení (Ruční parsování klíčů)
 router.post('/teams/points', requireAdmin, express.urlencoded({ extended: true }), (req, res) => {
     const { season, liga } = req.body;
 
@@ -1696,12 +1705,18 @@ router.post('/teams/points', requireAdmin, express.urlencoded({ extended: true }
             const teamId = key.substring(7);
 
             const pointsVal = Number(req.body[`points_${teamId}`]) || 0;
-            const gamesVal = Number(req.body[`games_${teamId}`]) || 0;
+            const gamesVal  = Number(req.body[`games_${teamId}`]) || 0;
 
-            // Uložíme pod správné ID
+            // PŘIDÁNO: Načtení gólů z formuláře
+            const gfVal     = Number(req.body[`gf_${teamId}`]) || 0;
+            const gaVal     = Number(req.body[`ga_${teamId}`]) || 0;
+
+            // Uložíme pod správné ID (nyní i s góly)
             bonusData[season][liga][teamId] = {
                 points: pointsVal,
-                games: gamesVal
+                games: gamesVal,
+                gf: gfVal,
+                ga: gaVal
             };
         }
     });
@@ -1710,7 +1725,6 @@ router.post('/teams/points', requireAdmin, express.urlencoded({ extended: true }
     res.redirect(`/admin/teams/points?liga=${encodeURIComponent(liga)}`);
 });
 
-// POZOR: Pokud máš tento soubor už pod prefixem '/admin', změň URL jen na '/settings/clinch'
 router.post('/settings/clinch', requireAdmin, (req, res) => {
     // 1. Zkontrolujeme, co přesně přišlo z formuláře
     console.log("--- UKLÁDÁNÍ NASTAVENÍ ---");

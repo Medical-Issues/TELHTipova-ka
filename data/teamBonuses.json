@@ -2,60 +2,88 @@
   "25/26": {
     "MAXA": {
       "15": {
-        "points": 79,
-        "games": 48
+        "points": 82,
+        "games": 49,
+        "gf": 139,
+        "ga": 118
       },
       "16": {
-        "points": 63,
-        "games": 48
+        "points": 66,
+        "games": 49,
+        "gf": 104,
+        "ga": 123
       },
       "17": {
         "points": 67,
-        "games": 48
+        "games": 49,
+        "gf": 109,
+        "ga": 129
       },
       "18": {
-        "points": 57,
-        "games": 48
+        "points": 59,
+        "games": 49,
+        "gf": 140,
+        "ga": 153
       },
       "19": {
-        "points": 74,
-        "games": 49
+        "points": 77,
+        "games": 50,
+        "gf": 148,
+        "ga": 151
       },
       "20": {
         "points": 90,
-        "games": 48
+        "games": 49,
+        "gf": 142,
+        "ga": 108
       },
       "21": {
         "points": 66,
-        "games": 48
+        "games": 49,
+        "gf": 127,
+        "ga": 149
       },
       "22": {
         "points": 64,
-        "games": 48
+        "games": 49,
+        "gf": 107,
+        "ga": 134
       },
       "23": {
-        "points": 59,
-        "games": 48
+        "points": 62,
+        "games": 49,
+        "gf": 117,
+        "ga": 140
       },
       "24": {
-        "points": 69,
-        "games": 48
+        "points": 72,
+        "games": 49,
+        "gf": 139,
+        "ga": 128
       },
       "25": {
-        "points": 93,
-        "games": 48
+        "points": 96,
+        "games": 49,
+        "gf": 138,
+        "ga": 102
       },
       "26": {
         "points": 66,
-        "games": 47
+        "games": 48,
+        "gf": 128,
+        "ga": 127
       },
       "27": {
         "points": 67,
-        "games": 48
+        "games": 49,
+        "gf": 121,
+        "ga": 132
       },
       "28": {
-        "points": 94,
-        "games": 48
+        "points": 95,
+        "games": 49,
+        "gf": 148,
+        "ga": 113
       }
     }
   }
