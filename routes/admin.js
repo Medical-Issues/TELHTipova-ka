@@ -1915,12 +1915,36 @@ router.get('/teams/points', requireAdmin, (req, res) => {
 
     // Filtrujeme týmy
     const leagueTeams = teams.filter(t => t.liga === selectedLiga && t.active);
+
+    // PŘIDÁNO: Ultimátní seřazení (Body -> Rozdíl skóre -> Vstřelené góly)
     leagueTeams.sort((a, b) => {
-        const getPts = (team) => {
-            const raw = bonusData[selectedSeason]?.[selectedLiga]?.[team.id];
-            return typeof raw === 'number' ? raw : (raw?.points || 0);
+        const getData = (team) => {
+            const raw = bonusData[selectedSeason]?.[selectedLiga]?.[String(team.id)];
+            if (typeof raw === 'number') return { points: raw, gf: 0, ga: 0 };
+            return raw || { points: 0, gf: 0, ga: 0 };
         };
-        return getPts(b) - getPts(a);
+
+        const dataA = getData(a);
+        const dataB = getData(b);
+
+        // 1. Kritérium: BODY
+        if (dataB.points !== dataA.points) {
+            return dataB.points - dataA.points;
+        }
+
+        // 2. Kritérium: ROZDÍL SKÓRE (GF - GA)
+        const diffA = (dataA.gf || 0) - (dataA.ga || 0);
+        const diffB = (dataB.gf || 0) - (dataB.ga || 0);
+        if (diffB !== diffA) {
+            return diffB - diffA;
+        }
+
+        // 3. Kritérium: VSTŘELENÉ GÓLY (GF)
+        if ((dataB.gf || 0) !== (dataA.gf || 0)) {
+            return (dataB.gf || 0) - (dataA.gf || 0);
+        }
+
+        return 0; // Pokud je všechno stejné
     });
 
     const html = `
