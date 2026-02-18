@@ -3456,7 +3456,17 @@ router.get('/history/a', requireLogin, (req, res) => {
                 if (bo === 1) {
                     const tH = userTip?.scoreHome ?? 0;
                     const tA = userTip?.scoreAway ?? 0;
-                    let sc = (Math.abs(tH - match.result.scoreHome) + Math.abs(tA - match.result.scoreAway)) === 0 ? 'exact-score' : 'diff-1'; // Simplified class for brevity
+                    const totalDiff = Math.abs(tH - match.result.scoreHome) + Math.abs(tA - match.result.scoreAway);
+                    let sc;
+                    if (totalDiff === 0) {
+                        sc = 'exact-score';    // Přesný výsledek (zelená)
+                    } else if (totalDiff === 1) {
+                        sc = 'diff-1';         // Chyba o 1 gól (žlutá)
+                    } else if (totalDiff === 2) {
+                        sc = 'diff-2';         // Chyba o 2 góly (oranžová)
+                    } else {
+                        sc = 'diff-3plus';     // Chyba o 3 a více gólů (červená)
+                    }
                     return `<div class="${userClass} team-link-history ${sc}" style="${visibilityStyle}">${tH} : ${tA}</div>`;
                 } else {
                     return `<div class="${userClass} team-link-history right-selected" style="${visibilityStyle}">${userTip?.loserWins ?? '-'}</div>`;

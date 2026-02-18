@@ -4099,30 +4099,6 @@
             "winner": "home",
             "scoreHome": 7,
             "scoreAway": 0
-          },
-          {
-            "matchId": 418,
-            "winner": "home",
-            "scoreHome": 5,
-            "scoreAway": 1
-          },
-          {
-            "matchId": 420,
-            "winner": "home",
-            "scoreHome": 7,
-            "scoreAway": 0
-          },
-          {
-            "matchId": 419,
-            "winner": "away",
-            "scoreHome": 3,
-            "scoreAway": 4
-          },
-          {
-            "matchId": 421,
-            "winner": "home",
-            "scoreHome": 5,
-            "scoreAway": 3
           }
         ]
       }
@@ -4157,10 +4133,10 @@
           "totalPlayoff": 9
         },
         "Olympiáda": {
-          "correct": 26,
+          "correct": 14,
           "totalRegular": 18,
-          "totalPlayoff": 7,
-          "tableCorrect": 6,
+          "totalPlayoff": 0,
+          "tableCorrect": 5,
           "tableDeviation": 8
         }
       }

@@ -771,3 +771,152 @@ tr.clinched-crosstable.locked td.points {
     font-size: 18px;
     cursor: pointer;
 }
+/* ===================================================================== */
+/* === ADMIN PLAYOFF ASISTENT === */
+/* ===================================================================== */
+
+#playoffTable { border-collapse: collapse; width: 100%; margin-top: 20px; user-select: none; }
+#playoffTable td { border: 1px solid orangered; width: 60px; height: 20px; text-align: center; padding: 5px; cursor: pointer; background-color: #333; color: lightgrey; font-weight: 600; transition: background-color 0.3s ease, color 0.3s ease; }
+#playoffTable td.selected { outline: 3px solid #00ff00; outline-offset: -2px; }
+#playoffTable td[contenteditable="true"]:empty::before { content: attr(data-placeholder); color: #666; }
+
+.assistant-panel { background: #111; border: 1px solid orangered; padding: 15px; border-radius: 8px; margin-left: 20px; flex: 1; height: fit-content; position: sticky; top: 20px; }
+.series-card { background: #222; border: 1px solid #444; padding: 10px; margin-bottom: 10px; border-radius: 4px; }
+.series-card button { background: #333; color: white; border: 1px solid #555; padding: 5px 10px; cursor: pointer; margin-top: 5px; width: 100%; text-align: left; }
+.series-card button:hover { background: #444; }
+
+.btn-advancing { border-left: 4px solid #006400 !important; }
+.btn-eliminated { border-left: 4px solid #8b0000 !important; }
+.btn-ongoing { border-left: 4px solid #b8860b !important; }
+
+.quick-team-btn { background: #333; color: #ccc; border: 1px solid #555; padding: 6px; cursor: pointer; border-radius: 4px; margin: 2px; }
+.quick-team-btn:hover { background: #555; color: white; }
+/* ===================================================================== */
+/* === ADMIN PLAYOFF ASISTENT - ZLEPŠENÝ VZHLED === */
+/* ===================================================================== */
+
+#playoffTable {
+    border-collapse: separate;
+    border-spacing: 0;
+    width: auto;
+    margin: 20px auto;
+    user-select: none;
+    background-color: #1a1a1a;
+    border: 1px solid #333;
+}
+
+#playoffTable td {
+    border: 1px solid rgba(255, 69, 0, 0.15); /* Velmi jemné linky */
+    width: 70px;
+    height: 28px;
+    text-align: center;
+    padding: 4px;
+    cursor: pointer;
+    background-color: #222;
+    color: #eee;
+    font-size: 0.85em;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    overflow: hidden;
+    white-space: nowrap;
+}
+/* ===================================================================== */
+/* === ADMIN PLAYOFF ASISTENT - VYČIŠTĚNÝ VZHLED === */
+/* ===================================================================== */
+
+#playoffTable {
+    border-collapse: separate;
+    border-spacing: 0;
+    width: auto;
+    margin: 20px auto;
+    user-select: none;
+    background-color: #1a1a1a;
+    border: 1px solid #333;
+}
+
+
+
+/* Skrytí placeholder teček - zobrazí se jen jedna při najetí myší */
+#playoffTable td:empty::before { content: ""; }
+#playoffTable td:hover:empty::before {
+    content: "·";
+    color: #ff4500;
+    font-size: 1.5em;
+}
+
+/* Výrazná vybraná buňka s neonovým efektem */
+#playoffTable td.selected {
+    outline: 2px solid #00ff00;
+    box-shadow: 0 0 12px rgba(0, 255, 0, 0.6);
+    z-index: 10;
+    background-color: #2a2a2a !important;
+}
+
+.assistant-panel {
+    background: #111;
+    border: 1px solid #ff4500;
+    padding: 15px;
+    border-radius: 12px;
+    margin-left: 20px;
+    flex: 1;
+    height: fit-content;
+    position: sticky;
+    top: 20px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+}
+
+/* Placeholder tečka jen při hoveru */
+#playoffTable td:empty::before { content: ""; }
+#playoffTable td:hover:empty::before {
+    content: "·";
+    color: #ff4500;
+    font-size: 1.5em;
+}
+
+/* Výraznější vybraná buňka */
+#playoffTable td.selected {
+    outline: 2px solid #00ff00;
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+    z-index: 10;
+    background-color: #2a2a2a !important;
+}
+
+.assistant-panel {
+    background: #111;
+    border: 1px solid #ff4500;
+    padding: 15px;
+    border-radius: 12px;
+    margin-left: 20px;
+    flex: 1;
+    height: fit-content;
+    position: sticky;
+    top: 20px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+}
+
+.series-card {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    padding: 10px;
+    margin-bottom: 12px;
+    border-radius: 8px;
+}
+
+.series-card button {
+    background: #262626;
+    color: #ddd;
+    border: 1px solid #444;
+    padding: 7px 12px;
+    cursor: pointer;
+    margin-top: 6px;
+    width: 100%;
+    text-align: left;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+.series-card button:hover { background: #333; border-color: #ff4500; }
+
+.btn-advancing { border-left: 5px solid #28a745 !important; }
+.btn-eliminated { border-left: 5px solid #dc3545 !important; }
+.btn-ongoing { border-left: 5px solid #ffc107 !important; }
