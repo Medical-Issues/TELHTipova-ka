@@ -2097,7 +2097,6 @@
             "winner": "home",
             "scoreHome": 4,
             "scoreAway": 2
-<<<<<<< HEAD
           },
           {
             "matchId": 418,
@@ -2122,8 +2121,6 @@
             "winner": "home",
             "scoreHome": 5,
             "scoreAway": 2
-=======
->>>>>>> origin/master
           }
         ]
       }
@@ -6172,7 +6169,6 @@
             "winner": "home",
             "scoreHome": 5,
             "scoreAway": 1
-<<<<<<< HEAD
           },
           {
             "matchId": 418,
@@ -6197,8 +6193,6 @@
             "winner": "home",
             "scoreHome": 3,
             "scoreAway": 1
-=======
->>>>>>> origin/master
           }
         ]
       }
