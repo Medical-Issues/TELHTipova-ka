@@ -6675,7 +6675,8 @@
     "datetime": "2026-02-22T17:30",
     "liga": "TELH",
     "season": "25/26",
-    "isPlayoff": false
+    "isPlayoff": false,
+    "postponed": false
   },
   {
     "id": 427,

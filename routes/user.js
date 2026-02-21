@@ -100,7 +100,8 @@ router.get("/table-tip", requireLogin, (req, res) => {
         userStats = allUsers.filter(u => {
             const tips = u.tips?.[selectedSeason]?.[selectedLiga] || [];
             const tableStats = u.stats?.[selectedSeason]?.[selectedLiga]?.tableCorrect;
-            return tips.length > 0 || tableStats !== undefined;
+            const hasRawTableTip = tableTips?.[selectedSeason]?.[selectedLiga]?.[u.username];
+            return tips.length > 0 || tableStats !== undefined || !!hasRawTableTip;
         }).map(u => {
             const stats = u.stats?.[selectedSeason]?.[selectedLiga] || {};
             const userTips = u.tips?.[selectedSeason]?.[selectedLiga] || [];
@@ -985,17 +986,17 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
         html += `
         <section class="user_stats">
             <h2>Tvoje statistiky</h2>
-            ${currentUserStats ? `
+             ${currentUserStats ? `
                 <p>Správně tipnuto z maximálního počtu všech vyhodnocených zápasů: 
                     <strong>${currentUserStats.correct}</strong> z <strong>${currentUserStats.total}</strong> 
-                    (${(currentUserStats.correct / currentUserStats.total * 100).toFixed(2)} %)
+                    (${(currentUserStats.total > 0 ? (currentUserStats.correct / currentUserStats.total * 100).toFixed(2) : '0.00')} %)
                 </p>
                 ${currentUserStats.total !== currentUserStats.maxFromTips ? `
                 <p>Správně tipnuto z tipovaných zápasů: 
                     <strong>${currentUserStats.correct}</strong> z <strong>${currentUserStats.maxFromTips}</strong> 
-                    (${(currentUserStats.correct / currentUserStats.maxFromTips * 100).toFixed(2)} %)
+                    (${(currentUserStats.maxFromTips > 0 ? (currentUserStats.correct / currentUserStats.maxFromTips * 100).toFixed(2) : '0.00')} %)
                 </p>` : ''}
-            ` : `<p>Nemáš ještě žádné tipy nebo není vyhodnoceno.</p>`}
+            ` : `<p>Nemáš pro tuto sezónu/ligu žádná data.</p>`}
             
             ${currentUserStats?.tableCorrect > 0 || currentUserStats?.tableDeviation > 0 ? `
                 <hr>
@@ -1465,10 +1466,18 @@ router.get('/', requireLogin, (req, res) => {
         const allUsers = JSON.parse(usersData);
         const matchesInLiga = matches.filter(m => m.season === selectedSeason && m.liga === selectedLiga);
 
+        let tableTips = {};
+        try {
+            tableTips = JSON.parse(fs.readFileSync('./data/tableTips.json', 'utf8'));
+        } catch (e) {
+            tableTips = {};
+        }
+
         userStats = allUsers.filter(u => {
             const tips = u.tips?.[selectedSeason]?.[selectedLiga] || [];
             const tableStats = u.stats?.[selectedSeason]?.[selectedLiga]?.tableCorrect;
-            return tips.length > 0 || tableStats !== undefined;
+            const hasRawTableTip = tableTips?.[selectedSeason]?.[selectedLiga]?.[u.username];
+            return tips.length > 0 || tableStats !== undefined || !!hasRawTableTip;
         }).map(u => {
             const stats = u.stats?.[selectedSeason]?.[selectedLiga] || {};
             const userTips = u.tips?.[selectedSeason]?.[selectedLiga] || [];
@@ -2230,17 +2239,17 @@ p.style.display = which === 'playoff' ? 'block' : 'none';
         html += `
 <section class="user_stats">
 <h2>Tvoje statistiky</h2>
-${currentUserStats ? `
-<p>Správně tipnuto z maximálního počtu všech vyhodnocených zápasů:
-<strong>${currentUserStats.correct}</strong> z <strong>${currentUserStats.total}</strong>
-(${(currentUserStats.correct / currentUserStats.total * 100).toFixed(2)} %)
-</p>
-${currentUserStats.total !== currentUserStats.maxFromTips ? `
-<p>Správně tipnuto z tipovaných zápasů:
-<strong>${currentUserStats.correct}</strong> z <strong>${currentUserStats.maxFromTips}</strong>
-(${(currentUserStats.correct / currentUserStats.maxFromTips * 100).toFixed(2)} %)
-</p>` : ''}
-` : `<p>Nemáš ještě žádné tipy nebo není vyhodnoceno.</p>`}
+ ${currentUserStats ? `
+                <p>Správně tipnuto z maximálního počtu všech vyhodnocených zápasů: 
+                    <strong>${currentUserStats.correct}</strong> z <strong>${currentUserStats.total}</strong> 
+                    (${(currentUserStats.total > 0 ? (currentUserStats.correct / currentUserStats.total * 100).toFixed(2) : '0.00')} %)
+                </p>
+                ${currentUserStats.total !== currentUserStats.maxFromTips ? `
+                <p>Správně tipnuto z tipovaných zápasů: 
+                    <strong>${currentUserStats.correct}</strong> z <strong>${currentUserStats.maxFromTips}</strong> 
+                    (${(currentUserStats.maxFromTips > 0 ? (currentUserStats.correct / currentUserStats.maxFromTips * 100).toFixed(2) : '0.00')} %)
+                </p>` : ''}
+            ` : `<p>Nemáš pro tuto sezónu/ligu žádná data.</p>`}
 ${currentUserStats?.tableCorrect > 0 || currentUserStats?.tableDeviation > 0 ? `
 <hr>
 <h3>Výsledek tipovačky tabulky</h3>
@@ -2660,10 +2669,32 @@ router.get('/history/a', requireLogin, (req, res) => {
 
             const maxFromTips = userTips.reduce((sum, tip) => {
                 const match = matchesInLiga.find(m => Number(m.id) === Number(tip.matchId));
-                if (!match || !match.result) return sum;
-                return sum + (match.isPlayoff ? 3 : (match.bo === 1 ? 5 : 3));
+                if (!match.isPlayoff) {
+                    return sum + 1; // Základní část = max 1 bod
+                } else {
+                    // Playoff
+                    if (Number(match.bo) === 1) {
+                        return sum + 5; // BO1 (jeden zápas) = max 5 bodů
+                    } else {
+                        return sum + 3; // Série = max 3 body
+                    }
+                }
             }, 0);
-            const totalPoints = matchesInLiga.reduce((sum, m) => m.result ? sum + (m.isPlayoff ? 3 : (m.bo === 1 ? 5 : 3)) : sum, 0);
+
+            // 2. Maximální možné body ze VŠECH odehraných zápasů v lize
+            const totalPoints = matchesInLiga.reduce((sum, m) => {
+                if (!m.result) return sum;
+
+                if (!m.isPlayoff) {
+                    return sum + 1; // Základní část
+                } else {
+                    if (Number(m.bo) === 1) {
+                        return sum + 5; // BO1
+                    } else {
+                        return sum + 3; // Série
+                    }
+                }
+            }, 0);
 
             return {
                 username: u.username,
@@ -3375,8 +3406,8 @@ router.get('/history/a', requireLogin, (req, res) => {
             if (b.correct !== a.correct) return b.correct - a.correct;
             return a.maxFromTips - b.maxFromTips;
         }).forEach((user, index) => {
-            const successRateOverall = user.maxFromTips > 0 ? ((user.correct / user.maxFromTips) * 100).toFixed(2) : '0.00';
             const successRate = user.total > 0 ? ((user.correct / user.total) * 100).toFixed(2) : '0.00';
+            const successRateOverall = user.maxFromTips > 0 ? ((user.correct / user.maxFromTips) * 100).toFixed(2) : '0.00';
             html += `<tr>
                 <td>${index + 1}.</td>
                 <td>${user.username}</td>
@@ -3770,9 +3801,32 @@ router.get('/history/table', requireLogin, (req, res) => {
             const maxFromTips = userTips.reduce((sum, tip) => {
                 const match = matchesInLiga.find(m => Number(m.id) === Number(tip.matchId));
                 if (!match || !match.result) return sum;
-                return sum + (match.isPlayoff ? 3 : (match.bo === 1 ? 5 : 3));
+
+                if (!match.isPlayoff) {
+                    return sum + 1;
+                } else {
+                    // Playoff
+                    if (Number(match.bo) === 1) {
+                        return sum + 5;
+                    } else {
+                        return sum + 3;
+                    }
+                }
             }, 0);
-            const totalPoints = matchesInLiga.reduce((sum, m) => m.result ? sum + (m.isPlayoff ? 3 : (m.bo === 1 ? 5 : 3)) : sum, 0);
+
+            const totalPoints = matchesInLiga.reduce((sum, m) => {
+                if (!m.result) return sum;
+
+                if (!m.isPlayoff) {
+                    return sum + 1;
+                } else {
+                    if (Number(m.bo) === 1) {
+                        return sum + 5;
+                    } else {
+                        return sum + 3;
+                    }
+                }
+            }, 0);
 
             return {
                 username: u.username,
@@ -5276,17 +5330,17 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
         html += `
 <section class="user_stats">
     <h2>Tvoje statistiky</h2>
-    ${currentUserStats ? `
-        <p>Správně tipnuto z maximálního počtu všech vyhodnocených zápasů: 
-            <strong>${currentUserStats.correct}</strong> z <strong>${currentUserStats.total}</strong> 
-            (${(currentUserStats.correct / currentUserStats.total * 100).toFixed(2)} %)
-        </p>
-        ${currentUserStats.total !== currentUserStats.maxFromTips ? `
-        <p>Správně tipnuto z tipovaných zápasů: 
-            <strong>${currentUserStats.correct}</strong> z <strong>${currentUserStats.maxFromTips}</strong> 
-            (${(currentUserStats.correct / currentUserStats.maxFromTips * 100).toFixed(2)} %)
-        </p>` : ''}
-    ` : `<p>Nemáš ještě žádné tipy nebo není vyhodnoceno.</p>`}
+     ${currentUserStats ? `
+                <p>Správně tipnuto z maximálního počtu všech vyhodnocených zápasů: 
+                    <strong>${currentUserStats.correct}</strong> z <strong>${currentUserStats.total}</strong> 
+                    (${(currentUserStats.total > 0 ? (currentUserStats.correct / currentUserStats.total * 100).toFixed(2) : '0.00')} %)
+                </p>
+                ${currentUserStats.total !== currentUserStats.maxFromTips ? `
+                <p>Správně tipnuto z tipovaných zápasů: 
+                    <strong>${currentUserStats.correct}</strong> z <strong>${currentUserStats.maxFromTips}</strong> 
+                    (${(currentUserStats.maxFromTips > 0 ? (currentUserStats.correct / currentUserStats.maxFromTips * 100).toFixed(2) : '0.00')} %)
+                </p>` : ''}
+            ` : `<p>Nemáš pro tuto sezónu/ligu žádná data.</p>`}
         ${currentUserStats?.tableCorrect > 0 || currentUserStats?.tableDeviation > 0 ? `
     <hr>
     <h3>Výsledek tipovačky tabulky</h3>

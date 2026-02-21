@@ -10639,13 +10639,13 @@
           "textColor": "lightgrey"
         },
         {
-          "text": "USA",
-          "bgColor": "rgb(0, 100, 0)",
+          "text": "Švédsko",
+          "bgColor": "rgb(139, 0, 0)",
           "textColor": "rgb(255, 255, 255)"
         },
         {
-          "text": "2",
-          "bgColor": "rgb(0, 100, 0)",
+          "text": "1",
+          "bgColor": "rgb(139, 0, 0)",
           "textColor": "rgb(255, 255, 255)"
         },
         {

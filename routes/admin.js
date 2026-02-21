@@ -936,7 +936,8 @@ router.post('/delete/:id', requireAdmin, (req, res) => {
 
     removeTipsForDeletedMatch(matchId);
 
-    // 4. PŘEPOČET BODŮ POMOCÍ ULOŽENÝCH PROMĚNNÝCH
+    evaluateAndAssignPoints(matchLiga, matchSeason);
+
     evaluateAndAssignPoints(matchLiga, matchSeason);
 
     res.redirect('/admin');

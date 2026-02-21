@@ -96,6 +96,10 @@
           "totalPlayoff": 10,
           "tableCorrect": 6,
           "tableDeviation": 6
+        },
+        "MAXA": {
+          "tableCorrect": 0,
+          "tableDeviation": 68
         }
       }
     },
@@ -1701,6 +1705,11 @@
             "matchId": 395,
             "winner": "home",
             "loserWins": 0
+          },
+          {
+            "matchId": 426,
+            "winner": "away",
+            "loserWins": 0
           }
         ],
         "Euro Hockey Tour": [
@@ -2133,6 +2142,18 @@
             "winner": "home",
             "scoreHome": 4,
             "scoreAway": 2
+          },
+          {
+            "matchId": 424,
+            "winner": "away",
+            "scoreHome": 2,
+            "scoreAway": 4
+          },
+          {
+            "matchId": 425,
+            "winner": "home",
+            "scoreHome": 3,
+            "scoreAway": 1
           }
         ]
       }
@@ -3725,6 +3746,46 @@
             "matchId": 395,
             "winner": "home",
             "loserWins": 0
+          },
+          {
+            "matchId": 426,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 427,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 428,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 429,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 430,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 431,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 432,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 433,
+            "winner": "home",
+            "loserWins": 0
           }
         ],
         "Euro Hockey Tour": [
@@ -4198,6 +4259,10 @@
           "totalPlayoff": 10,
           "tableCorrect": 5,
           "tableDeviation": 8
+        },
+        "MAXA": {
+          "tableCorrect": 1,
+          "tableDeviation": 60
         }
       }
     }
@@ -5809,6 +5874,11 @@
             "matchId": 395,
             "winner": "home",
             "loserWins": 0
+          },
+          {
+            "matchId": 426,
+            "winner": "away",
+            "loserWins": 0
           }
         ],
         "Euro Hockey Tour": [
@@ -6241,6 +6311,18 @@
             "winner": "home",
             "scoreHome": 5,
             "scoreAway": 1
+          },
+          {
+            "matchId": 424,
+            "winner": "away",
+            "scoreHome": 3,
+            "scoreAway": 4
+          },
+          {
+            "matchId": 425,
+            "winner": "away",
+            "scoreHome": 2,
+            "scoreAway": 3
           }
         ]
       }
@@ -6290,6 +6372,11 @@
     "stats": {
       "25/26": {
         "Olympiáda": {
+          "correct": 0,
+          "totalRegular": 0,
+          "totalPlayoff": 0
+        },
+        "TELH": {
           "correct": 0,
           "totalRegular": 0,
           "totalPlayoff": 0
