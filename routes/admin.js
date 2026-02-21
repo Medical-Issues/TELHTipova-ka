@@ -2182,7 +2182,7 @@ router.get('/matches/import', requireAdmin, (req, res) => {
                 <form method="POST" action="/admin/matches/import-run" style="display: flex; flex-direction: column; gap: 15px; width: 100%;">
                     
                     <label style="display: flex; flex-direction: column; color: orangered;">
-                        URL adresa (hokej.cz/../zapasy):
+                        URL adresa (https://www.hokej.cz/tipsport-extraliga/zapasy?matchList-view-displayAll=1&matchList-filter-season=2025&matchList-filter-competition=7397):
                         <input type="text" name="url" placeholder="https://www.hokej.cz/tipsport-extraliga/zapasy?season=..." required 
                                style="padding: 10px; background-color: #222; border: 1px solid orangered; color: white; border-radius: 5px;">
                     </label>
