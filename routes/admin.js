@@ -2,6 +2,8 @@ const fs = require("fs");
 const express = require("express");
 const router = express.Router();
 const path = require('path');
+const axios = require('axios');
+const cheerio = require('cheerio');
 const {
     requireAdmin,
     loadTeams,
@@ -110,9 +112,10 @@ router.get('/', requireAdmin, (req, res) => {
     <div>
         <a href="/admin/new/match" class="btn new-btn-admin">Vytvořit nový zápas</a>
         <a href="/admin/new/team" class="btn new-btn-admin">Vytvořit nový tým</a>
-        <a href="/admin/playoff" class="btn new-btn-admin">Playoff Tabulky</a>
+        <a href="/admin/playoff" class="btn new-btn-admin">Playoff tabulky</a>
         <a href="/admin/leagues/manage" class="btn new-btn-admin">Správa lig</a>
         <a href="/admin/teams/points" class="btn new-btn-admin">Manuální body</a>
+        <a href="/admin/matches/import" class="btn new-btn-admin">Import zápasů</a>
         <a id="backupBtn" class="btn new-btn-admin">Uložit data uživatelům (pouze pro administrativní účely)</a>
     </div>
   </div>
@@ -2101,6 +2104,339 @@ router.post('/settings/clinch', requireAdmin, (req, res) => {
 
     // Návrat na předchozí stránku (odkud se formulář odeslal)
     res.redirect('/admin');
+});
+
+router.get('/matches/import', requireAdmin, (req, res) => {
+    // 1. Načtení dat
+    const currentSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
+
+    // Načítáme ligy z leagues.json (nikoliv allowedLeagues.json)
+    let leaguesData = {};
+    try {
+        leaguesData = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf8'));
+    } catch (e) {
+        console.error("Chyba leagues.json", e);
+    }
+
+    // Získáme unikátní seznam lig napříč všemi sezónami
+    const uniqueLeagues = new Set();
+    Object.values(leaguesData).forEach(seasonObj => {
+        if (seasonObj.leagues && Array.isArray(seasonObj.leagues)) {
+            seasonObj.leagues.forEach(l => uniqueLeagues.add(l.name));
+        }
+    });
+    // Seřadíme abecedně
+    const leaguesList = Array.from(uniqueLeagues).sort();
+
+    // Pokud je seznam prázdný, dáme tam aspoň default
+    if (leaguesList.length === 0) leaguesList.push("TELH");
+
+    // 2. Datumy (Dnes -> +14 dní)
+    const today = new Date().toISOString().split('T')[0];
+    const nextWeekDate = new Date();
+    nextWeekDate.setDate(nextWeekDate.getDate() + 14);
+    const nextWeek = nextWeekDate.toISOString().split('T')[0];
+
+    // 3. Generování sezón (5 let zpět, 10 dopředu)
+    const currentYearShort = parseInt(currentSeason.split('/')[0]);
+    const currentYearFull = 2000 + currentYearShort;
+
+    const seasonOptions = [];
+    for (let i = -5; i <= 10; i++) {
+        const y = currentYearFull + i;
+        const nextY = y + 1;
+        const label = `${String(y).slice(-2)}/${String(nextY).slice(-2)}`;
+        seasonOptions.push(label);
+    }
+
+    // 4. HTML s tvým stylingem
+    const html = `
+    <!DOCTYPE html>
+    <html lang="cs">
+    <head>
+        <meta charset="UTF-8">
+        <title>Import z Hokej.cz</title>
+        <link rel="stylesheet" href="/css/styles.css">
+        <link rel="icon" href="/images/logo.png">
+    </head>
+    <body class="admin_site">
+        
+        <header class="header">
+            <div class="logo_title">
+                <img alt="Logo" class="image_logo" src="/images/logo.png">
+                <h1 id="title">Import zápasů</h1>
+            </div>
+            <div style="display:flex; gap:10px;">
+                <a href="/admin" style="color: orangered">Zpět do menu</a>
+            </div>
+        </header>
+
+        <main class="main_page" style="flex-direction: column; align-items: center;">
+            
+            <div class="stats-container" style="width: 100%; max-width: 800px; text-align: left;">
+                <h2 style="color: orangered; text-align: center;">Hokej.cz Scraper</h2>
+                <p style="text-align: center; color: lightgrey;">
+                    Vyber parametry a vlož odkaz na sekci <strong>ZÁPASY</strong> z webu hokej.cz.
+                </p>
+
+                <form method="POST" action="/admin/matches/import-run" style="display: flex; flex-direction: column; gap: 15px; width: 100%;">
+                    
+                    <label style="display: flex; flex-direction: column; color: orangered;">
+                        URL adresa (hokej.cz/../zapasy):
+                        <input type="text" name="url" placeholder="https://www.hokej.cz/tipsport-extraliga/zapasy?season=..." required 
+                               style="padding: 10px; background-color: #222; border: 1px solid orangered; color: white; border-radius: 5px;">
+                    </label>
+
+                    <div style="display:flex; gap: 20px; flex-wrap: wrap;">
+                        <label style="flex: 1; display: flex; flex-direction: column; color: orangered;">
+                            Od data:
+                            <input type="date" name="dateFrom" value="${today}" 
+                                   style="padding: 10px; background-color: #222; border: 1px solid orangered; color: white; border-radius: 5px;">
+                        </label>
+                        <label style="flex: 1; display: flex; flex-direction: column; color: orangered;">
+                            Do data:
+                            <input type="date" name="dateTo" value="${nextWeek}" 
+                                   style="padding: 10px; background-color: #222; border: 1px solid orangered; color: white; border-radius: 5px;">
+                        </label>
+                    </div>
+
+                    <div style="display:flex; gap: 20px; flex-wrap: wrap;">
+                        <label style="flex: 1; display: flex; flex-direction: column; color: orangered;">
+                            Liga (dle leagues.json):
+                            <select name="liga" style="padding: 10px; background-color: #222; border: 1px solid orangered; color: white; border-radius: 5px;">
+                                ${leaguesList.map(l => `<option value="${l}" ${l === 'TELH' ? 'selected' : ''}>${l}</option>`).join('')}
+                            </select>
+                        </label>
+
+                        <label style="flex: 1; display: flex; flex-direction: column; color: orangered;">
+                            Sezóna (pro výpočet roku):
+                            <select name="season" style="padding: 10px; background-color: #222; border: 1px solid orangered; color: white; border-radius: 5px;">
+                                ${seasonOptions.map(s => `<option value="${s}" ${s === currentSeason ? 'selected' : ''}>${s}</option>`).join('')}
+                            </select>
+                        </label>
+                    </div>
+
+                    <button type="submit" class="login_button" style="width: 100%; margin-top: 10px;">Stáhnout data</button>
+                </form>
+            </div>
+        </main>
+    </body>
+    </html>
+    `;
+    res.send(html);
+});
+
+router.post('/matches/import-run', requireAdmin, async (req, res) => {
+    const { url, liga, season, dateFrom, dateTo } = req.body;
+
+    try {
+        console.log(`🔍 DEBUG: Začínám import pro ligu '${liga}'...`);
+
+        // 1. Stahování
+        const response = await axios.get(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+            }
+        });
+
+        const html = response.data;
+        const $ = cheerio.load(html);
+        const pageTitle = $('title').text().trim();
+
+        const allTeams = JSON.parse(fs.readFileSync('./data/teams.json', 'utf8'));
+        const myTeams = allTeams.filter(t => t.liga === liga);
+
+        // --- ID MATCHING (Zjištění posledního ID) ---
+        const matchesDB = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'));
+
+        // Najdeme nejvyšší ID (číslo)
+        let maxId = matchesDB.reduce((max, m) => {
+            const numId = Number(m.id); // Převedeme na číslo
+            return !isNaN(numId) && numId > max ? numId : max;
+        }, 0);
+
+        console.log(`ℹ️ Start ID: ${maxId + 1}`);
+
+        let newMatchesCount = 0;
+        let skippedCount = 0;
+        let outOfRangeCount = 0;
+        let notFoundTeams = new Set();
+
+        // --- POMOCNÉ FUNKCE ---
+        const cleanTeamName = (rawName) => {
+            if (!rawName) return "";
+            let clean = rawName.trim();
+            clean = clean.replace(/^([A-Z]{1,2})\s+/, "");
+            clean = clean.split(/\s{2,}|\n/)[0];
+            clean = clean.replace("Č.", "České").replace("K.", "Karlovy");
+            return clean.trim();
+        };
+
+        const findTeamId = (scrapedName) => {
+            if (!scrapedName) return null;
+            let clean = cleanTeamName(scrapedName);
+            let found = myTeams.find(t => t.name.toLowerCase() === clean.toLowerCase());
+            if (!found) found = myTeams.find(t => t.name.toLowerCase().includes(clean.toLowerCase()));
+            if (!found) found = myTeams.find(t => clean.toLowerCase().includes(t.name.toLowerCase()));
+            if (!found && clean.includes(" B")) {
+                const baseName = clean.replace(" B", "").trim();
+                found = myTeams.find(t => t.name.includes(baseName) && t.name.includes(" B"));
+            }
+            if (!found) notFoundTeams.add(`${clean} (orig: ${scrapedName})`);
+
+            // Důležité: Vracíme ID jako ČÍSLO (pokud je v teams.json string, převedeme ho)
+            return found ? Number(found.id) : null;
+        };
+
+        const rows = $('table.preview tr');
+        console.log(`ℹ️ Nalezeno řádků: ${rows.length}`);
+
+        rows.each((i, el) => {
+            // Jména týmů
+            const getDirectText = (selector) => $(el).find(selector).contents().filter(function() { return this.type === 'text'; }).text().trim();
+            let homeName = getDirectText('.preview__name:first') || $(el).find('.preview__name').first().text().trim();
+            let awayName = getDirectText('.preview__name:last') || $(el).find('.preview__name').last().text().trim();
+
+            if (!homeName || !awayName) return;
+
+            // --- DATA A ČAS ---
+            let dateRaw = null;
+            let timeRaw = "17:00";
+
+            const dateBoxCols = $(el).find('.preview__center .box-snow .col-1_3');
+            if (dateBoxCols.length >= 2) {
+                dateBoxCols.each((idx, col) => {
+                    const txt = $(col).text().trim();
+                    if (txt.match(/^\d{1,2}\.\s*\d{1,2}\.$/)) dateRaw = txt;
+                    if (txt.match(/^\d{1,2}:\d{2}$/)) timeRaw = txt;
+                });
+            }
+
+            // Fallbacky
+            if (!dateRaw) dateRaw = $(el).closest('table').prevAll('h2, h3, .date-header').first().text().trim();
+            if (!dateRaw) {
+                const centerText = $(el).find('.preview__center').text().trim();
+                const dateMatch = centerText.match(/(\d{1,2})\.\s*(\d{1,2})\./);
+                if (dateMatch) dateRaw = `${dateMatch[1]}. ${dateMatch[2]}.`;
+            }
+
+            const homeId = findTeamId(homeName);
+            const awayId = findTeamId(awayName);
+
+            if (homeId && awayId) {
+                const parseMatch = dateRaw ? dateRaw.match(/(\d{1,2})\.\s*(\d{1,2})\./) : null;
+
+                if (parseMatch) {
+                    const day = parseMatch[1].padStart(2, '0');
+                    const month = parseMatch[2].padStart(2, '0');
+
+                    // Výpočet roku
+                    const seasonYears = season.split('/');
+                    const startYear = "20" + seasonYears[0];
+                    const endYear = "20" + seasonYears[1];
+                    const year = (parseInt(month) >= 8) ? startYear : endYear;
+
+                    const fullDate = `${year}-${month}-${day}`;
+
+                    // Vytvoření datetime stringu (YYYY-MM-DDTHH:MM)
+                    const isoDateTime = `${fullDate}T${timeRaw}`;
+
+                    // Kontrola rozsahu (porovnáváme jen datumovou část)
+                    if (dateFrom && fullDate < dateFrom) { outOfRangeCount++; return; }
+                    if (dateTo && fullDate > dateTo) { outOfRangeCount++; return; }
+
+                    // Kontrola existence - musíme parsovat existující datetime v DB
+                    const exists = matchesDB.some(m => {
+                        // Pokud v DB datetime chybí, nemůžeme porovnat
+                        if (!m.datetime) return false;
+                        // Porovnáváme začátek stringu (datum) + ID týmů
+                        return m.datetime.startsWith(fullDate) && m.homeTeamId === homeId && m.awayTeamId === awayId;
+                    });
+
+                    if (!exists) {
+                        maxId++;
+
+                        // PUSHUJEME PŘESNĚ TVŮJ FORMÁT
+                        matchesDB.push({
+                            id: maxId,              // Číslo (16)
+                            homeTeamId: homeId,     // Číslo (10)
+                            awayTeamId: awayId,     // Číslo (8)
+                            datetime: isoDateTime,  // "2025-09-14T16:00"
+                            liga: liga,             // "TELH"
+                            season: season,         // "25/26"
+                            isPlayoff: false,       // false
+                            result: null            // null (výsledek zatím není)
+                        });
+                        newMatchesCount++;
+                    } else {
+                        skippedCount++;
+                    }
+                }
+            }
+        });
+
+        if (newMatchesCount > 0) fs.writeFileSync('./data/matches.json', JSON.stringify(matchesDB, null, 2));
+
+        const notFoundArray = Array.from(notFoundTeams);
+
+        const htmlRes = `
+        <!DOCTYPE html>
+        <html lang="cs">
+        <head>
+            <meta charset="UTF-8">
+            <title>Výsledek importu</title>
+            <link rel="stylesheet" href="/css/styles.css">
+            <link rel="icon" href="/images/logo.png">
+        </head>
+        <body class="admin_site">
+            <header class="header">
+                <div class="logo_title">
+                    <img alt="Logo" class="image_logo" src="/images/logo.png">
+                    <h1 id="title">Výsledek importu</h1>
+                </div>
+            </header>
+
+            <main class="main_page" style="flex-direction: column; align-items: center;">
+                <div class="stats-container" style="width: 100%; max-width: 700px;">
+                    <h2 style="color: ${newMatchesCount > 0 ? '#00ff00' : 'orangered'};">
+                        ${newMatchesCount > 0 ? 'Úspěch!' : 'Dokončeno'}
+                    </h2>
+                    
+                    <p style="color:gray; font-size:12px;">Titulek stránky: ${pageTitle}</p>
+
+                    <table class="points-table" style="font-size: 14px; margin-top: 20px;">
+                        <tr><td style="text-align: left;">Vybraná liga:</td><td>${liga}</td></tr>
+                        <tr><td style="text-align: left;">Prohledáno řádků:</td><td>${rows.length}</td></tr>
+                        <tr><td style="text-align: left;">Nové zápasy:</td><td style="color: #00ff00; font-weight: bold;">${newMatchesCount}</td></tr>
+                        <tr><td style="text-align: left;">Již existující:</td><td style="color: yellow;">${skippedCount}</td></tr>
+                        <tr><td style="text-align: left;">Mimo datum:</td><td style="color: gray;">${outOfRangeCount}</td></tr>
+                    </table>
+
+                    ${notFoundArray.length > 0 ? `
+                    <div style="margin-top: 20px; border: 1px solid red; padding: 10px; background: #330000;">
+                        <h3 style="color: red; margin: 0 0 10px 0;">⚠️ Nespárované týmy</h3>
+                        <ul style="color: white; text-align: left; columns: 1;">
+                            ${notFoundArray.map(t => `<li>${t}</li>`).join('')}
+                        </ul>
+                    </div>
+                    ` : ''}
+
+                    <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: center;">
+                        <a href="/admin/matches/import" class="action-btn" style="background-color: #333; border: 1px solid orangered;">Zkusit znovu</a>
+                        <a href="/admin" class="action-btn edit-btn">Správa zápasů</a>
+                    </div>
+                </div>
+            </main>
+        </body>
+        </html>
+        `;
+        res.send(htmlRes);
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).send(`Chyba: ${error.message}`);
+    }
 });
 
 module.exports = router;
