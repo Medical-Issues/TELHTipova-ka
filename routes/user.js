@@ -2669,29 +2669,30 @@ router.get('/history/a', requireLogin, (req, res) => {
 
             const maxFromTips = userTips.reduce((sum, tip) => {
                 const match = matchesInLiga.find(m => Number(m.id) === Number(tip.matchId));
+                if (!match || !match.result) return sum;
+
                 if (!match.isPlayoff) {
-                    return sum + 1; // Základní část = max 1 bod
+                    return sum + 1;
                 } else {
                     // Playoff
                     if (Number(match.bo) === 1) {
-                        return sum + 5; // BO1 (jeden zápas) = max 5 bodů
+                        return sum + 5;
                     } else {
-                        return sum + 3; // Série = max 3 body
+                        return sum + 3;
                     }
                 }
             }, 0);
 
-            // 2. Maximální možné body ze VŠECH odehraných zápasů v lize
             const totalPoints = matchesInLiga.reduce((sum, m) => {
                 if (!m.result) return sum;
 
                 if (!m.isPlayoff) {
-                    return sum + 1; // Základní část
+                    return sum + 1;
                 } else {
                     if (Number(m.bo) === 1) {
-                        return sum + 5; // BO1
+                        return sum + 5;
                     } else {
-                        return sum + 3; // Série
+                        return sum + 3;
                     }
                 }
             }, 0);
