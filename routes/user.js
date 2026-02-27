@@ -3403,8 +3403,8 @@ p.style.display = which === 'playoff' ? 'block' : 'none';
     playoffData.forEach((row) => {
         html += '<tr>';
         row.forEach(cell => {
-            const bg = cell.bgColor ? ` style="background-color:${cell.bgColor}"` : '';
-            const txt = cell.textColor || '';
+            const bg = cell.bgColor ? ` style="background-color:${cell.bgColor}; color:${cell.textColor}"` : '';
+            const txt = cell.text || '';
             html += `<td${bg}>${txt}</td>`;
         });
         html += '</tr>';
@@ -4403,7 +4403,7 @@ function showTable(which) {
     playoffData.forEach((row) => {
         html += '<tr>';
         row.forEach(cell => {
-            const bg = cell.bgColor ? ` style="background-color:${cell.bgColor}"` : '';
+            const bg = cell.bgColor ? ` style="background-color:${cell.bgColor}; color:${cell.textColor}"` : '';
             const txt = cell.text || '';
             html += `<td${bg}>${txt}</td>`;
         });
