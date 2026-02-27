@@ -221,7 +221,7 @@ router.get("/table-tip", requireLogin, (req, res) => {
                     const isHome = Number(m.homeTeamId) === teamId;
                     let sH = m.result?.scoreHome !== undefined ? Number(m.result.scoreHome) : (m.scoreHome !== undefined ? Number(m.scoreHome) : 0);
                     let sA = m.result?.scoreAway !== undefined ? Number(m.result.scoreAway) : (m.scoreAway !== undefined ? Number(m.scoreAway) : 0);
-                    const isOt = m.result?.ot || m.result?.so || m.ot || m.so;
+                    const isOt = m.result?.ot || m.ot;
 
                     let hPts, aPts;
                     if (sH > sA) { hPts = isOt ? 2 : 3; aPts = isOt ? 1 : 0; }
@@ -297,6 +297,13 @@ router.get("/table-tip", requireLogin, (req, res) => {
 <link rel="stylesheet" href="/css/styles.css" />
 <link rel="icon" href="/images/logo.png">
 </head>
+<script>
+                function showTable(which) {
+                    document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none';
+                    const p = document.getElementById('playoffTablePreview');
+                    p.style.display = which === 'playoff' ? 'block' : 'none';
+                }
+</script>
 <body class="usersite">
 <header class="header">
 <form class="league-dropdown" method="GET" action="/">
@@ -381,7 +388,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 
                     let sH = m.result?.scoreHome !== undefined ? Number(m.result.scoreHome) : (m.scoreHome !== undefined ? Number(m.scoreHome) : 0);
                     let sA = m.result?.scoreAway !== undefined ? Number(m.result.scoreAway) : (m.scoreAway !== undefined ? Number(m.scoreAway) : 0);
-                    const isOt = m.result?.ot || m.result?.so || m.ot || m.so;
+                    const isOt = m.result?.ot || m.ot;
 
                     let hPts, aPts;
                     if (sH > sA) {
@@ -479,9 +486,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 
         // --- VÝPOČET ZÁPASŮ ---
         let matchesPerTeam;
-        if (leagueObj.rounds) {
-            matchesPerTeam = (teamsInGroup.length - 1) * leagueObj.rounds;
-        } else if (leagueObj.isMultigroup) {
+        if (leagueObj.isMultigroup) {
             matchesPerTeam = Math.max(1, teamsInGroup.length - 1);
         } else {
             matchesPerTeam = Math.ceil((leagueObj.maxMatches * 2) / teamsInGroup.length);
@@ -740,12 +745,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
         // 3. SPRÁVNÝ VÝPOČET ZÁPASŮ (Stejný jako v horních tabulkách)
         // Toto zajistí, že systém ví, že po 2 zápasech je konec a má zamknout.
         let cMatchesPerTeam = 52;
-        if (leagueObj.rounds) {
-            // Pokud je definován počet kol, musíme odhadnout velikost skupiny.
-            // Pro cross-table bereme velikost první skupiny jako referenci, nebo fallback.
-            const estimatedGroupSize = teamsInSelectedLiga.length / (leagueObj.groupCount || 1);
-            cMatchesPerTeam = (Math.ceil(estimatedGroupSize) - 1) * leagueObj.rounds;
-        } else if (leagueObj.isMultigroup) {
+        if (leagueObj.isMultigroup) {
             // Pokud je to multigroup bez rounds, bývá to "každý s každým" ve skupině
             const estimatedGroupSize = teamsInSelectedLiga.length / (leagueObj.groupCount || 1);
             cMatchesPerTeam = Math.max(1, Math.ceil(estimatedGroupSize) - 1);
@@ -972,13 +972,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 </div>
 <p id="progress-text"></p>
 </section>
-            <script>
-                function showTable(which) {
-                    document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none';
-                    const p = document.getElementById('playoffTablePreview');
-                    p.style.display = which === 'playoff' ? 'block' : 'none';
-                }
-            </script>
+     
         </div></div>`;
 
     // --- STATISTIKY (OBNOVENO V PLNÉ PARÁDĚ) ---
@@ -1449,7 +1443,7 @@ router.post("/tip", requireLogin, (req, res) => {
         if (req.headers['x-requested-with'] === 'fetch') {
             return res.status(200).send("Tip uložen");
         }
-        res.redirect(`/?liga=${encodeURIComponent(league)}&sezona=${encodeURIComponent(season)}`);
+        res.redirect(`/?liga=${encodeURIComponent(league)}&season=${encodeURIComponent(season)}`);
     });
 });
 
@@ -1616,6 +1610,13 @@ router.get('/', requireLogin, (req, res) => {
 <link rel="stylesheet" href="/css/styles.css" />
 <link rel="icon" href="/images/logo.png">
 </head>
+<script>
+function showTable(which) {
+        document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none';
+        const p = document.getElementById('playoffTablePreview');
+        p.style.display = which === 'playoff' ? 'block' : 'none';
+    }
+</script>
 <body class="usersite">
 <header class="header">
 <form class="league-dropdown" method="GET" action="/">
@@ -1700,7 +1701,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 
                     let sH = m.result?.scoreHome !== undefined ? Number(m.result.scoreHome) : (m.scoreHome !== undefined ? Number(m.scoreHome) : 0);
                     let sA = m.result?.scoreAway !== undefined ? Number(m.result.scoreAway) : (m.scoreAway !== undefined ? Number(m.scoreAway) : 0);
-                    const isOt = m.result?.ot || m.result?.so || m.ot || m.so;
+                    const isOt = m.result?.ot || m.ot;
 
                     let hPts, aPts;
                     if (sH > sA) { hPts = isOt ? 2 : 3; aPts = isOt ? 1 : 0; }
@@ -1784,9 +1785,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 
         // --- VÝPOČET ZÁPASŮ ---
         let matchesPerTeam;
-        if (leagueObj.rounds) {
-            matchesPerTeam = (teamsInGroup.length - 1) * leagueObj.rounds;
-        } else if (leagueObj.isMultigroup) {
+        if (leagueObj.isMultigroup) {
             matchesPerTeam = Math.max(1, teamsInGroup.length - 1);
         } else {
             matchesPerTeam = Math.ceil((leagueObj.maxMatches * 2) / teamsInGroup.length);
@@ -2046,12 +2045,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
         // 3. SPRÁVNÝ VÝPOČET ZÁPASŮ (Stejný jako v horních tabulkách)
         // Toto zajistí, že systém ví, že po 2 zápasech je konec a má zamknout.
         let cMatchesPerTeam = 52;
-        if (leagueObj.rounds) {
-            // Pokud je definován počet kol, musíme odhadnout velikost skupiny.
-            // Pro cross-table bereme velikost první skupiny jako referenci, nebo fallback.
-            const estimatedGroupSize = teamsInSelectedLiga.length / (leagueObj.groupCount || 1);
-            cMatchesPerTeam = (Math.ceil(estimatedGroupSize) - 1) * leagueObj.rounds;
-        } else if (leagueObj.isMultigroup) {
+        if (leagueObj.isMultigroup) {
             // Pokud je to multigroup bez rounds, bývá to "každý s každým" ve skupině
             const estimatedGroupSize = teamsInSelectedLiga.length / (leagueObj.groupCount || 1);
             cMatchesPerTeam = Math.max(1, Math.ceil(estimatedGroupSize) - 1);
@@ -2267,14 +2261,6 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 </div>
 <p id="progress-text"></p>
 </section>
-
-<script>
-function showTable(which) {
-document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none';
-const p = document.getElementById('playoffTablePreview');
-p.style.display = which === 'playoff' ? 'block' : 'none';
-}
-</script>
 </div>
 `;
 
@@ -2396,7 +2382,6 @@ ${currentUserStats?.tableCorrect > 0 || currentUserStats?.tableDeviation > 0 ? `
             })();
 
             html += `<h3>${formattedDateTime}</h3><table class="matches-table"><thead class="matches-table-header"><tr><th colspan="3">Zápasy</th></tr></thead><tbody>`;
-
             for (const match of matchesAtSameTime) {
                 const homeTeam = teams.find(t => t.id === match.homeTeamId)?.name || '???';
                 const awayTeam = teams.find(t => t.id === match.awayTeamId)?.name || '???';
@@ -2574,7 +2559,7 @@ router.get('/history', requireLogin, (req, res) => {
             <tr class="history-table-choose">
                 <td>${entry.season}</td>
                 <td>${entry.liga}</td>
-                <td><a href="/history/a/?liga=${encodeURIComponent(entry.liga)}&sezona=${encodeURIComponent(entry.season)}">Zobrazit</a></td>
+                <td><a href="/history/a/?liga=${encodeURIComponent(entry.liga)}&season=${encodeURIComponent(entry.season)}">Zobrazit</a></td>
             </tr>
         `;
     }
@@ -2592,7 +2577,7 @@ router.get('/history', requireLogin, (req, res) => {
 router.get('/history/a', requireLogin, (req, res) => {
     const username = req.session.user;
     const selectedLiga = req.query.liga;
-    const selectedSeason = req.query.sezona;
+    const selectedSeason = req.query.season;
 
     if (!selectedLiga || !selectedSeason) return res.redirect('/history');
 
@@ -2811,14 +2796,21 @@ router.get('/history/a', requireLogin, (req, res) => {
 <link rel="stylesheet" href="/css/styles.css" />
 <link rel="icon" href="/images/logo.png">
 </head>
+<script>
+function showTable(which) {
+document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none';
+const p = document.getElementById('playoffTablePreview');
+p.style.display = which === 'playoff' ? 'block' : 'none';
+}
+</script>
 <body class="usersite">
 <header class="header">
 <div class="league-dropdown">
 <div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
 <a class="history-btn" href="/">Aktuální</a>
 <a class="history-btn" href="/history">Zpět na výběr</a>
-<a class="history-btn" style="background:orangered; color:black;" href="/history/a/?liga=${encodeURIComponent(selectedLiga)}&sezona=${encodeURIComponent(selectedSeason)}">Tipy zápasů</a>
-<a class="history-btn" href="/history/table/?liga=${encodeURIComponent(selectedLiga)}&sezona=${encodeURIComponent(selectedSeason)}">Tipy tabulky</a>
+<a class="history-btn" style="background:orangered; color:black;" href="/history/a/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy zápasů</a>
+<a class="history-btn" href="/history/table/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy tabulky</a>
 </div>
 <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
@@ -2890,7 +2882,7 @@ router.get('/history/a', requireLogin, (req, res) => {
 
                     let sH = m.result?.scoreHome !== undefined ? Number(m.result.scoreHome) : (m.scoreHome !== undefined ? Number(m.scoreHome) : 0);
                     let sA = m.result?.scoreAway !== undefined ? Number(m.result.scoreAway) : (m.scoreAway !== undefined ? Number(m.scoreAway) : 0);
-                    const isOt = m.result?.ot || m.result?.so || m.ot || m.so;
+                    const isOt = m.result?.ot || m.ot;
 
                     let hPts, aPts;
                     if (sH > sA) { hPts = isOt ? 2 : 3; aPts = isOt ? 1 : 0; }
@@ -2974,9 +2966,7 @@ router.get('/history/a', requireLogin, (req, res) => {
 
         // --- VÝPOČET ZÁPASŮ ---
         let matchesPerTeam;
-        if (leagueObj.rounds) {
-            matchesPerTeam = (teamsInGroup.length - 1) * leagueObj.rounds;
-        } else if (leagueObj.isMultigroup) {
+        if (leagueObj.isMultigroup) {
             matchesPerTeam = Math.max(1, teamsInGroup.length - 1);
         } else {
             matchesPerTeam = Math.ceil((leagueObj.maxMatches * 2) / teamsInGroup.length);
@@ -3236,12 +3226,7 @@ router.get('/history/a', requireLogin, (req, res) => {
         // 3. SPRÁVNÝ VÝPOČET ZÁPASŮ (Stejný jako v horních tabulkách)
         // Toto zajistí, že systém ví, že po 2 zápasech je konec a má zamknout.
         let cMatchesPerTeam = 52;
-        if (leagueObj.rounds) {
-            // Pokud je definován počet kol, musíme odhadnout velikost skupiny.
-            // Pro cross-table bereme velikost první skupiny jako referenci, nebo fallback.
-            const estimatedGroupSize = teamsInSelectedLiga.length / (leagueObj.groupCount || 1);
-            cMatchesPerTeam = (Math.ceil(estimatedGroupSize) - 1) * leagueObj.rounds;
-        } else if (leagueObj.isMultigroup) {
+        if (leagueObj.isMultigroup) {
             // Pokud je to multigroup bez rounds, bývá to "každý s každým" ve skupině
             const estimatedGroupSize = teamsInSelectedLiga.length / (leagueObj.groupCount || 1);
             cMatchesPerTeam = Math.max(1, Math.ceil(estimatedGroupSize) - 1);
@@ -3419,12 +3404,18 @@ router.get('/history/a', requireLogin, (req, res) => {
         html += '<tr>';
         row.forEach(cell => {
             const bg = cell.bgColor ? ` style="background-color:${cell.bgColor}"` : '';
-            const txt = cell.text || '';
+            const txt = cell.textColor || '';
             html += `<td${bg}>${txt}</td>`;
         });
         html += '</tr>';
     });
-    html += `</table></div><script>function showTable(which) { document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none'; const p = document.getElementById('playoffTablePreview'); p.style.display = which === 'playoff' ? 'block' : 'none'; }</script>`;
+    html += `</table></div>
+<script>
+    function showTable(which) { 
+        document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none'; 
+        const p = document.getElementById('playoffTablePreview'); p.style.display = which === 'playoff' ? 'block' : 'none'; 
+    }
+</script>`;
 
     // --- ZDE JE TA VLOŽENÁ LEVÁ STRANA Z ROUTY / ---
     if (username) {
@@ -3509,6 +3500,14 @@ router.get('/history/a', requireLogin, (req, res) => {
 
     // --- PRAVÁ STRANA: ZÁPASY ---
     html += `
+        <script>
+        const globalStatsData = ${JSON.stringify(userStats)};
+        function showUserHistory(username) {
+            document.querySelectorAll('.history-item').forEach(el => el.style.display = 'none');
+            const safeName = username.replace(/[^a-zA-Z0-9]/g, '_');
+            document.querySelectorAll('.user-' + safeName).forEach(el => el.style.display = 'flex');
+        }
+        </script>
         <section class="matches-container">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
                 <h2 style="margin: 0;">Historie tipů</h2>
@@ -3603,12 +3602,6 @@ router.get('/history/a', requireLogin, (req, res) => {
 
     html += `</section></main>
     <script>
-        const globalStatsData = ${JSON.stringify(userStats)};
-        function showUserHistory(username) {
-            document.querySelectorAll('.history-item').forEach(el => el.style.display = 'none');
-            const safeName = username.replace(/[^a-zA-Z0-9]/g, '_');
-            document.querySelectorAll('.user-' + safeName).forEach(el => el.style.display = 'flex');
-        }
         document.addEventListener('DOMContentLoaded', () => {
     const sidebar = document.querySelector('.left-panel');
     const container = document.querySelector('.stats-container');
@@ -3658,7 +3651,7 @@ router.get('/history/a', requireLogin, (req, res) => {
 router.get('/history/table', requireLogin, (req, res) => {
     const username = req.session.user;
     const selectedLiga = req.query.liga;
-    const selectedSeason = req.query.sezona;
+    const selectedSeason = req.query.season;
 
     if (!selectedLiga || !selectedSeason) return res.redirect('/history');
 
@@ -3820,7 +3813,7 @@ router.get('/history/table', requireLogin, (req, res) => {
                     const isHome = Number(m.homeTeamId) === teamId;
                     let sH = m.result?.scoreHome !== undefined ? Number(m.result.scoreHome) : (m.scoreHome !== undefined ? Number(m.scoreHome) : 0);
                     let sA = m.result?.scoreAway !== undefined ? Number(m.result.scoreAway) : (m.scoreAway !== undefined ? Number(m.scoreAway) : 0);
-                    const isOt = m.result?.ot || m.result?.so || m.ot || m.so;
+                    const isOt = m.result?.ot || m.ot;
 
                     let hPts, aPts;
                     if (sH > sA) { hPts = isOt ? 2 : 3; aPts = isOt ? 1 : 0; }
@@ -3972,14 +3965,20 @@ router.get('/history/table', requireLogin, (req, res) => {
 <link rel="stylesheet" href="/css/styles.css" />
 <link rel="icon" href="/images/logo.png">
 </head>
+<script>
+function showTable(which) { 
+    document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none'; 
+    const p = document.getElementById('playoffTablePreview'); p.style.display = which === 'playoff' ? 'block' : 'none'; 
+}
+</script>;
 <body class="usersite">
 <header class="header">
         <div class="league-dropdown">
             <div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
             <a class="history-btn" href="/">Aktuální</a>
             <a class="history-btn" href="/history">Zpět na výběr</a>
-            <a class="history-btn" href="/history/a/?liga=${encodeURIComponent(selectedLiga)}&sezona=${encodeURIComponent(selectedSeason)}">Tipy zápasů</a>
-            <a class="history-btn" style="background:orangered; color:black;" href="/history/table/?liga=${encodeURIComponent(selectedLiga)}&sezona=${encodeURIComponent(selectedSeason)}">Tipy tabulky</a>
+            <a class="history-btn" href="/history/a/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy zápasů</a>
+            <a class="history-btn" style="background:orangered; color:black;" href="/history/table/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy tabulky</a>
         </div>
         <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
     </header>
@@ -4034,9 +4033,7 @@ router.get('/history/table', requireLogin, (req, res) => {
 
         // --- VÝPOČET ZÁPASŮ ---
         let matchesPerTeam;
-        if (leagueObj.rounds) {
-            matchesPerTeam = (teamsInGroup.length - 1) * leagueObj.rounds;
-        } else if (leagueObj.isMultigroup) {
+        if (leagueObj.isMultigroup) {
             matchesPerTeam = Math.max(1, teamsInGroup.length - 1);
         } else {
             matchesPerTeam = Math.ceil((leagueObj.maxMatches * 2) / teamsInGroup.length);
@@ -4243,10 +4240,7 @@ router.get('/history/table', requireLogin, (req, res) => {
         const cSafeZoneIndex = crossGroupTeams.length - cRelLimit - 1;
 
         let cMatchesPerTeam = 52;
-        if (leagueObj.rounds) {
-            const estimatedGroupSize = teamsInSelectedLiga.length / (leagueObj.groupCount || 1);
-            cMatchesPerTeam = (Math.ceil(estimatedGroupSize) - 1) * leagueObj.rounds;
-        } else if (leagueObj.isMultigroup) {
+        if (leagueObj.isMultigroup) {
             const estimatedGroupSize = teamsInSelectedLiga.length / (leagueObj.groupCount || 1);
             cMatchesPerTeam = Math.max(1, Math.ceil(estimatedGroupSize) - 1);
         } else if (leagueObj.maxMatches) {
@@ -4415,8 +4409,13 @@ router.get('/history/table', requireLogin, (req, res) => {
         });
         html += '</tr>';
     });
-    html += `</table></div><script>
-function showTable(which) { document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none'; const p = document.getElementById('playoffTablePreview'); p.style.display = which === 'playoff' ? 'block' : 'none'; }</script>`;
+    html += `</table></div>
+<script>
+function showTable(which) { 
+    document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none'; 
+    const p = document.getElementById('playoffTablePreview'); p.style.display = which === 'playoff' ? 'block' : 'none'; 
+}
+</script>`;
 
     // --- TVOJE STATISTIKY ---
     if (username) {
@@ -4497,6 +4496,13 @@ function showTable(which) { document.getElementById('regularTable').style.displa
 
     // --- PRAVÁ STRANA: TABULKA TIPŮ ---
     html += `
+        <script>
+        function showUserTableHistory(username) {
+            document.querySelectorAll('.user-history-table-container').forEach(el => el.style.display = 'none');
+            const safeName = username.replace(/[^a-zA-Z0-9]/g, '_');
+            document.querySelectorAll('.user-table-' + safeName).forEach(el => el.style.display = 'block');
+        }
+        </script>
         <section class="matches-container">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
                 <h2 style="margin: 0;">Historie tipu tabulky</h2>
@@ -4589,11 +4595,6 @@ function showTable(which) { document.getElementById('regularTable').style.displa
 
     html += `</section></main>
     <script>
-        function showUserTableHistory(username) {
-            document.querySelectorAll('.user-history-table-container').forEach(el => el.style.display = 'none');
-            const safeName = username.replace(/[^a-zA-Z0-9]/g, '_');
-            document.querySelectorAll('.user-table-' + safeName).forEach(el => el.style.display = 'block');
-        }
         document.addEventListener('DOMContentLoaded', () => {
     const sidebar = document.querySelector('.left-panel');
     const container = document.querySelector('.stats-container');
@@ -4805,6 +4806,12 @@ router.get("/prestupy", requireLogin, (req, res) => {
 <link rel="stylesheet" href="/css/styles.css" />
 <link rel="icon" href="/images/logo.png">
 </head>
+<script>
+function showTable(which) { 
+    document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none'; 
+    const p = document.getElementById('playoffTablePreview'); p.style.display = which === 'playoff' ? 'block' : 'none'; 
+}
+</script>;
 <body class="usersite">
 <header class="header">
 <form class="league-dropdown" method="GET" action="/">
@@ -4889,7 +4896,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 
                     let sH = m.result?.scoreHome !== undefined ? Number(m.result.scoreHome) : (m.scoreHome !== undefined ? Number(m.scoreHome) : 0);
                     let sA = m.result?.scoreAway !== undefined ? Number(m.result.scoreAway) : (m.scoreAway !== undefined ? Number(m.scoreAway) : 0);
-                    const isOt = m.result?.ot || m.result?.so || m.ot || m.so;
+                    const isOt = m.result?.ot || m.ot;
 
                     let hPts, aPts;
                     if (sH > sA) { hPts = isOt ? 2 : 3; aPts = isOt ? 1 : 0; }
@@ -4973,9 +4980,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 
         // --- VÝPOČET ZÁPASŮ ---
         let matchesPerTeam;
-        if (leagueObj.rounds) {
-            matchesPerTeam = (teamsInGroup.length - 1) * leagueObj.rounds;
-        } else if (leagueObj.isMultigroup) {
+        if (leagueObj.isMultigroup) {
             matchesPerTeam = Math.max(1, teamsInGroup.length - 1);
         } else {
             matchesPerTeam = Math.ceil((leagueObj.maxMatches * 2) / teamsInGroup.length);
@@ -5235,12 +5240,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
         // 3. SPRÁVNÝ VÝPOČET ZÁPASŮ (Stejný jako v horních tabulkách)
         // Toto zajistí, že systém ví, že po 2 zápasech je konec a má zamknout.
         let cMatchesPerTeam = 52;
-        if (leagueObj.rounds) {
-            // Pokud je definován počet kol, musíme odhadnout velikost skupiny.
-            // Pro cross-table bereme velikost první skupiny jako referenci, nebo fallback.
-            const estimatedGroupSize = teamsInSelectedLiga.length / (leagueObj.groupCount || 1);
-            cMatchesPerTeam = (Math.ceil(estimatedGroupSize) - 1) * leagueObj.rounds;
-        } else if (leagueObj.isMultigroup) {
+        if (leagueObj.isMultigroup) {
             // Pokud je to multigroup bez rounds, bývá to "každý s každým" ve skupině
             const estimatedGroupSize = teamsInSelectedLiga.length / (leagueObj.groupCount || 1);
             cMatchesPerTeam = Math.max(1, Math.ceil(estimatedGroupSize) - 1);
@@ -5457,13 +5457,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 </div>
 <p id="progress-text"></p>
 </section>
-
     <script>
-    function showTable(which) {
-        document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none';
-        const p = document.getElementById('playoffTablePreview');
-        p.style.display = which === 'playoff' ? 'block' : 'none';
-    }
     const bar = document.getElementById("progress-bar");
     const text = document.getElementById("progress-text");
     document.addEventListener('DOMContentLoaded', () => {

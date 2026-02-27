@@ -464,7 +464,7 @@ router.post('/teams/edit/:id', requireAdmin, (req, res) => {
     const teams = loadTeams();
 
     const teamIndex = teams.findIndex(t => t.id === teamId);
-    if (!team) return renderErrorHtml(res, "Tým s tímto ID nebyl nalezen.", 404);
+    if (!teams) return renderErrorHtml(res, "Tým s tímto ID nebyl nalezen.", 404);
 
     const {name, liga, active, group} = req.body;
 
@@ -695,7 +695,7 @@ router.get('/new/team', requireAdmin, (req, res) => {
         groupSelect.innerHTML = '';
         for (let i = 0; i < count; i++) {
             const option = document.createElement('option');
-            option.value = i+1;
+            option.value = String(i++);
             option.textContent = 'Skupina ' + String.fromCharCode(65+i);
             groupSelect.appendChild(option);
         }
@@ -875,7 +875,7 @@ router.post('/edit/:id', requireAdmin, (req, res) => {
 
     const parsedHome = scoreHome === '' ? null : parseInt(scoreHome);
     const parsedAway = scoreAway === '' ? null : parseInt(scoreAway);
-
+    let winner;
     if (parsedHome !== null && parsedAway !== null) {
         if (parsedHome > parsedAway) winner = "home";
         else if (parsedHome < parsedAway) winner = 'away';
@@ -1013,7 +1013,7 @@ router.get('/playoff', requireAdmin, (req, res) => {
 
     if (!playoffData[selectedSeason]) playoffData[selectedSeason] = {};
     if (!playoffData[selectedSeason][selectedLeague]) {
-        playoffData[selectedSeason][selectedLeague] = Array.from({ length: 20 }, () => Array.from({ length: 20 }, () => ({ text: '', bgColor: '' })));
+        playoffData[selectedSeason][selectedLeague] = Array.from({ length: 20 }, () => Array.from({ length: 20 }, () => ({ textColor: '', bgColor: '' })));
     }
     const tableData = playoffData[selectedSeason][selectedLeague];
 
@@ -1592,7 +1592,7 @@ router.get('/leagues/manage', requireAdmin, (req, res) => {
                 flex-wrap: wrap;
                 font-size: 0.9em;
             }
-            .cross-table-settings h4 { margin: 0; color: #ffa500; font-size: 1em; margin-right: 10px; }
+            .cross-table-settings h4 { color: #ffa500; font-size: 1em; margin: 0 10px 0 0;}
             .separator { border-left: 1px solid #444; height: 20px; margin: 0 5px; }
         </style>
     </head>
