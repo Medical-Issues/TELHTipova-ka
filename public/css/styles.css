@@ -55,6 +55,9 @@ th, td {
 
 .left-panel {
     width: 100%;
+    position: sticky;
+    top: 20px;
+    transition: top 0.1s ease-out;
 }
 
 #points-table-header {
@@ -548,9 +551,18 @@ input[type="checkbox"]:checked::after {
     }
     .stats-container {
         width: 100%;
+        align-items: flex-start;
     }
     .matches-container {
         width: 100%;
+    }
+    .left-panel {
+        position: sticky;
+        top: 20px;
+        max-height: calc(100vh - 40px);
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: orangered #1a1a1a;
     }
 }
 

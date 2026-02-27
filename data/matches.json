@@ -6818,7 +6818,13 @@
     "liga": "TELH",
     "season": "25/26",
     "isPlayoff": false,
-    "result": null
+    "result": {
+      "scoreHome": 1,
+      "scoreAway": 4,
+      "ot": false,
+      "winner": "away"
+    },
+    "postponed": false
   },
   {
     "id": 435,
@@ -6828,7 +6834,13 @@
     "liga": "TELH",
     "season": "25/26",
     "isPlayoff": false,
-    "result": null
+    "result": {
+      "scoreHome": 4,
+      "scoreAway": 5,
+      "ot": true,
+      "winner": "away"
+    },
+    "postponed": false
   },
   {
     "id": 436,
@@ -6838,7 +6850,13 @@
     "liga": "TELH",
     "season": "25/26",
     "isPlayoff": false,
-    "result": null
+    "result": {
+      "scoreHome": 5,
+      "scoreAway": 4,
+      "ot": true,
+      "winner": "home"
+    },
+    "postponed": false
   },
   {
     "id": 437,
@@ -6848,7 +6866,13 @@
     "liga": "TELH",
     "season": "25/26",
     "isPlayoff": false,
-    "result": null
+    "result": {
+      "scoreHome": 2,
+      "scoreAway": 4,
+      "ot": false,
+      "winner": "away"
+    },
+    "postponed": false
   },
   {
     "id": 438,
@@ -6858,7 +6882,13 @@
     "liga": "TELH",
     "season": "25/26",
     "isPlayoff": false,
-    "result": null
+    "result": {
+      "scoreHome": 2,
+      "scoreAway": 4,
+      "ot": false,
+      "winner": "away"
+    },
+    "postponed": false
   },
   {
     "id": 439,
@@ -6868,7 +6898,13 @@
     "liga": "TELH",
     "season": "25/26",
     "isPlayoff": false,
-    "result": null
+    "result": {
+      "scoreHome": 5,
+      "scoreAway": 1,
+      "ot": false,
+      "winner": "home"
+    },
+    "postponed": false
   },
   {
     "id": 440,
@@ -6878,7 +6914,13 @@
     "liga": "TELH",
     "season": "25/26",
     "isPlayoff": false,
-    "result": null
+    "result": {
+      "scoreHome": 3,
+      "scoreAway": 0,
+      "ot": false,
+      "winner": "home"
+    },
+    "postponed": false
   },
   {
     "id": 441,

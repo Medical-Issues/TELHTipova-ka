@@ -1277,6 +1277,49 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
                     });
                 });
             }
+            document.addEventListener('DOMContentLoaded', () => {
+                const sidebar = document.querySelector('.left-panel');
+                const container = document.querySelector('.stats-container');
+
+                if (!sidebar || !container) return;
+
+                let lastScrollY = window.scrollY;
+                let topOffset = 20; // Výchozí odsazení odshora
+                const margin = 20; // Mezera nahoře i dole
+
+                window.addEventListener('scroll', () => {
+                    // Pokud je obrazovka dostatečně velká, že se tam panel vejde celý, normálně ho přilepíme k vršku
+                    if (sidebar.offsetHeight <= window.innerHeight) {
+                        sidebar.style.top = margin + 'px';
+                        return;
+                    }
+
+                    const currentScrollY = window.scrollY;
+                    const scrollDelta = currentScrollY - lastScrollY;
+                    const viewportHeight = window.innerHeight;
+                    const sidebarHeight = sidebar.offsetHeight;
+
+                    // Minimální hodnota 'top', aby se ukázal spodek panelu (bude to záporné číslo)
+                    const minTop = viewportHeight - sidebarHeight - margin;
+
+                    if (scrollDelta > 0) {
+                        // SCROLUJEME DOLŮ
+                        topOffset -= scrollDelta;
+                        if (topOffset < minTop) {
+                            topOffset = minTop; // Zastavíme, když dorazíme na konec panelu (přilepí se ke spodku)
+                        }
+                    } else if (scrollDelta < 0) {
+                        // SCROLUJEME NAHORU
+                        topOffset -= scrollDelta; // (odčítáme záporné číslo = přičítáme)
+                        if (topOffset > margin) {
+                            topOffset = margin; // Zastavíme, když dorazíme na začátek panelu (přilepí se k vršku)
+                        }
+                    }
+
+                    sidebar.style.top = topOffset + 'px';
+                    lastScrollY = currentScrollY;
+                });
+            });
         </script>
         </body>
         </html>
@@ -2417,6 +2460,49 @@ const formData = new URLSearchParams(); formData.append('matchId', matchId); for
 sendTip(formData, null, null, null); }); }
 });
 });
+document.addEventListener('DOMContentLoaded', () => {
+    const sidebar = document.querySelector('.left-panel');
+    const container = document.querySelector('.stats-container');
+    
+    if (!sidebar || !container) return;
+
+    let lastScrollY = window.scrollY;
+    let topOffset = 20; // Výchozí odsazení odshora
+    const margin = 20; // Mezera nahoře i dole
+
+    window.addEventListener('scroll', () => {
+        // Pokud je obrazovka dostatečně velká, že se tam panel vejde celý, normálně ho přilepíme k vršku
+        if (sidebar.offsetHeight <= window.innerHeight) {
+            sidebar.style.top = margin + 'px';
+            return;
+        }
+
+        const currentScrollY = window.scrollY;
+        const scrollDelta = currentScrollY - lastScrollY;
+        const viewportHeight = window.innerHeight;
+        const sidebarHeight = sidebar.offsetHeight;
+        
+        // Minimální hodnota 'top', aby se ukázal spodek panelu (bude to záporné číslo)
+        const minTop = viewportHeight - sidebarHeight - margin;
+
+        if (scrollDelta > 0) {
+            // SCROLUJEME DOLŮ
+            topOffset -= scrollDelta;
+            if (topOffset < minTop) {
+                topOffset = minTop; // Zastavíme, když dorazíme na konec panelu (přilepí se ke spodku)
+            }
+        } else if (scrollDelta < 0) {
+            // SCROLUJEME NAHORU
+            topOffset -= scrollDelta; // (odčítáme záporné číslo = přičítáme)
+            if (topOffset > margin) {
+                topOffset = margin; // Zastavíme, když dorazíme na začátek panelu (přilepí se k vršku)
+            }
+        }
+
+        sidebar.style.top = topOffset + 'px';
+        lastScrollY = currentScrollY;
+    });
+});
 </script></html>`;
         res.send(html);
     }
@@ -3445,7 +3531,7 @@ router.get('/history/a', requireLogin, (req, res) => {
     // (ZBYTEK KÓDU PRO ZÁPASY ZŮSTÁVÁ)
     const groupedMatches = matches
         .filter(m => m.liga === selectedLiga && m.result && m.season === selectedSeason)
-        .sort((a, b) => new Date(a.datetime) - new Date(b.datetime))
+        .sort((a, b) => new Date(b.datetime) - new Date(a.datetime))
         .reduce((groups, match) => {
             const dateTime = match.datetime || match.date || "Neznámý čas";
             if (!groups[dateTime]) groups[dateTime] = [];
@@ -3523,6 +3609,49 @@ router.get('/history/a', requireLogin, (req, res) => {
             const safeName = username.replace(/[^a-zA-Z0-9]/g, '_');
             document.querySelectorAll('.user-' + safeName).forEach(el => el.style.display = 'flex');
         }
+        document.addEventListener('DOMContentLoaded', () => {
+    const sidebar = document.querySelector('.left-panel');
+    const container = document.querySelector('.stats-container');
+    
+    if (!sidebar || !container) return;
+
+    let lastScrollY = window.scrollY;
+    let topOffset = 20; // Výchozí odsazení odshora
+    const margin = 20; // Mezera nahoře i dole
+
+    window.addEventListener('scroll', () => {
+        // Pokud je obrazovka dostatečně velká, že se tam panel vejde celý, normálně ho přilepíme k vršku
+        if (sidebar.offsetHeight <= window.innerHeight) {
+            sidebar.style.top = margin + 'px';
+            return;
+        }
+
+        const currentScrollY = window.scrollY;
+        const scrollDelta = currentScrollY - lastScrollY;
+        const viewportHeight = window.innerHeight;
+        const sidebarHeight = sidebar.offsetHeight;
+        
+        // Minimální hodnota 'top', aby se ukázal spodek panelu (bude to záporné číslo)
+        const minTop = viewportHeight - sidebarHeight - margin;
+
+        if (scrollDelta > 0) {
+            // SCROLUJEME DOLŮ
+            topOffset -= scrollDelta;
+            if (topOffset < minTop) {
+                topOffset = minTop; // Zastavíme, když dorazíme na konec panelu (přilepí se ke spodku)
+            }
+        } else if (scrollDelta < 0) {
+            // SCROLUJEME NAHORU
+            topOffset -= scrollDelta; // (odčítáme záporné číslo = přičítáme)
+            if (topOffset > margin) {
+                topOffset = margin; // Zastavíme, když dorazíme na začátek panelu (přilepí se k vršku)
+            }
+        }
+
+        sidebar.style.top = topOffset + 'px';
+        lastScrollY = currentScrollY;
+    });
+});
     </script></body></html>`;
     res.send(html);
 });
@@ -4465,6 +4594,49 @@ function showTable(which) { document.getElementById('regularTable').style.displa
             const safeName = username.replace(/[^a-zA-Z0-9]/g, '_');
             document.querySelectorAll('.user-table-' + safeName).forEach(el => el.style.display = 'block');
         }
+        document.addEventListener('DOMContentLoaded', () => {
+    const sidebar = document.querySelector('.left-panel');
+    const container = document.querySelector('.stats-container');
+    
+    if (!sidebar || !container) return;
+
+    let lastScrollY = window.scrollY;
+    let topOffset = 20; // Výchozí odsazení odshora
+    const margin = 20; // Mezera nahoře i dole
+
+    window.addEventListener('scroll', () => {
+        // Pokud je obrazovka dostatečně velká, že se tam panel vejde celý, normálně ho přilepíme k vršku
+        if (sidebar.offsetHeight <= window.innerHeight) {
+            sidebar.style.top = margin + 'px';
+            return;
+        }
+
+        const currentScrollY = window.scrollY;
+        const scrollDelta = currentScrollY - lastScrollY;
+        const viewportHeight = window.innerHeight;
+        const sidebarHeight = sidebar.offsetHeight;
+        
+        // Minimální hodnota 'top', aby se ukázal spodek panelu (bude to záporné číslo)
+        const minTop = viewportHeight - sidebarHeight - margin;
+
+        if (scrollDelta > 0) {
+            // SCROLUJEME DOLŮ
+            topOffset -= scrollDelta;
+            if (topOffset < minTop) {
+                topOffset = minTop; // Zastavíme, když dorazíme na konec panelu (přilepí se ke spodku)
+            }
+        } else if (scrollDelta < 0) {
+            // SCROLUJEME NAHORU
+            topOffset -= scrollDelta; // (odčítáme záporné číslo = přičítáme)
+            if (topOffset > margin) {
+                topOffset = margin; // Zastavíme, když dorazíme na začátek panelu (přilepí se k vršku)
+            }
+        }
+
+        sidebar.style.top = topOffset + 'px';
+        lastScrollY = currentScrollY;
+    });
+});
     </script></body></html>`;
     res.send(html);
 });
@@ -5294,6 +5466,49 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
     }
     const bar = document.getElementById("progress-bar");
     const text = document.getElementById("progress-text");
+    document.addEventListener('DOMContentLoaded', () => {
+    const sidebar = document.querySelector('.left-panel');
+    const container = document.querySelector('.stats-container');
+    
+    if (!sidebar || !container) return;
+
+    let lastScrollY = window.scrollY;
+    let topOffset = 20; // Výchozí odsazení odshora
+    const margin = 20; // Mezera nahoře i dole
+
+    window.addEventListener('scroll', () => {
+        // Pokud je obrazovka dostatečně velká, že se tam panel vejde celý, normálně ho přilepíme k vršku
+        if (sidebar.offsetHeight <= window.innerHeight) {
+            sidebar.style.top = margin + 'px';
+            return;
+        }
+
+        const currentScrollY = window.scrollY;
+        const scrollDelta = currentScrollY - lastScrollY;
+        const viewportHeight = window.innerHeight;
+        const sidebarHeight = sidebar.offsetHeight;
+        
+        // Minimální hodnota 'top', aby se ukázal spodek panelu (bude to záporné číslo)
+        const minTop = viewportHeight - sidebarHeight - margin;
+
+        if (scrollDelta > 0) {
+            // SCROLUJEME DOLŮ
+            topOffset -= scrollDelta;
+            if (topOffset < minTop) {
+                topOffset = minTop; // Zastavíme, když dorazíme na konec panelu (přilepí se ke spodku)
+            }
+        } else if (scrollDelta < 0) {
+            // SCROLUJEME NAHORU
+            topOffset -= scrollDelta; // (odčítáme záporné číslo = přičítáme)
+            if (topOffset > margin) {
+                topOffset = margin; // Zastavíme, když dorazíme na začátek panelu (přilepí se k vršku)
+            }
+        }
+
+        sidebar.style.top = topOffset + 'px';
+        lastScrollY = currentScrollY;
+    });
+});
     </script>
         </div>
 `;
