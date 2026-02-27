@@ -3,87 +3,87 @@
     "MAXA": {
       "15": {
         "points": 85,
-        "games": 50,
-        "gf": 144,
-        "ga": 120
+        "games": 51,
+        "gf": 146,
+        "ga": 125
       },
       "16": {
         "points": 68,
-        "games": 50,
-        "gf": 107,
-        "ga": 125
+        "games": 51,
+        "gf": 108,
+        "ga": 129
       },
       "17": {
-        "points": 73,
-        "games": 50,
-        "gf": 117,
-        "ga": 128
+        "points": 76,
+        "games": 51,
+        "gf": 121,
+        "ga": 129
       },
       "18": {
         "points": 59,
-        "games": 50,
-        "gf": 141,
-        "ga": 162
+        "games": 51,
+        "gf": 142,
+        "ga": 166
       },
       "19": {
-        "points": 77,
-        "games": 50,
-        "gf": 148,
-        "ga": 151
+        "points": 79,
+        "games": 51,
+        "gf": 151,
+        "ga": 153
       },
       "20": {
-        "points": 93,
-        "games": 50,
-        "gf": 151,
+        "points": 96,
+        "games": 51,
+        "gf": 158,
         "ga": 109
       },
       "21": {
-        "points": 66,
-        "games": 50,
-        "gf": 129,
-        "ga": 154
+        "points": 69,
+        "games": 51,
+        "gf": 133,
+        "ga": 155
       },
       "22": {
         "points": 65,
-        "games": 50,
+        "games": 51,
         "gf": 109,
-        "ga": 137
+        "ga": 144
       },
       "23": {
         "points": 59,
-        "games": 50,
-        "gf": 116,
-        "ga": 147
+        "games": 51,
+        "gf": 118,
+        "ga": 151
       },
       "24": {
-        "points": 72,
-        "games": 50,
-        "gf": 141,
-        "ga": 132
+        "points": 75,
+        "games": 51,
+        "gf": 146,
+        "ga": 134
       },
       "25": {
         "points": 99,
-        "games": 50,
-        "gf": 142,
-        "ga": 104
+        "games": 51,
+        "gf": 143,
+        "ga": 106
       },
       "26": {
-        "points": 70,
-        "games": 50,
-        "gf": 133,
-        "ga": 132
+        "points": 73,
+        "games": 51,
+        "gf": 135,
+        "ga": 133
       },
       "27": {
-        "points": 67,
-        "games": 50,
-        "gf": 123,
-        "ga": 136
+        "points": 68,
+        "games": 51,
+        "gf": 125,
+        "ga": 139
       },
       "28": {
-        "points": 97,
-        "games": 50,
-        "gf": 151,
-        "ga": 115
+        "points": 100,
+        "games": 51,
+        "gf": 155,
+        "ga": 117
       }
     }
   }

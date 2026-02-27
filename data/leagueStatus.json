@@ -11,16 +11,20 @@
       ]
     },
     "MAXA": {
-      "regularSeasonFinished": false
+      "regularSeasonFinished": false,
+      "tableTipsLocked": true
     },
     "Spengler Cup": {
-      "regularSeasonFinished": true
+      "regularSeasonFinished": true,
+      "tableTipsLocked": true
     },
     "MSJ": {
-      "regularSeasonFinished": true
+      "regularSeasonFinished": true,
+      "tableTipsLocked": true
     },
     "Olympiáda": {
-      "regularSeasonFinished": true
+      "regularSeasonFinished": true,
+      "tableTipsLocked": true
     }
   }
 }

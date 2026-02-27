@@ -2670,31 +2670,16 @@ router.get('/history/a', requireLogin, (req, res) => {
             const maxFromTips = userTips.reduce((sum, tip) => {
                 const match = matchesInLiga.find(m => Number(m.id) === Number(tip.matchId));
                 if (!match || !match.result) return sum;
-
-                if (!match.isPlayoff) {
-                    return sum + 1;
-                } else {
-                    // Playoff
-                    if (Number(match.bo) === 1) {
-                        return sum + 5;
-                    } else {
-                        return sum + 3;
-                    }
-                }
+                if (!match.isPlayoff) return sum + 1;
+                if (match.bo === 1) return sum + 5;
+                return sum + 3;
             }, 0);
 
-            const totalPoints = matchesInLiga.reduce((sum, m) => {
-                if (!m.result) return sum;
-
-                if (!m.isPlayoff) {
-                    return sum + 1;
-                } else {
-                    if (Number(m.bo) === 1) {
-                        return sum + 5;
-                    } else {
-                        return sum + 3;
-                    }
-                }
+            const totalPoints = matchesInLiga.reduce((sum, match) => {
+                if (!match.result) return sum;
+                if (!match.isPlayoff) return sum + 1;
+                if (match.bo === 1) return sum + 5;
+                return sum + 3;
             }, 0);
 
             return {
@@ -3802,31 +3787,16 @@ router.get('/history/table', requireLogin, (req, res) => {
             const maxFromTips = userTips.reduce((sum, tip) => {
                 const match = matchesInLiga.find(m => Number(m.id) === Number(tip.matchId));
                 if (!match || !match.result) return sum;
-
-                if (!match.isPlayoff) {
-                    return sum + 1;
-                } else {
-                    // Playoff
-                    if (Number(match.bo) === 1) {
-                        return sum + 5;
-                    } else {
-                        return sum + 3;
-                    }
-                }
+                if (!match.isPlayoff) return sum + 1;
+                if (match.bo === 1) return sum + 5;
+                return sum + 3;
             }, 0);
 
-            const totalPoints = matchesInLiga.reduce((sum, m) => {
-                if (!m.result) return sum;
-
-                if (!m.isPlayoff) {
-                    return sum + 1;
-                } else {
-                    if (Number(m.bo) === 1) {
-                        return sum + 5;
-                    } else {
-                        return sum + 3;
-                    }
-                }
+            const totalPoints = matchesInLiga.reduce((sum, match) => {
+                if (!match.result) return sum;
+                if (!match.isPlayoff) return sum + 1;
+                if (match.bo === 1) return sum + 5;
+                return sum + 3;
             }, 0);
 
             return {
