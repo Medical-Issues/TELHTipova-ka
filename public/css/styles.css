@@ -155,7 +155,6 @@ main {
 .admin_site {
     display: flex;
     flex-direction: column;
-    gap: 10px;
 }
 
 .login_input {
