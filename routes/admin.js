@@ -136,6 +136,7 @@ router.get('/', requireAdmin, (req, res) => {
         <a href="/admin/images/manage" class="btn new-btn-admin">Správce obrázků</a>
         <a href="/admin/transfers/manage" class="btn new-btn-admin">Správa přestupů</a>
         <a href="/admin/broadcast-ping" class="btn new-btn-admin">Test notifikace</a>
+        <a href="/admin/users" class="btn new-btn-admin">Správa uživatelů</a>
         <a id="backupBtn" class="btn new-btn-admin">Uložit data uživatelům (pouze pro administrativní účely)</a>
     </div>
   </div>
@@ -2754,76 +2755,88 @@ router.get('/transfers/manage', requireAdmin, (req, res) => {
 });
 
 router.post('/transfers/save', requireAdmin, express.urlencoded({ extended: true }), async (req, res) => {
-    const { liga, season, t } = req.body;
-    const notif = require('./notificationService'); // Ujisti se, že máš cestu správně
     const fs = require('fs');
+    const path = require('path');
+    const notif = require('./notificationService');
 
-    // 1. Načtení týmů pro získání názvů (potřebujeme převést ID týmu na Jméno)
+    const { liga, season, t } = req.body;
+
+    // --- DEBUG 1: Co přišlo z formuláře? ---
+    console.log(`PŘIJATÝ POST: Liga: ${liga}, Sezóna: ${season}`);
+    if (!t) {
+        console.error("CHYBA: Objekt 't' s daty týmů chybí v req.body!");
+        return res.redirect('back');
+    }
+
+    const teamsPath = path.join(__dirname, '../data/teams.json');
+    const transfersPath = path.join(__dirname, '../data/transfers.json');
+
     let teams = [];
     try {
-        teams = JSON.parse(fs.readFileSync('./data/teams.json', 'utf8'));
+        teams = JSON.parse(fs.readFileSync(teamsPath, 'utf8'));
     } catch (e) { console.error("Chyba načítání teams.json", e); }
 
     let transfersData = {};
     try {
-        if (fs.existsSync('./data/transfers.json')) {
-            transfersData = JSON.parse(fs.readFileSync('./data/transfers.json', 'utf8'));
+        if (fs.existsSync(transfersPath)) {
+            transfersData = JSON.parse(fs.readFileSync(transfersPath, 'utf8'));
         }
     } catch (e) { transfersData = {}; }
 
-    // Inicializace struktury, pokud neexistuje
     if (!transfersData[season]) transfersData[season] = {};
     if (!transfersData[season][liga]) transfersData[season][liga] = {};
 
-    // Pole pro sběr nových přestupů pro notifikaci
     let newTransfersNotification = [];
 
-    // Iterujeme přes týmy z formuláře
+    // Iterujeme přes týmy
     for (const rawKey in t) {
         const teamId = rawKey.replace('id_', '');
         const teamObj = t[rawKey];
 
-        // Pomocná funkce pro čistění vstupu
         const cleanList = (text) => text ? text.split('\n').map(name => name.trim()).filter(name => name !== "") : [];
 
-        // Načteme nové seznamy
         const newConfIn = cleanList(teamObj.confIn);
 
-        // --- DETEKCE ZMĚN PRO NOTIFIKACI ---
-        // Získáme stará data pro tento tým (pokud existují)
+        // Načtení starých dat pro porovnání
         const oldTeamData = transfersData[season][liga][teamId] || {};
-        const oldConfIn = oldTeamData.confIn || [];
+        const oldConfIn = Array.isArray(oldTeamData.confIn) ? oldTeamData.confIn.map(p => p.trim()) : [];
 
-        // Najdeme hráče, kteří jsou v 'newConfIn', ale nebyli v 'oldConfIn'
-        const addedPlayers = newConfIn.filter(player => !oldConfIn.includes(player));
+        // Detekce nových hráčů
+        const addedPlayers = newConfIn.filter(player => {
+            const trimmedPlayer = player.trim();
+            return trimmedPlayer !== "" && !oldConfIn.includes(trimmedPlayer);
+        });
 
         if (addedPlayers.length > 0) {
-            // Najdeme jméno týmu podle ID
+            // NAJDEME JMÉNO TÝMU (Oprava ReferenceError)
             const teamName = teams.find(tm => Number(tm.id) === Number(teamId))?.name || `Tým ${teamId}`;
 
-            // Přidáme do seznamu pro notifikaci
+            console.log(`Nalezeni noví hráči pro ${teamName}:`, addedPlayers);
+
             addedPlayers.forEach(player => {
                 newTransfersNotification.push(`${player} -> ${teamName}`);
             });
         }
-        // -----------------------------------
 
-        // Uložení dat (přepisujeme stará data novými)
+        // AKTUALIZACE DAT V PAMĚTI
         transfersData[season][liga][teamId] = {
             specIn: cleanList(teamObj.specIn),
             specOut: cleanList(teamObj.specOut),
-            confIn: newConfIn, // Použijeme už vyčištěné
+            confIn: newConfIn,
             confOut: cleanList(teamObj.confOut)
         };
     }
 
-    // Uložení do souboru
-    fs.writeFileSync('./data/transfers.json', JSON.stringify(transfersData, null, 2));
+    // --- ZÁPIS DO SOUBORU ---
+    try {
+        fs.writeFileSync(transfersPath, JSON.stringify(transfersData, null, 2));
+        console.log("Data úspěšně uložena do transfers.json");
+    } catch (err) {
+        console.error("Chyba při zápisu do souboru:", err);
+    }
 
     // --- ODESLÁNÍ NOTIFIKACE ---
-    // Pošleme ji jen, pokud jsme našli nějaké nové hráče
     if (newTransfersNotification.length > 0) {
-        // Pokud je změn hodně (např. víc než 3), pošleme zkrácenou verzi, jinak vypíšeme vše
         let message;
         if (newTransfersNotification.length <= 3) {
             message = `Potvrzené přestupy: ${newTransfersNotification.join(', ')}`;
@@ -2832,8 +2845,15 @@ router.post('/transfers/save', requireAdmin, express.urlencoded({ extended: true
             message = `Nové přestupy (${newTransfersNotification.length}): ${firstFew} a další...`;
         }
 
-        // Volání tvé služby
-        notif.notifyTransfer(message);
+        console.log("ODESÍLÁM NOTIFIKACI:", message);
+
+        try {
+            notif.notifyTransfer(message);
+        } catch (err) {
+            console.error("Selhalo volání notif.notifyTransfer:", err);
+        }
+    } else {
+        console.log("Žádní noví hráči k oznámení.");
     }
 
     res.redirect(`/admin/transfers/manage?liga=${encodeURIComponent(liga)}`);
@@ -2889,6 +2909,231 @@ router.get('/broadcast-ping', requireAdmin, async (req, res) => {
         console.error("Chyba v broadcast-ping:", e);
         res.send(`Chyba serveru: ${e.message}`);
     }
+});
+router.get('/users', requireAdmin, (req, res) => {
+    const usersPath = path.join(__dirname, '../data/users.json');
+    const users = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
+
+    let html = `
+    <!DOCTYPE html>
+    <html lang="cs">
+    <head>
+        <meta charset="UTF-8">
+        <link rel="stylesheet" href="/css/styles.css">
+        <link rel="icon" href="/images/logo.png">
+        <title>Správa uživatelů</title>
+    </head>
+    <body class="usersite">
+        <main class="admin_site">
+            <h1>Správa uživatelů</h1>
+            <table class="admin-table" style="width:100%; border-collapse: collapse; margin-top: 20px; color: white;">
+                <thead>
+                    <tr style="background: #fb6a18; color: black;">
+                        <th style="padding: 12px; text-align: left;">Uživatel</th>
+                        <th style="padding: 12px; text-align: center;">Notifikace</th>
+                        <th style="padding: 12px; text-align: right;">Akce</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${users.map(user => `
+                        <tr style="border-bottom: 1px solid #444;">
+                            <td style="padding: 12px;"><strong>${user.username}</strong></td>
+                            <td style="padding: 12px; text-align: center;">${(user.subscriptions?.length > 0 || user.subscription) ? '🔔' : '❌'}</td>
+                            <td style="padding: 12px; text-align: right;">
+                                <a href="/admin/users/edit/${encodeURIComponent(user.username)}" class="btn-edit" style="background: orange; color: black; padding: 5px 10px; text-decoration: none; font-weight: bold;">Upravit</a>
+                                
+                                <form method="POST" action="/admin/users/delete" style="display:inline;" onsubmit="return confirm('OPRAVDU SMAZAT? Tato akce provede HLOUBKOVÉ smazání všech tipů uživatele ${user.username}!');">
+                                    <input type="hidden" name="usernameToDelete" value="${user.username}">
+                                    <button type="submit" style="background: red; color: white; border: none; padding: 5px 10px; cursor: pointer; font-weight: bold;">Smazat</button>
+                                </form>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+            <br>
+            <a href="/admin" style="color: #fb6a18; font-weight: bold;">← Zpět do hlavního Adminu</a>
+        </main>
+    </body></html>`;
+    res.send(html);
+});
+
+router.post('/users/delete', requireAdmin, (req, res) => {
+    const { usernameToDelete } = req.body;
+
+    if (usernameToDelete === req.session.user) {
+        return res.status(400).send("Chyba: Nemůžete smazat svůj vlastní účet.");
+    }
+
+    try {
+        // 1. Smazání z users.json (Přihlášení a odběry)
+        const usersPath = path.join(__dirname, '../data/users.json');
+        let users = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
+        users = users.filter(u => u.username !== usernameToDelete);
+        fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+
+        // 2. Smazání z tips.json (Tipy na zápasy)
+        const tipsPath = path.join(__dirname, '../data/tips.json');
+        if (fs.existsSync(tipsPath)) {
+            let tips = JSON.parse(fs.readFileSync(tipsPath, 'utf8'));
+            if (tips[usernameToDelete]) {
+                delete tips[usernameToDelete];
+                fs.writeFileSync(tipsPath, JSON.stringify(tips, null, 2));
+            }
+        }
+
+        // 3. Smazání z tableTips.json (Tipy na tabulky)
+        const tableTipsPath = path.join(__dirname, '../data/tableTips.json');
+        if (fs.existsSync(tableTipsPath)) {
+            let tableTips = JSON.parse(fs.readFileSync(tableTipsPath, 'utf8'));
+            if (tableTips[usernameToDelete]) {
+                delete tableTips[usernameToDelete];
+                fs.writeFileSync(tableTipsPath, JSON.stringify(tableTips, null, 2));
+            }
+        }
+
+        console.log(`🧹 Uživatel ${usernameToDelete} byl kompletně vymazán ze všech souborů.`);
+        res.redirect('/admin/users');
+    } catch (error) {
+        console.error("Kritická chyba při mazání:", error);
+        res.status(500).send("Chyba při hloubkovém mazání uživatele.");
+    }
+});
+
+// Formulář úpravy
+router.get('/users/edit/:username', requireAdmin, (req, res) => {
+    const usernameToEdit = req.params.username;
+    const usersPath = path.join(__dirname, '../data/users.json');
+    const users = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
+    const user = users.find(u => u.username === usernameToEdit);
+
+    if (!user) return res.send("Uživatel nenalezen.");
+
+    res.send(`
+    <!DOCTYPE html>
+    <html lang="cs">
+    <head>
+        <meta charset="UTF-8">
+        <link rel="stylesheet" href="/css/styles.css">
+        <title>Upravit uživatele - ${user.username}</title>
+        <style>
+            .edit-card {
+                background: #1a1a1a;
+                border: 1px solid #333;
+                padding: 30px;
+                max-width: 500px;
+                margin: 20px auto;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            }
+            .edit-card h1 {
+                color: #fb6a18;
+                margin-top: 0;
+                border-bottom: 1px solid #fb6a18;
+                padding-bottom: 10px;
+            }
+            .form-group {
+                margin-bottom: 20px;
+            }
+            .form-group label {
+                display: block;
+                color: #ccc;
+                margin-bottom: 8px;
+                font-weight: bold;
+            }
+            .form-group input, .form-group select {
+                width: 100%;
+                padding: 12px;
+                background: #000;
+                border: 1px solid #444;
+                color: #fff;
+                box-sizing: border-box;
+            }
+            .form-group input:focus {
+                border-color: #fb6a18;
+                outline: none;
+            }
+            .btn-save {
+                width: 100%;
+                padding: 15px;
+                background: #fb6a18;
+                color: #000;
+                border: none;
+                font-weight: bold;
+                cursor: pointer;
+                transition: 0.3s;
+            }
+            .btn-save:hover {
+                background: #ff8c4a;
+            }
+            .back-link {
+                display: block;
+                text-align: center;
+                margin-top: 20px;
+                color: #888;
+                text-decoration: none;
+            }
+            .back-link:hover {
+                color: #fb6a18;
+            }
+        </style>
+    </head>
+    <body class="usersite">
+        <main class="admin_site">
+            <div class="edit-card">
+                <h1>Upravit účet</h1>
+                <form action="/admin/users/update" method="POST">
+                    <input type="hidden" name="oldUsername" value="${user.username}">
+                    
+                    <div class="form-group">
+                        <label>Uživatelské jméno</label>
+                        <input type="text" name="newUsername" value="${user.username}" required>
+                    </div>
+
+
+                    <div class="form-group">
+                        <label>Nové heslo</label>
+                        <input type="password" name="newPassword" placeholder="Ponechte prázdné pro beze změny">
+                    </div>
+
+                    <button type="submit" class="btn-save">ULOŽIT ZMĚNY</button>
+                    <a href="/admin/users" class="back-link">← Zpět na seznam</a>
+                </form>
+            </div>
+        </main>
+    </body>
+    </html>`);
+});
+
+// Uložení úpravy
+router.post('/users/update', requireAdmin, (req, res) => {
+    const { oldUsername, newUsername, newPassword } = req.body;
+    const usersPath = path.join(__dirname, '../data/users.json');
+    let users = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
+
+    const idx = users.findIndex(u => u.username === oldUsername);
+    if (idx === -1) return res.send("Uživatel nenalezen.");
+
+    // Aktualizace v users.json
+    users[idx].username = newUsername;
+    if (newPassword && newPassword.trim() !== "") users[idx].password = newPassword; // Zde ideálně hashovat
+
+    fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+
+    // Pokud se změnilo jméno, přepíšeme ho v tipech (Hloubková synchronizace)
+    if (oldUsername !== newUsername) {
+        ['../data/tips.json', '../data/tableTips.json'].forEach(file => {
+            const filePath = path.join(__dirname, file);
+            if (fs.existsSync(filePath)) {
+                let data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+                if (data[oldUsername]) {
+                    data[newUsername] = data[oldUsername];
+                    delete data[oldUsername];
+                    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+                }
+            }
+        });
+    }
+    res.redirect('/admin/users');
 });
 
 module.exports = router;

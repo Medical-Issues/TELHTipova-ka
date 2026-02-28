@@ -2,9 +2,13 @@
   "25/26": {
     "TELH": {
       "1": {
-        "specIn": [],
+        "specIn": [
+          "Prdel obecná"
+        ],
         "specOut": [],
-        "confIn": [],
+        "confIn": [
+          "P. Augusta"
+        ],
         "confOut": []
       },
       "2": {

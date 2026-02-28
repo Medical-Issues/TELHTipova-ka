@@ -106,7 +106,7 @@
           "tableDeviation": 6
         },
         "MAXA": {
-          "tableCorrect": 0,
+          "tableCorrect": 1,
           "tableDeviation": 68
         }
       }
@@ -2235,7 +2235,41 @@
           }
         ]
       }
-    }
+    },
+    "subscriptions": [
+      {
+        "endpoint": "https://fcm.googleapis.com/fcm/send/dLsl4mFnNLM:APA91bE1WDDkTLhA6eckrd6pNDZeZ-gDtmVYxqafhKM9fiuDUIsoqMynKnk_nZL-5IUQS4-K_-Uem-lK3kFHS0pKapA0E5Yx7GMl41kjhJmftXpoV5mi4f9_1D6721tHoTI7ZpqvDWgO",
+        "expirationTime": null,
+        "keys": {
+          "p256dh": "BJiqfEztEOcsQjPIM1B-0bknzYxqHoY0QG3d8U4Oe2T0DA3_jaWjBDUGBUcRYaro5-5J8v5Al7r0KjVJssKy0VU",
+          "auth": "08Ymkm19G41KKqStYZlNnQ"
+        }
+      },
+      {
+        "endpoint": "https://fcm.googleapis.com/fcm/send/cEpPzNtH0u0:APA91bGZ_pElKCOGC-0Mm0ve71i98rzUpJY89OdOTVDeMsAcuujzWJEP3irP7VQ3bgy26xzUW6AZkTdw9RTjnRNTP5FlPUySiFOEPkwlgRkWqaZC284LST7lyyx2n6jMwvQh24mBimSv",
+        "expirationTime": null,
+        "keys": {
+          "p256dh": "BPr9mFuNtk1LesdYziazPGbgkTpHLOVWOfyUNCpFHBLDtyUOzbpX3DvN_e2hRzpWnGoXP65bG2jmW_WZZJlaJ6Q",
+          "auth": "YaIfRYdsW2t96-Z902RElw"
+        }
+      },
+      {
+        "endpoint": "https://fcm.googleapis.com/fcm/send/e7YdNe6VJFg:APA91bEXfRx9lzxvyw5T92HbcAk749JKl-2hL7MYh9ScQtNt28w8oacxBlv1UI344Ner7iOYmTHl62S8ZHyrqND1al4H8tEh3atPUTqYdtxenfcLLNteStiVkP9mXqifAoP_VpEIXEcG",
+        "expirationTime": null,
+        "keys": {
+          "p256dh": "BMkozS3ri659duRO00NycMFK8tkabJoQGxK-B0l4DI1zIesCKq1ID8koNqZciyroJtEshxl3ENiu4cQxt9Y9GOE",
+          "auth": "tLEa5NVzxt5yC49sP_gYFg"
+        }
+      },
+      {
+        "endpoint": "https://fcm.googleapis.com/wp/cwBSuj11hcg:APA91bGF8gsAsMvLnsrmnc6bdCMHxB2LBkjdtwBEKoyk76B-CnihNqWB9m7V1XAuITlHYt2EsP6izQhJ5Wiqe00zyxDThjTZzVsf-WBNi71LOTWqJ5YUHJCCwvLUdLURleJgfdFUY99f",
+        "expirationTime": null,
+        "keys": {
+          "p256dh": "BOnRvq15uWlx8egjT6C4PvSKePiogUaB3L4Fi_MuK77qwUJ3Dt2wkl_sCrY5JWwDFa-YULUpe2ClBGnRhunSd6k",
+          "auth": "IQNvN28CTK5xef7WGyQWvQ"
+        }
+      }
+    ]
   },
   {
     "username": "Jan Veselský",
@@ -4479,8 +4513,8 @@
           "tableDeviation": 4
         },
         "MAXA": {
-          "tableCorrect": 1,
-          "tableDeviation": 60
+          "tableCorrect": 0,
+          "tableDeviation": 64
         }
       }
     },
@@ -6656,26 +6690,6 @@
           "totalPlayoff": 12,
           "tableCorrect": 8,
           "tableDeviation": 4
-        }
-      }
-    }
-  },
-  {
-    "username": "Nuimi",
-    "password": "$2b$10$uG7xmFZz.u1won5TtsIERem.vgyGARs1/X8XUzDHXX5s.x5Z6zqkm",
-    "correct": 0,
-    "total": 0,
-    "stats": {
-      "25/26": {
-        "Olympiáda": {
-          "correct": 0,
-          "totalRegular": 0,
-          "totalPlayoff": 0
-        },
-        "TELH": {
-          "correct": 0,
-          "totalRegular": 0,
-          "totalPlayoff": 0
         }
       }
     }

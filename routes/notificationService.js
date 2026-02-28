@@ -42,6 +42,7 @@ const sendDirectNotification = (subscription, payload) => {
 
 // 2. Chytré odeslání uživateli (zvládne více zařízení i starý formát)
 const sendToUserDevices = (user, payload) => {
+    console.log(`Zkouším poslat notifikaci uživateli: ${user.username}`);
     const payloadString = JSON.stringify(payload);
 
     // A) Nový formát: Uživatel má pole 'subscriptions' (Mobil, PC, Tablet...)
@@ -179,5 +180,6 @@ module.exports = {
     notifyTransfer,
     notifyLeagueEnd,
     publicVapidKey,
-    sendNotification: sendDirectNotification // Export pro admin test
+    sendNotification: sendDirectNotification,
+    sendToUserDevices,
 };
