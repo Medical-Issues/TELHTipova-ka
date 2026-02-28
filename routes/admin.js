@@ -2839,13 +2839,12 @@ router.get('/broadcast-ping', requireAdmin, async (req, res) => {
         }
 
         // 3. Připravíme zprávu
-        const payload = JSON.stringify({
+        JSON.stringify({
             title: "📢 Testovací PING",
             body: "Pokud tohle čteš, hromadné notifikace fungují! 🚀",
             icon: "/images/logo.png" // Cesta k tvému logu
         });
-
-        // 4. Odesíláme všem najednou (paralelně)
+// 4. Odesíláme všem najednou (paralelně)
         let successCount = 0;
         let failCount = 0;
         let failedUsers = [];
