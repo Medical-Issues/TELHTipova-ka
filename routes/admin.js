@@ -2757,12 +2757,6 @@ router.post('/transfers/save', requireAdmin, express.urlencoded({ extended: true
 
     fs.writeFileSync('./data/transfers.json', JSON.stringify(transfersData, null, 2));
 
-    // Záloha na GitHub (volitelná, pokud máš funkci importovanou)
-    try {
-        const { backupJsonFilesToGitHub } = require('../utils/githubBackup');
-        await backupJsonFilesToGitHub();
-    } catch (e) { console.error("Backup warning:", e.message); }
-
     res.redirect(`/admin/transfers/manage?liga=${encodeURIComponent(liga)}`);
 });
 
