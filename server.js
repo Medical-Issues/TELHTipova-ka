@@ -12,6 +12,7 @@ const { loadJsonFilesFromGitHub } = require('./utils/githubLoadBackup');
 
 const app = express();
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/logoteamu', express.static(path.join(__dirname, 'data', 'images')));
 app.use(bodyParser.urlencoded({extended: true}));
 app.use(session({
     store: new FileStore({}),

@@ -4,6 +4,7 @@ const router = express.Router();
 const path = require('path');
 const axios = require('axios');
 const cheerio = require('cheerio');
+const multer = require('multer');
 const {
     requireAdmin,
     loadTeams,
@@ -24,10 +25,18 @@ router.post('/backup', async (req, res) => {
         res.status(500).json({ success: false, message: '❌ Chyba při záloze' });
     }
 });
-
+const storage = multer.diskStorage({
+    filename: function (req, file, cb) {
+        // Přidáme časové razítko, aby se nepřepsala dvě stejně pojmenovaná loga
+        const safeName = Date.now() + '-' + file.originalname.replace(/[^a-zA-Z0-9.]/g, '_');
+        cb(null, safeName);
+    }
+});
+const upload = multer({ storage: storage });
 router.get('/', requireAdmin, (req, res) => {
     const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'));
     const teams = loadTeams();
+    const transferLeagues = JSON.parse(fs.readFileSync('./data/transferLeagues.json', 'utf8'));
     const allowedLeagues = JSON.parse(fs.readFileSync('./data/allowedLeagues.json', 'utf-8'));
     const allSeasonData = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf-8'));
     const selecteSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
@@ -263,6 +272,25 @@ router.get('/', requireAdmin, (req, res) => {
       </div>
       <button type="submit" class="action-btn edit-btn" style="margin-top: 10px;">Uložit viditelnost lig</button>
       </form>
+      <h2 style="margin-top: 20px;">Ligy s aktivními přestupy</h2>
+    <form method="POST" action="/admin/leagues/transfers">
+      <div class="leagues-allow">
+`;
+
+    for (const l of allLeagues) {
+        const checked = transferLeagues.includes(l) ? 'checked' : '';
+        html += `
+        <label style="display: flex; align-items: center">
+          <input type="checkbox" name="transferLeagues" value="${l}" ${checked}/>
+          ${l}
+        </label>
+      `;
+    }
+
+    html += `
+      </div>
+      <button type="submit" class="action-btn edit-btn" style="margin-top: 10px;">Uložit přestupy</button>
+    </form>
     <h2 style="margin-top: 20px;">Logika zamykání tabulky</h2>
     <form method="POST" action="/admin/settings/clinch">
       <div class="season-choose" style="margin-bottom: 10px;">
@@ -426,9 +454,14 @@ router.get('/teams/edit/:id', requireAdmin, (req, res) => {
 </header>
 <main>
   <h1>Upravit tým ${team.name} ID ${team.id}</h1>
-  <form style="display: flex; flex-direction: row; gap: 10px; margin-bottom: 10px" action="/admin/teams/edit/${team.id}" method="POST">
+  <img height="50" src="${team.logo ? `/logoteamu/${team.logo}` : '/images/logo.png'}" alt="Logo" />
+  <form style="display: flex; flex-direction: row; gap: 10px; margin-bottom: 10px" action="/admin/teams/edit/${team.id}" method="POST" enctype="multipart/form-data">
     <label style="display: flex; flex-direction: column" for="name">Název týmu
       <input autocomplete="off" style="width: 220px" class="league-select" type="text" id="name" name="name" value="${team.name}" required />
+    </label>
+    <label style="display: flex; flex-direction: column" for="logo">Nahrát nové logo
+      <input style="width: 220px" class="league-select" type="file" id="logo" name="logo" accept="image/*" />
+      ${team.logo ? `<small style="color: gray;">Aktuální: ${team.logo}</small>` : ''}
     </label>
     <label style="display: flex; flex-direction: column" for="liga">Liga
       <select class="league-select" id="liga" name="liga" required>
@@ -459,19 +492,24 @@ router.get('/teams/edit/:id', requireAdmin, (req, res) => {
     res.send(html);
 });
 
-router.post('/teams/edit/:id', requireAdmin, (req, res) => {
+router.post('/teams/edit/:id', requireAdmin, upload.single('logo'), (req, res) => {
     const teamId = parseInt(req.params.id);
     const teams = loadTeams();
 
     const teamIndex = teams.findIndex(t => t.id === teamId);
-    if (!teams) return renderErrorHtml(res, "Tým s tímto ID nebyl nalezen.", 404);
+    if (teamIndex === -1) return renderErrorHtml(res, "Tým s tímto ID nebyl nalezen.", 404);
 
     const {name, liga, active, group} = req.body;
 
     teams[teamIndex].name = name.trim();
     teams[teamIndex].liga = liga;
     teams[teamIndex].active = active === 'on';
-    teams[teamIndex].group = Number(group);
+    if (teams.isMultigroup) {
+        teams[teamIndex].group = Number(group);
+    }
+    if (req.file) {
+        teams[teamIndex].logo = req.file.filename;
+    }
 
     fs.writeFileSync('./data/teams.json', JSON.stringify(teams, null, 2));
 
@@ -664,8 +702,11 @@ router.get('/new/team', requireAdmin, (req, res) => {
     </header>
     <main>
     <h1>Vytvořit nový tým</h1>
-    <form style="display: flex; flex-direction: row; gap: 10px" method="POST" action="">
+    <form style="display: flex; flex-direction: row; gap: 10px" method="POST" action="/admin/new/team" enctype="multipart/form-data">
       <label style="display: flex; flex-direction: column;">Název týmu: <input style="width: 220px" class="league-select" autocomplete="off" type="text" name="name" required></label>
+      <label style="display: flex; flex-direction: column;">Nahrát logo: 
+        <input style="width: 220px" class="league-select" type="file" name="logo" accept="image/*">
+      </label>
       <label style="display: flex; flex-direction: column;">Liga:
         <select class="league-select" style="width: 220px" name="liga" id="ligaSelect" required>
             ${leagueOptions}
@@ -707,13 +748,14 @@ router.get('/new/team', requireAdmin, (req, res) => {
   `);
 });
 
-router.post('/new/team', requireAdmin, express.urlencoded({extended: true}), (req, res) => {
+router.post('/new/team', requireAdmin, upload.single('logo'), express.urlencoded({extended: true}), (req, res) => {
     const teams = loadTeams();
     let {name, liga, active} = req.body;
     active = active === 'on';
 
     const inputName = name.trim().toLowerCase();
     const inputLiga = liga.trim().toLowerCase();
+    const logoFilename = req.file ? req.file.filename : '';
 
     const exists = teams.some(team =>
         team.name.trim().toLowerCase() === inputName &&
@@ -730,7 +772,8 @@ router.post('/new/team', requireAdmin, express.urlencoded({extended: true}), (re
         liga: liga.trim(),
         active,
         group: parseInt(req.body.group),
-        stats: {}
+        stats: {},
+        logo: logoFilename // Uložíme název souboru do JSONu
     };
 
     teams.push(newTeam);
@@ -1907,15 +1950,37 @@ router.get('/teams/points', requireAdmin, (req, res) => {
     const allSeasonData = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf8'));
     const teams = JSON.parse(fs.readFileSync('./data/teams.json', 'utf8'));
 
-    // Načteme existující bonusy
-    let bonusData = {};
-    try { bonusData = JSON.parse(fs.readFileSync('./data/teamBonuses.json', 'utf8')); } catch (e) { bonusData = {}; }
+    const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'));
+    const realScores = {};
 
     const seasonLeagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues)
         ? allSeasonData[selectedSeason].leagues
         : [];
 
     const selectedLiga = req.query.liga || (seasonLeagues.length > 0 ? seasonLeagues[0].name : null);
+
+    teams.forEach(t => realScores[t.id] = { points: 0, gf: 0, ga: 0 });
+
+    matches.filter(m => m.season === selectedSeason && m.liga === selectedLiga).forEach(m => {
+        if (m.result) {
+            const sH = parseInt(m.result.scoreHome);
+            const sA = parseInt(m.result.scoreAway);
+            if (realScores[m.homeTeamId]) { realScores[m.homeTeamId].gf += sH; realScores[m.homeTeamId].ga += sA; }
+            if (realScores[m.awayTeamId]) { realScores[m.awayTeamId].gf += sA; realScores[m.awayTeamId].ga += sH; }
+            if (m.result.ot) {
+                if (sH > sA) { if (realScores[m.homeTeamId]) realScores[m.homeTeamId].points += 2; if (realScores[m.awayTeamId]) realScores[m.awayTeamId].points += 1; }
+                else { if (realScores[m.awayTeamId]) realScores[m.awayTeamId].points += 2; if (realScores[m.homeTeamId]) realScores[m.homeTeamId].points += 1; }
+            } else {
+                if (sH > sA) { if (realScores[m.homeTeamId]) realScores[m.homeTeamId].points += 3; }
+                else if (sA > sH) { if (realScores[m.awayTeamId]) realScores[m.awayTeamId].points += 3; }
+                else { if (realScores[m.homeTeamId]) realScores[m.homeTeamId].points += 1; if (realScores[m.awayTeamId]) realScores[m.awayTeamId].points += 1; }
+            }
+        }
+    });
+
+    // Načteme existující bonusy
+    let bonusData = {};
+    try { bonusData = JSON.parse(fs.readFileSync('./data/teamBonuses.json', 'utf8')); } catch (e) { bonusData = {}; }
 
     // Filtrujeme týmy
     const leagueTeams = teams.filter(t => t.liga === selectedLiga && t.active);
@@ -1924,33 +1989,56 @@ router.get('/teams/points', requireAdmin, (req, res) => {
     leagueTeams.sort((a, b) => {
         const getData = (team) => {
             const raw = bonusData[selectedSeason]?.[selectedLiga]?.[String(team.id)];
-            if (typeof raw === 'number') return { points: raw, gf: 0, ga: 0 };
-            return raw || { points: 0, gf: 0, ga: 0 };
+            if (typeof raw === 'number') return { points: raw, gf: 0, ga: 0, tiebreaker: 0 };
+            return raw || { points: 0, gf: 0, ga: 0, tiebreaker: 0 };
         };
 
         const dataA = getData(a);
         const dataB = getData(b);
 
-        // 1. Kritérium: BODY
-        if (dataB.points !== dataA.points) {
-            return dataB.points - dataA.points;
+        const totalPtsA = (realScores[a.id]?.points || 0) + (dataA.points || 0);
+        const totalPtsB = (realScores[b.id]?.points || 0) + (dataB.points || 0);
+
+        // 1. Kritérium: CELKOVÉ BODY
+        if (totalPtsB !== totalPtsA) return totalPtsB - totalPtsA;
+
+        // 1.5 Kritérium: TIEBREAKER (Pořadí: 1 = vítěz minitabulky, 2 = druhý...)
+        const tieA = dataA.tiebreaker || 0;
+        const tieB = dataB.tiebreaker || 0;
+        if (tieA !== tieB) {
+            // Pokud jeden z nich nemá zadané pořadí (má 0), automaticky prohrává
+            if (tieA === 0) return 1;  // A padá dolů
+            if (tieB === 0) return -1; // B padá dolů
+
+            // Pokud mají oba vyplněno (> 0), menší číslo vyhrává (1 porazí 2)
+            return tieA - tieB;
         }
 
-        // 2. Kritérium: ROZDÍL SKÓRE (GF - GA)
-        const diffA = (dataA.gf || 0) - (dataA.ga || 0);
-        const diffB = (dataB.gf || 0) - (dataB.ga || 0);
-        if (diffB !== diffA) {
-            return diffB - diffA;
-        }
+        // 2. Kritérium: CELKOVÝ ROZDÍL SKÓRE (GF - GA)
+        const diffA = ((realScores[a.id]?.gf || 0) + (dataA.gf || 0)) - ((realScores[a.id]?.ga || 0) + (dataA.ga || 0));
+        const diffB = ((realScores[b.id]?.gf || 0) + (dataB.gf || 0)) - ((realScores[b.id]?.ga || 0) + (dataB.ga || 0));
+        if (diffB !== diffA) return diffB - diffA;
 
-        // 3. Kritérium: VSTŘELENÉ GÓLY (GF)
-        if ((dataB.gf || 0) !== (dataA.gf || 0)) {
-            return (dataB.gf || 0) - (dataA.gf || 0);
-        }
-
-        return 0; // Pokud je všechno stejné
+        // 3. Kritérium: CELKOVÉ VSTŘELENÉ GÓLY (GF)
+        const gfA = (realScores[a.id]?.gf || 0) + (dataA.gf || 0);
+        const gfB = (realScores[b.id]?.gf || 0) + (dataB.gf || 0);
+        return gfB - gfA;
     });
 
+    const pointsCount = {};
+    leagueTeams.forEach(t => {
+        const raw = bonusData[selectedSeason]?.[selectedLiga]?.[String(t.id)];
+        const manualPts = (typeof raw === 'number' ? raw : raw?.points) || 0;
+        const totalPts = (realScores[t.id]?.points || 0) + manualPts;
+        pointsCount[totalPts] = (pointsCount[totalPts] || 0) + 1;
+    });
+    // === NOVÉ: Zjištění unikátních shod pro barevné odlišení ===
+    const tiedScores = Object.keys(pointsCount)
+        .filter(pts => pointsCount[pts] > 1)
+        .sort((a, b) => Number(b) - Number(a)); // Seřadíme od nejvyšších bodů dolů
+
+    // Paleta tmavých barev pro pozadí skupin se shodou (rotují, kdyby bylo shod hodně)
+    const tieColors = ['#4a2500', '#00294d', '#00401a', '#4d0026', '#33004a'];
     const html = `
     <!DOCTYPE html>
     <html lang="cs">
@@ -1979,6 +2067,7 @@ router.get('/teams/points', requireAdmin, (req, res) => {
                         <th>Zápasy navíc (+/-)</th>
                         <th>Vstřelené góly (GF)</th>
                         <th>Obdržené góly (GA)</th>
+                        <th>Tiebreak (při shodě)</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -1986,7 +2075,7 @@ router.get('/teams/points', requireAdmin, (req, res) => {
         const tId = String(t.id);
 
         // Načtení uložených dat a přidání GF a GA
-        let savedData = { points: 0, games: 0, gf: 0, ga: 0 };
+        let savedData = { points: 0, games: 0, gf: 0, ga: 0, tiebreaker: 0 }; // Ujisti se, že tu je tiebreaker
         if (bonusData[selectedSeason] &&
             bonusData[selectedSeason][selectedLiga] &&
             bonusData[selectedSeason][selectedLiga][tId]) {
@@ -1995,27 +2084,41 @@ router.get('/teams/points', requireAdmin, (req, res) => {
             if (typeof raw === 'number') {
                 savedData.points = raw;
             } else {
-                savedData = { ...savedData, ...raw }; // Sloučí uložená data
+                savedData = { ...savedData, ...raw };
             }
         }
-
+        
+        const myTotalPts = (realScores[t.id]?.points || 0) + (savedData.points || 0);
+        const isTied = pointsCount[myTotalPts] > 1;
+        let rowBgStyle = "";
+        if (isTied) {
+            const groupIndex = tiedScores.indexOf(String(myTotalPts));
+            const bgColor = tieColors[groupIndex % tieColors.length];
+            rowBgStyle = `style="background-color: ${bgColor};"`;
+        }
         return `
-                        <tr>
+                        <tr ${rowBgStyle}>
                             <td style="text-align: left;">
                                 <b>${t.name}</b><br>
                                 <small style="color: grey;">ID: ${tId}</small>
                             </td>
                             <td>
-                                <input type="number" name="points_${tId}" value="${savedData.points || 0}" style="width: 70px; text-align: center;">
+                                <input type="number" name="points_${tId}" value="${savedData.points || 0}" style="width: 70px; text-align: center; background-color: #111; color: white; border: 1px solid orangered;">
                             </td>
                             <td>
-                                <input type="number" name="games_${tId}" value="${savedData.games || 0}" style="width: 70px; text-align: center;">
+                                <input type="number" name="games_${tId}" value="${savedData.games || 0}" style="width: 70px; text-align: center; background-color: #111; color: white; border: 1px solid orangered;">
                             </td>
                             <td>
-                                <input type="number" name="gf_${tId}" value="${savedData.gf || 0}" style="width: 70px; text-align: center; border: 1px solid #00ff00;">
+                                <input type="number" name="gf_${tId}" value="${savedData.gf || 0}" style="width: 70px; text-align: center; border: 1px solid #00ff00; background-color: #111; color: white;">
                             </td>
                             <td>
-                                <input type="number" name="ga_${tId}" value="${savedData.ga || 0}" style="width: 70px; text-align: center; border: 1px solid #ff4500;">
+                                <input type="number" name="ga_${tId}" value="${savedData.ga || 0}" style="width: 70px; text-align: center; border: 1px solid #ff0000; background-color: #111; color: white;">
+                            </td>
+                            <td>
+                                ${isTied
+                                ? `<input type="number" name="tie_${tId}" value="${savedData.tiebreaker || 0}" style="width: 70px; text-align: center; border: 1px solid orangered; background-color: #111; color: white;" title="Pořadí v minitabulce (1 = nejlepší)">`
+                                : `<input type="hidden" name="tie_${tId}" value="0"><span style="color: gray;">—</span>`
+                                }
                             </td>
                         </tr>`;
     }).join('')}
@@ -2053,13 +2156,15 @@ router.post('/teams/points', requireAdmin, express.urlencoded({ extended: true }
             // PŘIDÁNO: Načtení gólů z formuláře
             const gfVal     = Number(req.body[`gf_${teamId}`]) || 0;
             const gaVal     = Number(req.body[`ga_${teamId}`]) || 0;
+            const tieVal    = Number(req.body[`tie_${teamId}`]) || 0;
 
             // Uložíme pod správné ID (nyní i s góly)
             bonusData[season][liga][teamId] = {
                 points: pointsVal,
                 games: gamesVal,
                 gf: gfVal,
-                ga: gaVal
+                ga: gaVal,
+                tiebreaker: tieVal
             };
         }
     });
@@ -2439,5 +2544,20 @@ router.post('/matches/import-run', requireAdmin, async (req, res) => {
         res.status(500).send(`Chyba: ${error.message}`);
     }
 });
+router.post('/leagues/transfers', requireAdmin, express.urlencoded({ extended: true }), (req, res) => {
+    let { transferLeagues } = req.body;
 
+    // Ošetření, aby to bylo vždycky pole
+    let savedTransferLeagues = [];
+    if (Array.isArray(transferLeagues)) {
+        savedTransferLeagues = transferLeagues;
+    } else if (typeof transferLeagues === 'string') {
+        savedTransferLeagues = [transferLeagues];
+    }
+
+    // Uložení do JSONu
+    fs.writeFileSync('./data/transferLeagues.json', JSON.stringify(savedTransferLeagues, null, 2));
+
+    res.redirect('/admin');
+});
 module.exports = router;

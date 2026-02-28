@@ -176,6 +176,7 @@ router.get("/table-tip", requireLogin, (req, res) => {
 
         // Uložení manuálních zápasů do dočasné proměnné (použijeme později u played a progress baru)
         t.stats[selectedSeason].manualGames = bonusEntry.games || 0;
+        t.stats[selectedSeason].tiebreaker = bonusEntry.tiebreaker || 0;
     });
     // =================================================================
 
@@ -306,7 +307,7 @@ router.get("/table-tip", requireLogin, (req, res) => {
 </script>
 <body class="usersite">
 <header class="header">
-<form class="league-dropdown" method="GET" action="/">
+<form class="league-dropdown" method="GET">
 <div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
 <label class="league-select-name">
 Liga:
@@ -316,7 +317,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 </label>
 <a class="history-btn" href="/history">Historie</a>
 <a class="history-btn changed" href="/?liga=${encodeURIComponent(selectedLiga)}">Tipovačka</a>
-<a class="history-btn changed" href="/prestupy">Přestupy TELH</a>
+<a class="history-btn changed" href="/prestupy?liga=${encodeURIComponent(selectedLiga)}">Přestupy TELH</a>
 </form>
 <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
@@ -362,7 +363,9 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 
             // 1. Kritérium: BODY
             if (pB !== pA) return pB - pA;
-
+            const tieA = aStats.tiebreaker || 0;
+            const tieB = bStats.tiebreaker || 0;
+            if (tieB !== tieA) return tieA - tieB;
             // --- MINITABULKA ---
             // Najdeme týmy se stejným počtem bodů
             const tiedTeamIds = teamsInGroup
@@ -973,7 +976,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <p id="progress-text"></p>
 </section>
      
-        </div></div>`;
+        </div>`;
 
     // --- STATISTIKY (OBNOVENO V PLNÉ PARÁDĚ) ---
     if (username) {
@@ -1054,6 +1057,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
                 <tr style="background-color: orangered"><td colspan="3">Odchylka tipu tabulky (rozdíl pozic)</td><td colspan="3">Sčítá se (čím méně, tím lépe)</td></tr>
             </table>
         </section>
+        </div>
         </section>`;
     }
 
@@ -1583,6 +1587,7 @@ router.get('/', requireLogin, (req, res) => {
 
         // Uložení manuálních zápasů do dočasné proměnné (použijeme později u played a progress baru)
         t.stats[selectedSeason].manualGames = bonusEntry.games || 0;
+        t.stats[selectedSeason].tiebreaker = bonusEntry.tiebreaker || 0;
     });
     // =================================================================
 
@@ -1619,7 +1624,7 @@ function showTable(which) {
 </script>
 <body class="usersite">
 <header class="header">
-<form class="league-dropdown" method="GET" action="/">
+<form class="league-dropdown" method="GET">
 <div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
 <label class="league-select-name">
 Liga:
@@ -1629,7 +1634,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 </label>
 <a class="history-btn" href="/history">Historie</a>
 <a class="history-btn changed" href="/table-tip?liga=${encodeURIComponent(selectedLiga)}">Základní část</a>
-<a class="history-btn changed" href="/prestupy">Přestupy TELH</a>
+<a class="history-btn changed" href="/prestupy?liga=${encodeURIComponent(selectedLiga)}">Přestupy TELH</a>
 </form>
 <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
@@ -1641,7 +1646,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('playoff')">Playoff</button>
 </div>
 <div id="regularTable">
-`;
+`
 
     html += `
     <div style="display: flex; justify-content: flex-start; align-items: center; margin-bottom: 10px; gap: 10px;">
@@ -1675,7 +1680,9 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 
             // 1. Kritérium: BODY
             if (pB !== pA) return pB - pA;
-
+            const tieA = aStats.tiebreaker || 0;
+            const tieB = bStats.tiebreaker || 0;
+            if (tieB !== tieA) return tieA - tieB;
             // --- MINITABULKA ---
             // Najdeme týmy se stejným počtem bodů
             const tiedTeamIds = teamsInGroup
@@ -2261,7 +2268,6 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 </div>
 <p id="progress-text"></p>
 </section>
-</div>
 `;
 
     if (username) {
@@ -2341,6 +2347,7 @@ ${currentUserStats?.tableCorrect > 0 || currentUserStats?.tableDeviation > 0 ? `
 </table>
 </section>
 </section>
+</div>
 </section>
 <section class="matches-container">
 <h2>Aktuální zápasy k tipování</h2>
@@ -2627,6 +2634,7 @@ router.get('/history/a', requireLogin, (req, res) => {
 
         // Uložení manuálních zápasů do dočasné proměnné (použijeme později u played a progress baru)
         t.stats[selectedSeason].manualGames = bonusEntry.games || 0;
+        t.stats[selectedSeason].tiebreaker = bonusEntry.tiebreaker || 0;
     });
     // =================================================================
 
@@ -2827,11 +2835,11 @@ p.style.display = which === 'playoff' ? 'block' : 'none';
     html += `
     <div style="display: flex; justify-content: flex-start; align-items: center; margin-bottom: 10px; gap: 10px;">
         <span style="color: gray; font-size: 0.85em;">Logika obarvování:</span>
-        <a href="?liga=${encodeURIComponent(selectedLiga)}&mode=strict" 
+        <a href="/history/a/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}&mode=strict" 
            style="${clinchMode === 'strict' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; border-radius: 4px; text-decoration: none; font-size: 0.85em;">
            Striktní (Jistá meta)
         </a>
-        <a href="?liga=${encodeURIComponent(selectedLiga)}&mode=cascade" 
+        <a href="/history/a/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}&mode=cascade" 
            style="${clinchMode === 'cascade' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; border-radius: 4px; text-decoration: none; font-size: 0.85em;">
            Kaskádová (Minimální meta)
         </a>
@@ -2856,7 +2864,9 @@ p.style.display = which === 'playoff' ? 'block' : 'none';
 
             // 1. Kritérium: BODY
             if (pB !== pA) return pB - pA;
-
+            const tieA = aStats.tiebreaker || 0;
+            const tieB = bStats.tiebreaker || 0;
+            if (tieB !== tieA) return tieA - tieB;
             // --- MINITABULKA ---
             // Najdeme týmy se stejným počtem bodů
             const tiedTeamIds = teamsInGroup
@@ -3494,7 +3504,7 @@ p.style.display = which === 'playoff' ? 'block' : 'none';
             <tr style="background-color: #00FF00"><td colspan="3">Za přesné trefení pozice týmu v konečné tabulce</td><td colspan="3">1 bod (Tabulka)</td></tr>
             <tr style="background-color: orangered"><td colspan="3">Odchylka tipu tabulky (rozdíl pozic)</td><td colspan="3">Sčítá se (čím méně, tím lépe)</td></tr>
         </table>
-        </section></section>`;
+        </section></div></section>`;
     }
     html += `</div>`; // KONEC LEVÉ STRANY
 
@@ -3689,6 +3699,7 @@ router.get('/history/table', requireLogin, (req, res) => {
 
         t.stats[selectedSeason].points = naturalPoints + (bonusEntry.points || 0);
         t.stats[selectedSeason].manualGames = bonusEntry.games || 0;
+        t.stats[selectedSeason].tiebreaker = bonusEntry.tiebreaker || 0;
     });
 
     // 3. VÝPOČET REÁLNÉ TABULKY
@@ -3791,6 +3802,9 @@ router.get('/history/table', requireLogin, (req, res) => {
             const pB = bStats.points !== undefined ? bStats.points : scores[b.id].points;
 
             if (pB !== pA) return pB - pA;
+            const tieA = aStats.tiebreaker || 0;
+            const tieB = bStats.tiebreaker || 0;
+            if (tieB !== tieA) return tieA - tieB;
 
             const tiedTeamIds = teamsByGroup[group]
                 .filter(t => {
@@ -4490,9 +4504,8 @@ function showTable(which) {
             <tr style="background-color: #00FF00"><td colspan="3">Za přesné trefení pozice týmu v konečné tabulce</td><td colspan="3">1 bod (Tabulka)</td></tr>
             <tr style="background-color: orangered"><td colspan="3">Odchylka tipu tabulky (rozdíl pozic)</td><td colspan="3">Sčítá se (čím méně, tím lépe)</td></tr>
         </table>
-        </section></section>`;
+        </section></div></section>`;
     }
-    html += `</div>`; // KONEC LEVÉ STRANY
 
     // --- PRAVÁ STRANA: TABULKA TIPŮ ---
     html += `
@@ -4647,6 +4660,7 @@ router.get("/prestupy", requireLogin, (req, res) => {
     const teams = loadTeams().filter(t => t.active);
     const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf-8'));
     const allowedLeagues = JSON.parse(fs.readFileSync('./data/allowedLeagues.json', 'utf-8'));
+    const activeTransferLeagues = JSON.parse(fs.readFileSync('./data/transferLeagues.json', 'utf8'));
     const selectedSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
     const allSeasonData = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf-8'));
     const leagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues) ? allSeasonData[selectedSeason].leagues : [];
@@ -4660,7 +4674,6 @@ router.get("/prestupy", requireLogin, (req, res) => {
     const teamsInSelectedLiga = teams.filter(t => t.liga === selectedLiga);
 
     const scores = calculateTeamScores(matches, selectedSeason, selectedLiga);
-    // --- NAČTENÍ NASTAVENÍ VIZUÁLU (STRICT vs CASCADE) ---
     // --- NAČTENÍ NASTAVENÍ VIZUÁLU (STRICT vs CASCADE) ---
     let clinchMode = 'strict'; // Výchozí hard-kódovaný stav
 
@@ -4748,7 +4761,16 @@ router.get("/prestupy", requireLogin, (req, res) => {
     try {
         teamBonusData = JSON.parse(fs.readFileSync('./data/teamBonuses.json', 'utf8'));
     } catch (e) { teamBonusData = {}; }
+    // --- NAČTENÍ PŘESTUPŮ ---
+    let transfersData;
+    try {
+        transfersData = JSON.parse(fs.readFileSync('./data/transfers.json', 'utf8'));
+    } catch (e) {
+        transfersData = {};
+    }
 
+    // Vytáhneme data jen pro aktuální sezónu a ligu (pokud neexistují, vrátí prázdný objekt)
+    const currentTransfers = transfersData[selectedSeason]?.[selectedLiga] || {};
     teamsInSelectedLiga.forEach(t => {
         // Inicializace, pokud neexistuje
         if (!t.stats) t.stats = {};
@@ -4766,6 +4788,7 @@ router.get("/prestupy", requireLogin, (req, res) => {
 
         // Uložení manuálních zápasů do dočasné proměnné (použijeme později u played a progress baru)
         t.stats[selectedSeason].manualGames = bonusEntry.games || 0;
+        t.stats[selectedSeason].tiebreaker = bonusEntry.tiebreaker || 0;
     });
     // =================================================================
 
@@ -4811,10 +4834,10 @@ function showTable(which) {
     document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none'; 
     const p = document.getElementById('playoffTablePreview'); p.style.display = which === 'playoff' ? 'block' : 'none'; 
 }
-</script>;
+</script>
 <body class="usersite">
 <header class="header">
-<form class="league-dropdown" method="GET" action="/">
+<form class="league-dropdown" method="GET">
 <div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
 <label class="league-select-name">
 Liga:
@@ -4828,6 +4851,51 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 </form>
 <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const sidebar = document.querySelector('.left-panel');
+    const container = document.querySelector('.stats-container');
+    
+    if (!sidebar || !container) return;
+
+    let lastScrollY = window.scrollY;
+    let topOffset = 20; // Výchozí odsazení odshora
+    const margin = 20; // Mezera nahoře i dole
+
+    window.addEventListener('scroll', () => {
+        // Pokud je obrazovka dostatečně velká, že se tam panel vejde celý, normálně ho přilepíme k vršku
+        if (sidebar.offsetHeight <= window.innerHeight) {
+            sidebar.style.top = margin + 'px';
+            return;
+        }
+
+        const currentScrollY = window.scrollY;
+        const scrollDelta = currentScrollY - lastScrollY;
+        const viewportHeight = window.innerHeight;
+        const sidebarHeight = sidebar.offsetHeight;
+        
+        // Minimální hodnota 'top', aby se ukázal spodek panelu (bude to záporné číslo)
+        const minTop = viewportHeight - sidebarHeight - margin;
+
+        if (scrollDelta > 0) {
+            // SCROLUJEME DOLŮ
+            topOffset -= scrollDelta;
+            if (topOffset < minTop) {
+                topOffset = minTop; // Zastavíme, když dorazíme na konec panelu (přilepí se ke spodku)
+            }
+        } else if (scrollDelta < 0) {
+            // SCROLUJEME NAHORU
+            topOffset -= scrollDelta; // (odčítáme záporné číslo = přičítáme)
+            if (topOffset > margin) {
+                topOffset = margin; // Zastavíme, když dorazíme na začátek panelu (přilepí se k vršku)
+            }
+        }
+
+        sidebar.style.top = topOffset + 'px';
+        lastScrollY = currentScrollY;
+    });
+});
+</script>
 <main class="main_page">
 <section class="stats-container">
 <div class="left-panel">
@@ -4870,7 +4938,9 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 
             // 1. Kritérium: BODY
             if (pB !== pA) return pB - pA;
-
+            const tieA = aStats.tiebreaker || 0;
+            const tieB = bStats.tiebreaker || 0;
+            if (tieB !== tieA) return tieA - tieB;
             // --- MINITABULKA ---
             // Najdeme týmy se stejným počtem bodů
             const tiedTeamIds = teamsInGroup
@@ -5504,7 +5574,6 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
     });
 });
     </script>
-        </div>
 `;
     if (username) {
         html += `
@@ -5611,12 +5680,70 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
         </tr>
     </table>
 </section>
+</div>
 </section>
-<section class="matches-container">
-<h1>Funkce bude v budoucnu přidána</h1>
-</section>
-</main></body>
 `
+        html += `<section class="matches-container" style="flex: 1; padding: 10px;">`;
+        // KONTROLA: Má tato liga zapnuté přestupy?
+        if (!activeTransferLeagues.includes(selectedLiga)) {
+            html += `
+            <div style="display: flex; justify-content: center; align-items: center; height: 50vh; flex-direction: column;">
+                <h1 style="color: gray; text-align: center;">V této lize/turnaji nejsou přestupy k dispozici.</h1>
+            </div>
+        </section></main></body>`; // Ukončení HTML
+        } else {
+            // ZDE JE TVŮJ KÓD PRO GRID PŘESTUPŮ (to, co jsme dělali minule)
+            html += `<h2 style="margin-top: 0; text-align: center; border-bottom: 2px solid orangered; padding-bottom: 10px;">Přestupy a Spekulace - ${selectedLiga}</h2>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 15px; margin-top: 15px;">`;
+
+            // Projdeme všechny týmy v lize a vykreslíme pro ně kartičku
+            teamsInSelectedLiga.forEach(team => {
+                const tId = String(team.id);
+                const tData = currentTransfers[tId] || { specIn: [], specOut: [], confirmedIn: [], confirmedOut: [] };
+
+                // Helper funkce pro vypsání hráčů do <li> (pokud je prázdno, necháme jen prázdný sloupec)
+                const renderList = (arr) => arr.length > 0 ? arr.map(player => `<div style="font-size: 0.85em; padding: 2px 0;">${player}</div>`).join('') : '<div style="color: gray; font-size: 0.8em; font-style: italic;">-</div>';
+
+                html += `
+            <div style="background-color: black; border: 2px solid #00aaff; border-radius: 4px; overflow: hidden; display: flex; flex-direction: column;">
+                
+                <div style="background-color: #111; border-bottom: 3px solid #ffcc00; display: flex; align-items: center; padding: 5px;">
+                    <img src="/logoteamu/${team.logo || 'images/logo.png'}" alt="${team.name}" style="height: 40px; width: 40px; object-fit: contain; margin-right: 10px;">
+                    <strong style="color: white; font-size: 1.1em;">${team.name}</strong>
+                </div>
+
+                <div style="display: flex; flex-direction: row; flex: 1; background-color: #000;">
+                    
+                    <div style="flex: 1; padding: 5px; border-right: 1px solid #333; background-color: #1a0033;">
+                        <div style="color: lightblue; font-size: 0.75em; font-weight: bold; margin-bottom: 5px; text-transform: uppercase;">Spekulace IN</div>
+                        <div style="color: white;">${renderList(tData.specIn)}</div>
+                    </div>
+
+                    <div style="flex: 1; padding: 5px; border-right: 1px solid #333; background-color: #1a0033;">
+                        <div style="color: lightblue; font-size: 0.75em; font-weight: bold; margin-bottom: 5px; text-transform: uppercase;">Spekulace OUT</div>
+                        <div style="color: white;">${renderList(tData.specOut)}</div>
+                    </div>
+
+                    <div style="flex: 1; padding: 5px; border-right: 1px solid #333;">
+                        <div style="color: #00ff00; font-size: 0.75em; font-weight: bold; margin-bottom: 5px; text-transform: uppercase;">Příchody</div>
+                        <div style="color: white;">${renderList(tData.confirmedIn)}</div>
+                    </div>
+
+                    <div style="flex: 1; padding: 5px;">
+                        <div style="color: #ff4444; font-size: 0.75em; font-weight: bold; margin-bottom: 5px; text-transform: uppercase;">Odchody</div>
+                        <div style="color: white;">${renderList(tData.confirmedOut)}</div>
+                    </div>
+
+                </div>
+            </div>`;
+            });
+
+            html += `
+        </div>
+        </section>`
+        }
+        `</main></body>`;
     }
     res.send(html)
 });
