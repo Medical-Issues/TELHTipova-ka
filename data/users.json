@@ -54,6 +54,14 @@
           }
         ]
       }
+    },
+    "subscription": {
+      "endpoint": "https://fcm.googleapis.com/fcm/send/evpXl26OejY:APA91bGz1edyo785aZrj9Wxrg9qqN5nPYniKoWv2RYi2_7k551HJZ_du_P0J7usl9VenKiIXimogxpJH5SqdaoPh_lGzPSjuX5IvQQAweLRO7poTThTRg5FzZ1Rfh359MX2QBG5aYfjY",
+      "expirationTime": null,
+      "keys": {
+        "p256dh": "BOR58UhTqvL0toSeXmzo28tbzMNFmoZlOIGONaj98GzO1ISamxK0P6kQuFDxwZD4snSlqUSTu74lgHaC3bGLC9o",
+        "auth": "G_AphnvANuCkRoHHg0jtWw"
+      }
     }
   },
   {

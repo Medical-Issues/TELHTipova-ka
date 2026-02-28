@@ -5,6 +5,7 @@ const path = require('path');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const multer = require('multer');
+const notif = require('./notificationService');
 const {
     requireAdmin,
     loadTeams,
@@ -134,6 +135,7 @@ router.get('/', requireAdmin, (req, res) => {
         <a href="/admin/matches/import" class="btn new-btn-admin">Import zápasů</a>
         <a href="/admin/images/manage" class="btn new-btn-admin">Správce obrázků</a>
         <a href="/admin/transfers/manage" class="btn new-btn-admin">Správa přestupů</a>
+        <a href="/admin/test-notif" class="btn new-btn-admin">Test notifikace</a>
         <a id="backupBtn" class="btn new-btn-admin">Uložit data uživatelům (pouze pro administrativní účely)</a>
     </div>
   </div>
@@ -679,7 +681,7 @@ router.post('/new/match', requireAdmin, (req, res) => {
     }
 
     matches.push(newMatch);
-
+    notif.notifyNewMatches();
     fs.writeFileSync('./data/matches.json', JSON.stringify(matches, null, 2));
     res.redirect('/admin');
 });
@@ -948,6 +950,7 @@ router.post('/edit/:id', requireAdmin, (req, res) => {
         updateTeamsPoints(matches);
         evaluateAndAssignPoints(matches[matchIndex].liga, matches[matchIndex].season);
         evaluateRegularSeasonTable(season, liga);
+        notif.notifyResult(matchId, scoreHome, scoreAway);
     }
     } catch (err) {
         console.error("Chyba při přepočtech, nebyla odeslána sezóna nebo liga", err);
@@ -1821,6 +1824,9 @@ router.post('/leagues/manage', requireAdmin, express.urlencoded({ extended: true
             playin: Number(playin) || 0,
             relegation: Number(relegation) || 0
         });
+        if (req.body.active === 'true') {
+            notif.notifyLeagueEnd(ligaName);
+        }
         fs.writeFileSync('./data/leagues.json', JSON.stringify(allSeasonData, null, 2));
     }
     res.redirect('/admin/leagues/manage');
@@ -2735,10 +2741,14 @@ router.get('/transfers/manage', requireAdmin, (req, res) => {
 
 router.post('/transfers/save', requireAdmin, express.urlencoded({ extended: true }), async (req, res) => {
     const { liga, season, t } = req.body;
+    const notif = require('./notificationService'); // Ujisti se, že máš cestu správně
+    const fs = require('fs');
 
-    // DEBUG: Mrkni do konzole, co přesně přišlo.
-    // Teď bys tam měl vidět objekty typu: { id_1: { specIn: ... }, id_2: ... }
-    console.log("Data z formuláře:", JSON.stringify(t, null, 2));
+    // 1. Načtení týmů pro získání názvů (potřebujeme převést ID týmu na Jméno)
+    let teams = [];
+    try {
+        teams = JSON.parse(fs.readFileSync('./data/teams.json', 'utf8'));
+    } catch (e) { console.error("Chyba načítání teams.json", e); }
 
     let transfersData = {};
     try {
@@ -2747,28 +2757,98 @@ router.post('/transfers/save', requireAdmin, express.urlencoded({ extended: true
         }
     } catch (e) { transfersData = {}; }
 
+    // Inicializace struktury, pokud neexistuje
     if (!transfersData[season]) transfersData[season] = {};
-    transfersData[season][liga] = {};
+    if (!transfersData[season][liga]) transfersData[season][liga] = {};
 
-    // Iterujeme přes klíče (které teď vypadají jako "id_1", "id_2"...)
+    // Pole pro sběr nových přestupů pro notifikaci
+    let newTransfersNotification = [];
+
+    // Iterujeme přes týmy z formuláře
     for (const rawKey in t) {
-        // ODSTRANÍME PREFIX "id_", ABY ZŮSTALO JEN ČISTÉ ID
         const teamId = rawKey.replace('id_', '');
-
         const teamObj = t[rawKey];
+
+        // Pomocná funkce pro čistění vstupu
         const cleanList = (text) => text ? text.split('\n').map(name => name.trim()).filter(name => name !== "") : [];
 
+        // Načteme nové seznamy
+        const newConfIn = cleanList(teamObj.confIn);
+
+        // --- DETEKCE ZMĚN PRO NOTIFIKACI ---
+        // Získáme stará data pro tento tým (pokud existují)
+        const oldTeamData = transfersData[season][liga][teamId] || {};
+        const oldConfIn = oldTeamData.confIn || [];
+
+        // Najdeme hráče, kteří jsou v 'newConfIn', ale nebyli v 'oldConfIn'
+        const addedPlayers = newConfIn.filter(player => !oldConfIn.includes(player));
+
+        if (addedPlayers.length > 0) {
+            // Najdeme jméno týmu podle ID
+            const teamName = teams.find(tm => tm.id === teamId)?.name || `Tým ${teamId}`;
+
+            // Přidáme do seznamu pro notifikaci
+            addedPlayers.forEach(player => {
+                newTransfersNotification.push(`${player} -> ${teamName}`);
+            });
+        }
+        // -----------------------------------
+
+        // Uložení dat (přepisujeme stará data novými)
         transfersData[season][liga][teamId] = {
             specIn: cleanList(teamObj.specIn),
             specOut: cleanList(teamObj.specOut),
-            confIn: cleanList(teamObj.confIn),
+            confIn: newConfIn, // Použijeme už vyčištěné
             confOut: cleanList(teamObj.confOut)
         };
     }
 
+    // Uložení do souboru
     fs.writeFileSync('./data/transfers.json', JSON.stringify(transfersData, null, 2));
 
+    // --- ODESLÁNÍ NOTIFIKACE ---
+    // Pošleme ji jen, pokud jsme našli nějaké nové hráče
+    if (newTransfersNotification.length > 0) {
+        // Pokud je změn hodně (např. víc než 3), pošleme zkrácenou verzi, jinak vypíšeme vše
+        let message;
+        if (newTransfersNotification.length <= 3) {
+            message = `Potvrzené přestupy: ${newTransfersNotification.join(', ')}`;
+        } else {
+            const firstFew = newTransfersNotification.slice(0, 2).join(', ');
+            message = `Nové přestupy (${newTransfersNotification.length}): ${firstFew} a další...`;
+        }
+
+        // Volání tvé služby
+        notif.notifyTransfer(message);
+    }
+
     res.redirect(`/admin/transfers/manage?liga=${encodeURIComponent(liga)}`);
+});
+
+router.get('/test-notif', requireAdmin, (req, res) => {
+    const username = req.session.user;
+    const users = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/users.json'), 'utf8'));
+
+    // Najdeme tebe
+    const me = users.find(u => u.username === username);
+
+    if (me && me.subscription) {
+        try {
+            // Pošleme notifikaci přímo tobě (používáme interní webpush, ne tu wrapper funkci, pro test)
+            const webpush = require('web-push');
+
+            webpush.sendNotification(me.subscription, JSON.stringify({
+                title: "🔔 Test notifikace",
+                body: "Funguje to! Tohle je zpráva z adminu."
+            })).catch(err => console.error(err));
+
+            res.send("Notifikace odeslána! Zkontroluj pravý dolní roh (Windows) nebo pravý horní (Mac).");
+        } catch (e) {
+            res.send("Chyba: " + e.message);
+        }
+    } else {
+        res.send("Nemáš aktivní subscription v users.json!");
+    }
 });
 
 module.exports = router;

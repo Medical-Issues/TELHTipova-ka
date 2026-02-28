@@ -3,9 +3,11 @@ const path = require('path');
 const bodyParser = require("body-parser");
 const session = require("express-session");
 const FileStore = require('session-file-store')(session);
+const fs = require('fs');
 const userRoutes = require('./routes/user');
 const adminRoutes = require('./routes/admin');
 const authRoutes = require('./routes/auth');
+
 require('dotenv').config();
 const { backupJsonFilesToGitHub } = require('./utils/githubBackup');
 const { loadJsonFilesFromGitHub } = require('./utils/githubLoadBackup');
@@ -14,6 +16,8 @@ const app = express();
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/logoteamu', express.static(path.join(__dirname, 'data', 'images')));
 app.use(bodyParser.urlencoded({extended: true}));
+app.use(bodyParser.json());
+
 app.use(session({
     store: new FileStore({}),
     secret: 'tajnyklic',
@@ -30,7 +34,60 @@ app.get('/wake', (req, res) => {
 app.use('/auth', authRoutes);
 app.use('/', userRoutes)
 app.use('/admin', adminRoutes);
-// ... všechny tvé app.use a routes ...
+
+app.post('/api/subscribe', (req, res) => {
+    const subscription = req.body;
+    const username = req.session.user;
+
+    if (!username) return res.status(401).send('Nejste přihlášen');
+
+    // Cesta musí být absolutní nebo správně relativní k rootu
+    const usersPath = path.join(__dirname, 'data', 'users.json');
+
+    try {
+        const users = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
+        const userIndex = users.findIndex(u => u.username === username);
+
+        if (userIndex !== -1) {
+            users[userIndex].subscription = subscription;
+            fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+            console.log(`🔔 Notifikace aktivovány pro: ${username}`);
+            res.status(201).json({});
+        } else {
+            res.status(404).send('Uživatel nenalezen');
+        }
+    } catch (error) {
+        console.error("Chyba při ukládání subscription:", error);
+        res.status(500).send("Chyba serveru");
+    }
+});
+
+app.post('/api/unsubscribe', (req, res) => {
+    const username = req.session.user;
+    if (!username) return res.status(401).send('Nejste přihlášen');
+
+    // Cesta k users.json (použij stejnou logiku jako u subscribe)
+    const usersPath = path.join(__dirname, 'data', 'users.json');
+
+    try {
+        const users = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
+        const userIndex = users.findIndex(u => u.username === username);
+
+        if (userIndex !== -1) {
+            // Smažeme klíč subscription
+            delete users[userIndex].subscription;
+
+            fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+            console.log(`🔕 Notifikace vypnuty pro: ${username}`);
+            res.status(200).json({ message: "Odhlášeno" });
+        } else {
+            res.status(404).send('Uživatel nenalezen');
+        }
+    } catch (error) {
+        console.error("Chyba při rušení notifikací:", error);
+        res.status(500).send("Chyba serveru");
+    }
+});
 
 // 404 Handler - Zachytí vše, co nebylo vyřešeno výše
 app.use((req, res) => {
