@@ -26,18 +26,15 @@ router.post('/backup', async (req, res) => {
     }
 });
 const storage = multer.diskStorage({
+    // noinspection JSUnusedGlobalSymbols
     destination: function (req, file, cb) {
-        // Cesta musí být absolutní, aby ji Linux (Render) pochopil správně
         const uploadPath = path.resolve(__dirname, '..', 'data', 'images');
-
-        // Tahle část je kritická: pokud složka neexistuje, vytvoříme ji za běhu
         if (!fs.existsSync(uploadPath)) {
             fs.mkdirSync(uploadPath, { recursive: true });
         }
         cb(null, uploadPath);
     },
     filename: function (req, file, cb) {
-        // Vytvoříme unikátní název, aby se obrázky nepřepisovaly
         const safeName = Date.now() + '-' + file.originalname.replace(/[^a-zA-Z0-9.]/g, '_');
         cb(null, safeName);
     }
@@ -523,13 +520,6 @@ router.post('/teams/edit/:id', requireAdmin, upload.single('logo'), async (req, 
     }
 
     fs.writeFileSync('./data/teams.json', JSON.stringify(teams, null, 2));
-
-    try {
-        console.log("⏳ Spouštím okamžitou zálohu po editaci týmu....");
-        await backupJsonFilesToGitHub();
-    } catch (e) {
-        console.error("❌ Okamžitá záloha selhala, ale data jsou uložena lokálně:", e.message);
-    }
 
     res.redirect('/admin');
 });
