@@ -7173,5 +7173,14 @@
     "season": "25/26",
     "isPlayoff": true,
     "bo": 5
+  },
+  {
+    "id": 466,
+    "homeTeamId": 1,
+    "awayTeamId": 2,
+    "datetime": "2026-03-01T00:27",
+    "liga": "TELH",
+    "season": "25/26",
+    "isPlayoff": false
   }
 ]

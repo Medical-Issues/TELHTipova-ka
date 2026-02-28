@@ -139,38 +139,52 @@ cron.schedule('* * * * *', () => {
     const teams = getTeams();
     const now = new Date();
 
-    // Rozmezí: zápas začíná za 60 až 61 minut
-    const checkTimeStart = new Date(now.getTime() + 60 * 60 * 1000);
-    const checkTimeEnd = new Date(now.getTime() + 61 * 60 * 1000);
+    const oneHourMS = 60 * 60 * 1000;
+    const fourHoursMS = 240 * 60 * 1000;
+    const margin = 1 * 60 * 1000; // 1 minuta tolerance, aby se trefil CRON
 
-    const matchesStartingSoon = matches.filter(m => {
-        // Předpokládáme ISO formát (např. 2024-05-01T17:30)
-        const mDate = new Date(m.datetime);
-        return mDate >= checkTimeStart && mDate <= checkTimeEnd && !m.result;
-    });
+    matches.forEach(match => {
+        if (match.result) return; // Zápas už skončil
 
-    matchesStartingSoon.forEach(match => {
-        const homeName = teams.find(t => t.id === match.homeTeamId)?.name || 'Domácí';
-        const awayName = teams.find(t => t.id === match.awayTeamId)?.name || 'Hosté';
+        const mDate = new Date(match.datetime);
+        const diff = mDate.getTime() - now.getTime();
 
-        users.forEach(u => {
-            // Kontrola, zda má uživatel notifikace povolené (má alespoň jedno zařízení)
-            const hasSub = (u.subscriptions && u.subscriptions.length > 0) || u.subscription;
-            if (!hasSub) return;
+        let notificationType = null;
 
-            // Zjistíme, jestli má uživatel tip
-            const userTipsForSeason = u.tips?.[match.season]?.[match.liga] || [];
-            const hasTip = userTipsForSeason.find(t => t.matchId === match.id);
+        // Kontrola 4 hodiny předem
+        if (diff >= (fourHoursMS - margin) && diff <= fourHoursMS) {
+            notificationType = "4h";
+        }
+        // Kontrola 1 hodinu předem
+        else if (diff >= (oneHourMS - margin) && diff <= oneHourMS) {
+            notificationType = "1h";
+        }
 
-            // Pokud NEMÁ tip, pošleme upozornění
-            if (!hasTip) {
-                sendToUserDevices(u, {
-                    title: "⏳ Blíží se uzávěrka!",
-                    body: `Za hodinu začíná zápas ${homeName} vs ${awayName} a nemáš tipnuto!`,
-                    icon: '/images/logo.png'
-                });
-            }
-        });
+        // Pokud jsme se trefili do jednoho z oken, jdeme na uživatele
+        if (notificationType) {
+            const homeName = teams.find(t => Number(t.id) === Number(match.homeTeamId))?.name || 'Domácí';
+            const awayName = teams.find(t => Number(t.id) === Number(match.awayTeamId))?.name || 'Hosté';
+
+            users.forEach(u => {
+                const hasSub = (u.subscriptions && u.subscriptions.length > 0) || u.subscription;
+                if (!hasSub) return;
+
+                const userTipsForSeason = u.tips?.[match.season]?.[match.liga] || [];
+                const hasTip = userTipsForSeason.find(t => Number(t.matchId) === Number(match.id));
+
+                if (!hasTip) {
+                    const timeText = notificationType === "4h" ? "4 hodiny" : "hodinu";
+
+                    console.log(`[CRON] Posílám ${notificationType} upozornění: ${u.username} (${homeName} vs ${awayName})`);
+
+                    sendToUserDevices(u, {
+                        title: notificationType === "4h" ? "🔔 Nezapomeň si tipnout!" : "⏳ Poslední šance!",
+                        body: `Za ${timeText} začíná zápas ${homeName} vs ${awayName}. Ještě nemáš tipnuto!`,
+                        icon: '/images/logo.png'
+                    });
+                }
+            });
+        }
     });
 });
 
