@@ -2795,35 +2795,45 @@ router.post('/transfers/save', requireAdmin, express.urlencoded({ extended: true
 
         const cleanList = (text) => text ? text.split('\n').map(name => name.trim()).filter(name => name !== "") : [];
 
+        // 1. Načtení nových seznamů z formuláře
         const newConfIn = cleanList(teamObj.confIn);
+        const newConfOut = cleanList(teamObj.confOut);
+        const newSpecIn = cleanList(teamObj.specIn);
+        const newSpecOut = cleanList(teamObj.specOut);
 
-        // Načtení starých dat pro porovnání
-        const oldTeamData = transfersData[season][liga][teamId] || {};
-        const oldConfIn = Array.isArray(oldTeamData.confIn) ? oldTeamData.confIn.map(p => p.trim()) : [];
+        // 2. Načtení starých dat pro porovnání
+        const oldData = transfersData[season][liga][teamId] || {};
+        const oldConfIn = Array.isArray(oldData.confIn) ? oldData.confIn.map(p => p.trim()) : [];
+        const oldConfOut = Array.isArray(oldData.confOut) ? oldData.confOut.map(p => p.trim()) : [];
+        const oldSpecIn = Array.isArray(oldData.specIn) ? oldData.specIn.map(p => p.trim()) : [];
+        const oldSpecOut = Array.isArray(oldData.specOut) ? oldData.specOut.map(p => p.trim()) : [];
 
-        // Detekce nových hráčů
-        const addedPlayers = newConfIn.filter(player => {
-            const trimmedPlayer = player.trim();
-            return trimmedPlayer !== "" && !oldConfIn.includes(trimmedPlayer);
-        });
+        // Najdeme jméno týmu
+        const teamName = teams.find(tm => Number(tm.id) === Number(teamId))?.name || `Tým ${teamId}`;
 
-        if (addedPlayers.length > 0) {
-            // NAJDEME JMÉNO TÝMU (Oprava ReferenceError)
-            const teamName = teams.find(tm => Number(tm.id) === Number(teamId))?.name || `Tým ${teamId}`;
+        // Pomocná funkce pro nalezení skutečně nových jmen
+        const getAdded = (newArr, oldArr) => newArr.filter(p => p !== "" && !oldArr.includes(p));
 
-            console.log(`Nalezeni noví hráči pro ${teamName}:`, addedPlayers);
+        // 3. DETEKCE ZMĚN
 
-            addedPlayers.forEach(player => {
-                newTransfersNotification.push(`${player} -> ${teamName}`);
-            });
-        }
+        // Potvrzené příchody
+        getAdded(newConfIn, oldConfIn).forEach(p => newTransfersNotification.push(`✅ ${p} -> ${teamName}`));
 
-        // AKTUALIZACE DAT V PAMĚTI
+        // Potvrzené odchody
+        getAdded(newConfOut, oldConfOut).forEach(p => newTransfersNotification.push(`❌ ${p} opouští ${teamName}`));
+
+        // Spekulace příchody
+        getAdded(newSpecIn, oldSpecIn).forEach(p => newTransfersNotification.push(`❓ ${p} (spekulace) -> ${teamName}`));
+
+        // Spekulace odchody
+        getAdded(newSpecOut, oldSpecOut).forEach(p => newTransfersNotification.push(`⚠️ ${p} (možný odchod) -> ${teamName}`));
+
+        // 4. AKTUALIZACE DAT V PAMĚTI
         transfersData[season][liga][teamId] = {
-            specIn: cleanList(teamObj.specIn),
-            specOut: cleanList(teamObj.specOut),
+            specIn: newSpecIn,
+            specOut: newSpecOut,
             confIn: newConfIn,
-            confOut: cleanList(teamObj.confOut)
+            confOut: newConfOut
         };
     }
 
@@ -2838,11 +2848,12 @@ router.post('/transfers/save', requireAdmin, express.urlencoded({ extended: true
     // --- ODESLÁNÍ NOTIFIKACE ---
     if (newTransfersNotification.length > 0) {
         let message;
-        if (newTransfersNotification.length <= 3) {
-            message = `Potvrzené přestupy: ${newTransfersNotification.join(', ')}`;
+        // Pokud je změn málo, vypíšeme je. Pokud hodně, pošleme souhrnnou zprávu.
+        if (newTransfersNotification.length <= 4) {
+            message = `Změny v kádrech: ${newTransfersNotification.join(', ')}`;
         } else {
-            const firstFew = newTransfersNotification.slice(0, 2).join(', ');
-            message = `Nové přestupy (${newTransfersNotification.length}): ${firstFew} a další...`;
+            const firstFew = newTransfersNotification.slice(0, 3).join(', ');
+            message = `Nové pohyby v lize (${newTransfersNotification.length}): ${firstFew} a další...`;
         }
 
         console.log("ODESÍLÁM NOTIFIKACI:", message);
@@ -2853,7 +2864,7 @@ router.post('/transfers/save', requireAdmin, express.urlencoded({ extended: true
             console.error("Selhalo volání notif.notifyTransfer:", err);
         }
     } else {
-        console.log("Žádní noví hráči k oznámení.");
+        console.log("Žádné nové pohyby k oznámení.");
     }
 
     res.redirect(`/admin/transfers/manage?liga=${encodeURIComponent(liga)}`);
