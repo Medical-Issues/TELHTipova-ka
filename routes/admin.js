@@ -514,7 +514,7 @@ router.post('/teams/edit/:id', requireAdmin, upload.single('logo'), async (req, 
     fs.writeFileSync('./data/teams.json', JSON.stringify(teams, null, 2));
 
     try {
-        console.log("⏳ Spouštím okamžitou zálohu po editaci týmu...");
+        console.log("⏳ Spouštím okamžitou zálohu po editaci týmu....");
         await backupJsonFilesToGitHub();
     } catch (e) {
         console.error("❌ Okamžitá záloha selhala, ale data jsou uložena lokálně:", e.message);
