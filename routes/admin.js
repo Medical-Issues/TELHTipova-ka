@@ -26,12 +26,23 @@ router.post('/backup', async (req, res) => {
     }
 });
 const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        // Cesta musí být absolutní, aby ji Linux (Render) pochopil správně
+        const uploadPath = path.resolve(__dirname, '..', 'data', 'images');
+
+        // Tahle část je kritická: pokud složka neexistuje, vytvoříme ji za běhu
+        if (!fs.existsSync(uploadPath)) {
+            fs.mkdirSync(uploadPath, { recursive: true });
+        }
+        cb(null, uploadPath);
+    },
     filename: function (req, file, cb) {
-        // Přidáme časové razítko, aby se nepřepsala dvě stejně pojmenovaná loga
+        // Vytvoříme unikátní název, aby se obrázky nepřepisovaly
         const safeName = Date.now() + '-' + file.originalname.replace(/[^a-zA-Z0-9.]/g, '_');
         cb(null, safeName);
     }
 });
+
 const upload = multer({ storage: storage });
 router.get('/', requireAdmin, (req, res) => {
     const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'));
