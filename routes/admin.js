@@ -133,6 +133,7 @@ router.get('/', requireAdmin, (req, res) => {
         <a href="/admin/teams/points" class="btn new-btn-admin">Manuální body</a>
         <a href="/admin/matches/import" class="btn new-btn-admin">Import zápasů</a>
         <a href="/admin/images/manage" class="btn new-btn-admin">Správce obrázků</a>
+        <a href="/admin/transfers/manage" class="btn new-btn-admin">Správa přestupů</a>
         <a id="backupBtn" class="btn new-btn-admin">Uložit data uživatelům (pouze pro administrativní účely)</a>
     </div>
   </div>
@@ -2647,4 +2648,122 @@ router.get('/images/delete/:filename', requireAdmin, async (req, res) => {
 
     res.redirect('/admin/images/manage');
 });
+
+router.get('/transfers/manage', requireAdmin, (req, res) => {
+    const teams = loadTeams();
+    const selectedSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
+    const allowedLeagues = JSON.parse(fs.readFileSync('./data/allowedLeagues.json', 'utf-8'));
+
+    // Aktuálně vybraná liga z query nebo první dostupná
+    const selectedLiga = req.query.liga || allowedLeagues[0];
+
+    // Načtení stávajících dat přestupů
+    let transfersData = {};
+    try {
+        if (fs.existsSync('./data/transfers.json')) {
+            transfersData = JSON.parse(fs.readFileSync('./data/transfers.json', 'utf8'));
+        }
+    } catch (e) { transfersData = {}; }
+
+    const currentTransfers = transfersData[selectedSeason]?.[selectedLiga] || {};
+    const teamsInLiga = teams.filter(t => t.liga === selectedLiga && t.active);
+
+    let html = `
+    <!DOCTYPE html>
+    <html lang="cs">
+    <head>
+        <meta charset="UTF-8">
+        <title>Admin - Přestupy</title>
+        <link rel="stylesheet" href="/css/styles.css">
+        <link rel="icon" href="/images/logo.png">
+    </head>
+    <body class="usersite">
+        <main class="admin_site">
+            <h1>Správa přestupů: ${selectedLiga} (${selectedSeason})</h1>
+            
+            <form method="GET" style="margin-bottom: 20px;">
+                Změnit ligu: 
+                <select id="league-select" name="liga" onchange="this.form.submit()" style="padding: 5px;">
+                    ${allowedLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected' : ''}>${l}</option>`).join('')}
+                </select>
+            </form>
+
+            <form method="POST" action="/admin/transfers/save">
+                <input type="hidden" name="liga" value="${selectedLiga}">
+                <input type="hidden" name="season" value="${selectedSeason}">
+                
+                ${teamsInLiga.map(team => {
+        // ID týmu převedeme na string, aby odpovídalo klíčům v JSONu
+        const tId = String(team.id);
+        const data = currentTransfers[tId] || { specIn: [], specOut: [], confIn: [], confOut: [] };
+        // Logo bereme přímo z týmu v cyklu
+        const logoUrl = team.logo ? `/logoteamu/${team.logo}` : '/images/logo.png';
+
+        return `
+                    <div class="team-block">
+                        <div class="team-background-logo" style="background-image: url('${logoUrl}');"></div>
+                        
+                        <div class="team-content">
+                            <h2>${team.name}</h2>
+                            <div class="t-grid">
+                                <div><span class="t-label">SPEKULACE PŘÍCHOD (?)</span><textarea name="t[${team.id}][specIn]">${(data.specIn || []).join('\n')}</textarea></div>
+                                <div><span class="t-label">SPEKULACE ODCHOD (?)</span><textarea name="t[${team.id}][specOut]">${(data.specOut || []).join('\n')}</textarea></div>
+                                <div><span class="t-label" style="color: lime;">POTVRZENÉ PŘÍCHODY (!)</span><textarea name="t[${team.id}][confIn]">${(data.confIn || []).join('\n')}</textarea></div>
+                                <div><span class="t-label" style="color: red;">POTVRZENÉ ODCHODY (X)</span><textarea name="t[${team.id}][confOut]">${(data.confOut || []).join('\n')}</textarea></div>
+                            </div>
+                        </div>
+                    </div>`;
+    }).join('')}
+
+                <div class="save-bar">
+                    <button type="submit" class="btn new-btn-admin" style="width: 300px; padding: 10px;">ULOŽIT VŠECHNY PŘESTUPY</button>
+                    <p><a href="/admin" style="color: #aaa;">Zrušit a zpět</a></p>
+                </div>
+            </form>
+        </main>
+    </body>
+    </html>`;
+    res.send(html);
+});
+
+router.post('/transfers/save', requireAdmin, express.urlencoded({ extended: true }), async (req, res) => {
+    const { liga, season, t } = req.body;
+
+    let transfersData = {};
+    try {
+        if (fs.existsSync('./data/transfers.json')) {
+            transfersData = JSON.parse(fs.readFileSync('./data/transfers.json', 'utf8'));
+        }
+    } catch (e) { transfersData = {}; }
+
+    if (!transfersData[season]) transfersData[season] = {};
+
+    // Resetujeme data pro aktuální ligu, aby se smazalo to, co uživatel vymazal
+    transfersData[season][liga] = {};
+
+    // Iterujeme přes IDčka týmů (klíče v objektu t)
+    for (const teamId in t) {
+        const teamObj = t[teamId];
+        const cleanList = (text) => text.split('\n').map(name => name.trim()).filter(name => name !== "");
+
+        // Ukládáme pod ID týmu (např. "1772247543825")
+        transfersData[season][liga][teamId] = {
+            specIn: cleanList(teamObj.specIn),
+            specOut: cleanList(teamObj.specOut),
+            confIn: cleanList(teamObj.confIn),   // Sjednoceno na confIn
+            confOut: cleanList(teamObj.confOut)  // Sjednoceno na confOut
+        };
+    }
+
+    fs.writeFileSync('./data/transfers.json', JSON.stringify(transfersData, null, 2));
+
+    // Záloha na GitHub (volitelná, pokud máš funkci importovanou)
+    try {
+        const { backupJsonFilesToGitHub } = require('../utils/githubBackup');
+        await backupJsonFilesToGitHub();
+    } catch (e) { console.error("Backup warning:", e.message); }
+
+    res.redirect(`/admin/transfers/manage?liga=${encodeURIComponent(liga)}`);
+});
+
 module.exports = router;

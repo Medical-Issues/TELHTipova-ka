@@ -5692,56 +5692,56 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         </section></main></body>`; // Ukončení HTML
         } else {
-            // ZDE JE TVŮJ KÓD PRO GRID PŘESTUPŮ (to, co jsme dělali minule)
+            // --- SEKCE PŘESTUPŮ ---
             html += `<h2 style="margin-top: 0; text-align: center; border-bottom: 2px solid orangered; padding-bottom: 10px;">Přestupy a Spekulace - ${selectedLiga}</h2>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 15px; margin-top: 15px;">`;
 
-        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 15px; margin-top: 15px;">`;
-
-            // Projdeme všechny týmy v lize a vykreslíme pro ně kartičku
             teamsInSelectedLiga.forEach(team => {
                 const tId = String(team.id);
-                const tData = currentTransfers[tId] || { specIn: [], specOut: [], confirmedIn: [], confirmedOut: [] };
+                // POZOR: Tady musíme číst 'confIn' a 'confOut', protože tak to ukládá Admin!
+                const tData = currentTransfers[tId] || { specIn: [], specOut: [], confIn: [], confOut: [] };
+                const logoUrl = team.logo ? `/logoteamu/${team.logo}` : '/images/logo.png';
 
-                // Helper funkce pro vypsání hráčů do <li> (pokud je prázdno, necháme jen prázdný sloupec)
-                const renderList = (arr) => arr.length > 0 ? arr.map(player => `<div style="font-size: 0.85em; padding: 2px 0;">${player}</div>`).join('') : '<div style="color: gray; font-size: 0.8em; font-style: italic;">-</div>';
+                const renderList = (arr) => arr && arr.length > 0 ? arr.map(player => `<div style="font-size: 0.9em; padding: 2px 0;">${player}</div>`).join('') : '<div style="color: gray; font-size: 0.8em; font-style: italic;">-</div>';
 
                 html += `
-            <div style="background-color: black; border: 2px solid #ff4500; overflow: hidden; display: flex; flex-direction: column;">
-                
-                <div style="background-color: #111; border-bottom: 3px solid #ff4500; display: flex; align-items: center; padding: 5px;">
-                    <img src="/logoteamu/${team.logo || 'images/logo.png'}" alt="${team.name}" style="height: 40px; width: 40px; object-fit: contain; margin-right: 10px;">
-                    <strong style="color: white; font-size: 1.1em;">${team.name}</strong>
-                </div>
-
-                <div style="display: flex; flex-direction: row; flex: 1; background-color: #000;">
+                <div style="position: relative; background-color: #000; border: 2px solid #ff4500; border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; min-height: 250px;">
                     
-                    <div style="flex: 1; padding: 5px; border-right: 1px solid #333; background-color: #1a0033;">
-                        <div style="color: lightblue; font-size: 0.75em; font-weight: bold; margin-bottom: 5px; text-transform: uppercase;">Spekulace IN</div>
-                        <div style="color: white;">${renderList(tData.specIn)}</div>
+                    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-10deg); width: 80%; height: 80%; background-image: url('${logoUrl}'); background-size: contain; background-repeat: no-repeat; background-position: center; opacity: 0.15; filter: grayscale(100%); z-index: 0; pointer-events: none;"></div>
+
+                    <div style="position: relative; z-index: 1; background-color: #111; border-bottom: 3px solid #ff4500; display: flex; align-items: center; padding: 10px;">
+                        <img src="${logoUrl}" alt="${team.name}" style="height: 40px; width: 40px; object-fit: contain; margin-right: 10px;">
+                        <strong style="color: white; font-size: 1.2em;">${team.name}</strong>
                     </div>
 
-                    <div style="flex: 1; padding: 5px; border-right: 1px solid #333; background-color: #1a0033;">
-                        <div style="color: lightblue; font-size: 0.75em; font-weight: bold; margin-bottom: 5px; text-transform: uppercase;">Spekulace OUT</div>
-                        <div style="color: white;">${renderList(tData.specOut)}</div>
-                    </div>
+                    <div style="position: relative; z-index: 1; display: flex; flex-direction: row; flex: 1; background: transparent;">
+                        
+                        <div style="flex: 1; padding: 5px; border-right: 1px solid #333; background-color: rgba(26, 0, 51, 0.6);">
+                            <div style="color: lightblue; font-size: 0.75em; font-weight: bold; margin-bottom: 5px; text-transform: uppercase;">Spekulace IN</div>
+                            <div style="color: white;">${renderList(tData.specIn)}</div>
+                        </div>
 
-                    <div style="flex: 1; padding: 5px; border-right: 1px solid #333;">
-                        <div style="color: #00ff00; font-size: 0.75em; font-weight: bold; margin-bottom: 5px; text-transform: uppercase;">Příchody</div>
-                        <div style="color: white;">${renderList(tData.confirmedIn)}</div>
-                    </div>
+                        <div style="flex: 1; padding: 5px; border-right: 1px solid #333; background-color: rgba(26, 0, 51, 0.6);">
+                            <div style="color: lightblue; font-size: 0.75em; font-weight: bold; margin-bottom: 5px; text-transform: uppercase;">Spekulace OUT</div>
+                            <div style="color: white;">${renderList(tData.specOut)}</div>
+                        </div>
 
-                    <div style="flex: 1; padding: 5px;">
-                        <div style="color: #ff4444; font-size: 0.75em; font-weight: bold; margin-bottom: 5px; text-transform: uppercase;">Odchody</div>
-                        <div style="color: white;">${renderList(tData.confirmedOut)}</div>
-                    </div>
+                        <div style="flex: 1; padding: 5px; border-right: 1px solid #333; background-color: rgba(0, 0, 0, 0.3);">
+                            <div style="color: #00ff00; font-size: 0.75em; font-weight: bold; margin-bottom: 5px; text-transform: uppercase;">Příchody</div>
+                            <div style="color: white;">${renderList(tData.confIn)}</div>
+                        </div>
 
-                </div>
-            </div>`;
+                        <div style="flex: 1; padding: 5px; background-color: rgba(0, 0, 0, 0.3);">
+                            <div style="color: #ff4444; font-size: 0.75em; font-weight: bold; margin-bottom: 5px; text-transform: uppercase;">Odchody</div>
+                            <div style="color: white;">${renderList(tData.confOut)}</div>
+                        </div>
+
+                    </div>
+                </div>`;
             });
 
-            html += `
-        </div>
-        </section>`
+            html += `</div></section>`;
         }
         `</main></body>`;
     }

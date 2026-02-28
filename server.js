@@ -65,7 +65,6 @@ app.use((req, res) => {
 // app.listen(...)
 async function startServer() {
     await loadJsonFilesFromGitHub();
-    await backupJsonFilesToGitHub();
 
     app.listen(3000, () => {
         console.log('Server běží.');
