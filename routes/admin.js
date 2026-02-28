@@ -2571,6 +2571,8 @@ router.post('/leagues/transfers', requireAdmin, express.urlencoded({ extended: t
 
 router.get('/images/manage', requireAdmin, (req, res) => {
     const imagesDir = path.join(__dirname, '..', 'data', 'images');
+    const teams = loadTeams();
+    const usedLogos = new Set(teams.map(t => t.logo).filter(Boolean));
 
     // Pojistka, kdyby složka neexistovala
     if (!fs.existsSync(imagesDir)) {
@@ -2588,12 +2590,16 @@ router.get('/images/manage', requireAdmin, (req, res) => {
         <title>Správce log</title>
         <link rel="stylesheet" href="/css/styles.css">
         <style>
-            .image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 20px; padding: 20px; }
-            .image-card { border: 1px solid #444; padding: 10px; text-align: center; background: #222; border-radius: 8px; }
+            .image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 20px; padding: 20px; }
+            .image-card { border: 2px solid #444; padding: 10px; text-align: center; background: #222; border-radius: 8px; position: relative; }
+            .image-card.active { border-color: #00ff00; box-shadow: 0 0 10px rgba(0,255,0,0.2); }
+            .status-badge { font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 4px; position: absolute; top: 5px; right: 5px; }
+            .status-active { background: #00ff00; color: black; }
+            .status-unused { background: #555; color: white; }
             .image-card img { max-width: 100%; height: 80px; object-fit: contain; margin-bottom: 10px; display: block; margin-left: auto; margin-right: auto; }
             .image-name { font-size: 10px; color: gray; word-break: break-all; margin-bottom: 10px; display: block; height: 30px; overflow: hidden; }
             .delete-link { color: #ff4444; text-decoration: none; font-weight: bold; font-size: 13px; }
-            .delete-link:hover { text-decoration: underline; }
+            .delete-link.disabled { color: #444; cursor: not-allowed; pointer-events: none; }
         </style>
     </head>
     <body class="usersite">
@@ -2602,15 +2608,22 @@ router.get('/images/manage', requireAdmin, (req, res) => {
             <p><a href="/admin" style="color: orangered;">← Zpět do adminu</a></p>
             
             <div class="image-grid">
-                ${files.map(file => `
-                    <div class="image-card">
+                ${files.map(file => {
+        const isActive = usedLogos.has(file);
+        return `
+                    <div class="image-card ${isActive ? 'active' : ''}">
+                        <span class="status-badge ${isActive ? 'status-active' : 'status-unused'}">
+                            ${isActive ? 'POUŽÍVÁ SE' : 'NEVYUŽITO'}
+                        </span>
                         <img src="/logoteamu/${file}" alt="${file}">
                         <span class="image-name">${file}</span>
-                        <a href="/admin/images/delete/${file}" 
-                           class="delete-link" 
-                           onclick="return confirm('Opravdu smazat tento soubor z disku i ze zálohy?')">SMAZAT</a>
+                        
+                        ${isActive
+            ? `<span class="delete-link disabled" title="Nelze smazat logo, které je přiřazeno týmu">SMAZAT</span>`
+            : `<a href="/admin/images/delete/${file}" class="delete-link" onclick="return confirm('Opravdu smazat nepoužívané logo?')">SMAZAT</a>`
+        }
                     </div>
-                `).join('')}
+                `;}).join('')}
             </div>
             
             ${files.length === 0 ? '<p style="text-align:center; color: gray;">Žádné obrázky nenalezeny.</p>' : ''}
@@ -2619,7 +2632,7 @@ router.get('/images/manage', requireAdmin, (req, res) => {
     </html>`;
     res.send(html);
 });
-router.get('/admin/images/delete/:filename', requireAdmin, async (req, res) => {
+router.get('/images/delete/:filename', requireAdmin, async (req, res) => {
     const filename = req.params.filename;
     const filePath = path.join(__dirname, '..', 'data', 'images', filename);
 
@@ -2627,10 +2640,6 @@ router.get('/admin/images/delete/:filename', requireAdmin, async (req, res) => {
         if (fs.existsSync(filePath)) {
             fs.unlinkSync(filePath);
             console.log(`🗑️ Soubor ${filename} byl smazán.`);
-
-            // Okamžitá záloha, aby GitHub věděl o změně
-            const { backupJsonFilesToGitHub } = require('../utils/githubBackup');
-            await backupJsonFilesToGitHub();
         }
     } catch (err) {
         console.error("Chyba při mazání souboru:", err);
