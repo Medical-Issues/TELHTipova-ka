@@ -337,11 +337,11 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
     <div style="display: flex; justify-content: flex-start; align-items: center; margin-bottom: 10px; gap: 10px;">
         <span style="color: gray; font-size: 0.85em;">Logika obarvování:</span>
         <a href="?liga=${encodeURIComponent(selectedLiga)}&mode=strict" 
-           style="${clinchMode === 'strict' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; border-radius: 4px; text-decoration: none; font-size: 0.85em;">
+           style="${clinchMode === 'strict' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; text-decoration: none; font-size: 0.85em;">
            Striktní (Jistá meta)
         </a>
         <a href="?liga=${encodeURIComponent(selectedLiga)}&mode=cascade" 
-           style="${clinchMode === 'cascade' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; border-radius: 4px; text-decoration: none; font-size: 0.85em;">
+           style="${clinchMode === 'cascade' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; text-decoration: none; font-size: 0.85em;">
            Kaskádová (Minimální meta)
         </a>
     </div>
@@ -1660,11 +1660,11 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
     <div style="display: flex; justify-content: flex-start; align-items: center; margin-bottom: 10px; gap: 10px;">
         <span style="color: gray; font-size: 0.85em;">Logika obarvování:</span>
         <a href="?liga=${encodeURIComponent(selectedLiga)}&mode=strict" 
-           style="${clinchMode === 'strict' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; border-radius: 4px; text-decoration: none; font-size: 0.85em;">
+           style="${clinchMode === 'strict' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; text-decoration: none; font-size: 0.85em;">
            Striktní (Jistá meta)
         </a>
         <a href="?liga=${encodeURIComponent(selectedLiga)}&mode=cascade" 
-           style="${clinchMode === 'cascade' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; border-radius: 4px; text-decoration: none; font-size: 0.85em;">
+           style="${clinchMode === 'cascade' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; text-decoration: none; font-size: 0.85em;">
            Kaskádová (Minimální meta)
         </a>
     </div>
@@ -2909,11 +2909,11 @@ p.style.display = which === 'playoff' ? 'block' : 'none';
     <div style="display: flex; justify-content: flex-start; align-items: center; margin-bottom: 10px; gap: 10px;">
         <span style="color: gray; font-size: 0.85em;">Logika obarvování:</span>
         <a href="/history/a/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}&mode=strict" 
-           style="${clinchMode === 'strict' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; border-radius: 4px; text-decoration: none; font-size: 0.85em;">
+           style="${clinchMode === 'strict' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; text-decoration: none; font-size: 0.85em;">
            Striktní (Jistá meta)
         </a>
         <a href="/history/a/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}&mode=cascade" 
-           style="${clinchMode === 'cascade' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; border-radius: 4px; text-decoration: none; font-size: 0.85em;">
+           style="${clinchMode === 'cascade' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; text-decoration: none; font-size: 0.85em;">
            Kaskádová (Minimální meta)
         </a>
     </div>
@@ -3645,7 +3645,7 @@ p.style.display = which === 'playoff' ? 'block' : 'none';
                 <h2 style="margin: 0;">Historie tipů</h2>
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <label for="historyUserSelect" style="color: lightgrey;">Zobrazit:</label>
-                    <select id="historyUserSelect" onchange="showUserHistory(this.value)" style="background-color: black; color: orangered; border: 1px solid orangered; padding: 5px; border-radius: 5px;">`;
+                    <select id="historyUserSelect" onchange="showUserHistory(this.value)" style="background-color: black; color: orangered; border: 1px solid orangered; padding: 5px;">`;
 
     if (usersWithTips.length === 0) {
         html += `<option disabled selected>Žádná data</option>`;
@@ -4191,11 +4191,11 @@ function showTable(which) {
     <div style="display: flex; justify-content: flex-start; align-items: center; margin-bottom: 10px; gap: 10px;">
         <span style="color: gray; font-size: 0.85em;">Logika obarvování:</span>
         <a href="?liga=${encodeURIComponent(selectedLiga)}&mode=strict" 
-           style="${clinchMode === 'strict' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; border-radius: 4px; text-decoration: none; font-size: 0.85em;">
+           style="${clinchMode === 'strict' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; text-decoration: none; font-size: 0.85em;">
            Striktní (Jistá meta)
         </a>
         <a href="?liga=${encodeURIComponent(selectedLiga)}&mode=cascade" 
-           style="${clinchMode === 'cascade' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; border-radius: 4px; text-decoration: none; font-size: 0.85em;">
+           style="${clinchMode === 'cascade' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; text-decoration: none; font-size: 0.85em;">
            Kaskádová (Minimální meta)
         </a>
     </div>
@@ -4702,7 +4702,7 @@ function showTable(which) {
                 <h2 style="margin: 0;">Historie tipu tabulky</h2>
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <label for="historyUserSelect" style="color: lightgrey;">Zobrazit:</label>
-                    <select id="historyUserSelect" onchange="showUserTableHistory(this.value)" style="background-color: black; color: orangered; border: 1px solid orangered; padding: 5px; border-radius: 5px;">`;
+                    <select id="historyUserSelect" onchange="showUserTableHistory(this.value)" style="background-color: black; color: orangered; border: 1px solid orangered; padding: 5px;">`;
 
     if (usersWithTableTips.length === 0) {
         html += `<option disabled selected>Žádná data</option>`;
@@ -5103,11 +5103,11 @@ document.addEventListener('DOMContentLoaded', () => {
     <div style="display: flex; justify-content: flex-start; align-items: center; margin-bottom: 10px; gap: 10px;">
         <span style="color: gray; font-size: 0.85em;">Logika obarvování:</span>
         <a href="?liga=${encodeURIComponent(selectedLiga)}&mode=strict" 
-           style="${clinchMode === 'strict' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; border-radius: 4px; text-decoration: none; font-size: 0.85em;">
+           style="${clinchMode === 'strict' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; text-decoration: none; font-size: 0.85em;">
            Striktní (Jistá meta)
         </a>
         <a href="?liga=${encodeURIComponent(selectedLiga)}&mode=cascade" 
-           style="${clinchMode === 'cascade' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; border-radius: 4px; text-decoration: none; font-size: 0.85em;">
+           style="${clinchMode === 'cascade' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; text-decoration: none; font-size: 0.85em;">
            Kaskádová (Minimální meta)
         </a>
     </div>
@@ -5948,7 +5948,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const logoUrl = team.logo ? `/logoteamu/${team.logo}` : '/images/logo.png';
 
                 html += `
-    <div style="position: relative; background-color: #000; border: 2px solid #ff4500; border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; min-height: 250px; box-shadow: 0 4px 15px rgba(0,0,0,0.8);">
+    <div style="position: relative; background-color: #000; border: 2px solid #ff4500; overflow: hidden; display: flex; flex-direction: column; min-height: 250px; box-shadow: 0 4px 15px rgba(0,0,0,0.8);">
         
         <div style="position: relative; z-index: 1; background: linear-gradient(to bottom, #222, #111); border-bottom: 3px solid #ff4500; display: flex; align-items: center; padding: 10px;">
             <img src="${logoUrl}" alt="${team.name}" style="height: 45px; width: 45px; object-fit: contain; margin-right: 12px; filter: drop-shadow(0 0 5px rgba(255,255,255,0.2));">
