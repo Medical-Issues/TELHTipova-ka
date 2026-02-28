@@ -2569,7 +2569,7 @@ router.post('/leagues/transfers', requireAdmin, express.urlencoded({ extended: t
     res.redirect('/admin');
 });
 
-router.get('/admin/images/manage', requireAdmin, (req, res) => {
+router.get('/images/manage', requireAdmin, (req, res) => {
     const imagesDir = path.join(__dirname, '..', 'data', 'images');
 
     // Pojistka, kdyby složka neexistovala
