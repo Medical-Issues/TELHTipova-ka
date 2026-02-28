@@ -36,7 +36,7 @@ const getTeams = () => {
 // --- CORE FUNKCE PRO ODESÍLÁNÍ ---
 
 // 1. Odeslání na jeden konkrétní endpoint (používá se pro admin test)
-const sendNotification = (subscription, payload) => {
+const sendDirectNotification = (subscription, payload) => {
     return webpush.sendNotification(subscription, JSON.stringify(payload));
 };
 
