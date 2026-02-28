@@ -35,6 +35,11 @@
           "correct": 0,
           "totalRegular": 0,
           "totalPlayoff": 0
+        },
+        "MAXA": {
+          "correct": 0,
+          "totalRegular": 0,
+          "totalPlayoff": 0
         }
       }
     },
@@ -107,7 +112,10 @@
         },
         "MAXA": {
           "tableCorrect": 1,
-          "tableDeviation": 70
+          "tableDeviation": 70,
+          "correct": 0,
+          "totalRegular": 0,
+          "totalPlayoff": 0
         }
       }
     },
@@ -4473,6 +4481,28 @@
             "scoreHome": 3,
             "scoreAway": 5
           }
+        ],
+        "MAXA": [
+          {
+            "matchId": 462,
+            "winner": "away",
+            "loserWins": 1
+          },
+          {
+            "matchId": 463,
+            "winner": "away",
+            "loserWins": 1
+          },
+          {
+            "matchId": 464,
+            "winner": "home",
+            "loserWins": 1
+          },
+          {
+            "matchId": 465,
+            "winner": "home",
+            "loserWins": 2
+          }
         ]
       }
     },
@@ -4514,7 +4544,10 @@
         },
         "MAXA": {
           "tableCorrect": 3,
-          "tableDeviation": 60
+          "tableDeviation": 60,
+          "correct": 0,
+          "totalRegular": 0,
+          "totalPlayoff": 0
         }
       }
     },
@@ -6690,6 +6723,11 @@
           "totalPlayoff": 12,
           "tableCorrect": 8,
           "tableDeviation": 4
+        },
+        "MAXA": {
+          "correct": 0,
+          "totalRegular": 0,
+          "totalPlayoff": 0
         }
       }
     }

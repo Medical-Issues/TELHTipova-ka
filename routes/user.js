@@ -2705,15 +2705,15 @@ ${currentUserStats?.tableCorrect > 0 || currentUserStats?.tableDeviation > 0 ? `
                     <tr class="match-row playoff-parent-row" data-match-id="${match.id}">
                         <td style="position: relative; overflow: hidden;">${watermarkHTML(homeLogoUrl)}
                             <button type="button" class="team-link home-btn ${selectedWinner === "home" ? "selected" : ""}" data-winner="home" ${matchStarted ? 'disabled' : ''}
-                                    style="position: relative; overflow: hidden;">
-                                <span style="position: relative; z-index: 2;">${homeTeamName}</span>
+                                    style="overflow: hidden;">
+                                <span style="z-index: 2;">${homeTeamName}</span>
                             </button>
                         </td>
                         <td class="vs">vs</td>
                         <td style="position: relative; overflow: hidden;">${watermarkHTML(awayLogoUrl)}
                             <button type="button" class="team-link away-btn ${selectedWinner === "away" ? "selected" : ""}" data-winner="away" ${matchStarted ? 'disabled' : ''}
-                                    style="position: relative; overflow: hidden;">
-                                <span style="position: relative; z-index: 2;">${awayTeamName}</span>
+                                    style="overflow: hidden;">
+                                <span style="z-index: 2;">${awayTeamName}</span>
                             </button>
                         </td>
                     </tr>

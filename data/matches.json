@@ -7132,5 +7132,46 @@
     "season": "25/26",
     "isPlayoff": false,
     "result": null
+  },
+  {
+    "id": 462,
+    "homeTeamId": 24,
+    "awayTeamId": 16,
+    "datetime": "2026-03-02T17:00",
+    "liga": "MAXA",
+    "season": "25/26",
+    "isPlayoff": true,
+    "bo": 3,
+    "postponed": false
+  },
+  {
+    "id": 463,
+    "homeTeamId": 17,
+    "awayTeamId": 27,
+    "datetime": "2026-03-02T17:00",
+    "liga": "MAXA",
+    "season": "25/26",
+    "isPlayoff": true,
+    "bo": 3
+  },
+  {
+    "id": 464,
+    "homeTeamId": 20,
+    "awayTeamId": 26,
+    "datetime": "2026-03-08T17:00",
+    "liga": "MAXA",
+    "season": "25/26",
+    "isPlayoff": true,
+    "bo": 5
+  },
+  {
+    "id": 465,
+    "homeTeamId": 15,
+    "awayTeamId": 19,
+    "datetime": "2026-03-08T17:00",
+    "liga": "MAXA",
+    "season": "25/26",
+    "isPlayoff": true,
+    "bo": 5
   }
 ]
