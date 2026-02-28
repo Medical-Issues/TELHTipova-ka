@@ -1891,23 +1891,37 @@ router.post('/leagues/delete', requireAdmin, express.urlencoded({ extended: true
 router.post("/toggle-regular-season", requireAdmin, (req, res) => {
     if (req.session.user !== "Admin") return renderErrorHtml(res, "Nemáte oprávnění k této akci.", 403);
 
-    const { season, liga, finished } = req.body; // finished bude true/false
+    const { season, liga } = req.body;
+    const isFinishedNow = req.body.finished === 'true'; // Pokud je checkbox zaškrtnutý
 
     let statusData = {};
-    try { statusData = JSON.parse(fs.readFileSync('./data/leagueStatus.json', 'utf8')); } catch(e) {}
+    try {
+        statusData = JSON.parse(fs.readFileSync('./data/leagueStatus.json', 'utf8'));
+    } catch(e) {}
 
     if (!statusData[season]) statusData[season] = {};
-    statusData[season][liga] = { regularSeasonFinished: (finished === 'true') };
+
+    // Získáme předchozí stav, abychom věděli, jestli se něco změnilo
+    const wasFinishedBefore = statusData[season][liga]?.regularSeasonFinished === true;
+
+    // Uložíme nový stav
+    statusData[season][liga] = {
+        ...statusData[season][liga], // Zachováme ostatní klíče (např. zámky)
+        regularSeasonFinished: isFinishedNow
+    };
 
     fs.writeFileSync('./data/leagueStatus.json', JSON.stringify(statusData, null, 2));
 
-    // Ihned provedeme přepočet, aby se body aktualizovaly
+    // Přepočet tabulky
     evaluateRegularSeasonTable(season, liga);
-    if (req.body.finished === 'false') {
+
+    // NOTIFIKACE: Pokud byla liga právě teď označena jako dokončená (a předtím nebyla)
+    if (isFinishedNow && !wasFinishedBefore) {
+        console.log(`Posílám notifikaci o ukončení ligy: ${liga}`);
         notif.notifyLeagueEnd(liga);
     }
 
-    res.redirect('/admin'); // Nebo kdekoliv jsi byl
+    res.redirect('/admin');
 });
 
 router.post("/toggle-table-tips-lock", requireAdmin, express.urlencoded({ extended: true }), (req, res) => {
@@ -2785,7 +2799,7 @@ router.post('/transfers/save', requireAdmin, express.urlencoded({ extended: true
 
         if (addedPlayers.length > 0) {
             // Najdeme jméno týmu podle ID
-            const teamName = teams.find(tm => tm.id === teamId)?.name || `Tým ${teamId}`;
+            const teamName = teams.find(tm => Number(tm.id) === Number(teamId))?.name || `Tým ${teamId}`;
 
             // Přidáme do seznamu pro notifikaci
             addedPlayers.forEach(player => {
@@ -2827,58 +2841,52 @@ router.post('/transfers/save', requireAdmin, express.urlencoded({ extended: true
 
 router.get('/broadcast-ping', requireAdmin, async (req, res) => {
     try {
-        // 1. Načteme uživatele
+        // 1. Čteme soubor VŽDY uvnitř routy, aby tam byli i noví lidé
         const usersPath = path.join(__dirname, '../data/users.json');
         const users = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
 
-        // 2. Vyfiltrujeme jen ty, co mají zapnuté notifikace
-        const subscribers = users.filter(u => u.subscription);
+        // 2. OPRAVENÝ FILTR: Musíme vzít starý i nový formát
+        const subscribers = users.filter(u =>
+            u.subscription || (u.subscriptions && u.subscriptions.length > 0)
+        );
 
         if (subscribers.length === 0) {
             return res.send("<h2>Nikdo nemá zapnuté notifikace 😢</h2>");
         }
 
-        // 3. Připravíme zprávu
-        JSON.stringify({
+        // 3. Příprava dat
+        const payload = {
             title: "📢 Testovací PING",
-            body: "Pokud tohle čteš, hromadné notifikace fungují! 🚀",
-            icon: "/images/logo.png" // Cesta k tvému logu
-        });
-// 4. Odesíláme všem najednou (paralelně)
+            body: "Pokud tohle čteš, hromadné notifikace fungují na všech tvých zařízeních! 🚀",
+            icon: "/images/logo.png"
+        };
+
         let successCount = 0;
         let failCount = 0;
-        let failedUsers = [];
 
-        const promises = subscribers.map(u => {
-            return notif.sendNotification(u.subscription, {
-                title: "📢 Testovací PING",
-                body: "Pokud tohle čteš, hromadné notifikace fungují! 🚀",
-                icon: "/images/logo.png"
-            })
-                .then(() => {
-                    successCount++;
-                })
-                .catch(err => {
-                    failCount++;
-                    failedUsers.push(u.username);
-                    console.error(`Chyba u ${u.username}:`, err.statusCode);
-                });
+        // 4. Odesílání přes sendToUserDevices, která zvládne všechna zařízení uživatele
+        subscribers.forEach(u => {
+            try {
+                // Tato funkce v notificationService už má v sobě .catch pro chyby 410
+                notif.sendToUserDevices(u, payload);
+                successCount++;
+            } catch (err) {
+                failCount++;
+                console.error(`Kritická chyba u odesílání pro ${u.username}:`, err);
+            }
         });
-
-        // Počkáme, až se všechny odešlou
-        await Promise.all(promises);
 
         // 5. Výsledek pro admina
         res.send(`
             <h1>Výsledek Broadcastu</h1>
-            <p>✅ Úspěšně odesláno: <strong>${successCount}</strong></p>
-            <p>❌ Selhalo: <strong>${failCount}</strong></p>
-            ${failCount > 0 ? `<p>Chyby u: ${failedUsers.join(', ')}</p>` : ''}
+            <p>✅ Příkaz k odeslání vydán pro: <strong>${successCount}</strong> uživatelů.</p>
+            <p>ℹ️ <em>Poznámka: Pokud má uživatel více zařízení (PC i mobil), dostane zprávu na obě.</em></p>
             <br>
             <a href="/admin">Zpět do adminu</a>
         `);
 
     } catch (e) {
+        console.error("Chyba v broadcast-ping:", e);
         res.send(`Chyba serveru: ${e.message}`);
     }
 });
