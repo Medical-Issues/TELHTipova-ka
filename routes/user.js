@@ -5706,9 +5706,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const renderList = (arr) => arr.length > 0 ? arr.map(player => `<div style="font-size: 0.85em; padding: 2px 0;">${player}</div>`).join('') : '<div style="color: gray; font-size: 0.8em; font-style: italic;">-</div>';
 
                 html += `
-            <div style="background-color: black; border: 2px solid #00aaff; border-radius: 4px; overflow: hidden; display: flex; flex-direction: column;">
+            <div style="background-color: black; border: 2px solid #ff4500; overflow: hidden; display: flex; flex-direction: column;">
                 
-                <div style="background-color: #111; border-bottom: 3px solid #ffcc00; display: flex; align-items: center; padding: 5px;">
+                <div style="background-color: #111; border-bottom: 3px solid #ff4500; display: flex; align-items: center; padding: 5px;">
                     <img src="/logoteamu/${team.logo || 'images/logo.png'}" alt="${team.name}" style="height: 40px; width: 40px; object-fit: contain; margin-right: 10px;">
                     <strong style="color: white; font-size: 1.1em;">${team.name}</strong>
                 </div>

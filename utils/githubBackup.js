@@ -51,12 +51,6 @@ async function backupJsonFilesToGitHub() {
                     console.log(`⚠️ Varování u souboru ${fileObj.local}: ${e.message}`);
                 }
             }
-            if (fs.existsSync(IMAGES_FOLDER)) {
-                imageFiles = fs.readdirSync(IMAGES_FOLDER).filter(f => f.match(/\.(jpg|jpeg|png|gif|webp)$/i));
-                console.log(`🔎 Nalezené obrázky k záloze: ${imageFiles.length} (${imageFiles.join(', ')})`);
-            } else {
-                console.log(`⚠️ Složka ${IMAGES_FOLDER} nebyla nalezena!`);
-            }
             await octokit.repos.createOrUpdateFileContents({
                 owner: REPO_OWNER,
                 repo: REPO_NAME,
