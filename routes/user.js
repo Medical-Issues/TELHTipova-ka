@@ -424,7 +424,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 </select>
 </label>
 <a class="history-btn" href="/history">Historie</a>
-<a class="history-btn changed" href="/?liga=${encodeURIComponent(selectedLiga)}">Tipovačka</a>
+<a class="history-btn changed break" href="/?liga=${encodeURIComponent(selectedLiga)}">Tipovačka</a>
 <a class="history-btn changed" href="/prestupy?liga=${encodeURIComponent(selectedLiga)}">Přestupy TELH</a>
 <div style="text-align: center; margin: 20px;">
     <button type="button" id="notify-toggle-btn" style="display: none; padding: 10px 20px; cursor: pointer; border-radius: 5px; font-weight: bold; border: none;">
@@ -1861,7 +1861,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 </select>
 </label>
 <a class="history-btn" href="/history">Historie</a>
-<a class="history-btn changed" href="/table-tip?liga=${encodeURIComponent(selectedLiga)}">Základní část</a>
+<a class="history-btn changed break" href="/table-tip?liga=${encodeURIComponent(selectedLiga)}">Základní část</a>
 <a class="history-btn changed" href="/prestupy?liga=${encodeURIComponent(selectedLiga)}">Přestupy TELH</a>
 <div style="text-align: center; margin: 20px;">
     <button type="button" id="notify-toggle-btn" style="display: none; padding: 10px 20px; cursor: pointer; border-radius: 5px; font-weight: bold; border: none;">
@@ -5371,7 +5371,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 </select>
 </label>
 <a class="history-btn" href="/history">Historie</a>
-<a class="history-btn changed" href="/?liga=${encodeURIComponent(selectedLiga)}">Tipovačka</a>
+<a class="history-btn changed break" href="/?liga=${encodeURIComponent(selectedLiga)}">Tipovačka</a>
 <a class="history-btn changed" href="/table-tip?liga=${encodeURIComponent(selectedLiga)}">Základní část</a>
 <div style="text-align: center; margin: 20px;">
     <button type="button" id="notify-toggle-btn" style="display: none; padding: 10px 20px; cursor: pointer; border-radius: 5px; font-weight: bold; border: none;">
