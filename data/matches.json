@@ -12,7 +12,8 @@
       "scoreAway": 3,
       "ot": false,
       "winner": "away"
-    }
+    },
+    "postponed": false
   },
   {
     "id": 2,

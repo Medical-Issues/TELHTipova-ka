@@ -245,7 +245,7 @@ main {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-weight: bold;
+    font-weight: 700;
 }
 .match-row .team-link {
     background-color: #333333;
