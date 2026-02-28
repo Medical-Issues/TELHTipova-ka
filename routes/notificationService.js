@@ -4,41 +4,84 @@ const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
 
-// --- NASTAVENÍ (Doplň své vygenerované klíče) ---
+// --- NASTAVENÍ KLÍČŮ ---
 const publicVapidKey = process.env.VAPID_PUBLIC_KEY;
 const privateVapidKey = process.env.VAPID_PRIVATE_KEY;
 
+if (!publicVapidKey || !privateVapidKey) {
+    console.error("CHYBA: VAPID klíče nejsou nastaveny v souboru .env!");
+}
+
 webpush.setVapidDetails(
-    'mailto:admin@tvoje-domena.cz', // Kontaktní email pro službu
+    'mailto:admin@tvoje-domena.cz', // Kontaktní email
     publicVapidKey,
     privateVapidKey
 );
 
-// Pomocné funkce pro čtení dat (aby byly vždy aktuální)
-const getUsers = () => JSON.parse(fs.readFileSync(path.join(__dirname, '../data/users.json'), 'utf8'));
-const getMatches = () => JSON.parse(fs.readFileSync(path.join(__dirname, '../data/matches.json'), 'utf8'));
-
-// Funkce pro odeslání jedné notifikace
-const sendNotification = (subscription, payload) => {
-    return webpush.sendNotification(subscription, JSON.stringify(payload))
-        .catch(err => console.error("Chyba odeslání notifikace:", err));
+// --- POMOCNÉ FUNKCE PRO ČTENÍ DAT ---
+// Používáme path.join a '..' pro vyskočení ze složky routes do rootu/data
+const getUsers = () => {
+    try { return JSON.parse(fs.readFileSync(path.join(__dirname, '../data/users.json'), 'utf8')); }
+    catch (e) { return []; }
+};
+const getMatches = () => {
+    try { return JSON.parse(fs.readFileSync(path.join(__dirname, '../data/matches.json'), 'utf8')); }
+    catch (e) { return []; }
+};
+const getTeams = () => {
+    try { return JSON.parse(fs.readFileSync(path.join(__dirname, '../data/teams.json'), 'utf8')); }
+    catch (e) { return []; }
 };
 
-// Funkce pro odeslání všem, co mají odběr
+// --- CORE FUNKCE PRO ODESÍLÁNÍ ---
+
+// 1. Odeslání na jeden konkrétní endpoint (používá se pro admin test)
+const sendNotification = (subscription, payload) => {
+    return webpush.sendNotification(subscription, JSON.stringify(payload));
+};
+
+// 2. Chytré odeslání uživateli (zvládne více zařízení i starý formát)
+const sendToUserDevices = (user, payload) => {
+    const payloadString = JSON.stringify(payload);
+
+    // A) Nový formát: Uživatel má pole 'subscriptions' (Mobil, PC, Tablet...)
+    if (user.subscriptions && Array.isArray(user.subscriptions)) {
+        user.subscriptions.forEach(sub => {
+            webpush.sendNotification(sub, payloadString)
+                .catch(err => {
+                    // 410 Gone = Zařízení už neexistuje/odhlášeno
+                    if (err.statusCode === 410) {
+                        console.log(`Zařízení uživatele ${user.username} je nedostupné (410).`);
+                    } else {
+                        console.error(`Chyba notifikace pro ${user.username}:`, err.statusCode);
+                    }
+                });
+        });
+    }
+    // B) Starý formát: Uživatel má jen jedno 'subscription'
+    else if (user.subscription) {
+        webpush.sendNotification(user.subscription, payloadString)
+            .catch(err => console.error(`Chyba (single) pro ${user.username}:`, err));
+    }
+};
+
+// 3. Broadcast - Pošle zprávu VŠEM uživatelům s notifikacemi
 const broadcast = (title, body) => {
     const users = getUsers();
     users.forEach(u => {
-        if (u.subscription) {
-            sendNotification(u.subscription, { title, body });
-        }
+        // Použijeme chytrou funkci, která si poradí s poli i objekty
+        sendToUserDevices(u, { title, body, icon: '/images/logo.png' });
     });
 };
 
-// --- A) NOVĚ VYPSANÝ ZÁPAS (S timerem 5 minut) ---
+
+// --- LOGIKA UDÁLOSTÍ ---
+
+// A) NOVĚ VYPSANÝ ZÁPAS (S timerem 5 minut)
 let newMatchTimer = null;
 
 const notifyNewMatches = () => {
-    // Pokud už běží odpočet, zrušíme ho a začneme znova (debounce)
+    // Reset timeru (debounce)
     if (newMatchTimer) {
         clearTimeout(newMatchTimer);
         console.log("Timer resetován, čekám dalších 5 minut...");
@@ -46,48 +89,53 @@ const notifyNewMatches = () => {
         console.log("Timer spuštěn, za 5 minut odešlu notifikaci...");
     }
 
-    // Nastavíme nový odpočet na 5 minut (300 000 ms)
+    // 5 minut = 300 000 ms
     newMatchTimer = setTimeout(() => {
-        broadcast("Nové zápasy!", "Byli vypsány nové zápasy k tipování. Běž na to!");
+        broadcast("Nové zápasy!", "Právě byly vypsány nové zápasy k tipování. Běž na to!");
         newMatchTimer = null;
-        console.log("Notifikace o nových zápasech odeslána.");
+        console.log("📢 Notifikace o nových zápasech odeslána.");
     }, 5 * 60 * 1000);
 };
 
-// --- B) VÝSLEDEK ZÁPASU ---
+// B) VÝSLEDEK ZÁPASU
 const notifyResult = (matchId, scoreHome, scoreAway) => {
     const users = getUsers();
-    const match = getMatches().find(m => m.id === matchId);
+    const matches = getMatches();
+    const teams = getTeams();
+
+    const match = matches.find(m => m.id === matchId);
     if (!match) return;
 
-    // Najdeme jména týmů (pokud je nemáš v objektu match, musíš načíst i teams.json)
-    // Zde předpokládám zjednodušení
+    // Zkusíme najít jména týmů podle ID, jinak použijeme '???'
+    const homeTeamName = teams.find(t => t.id === match.homeTeamId)?.name || 'Domácí';
+    const awayTeamName = teams.find(t => t.id === match.awayTeamId)?.name || 'Hosté';
+
     const title = "Výsledek zápasu";
-    const body = `Zápas skončil ${scoreHome}:${scoreAway}. Zkontroluj si body!`;
+    const body = `${homeTeamName} vs ${awayTeamName} - ${scoreHome}:${scoreAway}.`;
 
     users.forEach(u => {
-        // Tady můžeš filtrovat, jestli měl uživatel tipnuto, abys nespamoval všechny
-        if (u.subscription) {
-            sendNotification(u.subscription, { title, body });
-        }
+        // Zde by šlo přidat logiku: poslat jen těm, co měli tipnuto
+        // Prozatím posíláme všem, co mají odběr
+        sendToUserDevices(u, { title, body, icon: '/images/logo.png' });
     });
 };
 
-// --- C) PŘESTUPY ---
+// C) PŘESTUPY
 const notifyTransfer = (text) => {
-    broadcast("Nový přestup!", text);
+    broadcast("Přestupová bomba! 💣", text);
 };
 
-// --- D) VYHODNOCENÍ LIGY ---
+// D) VYHODNOCENÍ LIGY
 const notifyLeagueEnd = (leagueName) => {
-    broadcast("Liga vyhodnocena", `Liga ${leagueName} byla uzavřena. Podívej se, jak jsi dopadl.`);
+    broadcast("Liga vyhodnocena 🏆", `Liga ${leagueName} byla uzavřena. Podívej se, jak jsi dopadl!`);
 };
 
-// --- E) CRON: UPOZORNĚNÍ NA LOCK (Každou minutu) ---
+// E) CRON: UPOZORNĚNÍ NA LOCK (Každou minutu)
 // Kontroluje, jestli zápas začíná za 60 minut
 cron.schedule('* * * * *', () => {
     const matches = getMatches();
     const users = getUsers();
+    const teams = getTeams();
     const now = new Date();
 
     // Rozmezí: zápas začíná za 60 až 61 minut
@@ -95,25 +143,30 @@ cron.schedule('* * * * *', () => {
     const checkTimeEnd = new Date(now.getTime() + 61 * 60 * 1000);
 
     const matchesStartingSoon = matches.filter(m => {
-        const mDate = new Date(m.datetime); // Předpokládám ISO formát
+        // Předpokládáme ISO formát (např. 2024-05-01T17:30)
+        const mDate = new Date(m.datetime);
         return mDate >= checkTimeStart && mDate <= checkTimeEnd && !m.result;
     });
 
     matchesStartingSoon.forEach(match => {
+        const homeName = teams.find(t => t.id === match.homeTeamId)?.name || 'Domácí';
+        const awayName = teams.find(t => t.id === match.awayTeamId)?.name || 'Hosté';
+
         users.forEach(u => {
-            if (!u.subscription) return;
+            // Kontrola, zda má uživatel notifikace povolené (má alespoň jedno zařízení)
+            const hasSub = (u.subscriptions && u.subscriptions.length > 0) || u.subscription;
+            if (!hasSub) return;
 
             // Zjistíme, jestli má uživatel tip
-            // !!! UPRAV SI CESTU K TIPŮM PODLE TVÉ STRUKTURY JSONU !!!
-            // Příklad: u.tips['2024']['extraliga']...
             const userTipsForSeason = u.tips?.[match.season]?.[match.liga] || [];
             const hasTip = userTipsForSeason.find(t => t.matchId === match.id);
 
             // Pokud NEMÁ tip, pošleme upozornění
             if (!hasTip) {
-                sendNotification(u.subscription, {
+                sendToUserDevices(u, {
                     title: "⏳ Blíží se uzávěrka!",
-                    body: `Za hodinu začíná zápas a nemáš tipnuto! Šup tam s tím.`
+                    body: `Za hodinu začíná zápas ${homeName} vs ${awayName} a nemáš tipnuto!`,
+                    icon: '/images/logo.png'
                 });
             }
         });
@@ -126,5 +179,5 @@ module.exports = {
     notifyTransfer,
     notifyLeagueEnd,
     publicVapidKey,
-    sendNotification
+    sendDirectNotification: sendNotification // Export pro admin test
 };

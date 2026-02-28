@@ -371,7 +371,11 @@ router.get("/table-tip", requireLogin, (req, res) => {
                         // 1. Odhlásit v prohlížeči
                         await sub.unsubscribe();
                         // 2. Odhlásit na serveru
-                        await fetch('/api/unsubscribe', { method: 'POST' });
+                        await fetch('/api/unsubscribe', { 
+                            method: 'POST',
+                            body: JSON.stringify({ endpoint: sub.endpoint }), // <--- TOTO JE NOVÉ
+                            headers: { 'content-type': 'application/json' }
+                        });
                         
                         isSubscribed = false;
                         alert("Notifikace vypnuty.");
@@ -1804,7 +1808,11 @@ function showTable(which) {
                         // 1. Odhlásit v prohlížeči
                         await sub.unsubscribe();
                         // 2. Odhlásit na serveru
-                        await fetch('/api/unsubscribe', { method: 'POST' });
+                        await fetch('/api/unsubscribe', { 
+                            method: 'POST',
+                            body: JSON.stringify({ endpoint: sub.endpoint }), // <--- TOTO JE NOVÉ
+                            headers: { 'content-type': 'application/json' }
+                        });
                         
                         isSubscribed = false;
                         alert("Notifikace vypnuty.");
@@ -5310,7 +5318,11 @@ function showTable(which) {
                         // 1. Odhlásit v prohlížeči
                         await sub.unsubscribe();
                         // 2. Odhlásit na serveru
-                        await fetch('/api/unsubscribe', { method: 'POST' });
+                        await fetch('/api/unsubscribe', { 
+                            method: 'POST',
+                            body: JSON.stringify({ endpoint: sub.endpoint }), // <--- TOTO JE NOVÉ
+                            headers: { 'content-type': 'application/json' }
+                        });
                         
                         isSubscribed = false;
                         alert("Notifikace vypnuty.");

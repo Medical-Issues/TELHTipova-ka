@@ -41,7 +41,6 @@ app.post('/api/subscribe', (req, res) => {
 
     if (!username) return res.status(401).send('Nejste přihlášen');
 
-    // Cesta musí být absolutní nebo správně relativní k rootu
     const usersPath = path.join(__dirname, 'data', 'users.json');
 
     try {
@@ -49,43 +48,63 @@ app.post('/api/subscribe', (req, res) => {
         const userIndex = users.findIndex(u => u.username === username);
 
         if (userIndex !== -1) {
-            users[userIndex].subscription = subscription;
-            fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
-            console.log(`🔔 Notifikace aktivovány pro: ${username}`);
+            const user = users[userIndex];
+
+            // 1. Pokud pole subscriptions ještě neexistuje, vytvoříme ho
+            // (a převedeme starý 'subscription' do pole, aby se neztratil)
+            if (!user.subscriptions) {
+                user.subscriptions = [];
+                if (user.subscription) {
+                    user.subscriptions.push(user.subscription);
+                    delete user.subscription; // Smažeme starý formát
+                }
+            }
+
+            // 2. Kontrola duplicit (aby tam stejný mobil nebyl 10x)
+            const deviceExists = user.subscriptions.some(s => s.endpoint === subscription.endpoint);
+
+            if (!deviceExists) {
+                user.subscriptions.push(subscription); // PŘIDÁME na konec seznamu
+                fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+                console.log(`🔔 Nové zařízení přidáno pro: ${username}`);
+            } else {
+                console.log(`Zařízení už v seznamu je.`);
+            }
+
             res.status(201).json({});
         } else {
             res.status(404).send('Uživatel nenalezen');
         }
     } catch (error) {
-        console.error("Chyba při ukládání subscription:", error);
+        console.error("Chyba:", error);
         res.status(500).send("Chyba serveru");
     }
 });
 
 app.post('/api/unsubscribe', (req, res) => {
     const username = req.session.user;
+    // Frontend nám musí poslat endpoint zařízení, které chce smazat
+    const { endpoint } = req.body;
+
     if (!username) return res.status(401).send('Nejste přihlášen');
 
-    // Cesta k users.json (použij stejnou logiku jako u subscribe)
     const usersPath = path.join(__dirname, 'data', 'users.json');
+    const users = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
+    const userIndex = users.findIndex(u => u.username === username);
 
-    try {
-        const users = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
-        const userIndex = users.findIndex(u => u.username === username);
+    if (userIndex !== -1) {
+        const user = users[userIndex];
 
-        if (userIndex !== -1) {
-            // Smažeme klíč subscription
-            delete users[userIndex].subscription;
+        if (user.subscriptions) {
+            // Vyfiltrujeme pryč to zařízení, které se odhlašuje
+            user.subscriptions = user.subscriptions.filter(s => s.endpoint !== endpoint);
 
             fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
-            console.log(`🔕 Notifikace vypnuty pro: ${username}`);
-            res.status(200).json({ message: "Odhlášeno" });
-        } else {
-            res.status(404).send('Uživatel nenalezen');
+            console.log(`🔕 Zařízení odebráno pro: ${username}`);
         }
-    } catch (error) {
-        console.error("Chyba při rušení notifikací:", error);
-        res.status(500).send("Chyba serveru");
+        res.status(200).json({ message: "Odhlášeno" });
+    } else {
+        res.status(404).send('Uživatel nenalezen');
     }
 });
 
