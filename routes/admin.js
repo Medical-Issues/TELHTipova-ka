@@ -1824,7 +1824,7 @@ router.post('/leagues/manage', requireAdmin, express.urlencoded({ extended: true
             playin: Number(playin) || 0,
             relegation: Number(relegation) || 0
         });
-        if (req.body.active === 'true') {
+        if (req.body.finished === 'false') {
             notif.notifyLeagueEnd(ligaName);
         }
         fs.writeFileSync('./data/leagues.json', JSON.stringify(allSeasonData, null, 2));
