@@ -4165,7 +4165,7 @@ function showTable(which) {
     document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none'; 
     const p = document.getElementById('playoffTablePreview'); p.style.display = which === 'playoff' ? 'block' : 'none'; 
 }
-</script>;
+</script>
 <body class="usersite">
 <header class="header">
         <div class="league-dropdown">
