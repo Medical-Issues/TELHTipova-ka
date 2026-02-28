@@ -664,7 +664,11 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
             //console.log(`--- TEAM: ${team.name} (${index + 1}.) ---`);
             //console.log(`   Pts: ${myPoints}, Played: ${played}, Remaining: ${remaining}, MaxPts: ${myMaxPoints}`);
 
-            // --- STRICT LOCK LOGIKA (Tvoje verze - funguje správně) ---
+            // --- OPRAVENÁ LOGIKA ZAMYKÁNÍ (LOCKED) ---
+
+// Zjistíme tiebreaky
+            const myTie = stats.tiebreaker || 0;
+
             let canDrop = false;
             for (let i = index + 1; i < sorted.length; i++) {
                 const chaser = sorted[i];
@@ -672,15 +676,20 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
                 const p = (s.wins || 0) + (s.otWins || 0) + (s.otLosses || 0) + (s.losses || 0) + (s.manualGames || 0);
                 const rem = Math.max(0, matchesPerTeam - p);
                 const chaserMax = (s.points || 0) + (rem * 3);
+                const chaserTie = s.tiebreaker || 0;
 
-                // 1. Pokud mě může předběhnout na ČISTÉ BODY -> nejsem Locked
+                // Pokud mě může předběhnout na body
                 if (chaserMax > myPoints) {
                     canDrop = true;
                     break;
                 }
 
-                // 2. Pokud mě může DOROVNAT na body a ještě se hraje
+                // Pokud může mít stejně bodů, ale má horší manuální tiebreak, tak mě NEpředběhne
                 if (chaserMax === myPoints) {
+                    if (myTie > 0 && chaserTie > 0 && myTie < chaserTie) {
+                        // Mám lepší manuální tiebreak (např. 1 vs 2), on mě nepředskočí
+                        continue;
+                    }
                     if (rem > 0 || remaining > 0) {
                         canDrop = true;
                         break;
@@ -693,13 +702,18 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
                 const leader = sorted[index - 1];
                 const leaderStats = leader.stats?.[selectedSeason] || {};
                 const leaderPoints = leaderStats.points || 0;
-                const pL = (leaderStats.wins || 0) + (leaderStats.otWins || 0) + (leaderStats.otLosses || 0) + (leaderStats.losses || 0);
-                const remL = Math.max(0, matchesPerTeam - pL);
+                const leadTie = leaderStats.tiebreaker || 0;
 
+                // Pokud ho můžu předskočit na body
                 if (myMaxPoints > leaderPoints) {
                     canRise = true;
-                } else if (myMaxPoints === leaderPoints) {
-                    if (remaining > 0 || remL > 0) {
+                }
+                // Pokud můžu mít stejně bodů
+                else if (myMaxPoints === leaderPoints) {
+                    // Pokud oba máme manuální tiebreak a já mám ten horší (2), tak ho nepředskočím
+                    if (myTie > 0 && leadTie > 0 && myTie > leadTie) {
+                        canRise = false;
+                    } else if (remaining > 0) {
                         canRise = true;
                     }
                 }
@@ -2087,23 +2101,32 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
             //console.log(`--- TEAM: ${team.name} (${index + 1}.) ---`);
             //console.log(`   Pts: ${myPoints}, Played: ${played}, Remaining: ${remaining}, MaxPts: ${myMaxPoints}`);
 
-            // --- STRICT LOCK LOGIKA (Tvoje verze - funguje správně) ---
+            // --- OPRAVENÁ LOGIKA ZAMYKÁNÍ (LOCKED) ---
+
+// Zjistíme tiebreaky
+            const myTie = stats.tiebreaker || 0;
+
             let canDrop = false;
             for (let i = index + 1; i < sorted.length; i++) {
                 const chaser = sorted[i];
                 const s = chaser.stats?.[selectedSeason] || {};
-                const p = (s.wins||0) + (s.otWins||0) + (s.otLosses||0) + (s.losses||0) + (s.manualGames || 0);
+                const p = (s.wins || 0) + (s.otWins || 0) + (s.otLosses || 0) + (s.losses || 0) + (s.manualGames || 0);
                 const rem = Math.max(0, matchesPerTeam - p);
                 const chaserMax = (s.points || 0) + (rem * 3);
+                const chaserTie = s.tiebreaker || 0;
 
-                // 1. Pokud mě může předběhnout na ČISTÉ BODY -> nejsem Locked
+                // Pokud mě může předběhnout na body
                 if (chaserMax > myPoints) {
                     canDrop = true;
                     break;
                 }
 
-                // 2. Pokud mě může DOROVNAT na body a ještě se hraje
+                // Pokud může mít stejně bodů, ale má horší manuální tiebreak, tak mě NEpředběhne
                 if (chaserMax === myPoints) {
+                    if (myTie > 0 && chaserTie > 0 && myTie < chaserTie) {
+                        // Mám lepší manuální tiebreak (např. 1 vs 2), on mě nepředskočí
+                        continue;
+                    }
                     if (rem > 0 || remaining > 0) {
                         canDrop = true;
                         break;
@@ -2116,14 +2139,18 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
                 const leader = sorted[index - 1];
                 const leaderStats = leader.stats?.[selectedSeason] || {};
                 const leaderPoints = leaderStats.points || 0;
-                const pL = (leaderStats.wins||0)+(leaderStats.otWins||0)+(leaderStats.otLosses||0)+(leaderStats.losses||0);
-                const remL = Math.max(0, matchesPerTeam - pL);
+                const leadTie = leaderStats.tiebreaker || 0;
 
+                // Pokud ho můžu předskočit na body
                 if (myMaxPoints > leaderPoints) {
                     canRise = true;
                 }
+                // Pokud můžu mít stejně bodů
                 else if (myMaxPoints === leaderPoints) {
-                    if (remaining > 0 || remL > 0) {
+                    // Pokud oba máme manuální tiebreak a já mám ten horší (2), tak ho nepředskočím
+                    if (myTie > 0 && leadTie > 0 && myTie > leadTie) {
+                        canRise = false;
+                    } else if (remaining > 0) {
                         canRise = true;
                     }
                 }
@@ -3336,23 +3363,32 @@ p.style.display = which === 'playoff' ? 'block' : 'none';
             //console.log(`--- TEAM: ${team.name} (${index + 1}.) ---`);
             //console.log(`   Pts: ${myPoints}, Played: ${played}, Remaining: ${remaining}, MaxPts: ${myMaxPoints}`);
 
-            // --- STRICT LOCK LOGIKA (Tvoje verze - funguje správně) ---
+            // --- OPRAVENÁ LOGIKA ZAMYKÁNÍ (LOCKED) ---
+
+// Zjistíme tiebreaky
+            const myTie = stats.tiebreaker || 0;
+
             let canDrop = false;
             for (let i = index + 1; i < sorted.length; i++) {
                 const chaser = sorted[i];
                 const s = chaser.stats?.[selectedSeason] || {};
-                const p = (s.wins||0) + (s.otWins||0) + (s.otLosses||0) + (s.losses||0) + (s.manualGames || 0);
+                const p = (s.wins || 0) + (s.otWins || 0) + (s.otLosses || 0) + (s.losses || 0) + (s.manualGames || 0);
                 const rem = Math.max(0, matchesPerTeam - p);
                 const chaserMax = (s.points || 0) + (rem * 3);
+                const chaserTie = s.tiebreaker || 0;
 
-                // 1. Pokud mě může předběhnout na ČISTÉ BODY -> nejsem Locked
+                // Pokud mě může předběhnout na body
                 if (chaserMax > myPoints) {
                     canDrop = true;
                     break;
                 }
 
-                // 2. Pokud mě může DOROVNAT na body a ještě se hraje
+                // Pokud může mít stejně bodů, ale má horší manuální tiebreak, tak mě NEpředběhne
                 if (chaserMax === myPoints) {
+                    if (myTie > 0 && chaserTie > 0 && myTie < chaserTie) {
+                        // Mám lepší manuální tiebreak (např. 1 vs 2), on mě nepředskočí
+                        continue;
+                    }
                     if (rem > 0 || remaining > 0) {
                         canDrop = true;
                         break;
@@ -3365,14 +3401,18 @@ p.style.display = which === 'playoff' ? 'block' : 'none';
                 const leader = sorted[index - 1];
                 const leaderStats = leader.stats?.[selectedSeason] || {};
                 const leaderPoints = leaderStats.points || 0;
-                const pL = (leaderStats.wins||0)+(leaderStats.otWins||0)+(leaderStats.otLosses||0)+(leaderStats.losses||0);
-                const remL = Math.max(0, matchesPerTeam - pL);
+                const leadTie = leaderStats.tiebreaker || 0;
 
+                // Pokud ho můžu předskočit na body
                 if (myMaxPoints > leaderPoints) {
                     canRise = true;
                 }
+                // Pokud můžu mít stejně bodů
                 else if (myMaxPoints === leaderPoints) {
-                    if (remaining > 0 || remL > 0) {
+                    // Pokud oba máme manuální tiebreak a já mám ten horší (2), tak ho nepředskočím
+                    if (myTie > 0 && leadTie > 0 && myTie > leadTie) {
+                        canRise = false;
+                    } else if (remaining > 0) {
                         canRise = true;
                     }
                 }
@@ -4498,17 +4538,36 @@ function showTable(which) {
             const remaining = Math.max(0, matchesPerTeam - played);
             const myMaxPoints = myPoints + (remaining * 3);
 
+            // --- OPRAVENÁ LOGIKA ZAMYKÁNÍ (LOCKED) ---
+
+// Zjistíme tiebreaky
+            const myTie = stats.tiebreaker || 0;
+
             let canDrop = false;
             for (let i = index + 1; i < sorted.length; i++) {
                 const chaser = sorted[i];
                 const s = chaser.stats?.[selectedSeason] || {};
-                const p = (s.wins||0) + (s.otWins||0) + (s.otLosses||0) + (s.losses||0) + (s.manualGames || 0);
+                const p = (s.wins || 0) + (s.otWins || 0) + (s.otLosses || 0) + (s.losses || 0) + (s.manualGames || 0);
                 const rem = Math.max(0, matchesPerTeam - p);
                 const chaserMax = (s.points || 0) + (rem * 3);
+                const chaserTie = s.tiebreaker || 0;
 
-                if (chaserMax > myPoints) { canDrop = true; break; }
+                // Pokud mě může předběhnout na body
+                if (chaserMax > myPoints) {
+                    canDrop = true;
+                    break;
+                }
+
+                // Pokud může mít stejně bodů, ale má horší manuální tiebreak, tak mě NEpředběhne
                 if (chaserMax === myPoints) {
-                    if (rem > 0 || remaining > 0) { canDrop = true; break; }
+                    if (myTie > 0 && chaserTie > 0 && myTie < chaserTie) {
+                        // Mám lepší manuální tiebreak (např. 1 vs 2), on mě nepředskočí
+                        continue;
+                    }
+                    if (rem > 0 || remaining > 0) {
+                        canDrop = true;
+                        break;
+                    }
                 }
             }
 
@@ -4517,12 +4576,20 @@ function showTable(which) {
                 const leader = sorted[index - 1];
                 const leaderStats = leader.stats?.[selectedSeason] || {};
                 const leaderPoints = leaderStats.points || 0;
-                const pL = (leaderStats.wins||0)+(leaderStats.otWins||0)+(leaderStats.otLosses||0)+(leaderStats.losses||0);
-                const remL = Math.max(0, matchesPerTeam - pL);
+                const leadTie = leaderStats.tiebreaker || 0;
 
-                if (myMaxPoints > leaderPoints) canRise = true;
+                // Pokud ho můžu předskočit na body
+                if (myMaxPoints > leaderPoints) {
+                    canRise = true;
+                }
+                // Pokud můžu mít stejně bodů
                 else if (myMaxPoints === leaderPoints) {
-                    if (remaining > 0 || remL > 0) canRise = true;
+                    // Pokud oba máme manuální tiebreak a já mám ten horší (2), tak ho nepředskočím
+                    if (myTie > 0 && leadTie > 0 && myTie > leadTie) {
+                        canRise = false;
+                    } else if (remaining > 0) {
+                        canRise = true;
+                    }
                 }
             }
 
@@ -5642,23 +5709,32 @@ document.addEventListener('DOMContentLoaded', () => {
             //console.log(`--- TEAM: ${team.name} (${index + 1}.) ---`);
             //console.log(`   Pts: ${myPoints}, Played: ${played}, Remaining: ${remaining}, MaxPts: ${myMaxPoints}`);
 
-            // --- STRICT LOCK LOGIKA (Tvoje verze - funguje správně) ---
+            // --- OPRAVENÁ LOGIKA ZAMYKÁNÍ (LOCKED) ---
+
+// Zjistíme tiebreaky
+            const myTie = stats.tiebreaker || 0;
+
             let canDrop = false;
             for (let i = index + 1; i < sorted.length; i++) {
                 const chaser = sorted[i];
                 const s = chaser.stats?.[selectedSeason] || {};
-                const p = (s.wins||0) + (s.otWins||0) + (s.otLosses||0) + (s.losses||0) + (s.manualGames || 0);
+                const p = (s.wins || 0) + (s.otWins || 0) + (s.otLosses || 0) + (s.losses || 0) + (s.manualGames || 0);
                 const rem = Math.max(0, matchesPerTeam - p);
                 const chaserMax = (s.points || 0) + (rem * 3);
+                const chaserTie = s.tiebreaker || 0;
 
-                // 1. Pokud mě může předběhnout na ČISTÉ BODY -> nejsem Locked
+                // Pokud mě může předběhnout na body
                 if (chaserMax > myPoints) {
                     canDrop = true;
                     break;
                 }
 
-                // 2. Pokud mě může DOROVNAT na body a ještě se hraje
+                // Pokud může mít stejně bodů, ale má horší manuální tiebreak, tak mě NEpředběhne
                 if (chaserMax === myPoints) {
+                    if (myTie > 0 && chaserTie > 0 && myTie < chaserTie) {
+                        // Mám lepší manuální tiebreak (např. 1 vs 2), on mě nepředskočí
+                        continue;
+                    }
                     if (rem > 0 || remaining > 0) {
                         canDrop = true;
                         break;
@@ -5671,14 +5747,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 const leader = sorted[index - 1];
                 const leaderStats = leader.stats?.[selectedSeason] || {};
                 const leaderPoints = leaderStats.points || 0;
-                const pL = (leaderStats.wins||0)+(leaderStats.otWins||0)+(leaderStats.otLosses||0)+(leaderStats.losses||0);
-                const remL = Math.max(0, matchesPerTeam - pL);
+                const leadTie = leaderStats.tiebreaker || 0;
 
+                // Pokud ho můžu předskočit na body
                 if (myMaxPoints > leaderPoints) {
                     canRise = true;
                 }
+                // Pokud můžu mít stejně bodů
                 else if (myMaxPoints === leaderPoints) {
-                    if (remaining > 0 || remL > 0) {
+                    // Pokud oba máme manuální tiebreak a já mám ten horší (2), tak ho nepředskočím
+                    if (myTie > 0 && leadTie > 0 && myTie > leadTie) {
+                        canRise = false;
+                    } else if (remaining > 0) {
                         canRise = true;
                     }
                 }

@@ -107,7 +107,7 @@
         },
         "MAXA": {
           "tableCorrect": 1,
-          "tableDeviation": 68
+          "tableDeviation": 70
         }
       }
     },
@@ -4513,8 +4513,8 @@
           "tableDeviation": 4
         },
         "MAXA": {
-          "tableCorrect": 0,
-          "tableDeviation": 64
+          "tableCorrect": 3,
+          "tableDeviation": 60
         }
       }
     },

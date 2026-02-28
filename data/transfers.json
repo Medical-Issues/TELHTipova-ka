@@ -3,12 +3,28 @@
     "TELH": {
       "1": {
         "specIn": [
-          "Prdel obecná"
+          "P. Augusta (?)",
+          "L. Rousek (?)",
+          "J. Rychlovský (?)",
+          "D. Kampf (?)",
+          "D. Jiříček (?)",
+          "A. Musil (?)"
         ],
-        "specOut": [],
-        "confIn": [
-          "P. Augusta"
+        "specOut": [
+          "M.Řepík (K)",
+          "M.Dzierkals (K)",
+          "J.Eberle (K)",
+          "O.Hrabík(K)",
+          "J.Lajunen (K)",
+          "D.Pavlák (K)",
+          "P.Ton (K)",
+          "M.Seppala (K)",
+          "N.Seppala (K)",
+          "M.Vitouch (K)",
+          "J.Nedvěd",
+          "T.Hyka"
         ],
+        "confIn": [],
         "confOut": []
       },
       "2": {
