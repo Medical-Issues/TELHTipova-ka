@@ -150,6 +150,7 @@ router.get('/', requireAdmin, (req, res) => {
         ${allSeasons.map(s => `<option value="${s}" ${s === selectedSeason ? 'selected' : ''}>${s}</option>`).join('')}
     </select>
   </form>
+  <br>
   <section class="all-match-table-and-leagues">
   <div style="display: flex; flex-direction: column; border: 1px solid orangered; padding: 10px; flex: 5;">
   <table>
