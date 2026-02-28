@@ -132,6 +132,7 @@ router.get('/', requireAdmin, (req, res) => {
         <a href="/admin/leagues/manage" class="btn new-btn-admin">Správa lig</a>
         <a href="/admin/teams/points" class="btn new-btn-admin">Manuální body</a>
         <a href="/admin/matches/import" class="btn new-btn-admin">Import zápasů</a>
+        <a href="/admin/images/manage" class="btn new-btn-admin">Správce obrázků</a>
         <a id="backupBtn" class="btn new-btn-admin">Uložit data uživatelům (pouze pro administrativní účely)</a>
     </div>
   </div>
@@ -2566,5 +2567,75 @@ router.post('/leagues/transfers', requireAdmin, express.urlencoded({ extended: t
     fs.writeFileSync('./data/transferLeagues.json', JSON.stringify(savedTransferLeagues, null, 2));
 
     res.redirect('/admin');
+});
+
+router.get('/admin/images/manage', requireAdmin, (req, res) => {
+    const imagesDir = path.join(__dirname, '..', 'data', 'images');
+
+    // Pojistka, kdyby složka neexistovala
+    if (!fs.existsSync(imagesDir)) {
+        fs.mkdirSync(imagesDir, { recursive: true });
+    }
+
+    // Načteme všechny soubory, které jsou obrázky
+    const files = fs.readdirSync(imagesDir).filter(f => f.match(/\.(jpg|jpeg|png|gif|webp)$/i));
+
+    let html = `
+    <!DOCTYPE html>
+    <html lang="cs">
+    <head>
+        <meta charset="UTF-8">
+        <title>Správce log</title>
+        <link rel="stylesheet" href="/css/styles.css">
+        <style>
+            .image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 20px; padding: 20px; }
+            .image-card { border: 1px solid #444; padding: 10px; text-align: center; background: #222; border-radius: 8px; }
+            .image-card img { max-width: 100%; height: 80px; object-fit: contain; margin-bottom: 10px; display: block; margin-left: auto; margin-right: auto; }
+            .image-name { font-size: 10px; color: gray; word-break: break-all; margin-bottom: 10px; display: block; height: 30px; overflow: hidden; }
+            .delete-link { color: #ff4444; text-decoration: none; font-weight: bold; font-size: 13px; }
+            .delete-link:hover { text-decoration: underline; }
+        </style>
+    </head>
+    <body class="usersite">
+        <main class="admin_site">
+            <h1>Správce nahraných log (${files.length} souborů)</h1>
+            <p><a href="/admin" style="color: orangered;">← Zpět do adminu</a></p>
+            
+            <div class="image-grid">
+                ${files.map(file => `
+                    <div class="image-card">
+                        <img src="/logoteamu/${file}" alt="${file}">
+                        <span class="image-name">${file}</span>
+                        <a href="/admin/images/delete/${file}" 
+                           class="delete-link" 
+                           onclick="return confirm('Opravdu smazat tento soubor z disku i ze zálohy?')">SMAZAT</a>
+                    </div>
+                `).join('')}
+            </div>
+            
+            ${files.length === 0 ? '<p style="text-align:center; color: gray;">Žádné obrázky nenalezeny.</p>' : ''}
+        </main>
+    </body>
+    </html>`;
+    res.send(html);
+});
+router.get('/admin/images/delete/:filename', requireAdmin, async (req, res) => {
+    const filename = req.params.filename;
+    const filePath = path.join(__dirname, '..', 'data', 'images', filename);
+
+    try {
+        if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+            console.log(`🗑️ Soubor ${filename} byl smazán.`);
+
+            // Okamžitá záloha, aby GitHub věděl o změně
+            const { backupJsonFilesToGitHub } = require('../utils/githubBackup');
+            await backupJsonFilesToGitHub();
+        }
+    } catch (err) {
+        console.error("Chyba při mazání souboru:", err);
+    }
+
+    res.redirect('/admin/images/manage');
 });
 module.exports = router;
