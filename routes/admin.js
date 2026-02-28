@@ -595,7 +595,7 @@ router.get('/new/match', requireAdmin, (req, res) => {
         <main>
             <h1>Vytvořit nový zápas</h1>
             
-            <div style="margin-bottom: 20px; padding: 10px; background-color: #333; border-radius: 8px; display: inline-flex; align-items: center; gap: 10px;">
+            <div style="margin-bottom: 20px; padding: 10px; background-color: #333; display: inline-flex; align-items: center; gap: 10px;">
                 <label for="leagueFilter" style="color: white; font-weight: bold;">Rychlý filtr ligy:</label>
                 <select class="league-select" id="leagueFilter" onchange="filterByLeague()">
                     <option value="all">-- Všechny ligy --</option>
@@ -1133,7 +1133,7 @@ router.get('/playoff', requireAdmin, (req, res) => {
         </table>
       </form>
       
-      <div style="margin-top: 30px; background: #1a1a1a; padding: 15px; border-radius: 8px; border: 1px solid #444;">
+      <div style="margin-top: 30px; background: #1a1a1a; padding: 15px; border: 1px solid #444;">
           <h3 style="color: orangered; margin-top: 0;">Generátor a Šablony</h3>
           
           <div style="display: flex; gap: 30px; flex-wrap: wrap;">
@@ -2299,33 +2299,33 @@ router.get('/matches/import', requireAdmin, (req, res) => {
                     <label style="display: flex; flex-direction: column; color: orangered;">
                         URL adresa (https://www.hokej.cz/tipsport-extraliga/zapasy?matchList-view-displayAll=1&matchList-filter-season=2025&matchList-filter-competition=7397):
                         <input type="text" name="url" placeholder="https://www.hokej.cz/tipsport-extraliga/zapasy?season=..." required 
-                               style="padding: 10px; background-color: #222; border: 1px solid orangered; color: white; border-radius: 5px;">
+                               style="padding: 10px; background-color: #222; border: 1px solid orangered; color: white;">
                     </label>
 
                     <div style="display:flex; gap: 20px; flex-wrap: wrap;">
                         <label style="flex: 1; display: flex; flex-direction: column; color: orangered;">
                             Od data:
                             <input type="date" name="dateFrom" value="${today}" 
-                                   style="padding: 10px; background-color: #222; border: 1px solid orangered; color: white; border-radius: 5px;">
+                                   style="padding: 10px; background-color: #222; border: 1px solid orangered; color: white;">
                         </label>
                         <label style="flex: 1; display: flex; flex-direction: column; color: orangered;">
                             Do data:
                             <input type="date" name="dateTo" value="${nextWeek}" 
-                                   style="padding: 10px; background-color: #222; border: 1px solid orangered; color: white; border-radius: 5px;">
+                                   style="padding: 10px; background-color: #222; border: 1px solid orangered; color: white;">
                         </label>
                     </div>
 
                     <div style="display:flex; gap: 20px; flex-wrap: wrap;">
                         <label style="flex: 1; display: flex; flex-direction: column; color: orangered;">
                             Liga (dle leagues.json):
-                            <select name="liga" style="padding: 10px; background-color: #222; border: 1px solid orangered; color: white; border-radius: 5px;">
+                            <select name="liga" style="padding: 10px; background-color: #222; border: 1px solid orangered; color: white;">
                                 ${leaguesList.map(l => `<option value="${l}" ${l === 'TELH' ? 'selected' : ''}>${l}</option>`).join('')}
                             </select>
                         </label>
 
                         <label style="flex: 1; display: flex; flex-direction: column; color: orangered;">
                             Sezóna (pro výpočet roku):
-                            <select name="season" style="padding: 10px; background-color: #222; border: 1px solid orangered; color: white; border-radius: 5px;">
+                            <select name="season" style="padding: 10px; background-color: #222; border: 1px solid orangered; color: white;">
                                 ${seasonOptions.map(s => `<option value="${s}" ${s === currentSeason ? 'selected' : ''}>${s}</option>`).join('')}
                             </select>
                         </label>
