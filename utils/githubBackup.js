@@ -5,7 +5,7 @@ const REPO_OWNER = 'Medical-Issues';
 const REPO_NAME = 'TELHTipovackaZaloha';
 const BRANCH = 'main';
 const DATA_FOLDER = path.join(__dirname, '..', 'data');
-const IMAGES_FOLDER = path.join(DATA_FOLDER, 'images');
+const IMAGES_FOLDER = path.resolve(DATA_FOLDER, 'images');
 
 async function backupJsonFilesToGitHub() {
     const { Octokit } = require("@octokit/rest");
@@ -51,7 +51,12 @@ async function backupJsonFilesToGitHub() {
                     console.log(`⚠️ Varování u souboru ${fileObj.local}: ${e.message}`);
                 }
             }
-
+            if (fs.existsSync(IMAGES_FOLDER)) {
+                imageFiles = fs.readdirSync(IMAGES_FOLDER).filter(f => f.match(/\.(jpg|jpeg|png|gif|webp)$/i));
+                console.log(`🔎 Nalezené obrázky k záloze: ${imageFiles.length} (${imageFiles.join(', ')})`);
+            } else {
+                console.log(`⚠️ Složka ${IMAGES_FOLDER} nebyla nalezena!`);
+            }
             await octokit.repos.createOrUpdateFileContents({
                 owner: REPO_OWNER,
                 repo: REPO_NAME,
