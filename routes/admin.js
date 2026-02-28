@@ -2590,18 +2590,7 @@ router.get('/images/manage', requireAdmin, (req, res) => {
         <meta charset="UTF-8">
         <title>Správce log</title>
         <link rel="stylesheet" href="/css/styles.css">
-        <style>
-            .image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 20px; padding: 20px; }
-            .image-card { border: 2px solid #444; padding: 10px; text-align: center; background: #222; border-radius: 8px; position: relative; }
-            .image-card.active { border-color: #00ff00; box-shadow: 0 0 10px rgba(0,255,0,0.2); }
-            .status-badge { font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 4px; position: absolute; top: 5px; right: 5px; }
-            .status-active { background: #00ff00; color: black; }
-            .status-unused { background: #555; color: white; }
-            .image-card img { max-width: 100%; height: 80px; object-fit: contain; margin-bottom: 10px; display: block; margin-left: auto; margin-right: auto; }
-            .image-name { font-size: 10px; color: gray; word-break: break-all; margin-bottom: 10px; display: block; height: 30px; overflow: hidden; }
-            .delete-link { color: #ff4444; text-decoration: none; font-weight: bold; font-size: 13px; }
-            .delete-link.disabled { color: #444; cursor: not-allowed; pointer-events: none; }
-        </style>
+        <link rel="icon" href="/images/logo.png">
     </head>
     <body class="usersite">
         <main class="admin_site">
@@ -2654,10 +2643,8 @@ router.get('/transfers/manage', requireAdmin, (req, res) => {
     const selectedSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
     const allowedLeagues = JSON.parse(fs.readFileSync('./data/allowedLeagues.json', 'utf-8'));
 
-    // Aktuálně vybraná liga z query nebo první dostupná
     const selectedLiga = req.query.liga || allowedLeagues[0];
 
-    // Načtení stávajících dat přestupů
     let transfersData = {};
     try {
         if (fs.existsSync('./data/transfers.json')) {
@@ -2681,6 +2668,29 @@ router.get('/transfers/manage', requireAdmin, (req, res) => {
         <main class="admin_site">
             <h1>Správa přestupů: ${selectedLiga} (${selectedSeason})</h1>
             
+            <div class="legend-box">
+                <h3 style="margin: 0; color: white;">🎨 Jak formátovat jména (Legenda)</h3>
+                <p style="margin: 5px 0 0 0; color: gray; font-size: 0.9em;">Za jméno hráče připiš tyto značky a po uložení se na webu obarví:</p>
+                
+                <div class="legend-grid">
+                    <div class="legend-item">
+                        <span class="code-tag">(!)</span> = <span style="color: gold; font-weight: bold;">🔥 Bomba / Hotovo</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="code-tag">(X)</span> = <span style="color: #ff6666; text-decoration: line-through;">❌ Padlo / Odchod</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="code-tag">(?)</span> = <span style="color: #00d4ff; font-style: italic;">❓ Spekulace</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="code-tag">(K)</span> = <span style="color: orange; font-weight: bold;">📄 Konec smlouvy</span>
+                    </div>
+                     <div class="legend-item">
+                        <span class="code-tag">#00ff00</span> = <span style="color: #00ff00;">Vlastní HEX barva</span>
+                    </div>
+                </div>
+            </div>
+
             <form method="GET" style="margin-bottom: 20px;">
                 Změnit ligu: 
                 <select id="league-select" name="liga" onchange="this.form.submit()" style="padding: 5px;">
@@ -2693,23 +2703,20 @@ router.get('/transfers/manage', requireAdmin, (req, res) => {
                 <input type="hidden" name="season" value="${selectedSeason}">
                 
                 ${teamsInLiga.map(team => {
-        // ID týmu převedeme na string, aby odpovídalo klíčům v JSONu
         const tId = String(team.id);
         const data = currentTransfers[tId] || { specIn: [], specOut: [], confIn: [], confOut: [] };
-        // Logo bereme přímo z týmu v cyklu
         const logoUrl = team.logo ? `/logoteamu/${team.logo}` : '/images/logo.png';
 
         return `
                     <div class="team-block">
                         <div class="team-background-logo" style="background-image: url('${logoUrl}');"></div>
-                        
                         <div class="team-content">
-                            <h2>${team.name}</h2>
+                            <h2>${team.name} <span style="font-size:0.6em; color:gray; font-weight:normal;">(ID: ${team.id})</span></h2>
                             <div class="t-grid">
-                                <div><span class="t-label">SPEKULACE PŘÍCHOD (?)</span><textarea name="t[${team.id}][specIn]">${(data.specIn || []).join('\n')}</textarea></div>
-                                <div><span class="t-label">SPEKULACE ODCHOD (?)</span><textarea name="t[${team.id}][specOut]">${(data.specOut || []).join('\n')}</textarea></div>
-                                <div><span class="t-label" style="color: lime;">POTVRZENÉ PŘÍCHODY (!)</span><textarea name="t[${team.id}][confIn]">${(data.confIn || []).join('\n')}</textarea></div>
-                                <div><span class="t-label" style="color: red;">POTVRZENÉ ODCHODY (X)</span><textarea name="t[${team.id}][confOut]">${(data.confOut || []).join('\n')}</textarea></div>
+                                <div><span class="t-label">SPEKULACE IN <span style="color:cyan">(?)</span></span><textarea name="t[id_${team.id}][specIn]">${(data.specIn || []).join('\n')}</textarea></div>
+                                <div><span class="t-label">SPEKULACE OUT <span style="color:cyan">(?)</span></span><textarea name="t[id_${team.id}][specOut]">${(data.specOut || []).join('\n')}</textarea></div>
+                                <div><span class="t-label" style="color: lime;">PŘÍCHODY <span style="color:gold">(!)</span></span><textarea name="t[id_${team.id}][confIn]">${(data.confIn || []).join('\n')}</textarea></div>
+                                <div><span class="t-label" style="color: red;">ODCHODY <span style="color:#ff6666">(X)</span></span><textarea name="t[id_${team.id}][confOut]">${(data.confOut || []).join('\n')}</textarea></div>
                             </div>
                         </div>
                     </div>`;
@@ -2729,6 +2736,10 @@ router.get('/transfers/manage', requireAdmin, (req, res) => {
 router.post('/transfers/save', requireAdmin, express.urlencoded({ extended: true }), async (req, res) => {
     const { liga, season, t } = req.body;
 
+    // DEBUG: Mrkni do konzole, co přesně přišlo.
+    // Teď bys tam měl vidět objekty typu: { id_1: { specIn: ... }, id_2: ... }
+    console.log("Data z formuláře:", JSON.stringify(t, null, 2));
+
     let transfersData = {};
     try {
         if (fs.existsSync('./data/transfers.json')) {
@@ -2737,21 +2748,21 @@ router.post('/transfers/save', requireAdmin, express.urlencoded({ extended: true
     } catch (e) { transfersData = {}; }
 
     if (!transfersData[season]) transfersData[season] = {};
-
-    // Resetujeme data pro aktuální ligu, aby se smazalo to, co uživatel vymazal
     transfersData[season][liga] = {};
 
-    // Iterujeme přes IDčka týmů (klíče v objektu t)
-    for (const teamId in t) {
-        const teamObj = t[teamId];
-        const cleanList = (text) => text.split('\n').map(name => name.trim()).filter(name => name !== "");
+    // Iterujeme přes klíče (které teď vypadají jako "id_1", "id_2"...)
+    for (const rawKey in t) {
+        // ODSTRANÍME PREFIX "id_", ABY ZŮSTALO JEN ČISTÉ ID
+        const teamId = rawKey.replace('id_', '');
 
-        // Ukládáme pod ID týmu (např. "1772247543825")
+        const teamObj = t[rawKey];
+        const cleanList = (text) => text ? text.split('\n').map(name => name.trim()).filter(name => name !== "") : [];
+
         transfersData[season][liga][teamId] = {
             specIn: cleanList(teamObj.specIn),
             specOut: cleanList(teamObj.specOut),
-            confIn: cleanList(teamObj.confIn),   // Sjednoceno na confIn
-            confOut: cleanList(teamObj.confOut)  // Sjednoceno na confOut
+            confIn: cleanList(teamObj.confIn),
+            confOut: cleanList(teamObj.confOut)
         };
     }
 

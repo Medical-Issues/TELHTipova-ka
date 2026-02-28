@@ -1133,7 +1133,8 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
             const realRank = globalRealRankMap[team.id] || '?';
             const diff = userRank - realRank;
             const isCorrect = (diff === 0);
-
+            const logoUrl = team.logo ? `/logoteamu/${team.logo}` : '/images/logo.png';
+            
             let bgStyle = "background-color: #1a1a1a; border: 1px solid #444;";
             let diffText;
             let diffColor = "gray";
@@ -1156,14 +1157,21 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
                             draggable="${!isGroupLocked}" 
                             data-id="${team.id}"
                             data-group="${gKey}"
-                            style="${bgStyle} ${isGroupLocked ? 'cursor: default; opacity: 0.9;' : 'cursor: grab;'} display: flex; align-items: center; justify-content: space-between; margin: 5px 0; padding: 15px; color: #fff;">
+                            style="${bgStyle} ${isGroupLocked ? 'cursor: default; opacity: 0.9;' : 'cursor: grab;'} 
+                           display: flex; align-items: center; justify-content: space-between; margin: 5px 0; padding: 15px; color: #fff;
+                           position: relative; overflow: hidden;"> 
+                           <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+                                width: 80%; height: 400%; 
+                                background-image: url('${logoUrl}'); background-size: contain; background-repeat: no-repeat; background-position: center; 
+                                opacity: 0.30; filter: grayscale(50%); pointer-events: none; z-index: 1;">
+                           </div>
                             
-                            <div style="display:flex; align-items:center;">
+                            <div style="display:flex; align-items:center; position: relative; z-index: 2;">
                                 <span class="rank-number" style="font-weight: bold; color: orangered; margin-right: 15px; width: 30px;">${userRank}.</span>
                                 <span class="team-name" style="font-weight: bold;">${team.name}</span>
                             </div>
 
-                            <div style="display:flex; align-items:center; gap: 15px;">
+                            <div style="display:flex; align-items:center; gap: 15px; position: relative; z-index: 2;">
                                 <span style="color: ${diffColor}; font-weight: normal; margin-right: 10px;">${diffText}</span>
                                 <span style="font-size:20px;">${isGroupLocked ? '🔒' : '☰'}</span>
                             </div>
@@ -2389,24 +2397,89 @@ ${currentUserStats?.tableCorrect > 0 || currentUserStats?.tableDeviation > 0 ? `
             })();
 
             html += `<h3>${formattedDateTime}</h3><table class="matches-table"><thead class="matches-table-header"><tr><th colspan="3">Zápasy</th></tr></thead><tbody>`;
+
             for (const match of matchesAtSameTime) {
-                const homeTeam = teams.find(t => t.id === match.homeTeamId)?.name || '???';
-                const awayTeam = teams.find(t => t.id === match.awayTeamId)?.name || '???';
+                // Najdeme objekty týmů, abychom měli přístup k logům
+                const homeTeamObj = teams.find(t => t.id === match.homeTeamId);
+                const awayTeamObj = teams.find(t => t.id === match.awayTeamId);
+
+                const homeTeamName = homeTeamObj?.name || '???';
+                const awayTeamName = awayTeamObj?.name || '???';
+
+                // Definice log (Watermark)
+                const homeLogoUrl = homeTeamObj?.logo ? `/logoteamu/${homeTeamObj.logo}` : '/images/logo.png';
+                const awayLogoUrl = awayTeamObj?.logo ? `/logoteamu/${awayTeamObj.logo}` : '/images/logo.png';
+
+                // HTML PRO WATERMARK (vložíme ho do tlačítek)
+                const watermarkHTML = (url) => `
+                    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-10deg); 
+                                width: 120%; height: 400%; 
+                                background-image: url('${url}'); background-size: contain; background-repeat: no-repeat; background-position: center; 
+                                opacity: 0.30; filter: grayscale(50%); pointer-events: none; z-index: 1;">
+                    </div>`;
+
                 const existingTip = userTips.find(t => t.matchId === match.id);
                 const selectedWinner = existingTip?.winner;
                 const matchStarted = match.postponed ? true : (match.datetime <= currentPragueTimeISO);
                 const isPlayoff = match.isPlayoff;
 
                 if (match.postponed) {
-                    html += `<tr class="match-row postponed"><td colspan="3"><strong>${homeTeam} vs ${awayTeam}</strong></td></tr>`;
+                    html += `<tr class="match-row postponed"><td colspan="3"><strong>${homeTeamName} vs ${awayTeamName}</strong></td></tr>`;
                 } else if (!isPlayoff) {
-                    html += `<tr class="match-row simple-match-row" data-match-id="${match.id}"><td><button type="button" class="team-link home-btn ${selectedWinner === "home" ? "selected" : ""}" data-winner="home" ${matchStarted ? 'disabled' : ''}>${homeTeam}</button></td><td class="vs">vs</td><td><button type="button" class="team-link away-btn ${selectedWinner === "away" ? "selected" : ""}" data-winner="away" ${matchStarted ? 'disabled' : ''}>${awayTeam}</button></td></tr>`;
+                    // --- ZÁKLADNÍ ČÁST (Simple Match) ---
+                    html += `
+                    <tr class="match-row simple-match-row" data-match-id="${match.id}">
+                        <td style="position: relative; overflow: hidden;">${watermarkHTML(homeLogoUrl)}
+                            <button type="button" class="team-link home-btn ${selectedWinner === "home" ? "selected" : ""}" data-winner="home" ${matchStarted ? 'disabled' : ''} 
+                                    style="overflow: hidden;">
+                                <span style="z-index: 2;">${homeTeamName}</span>
+                            </button>
+                        </td>
+                        <td class="vs">vs</td>
+                        <td style="position: relative; overflow: hidden;">${watermarkHTML(awayLogoUrl)}
+                            <button type="button" class="team-link away-btn ${selectedWinner === "away" ? "selected" : ""}" data-winner="away" ${matchStarted ? 'disabled' : ''}
+                                    style="overflow: hidden;">
+                                <span style="z-index: 2;">${awayTeamName}</span>
+                            </button>
+                        </td>
+                    </tr>`;
                 } else {
+                    // --- PLAYOFF ZÁPAS ---
                     const existingLoserWins = existingTip?.loserWins || 0;
                     const bo = match.bo || 7;
                     const maxLoserWins = Math.floor(bo / 2);
-                    html += `<tr class="match-row playoff-parent-row" data-match-id="${match.id}"><td><button type="button" class="team-link home-btn ${selectedWinner === "home" ? "selected" : ""}" data-winner="home" ${matchStarted ? 'disabled' : ''}>${homeTeam}</button></td><td class="vs">vs</td><td><button type="button" class="team-link away-btn ${selectedWinner === "away" ? "selected" : ""}" data-winner="away" ${matchStarted ? 'disabled' : ''}>${awayTeam}</button></td></tr>
-                    <tr class="match-row loser-row" style="display:${existingTip ? 'table-row' : 'none'}"><td colspan="3"><form class="loserwins-form" onsubmit="return false;" data-bo="${match.bo}"><input type="hidden" name="matchId" value="${match.id}"><input type="hidden" name="winner" value="${existingTip?.winner ?? ''}">${match.bo === 1 ? `Skóre: <input type="number" name="scoreHome" value="${existingTip?.scoreHome ?? ''}" min="0" style="width:50px"> : <input type="number" name="scoreAway" value="${existingTip?.scoreAway ?? ''}" min="0" style="width:50px">` : `Kolik zápasů vyhrál poražený: <select name="loserWins">${Array.from({length: maxLoserWins + 1}, (_, i) => `<option value="${i}" ${i === existingLoserWins ? 'selected' : ''}>${i}</option>`).join('')}</select>`}</form></td></tr>`;
+
+                    html += `
+                    <tr class="match-row playoff-parent-row" data-match-id="${match.id}">
+                        <td>
+                            <button type="button" class="team-link home-btn ${selectedWinner === "home" ? "selected" : ""}" data-winner="home" ${matchStarted ? 'disabled' : ''}
+                                    style="position: relative; overflow: hidden;">
+                                ${watermarkHTML(homeLogoUrl)}
+                                <span style="position: relative; z-index: 2;">${homeTeamName}</span>
+                            </button>
+                        </td>
+                        <td class="vs">vs</td>
+                        <td>
+                            <button type="button" class="team-link away-btn ${selectedWinner === "away" ? "selected" : ""}" data-winner="away" ${matchStarted ? 'disabled' : ''}
+                                    style="position: relative; overflow: hidden;">
+                                ${watermarkHTML(awayLogoUrl)}
+                                <span style="position: relative; z-index: 2;">${awayTeamName}</span>
+                            </button>
+                        </td>
+                    </tr>
+                    <tr class="match-row loser-row" style="display:${existingTip ? 'table-row' : 'none'}">
+                        <td colspan="3">
+                            <form class="loserwins-form" onsubmit="return false;" data-bo="${match.bo}">
+                                <input type="hidden" name="matchId" value="${match.id}">
+                                <input type="hidden" name="winner" value="${existingTip?.winner ?? ''}">
+                                ${match.bo === 1 ?
+                        `Skóre: <input type="number" name="scoreHome" value="${existingTip?.scoreHome ?? ''}" min="0" style="width:50px"> : <input type="number" name="scoreAway" value="${existingTip?.scoreAway ?? ''}" min="0" style="width:50px">`
+                        :
+                        `Kolik zápasů vyhrál poražený: <select name="loserWins">${Array.from({length: maxLoserWins + 1}, (_, i) => `<option value="${i}" ${i === existingLoserWins ? 'selected' : ''}>${i}</option>`).join('')}</select>`
+                    }
+                            </form>
+                        </td>
+                    </tr>`;
                 }
             }
             html += `</tbody></table>`;
@@ -3508,16 +3581,65 @@ p.style.display = which === 'playoff' ? 'block' : 'none';
     }
     html += `</div>`; // KONEC LEVÉ STRANY
 
-    // --- PRAVÁ STRANA: ZÁPASY ---
+    // ... (začátek routy, načtení dat atd.) ...
+
+// --- PRAVÁ STRANA: ZÁPASY ---
     html += `
         <script>
         const globalStatsData = ${JSON.stringify(userStats)};
+        
+        // Funkce pro zobrazení historie a dynamické barvení políček
         function showUserHistory(username) {
+            // 1. Schovat všechny tipy
             document.querySelectorAll('.history-item').forEach(el => el.style.display = 'none');
+            
             const safeName = username.replace(/[^a-zA-Z0-9]/g, '_');
-            document.querySelectorAll('.user-' + safeName).forEach(el => el.style.display = 'flex');
+            const userSelector = '.user-' + safeName;
+            
+            // 2. Zobrazit tipy vybraného uživatele a aktualizovat rodičovské TD
+            document.querySelectorAll(userSelector).forEach(el => {
+                el.style.display = 'flex'; // Zobrazíme text (např. 3:2)
+                
+                // Najdeme rodičovskou buňku tabulky
+                const parentTd = el.closest('td');
+                if (parentTd) {
+                    // Resetujeme třídy (odstraníme staré barvy, necháme jen základ)
+                    parentTd.classList.remove('right-selected', 'wrong-selected', 'exact-score', 'diff-1', 'diff-2', 'diff-3plus');
+                    
+                    // Pokud má element data-td-class, přidáme ji rodiči
+                    if (el.dataset.tdClass) {
+                        parentTd.classList.add(el.dataset.tdClass);
+                    }
+                }
+            });
         }
         </script>
+        <style>
+            /* Styly pro history tabulku inspirované hlavní routou */
+            .matches-table td {
+                position: relative;
+                overflow: hidden;
+                vertical-align: middle;
+            }
+            .team-link-history {
+                position: absolute;
+                z-index: 2; /* Text musí být nad logem */
+                font-weight: bold;
+                width: 100%;
+                height: 100%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            /* Barvy pro výsledky - musí mít !important, aby přebily základní styly */
+            td.right-selected { background-color: rgba(0, 255, 0, 0.6); }
+            td.wrong-selected { background-color: rgba(255, 0, 0, 0.6); }
+            td.exact-score { background-color: rgba(0, 255, 0, 0.6); }
+            td.diff-1 { background-color: rgba(255, 255, 0, 0.5); }
+            td.diff-2 { background-color: rgba(255, 80, 0, 0.5); }
+            td.diff-3plus { background-color: rgba(255, 0, 0, 0.6); }
+        </style>
+
         <section class="matches-container">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
                 <h2 style="margin: 0;">Historie tipů</h2>
@@ -3537,7 +3659,7 @@ p.style.display = which === 'playoff' ? 'block' : 'none';
     html += `   </select></div></div>
    <table class="points-table">`;
 
-    // (ZBYTEK KÓDU PRO ZÁPASY ZŮSTÁVÁ)
+    // Seskupení zápasů
     const groupedMatches = matches
         .filter(m => m.liga === selectedLiga && m.result && m.season === selectedSeason)
         .sort((a, b) => new Date(b.datetime) - new Date(a.datetime))
@@ -3548,43 +3670,58 @@ p.style.display = which === 'playoff' ? 'block' : 'none';
             return groups;
         }, {});
 
+    // Funkce pro watermark (převzatá z routy /)
+    const watermarkHTML = (url) => `
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-10deg); 
+                    width: 120%; height: 400%; 
+                    background-image: url('${url}'); background-size: contain; background-repeat: no-repeat; background-position: center; 
+                    opacity: 0.30; filter: grayscale(50%); pointer-events: none; z-index: 1;">
+        </div>`;
+
+    // Renderovací funkce
     const renderUserTip = (u, match, type) => {
         const userTip = u.tips?.[selectedSeason]?.[selectedLiga]?.find(t => t.matchId === match.id);
         const selectedWinner = userTip?.winner;
         const bo = match.bo || 5;
+
+        // Zde schováváme div, ale data-atributy nesou informaci pro JS
         const visibilityStyle = u.username === initialUser ? '' : 'display:none;';
         const userClass = `history-item user-${u.username.replace(/[^a-zA-Z0-9]/g, '_')}`;
 
+        // Proměnná pro třídu, kterou pak JS hodí na rodičovské TD
+        let tdStatusClass = "";
+
         if (type === 'home' || type === 'away') {
             const teamName = type === 'home' ? (teams.find(t => t.id === match.homeTeamId)?.name || '???') : (teams.find(t => t.id === match.awayTeamId)?.name || '???');
-            let cssClass = "";
+
             if (selectedWinner === type) {
-                cssClass = match.result.winner === type ? "right-selected" : "wrong-selected";
+                tdStatusClass = match.result.winner === type ? "right-selected" : "wrong-selected";
             }
-            return `<div class="${userClass} team-link-history ${cssClass}" style="${visibilityStyle}">${teamName}</div>`;
+
+            // Vracíme DIV s atributem data-td-class
+            return `<div class="${userClass} team-link-history" style="${visibilityStyle}" data-td-class="${tdStatusClass}">${teamName}</div>`;
         }
+
         if (type === 'score') {
+            let content = '-';
             if (selectedWinner === "home" || selectedWinner === "away") {
                 if (bo === 1) {
                     const tH = userTip?.scoreHome ?? 0;
                     const tA = userTip?.scoreAway ?? 0;
                     const totalDiff = Math.abs(tH - match.result.scoreHome) + Math.abs(tA - match.result.scoreAway);
-                    let sc;
-                    if (totalDiff === 0) {
-                        sc = 'exact-score';    // Přesný výsledek (zelená)
-                    } else if (totalDiff === 1) {
-                        sc = 'diff-1';         // Chyba o 1 gól (žlutá)
-                    } else if (totalDiff === 2) {
-                        sc = 'diff-2';         // Chyba o 2 góly (oranžová)
-                    } else {
-                        sc = 'diff-3plus';     // Chyba o 3 a více gólů (červená)
-                    }
-                    return `<div class="${userClass} team-link-history ${sc}" style="${visibilityStyle}">${tH} : ${tA}</div>`;
+
+                    if (totalDiff === 0) tdStatusClass = 'exact-score';
+                    else if (totalDiff === 1) tdStatusClass = 'diff-1';
+                    else if (totalDiff === 2) tdStatusClass = 'diff-2';
+                    else tdStatusClass = 'diff-3plus';
+
+                    content = `${tH} : ${tA}`;
                 } else {
-                    return `<div class="${userClass} team-link-history right-selected" style="${visibilityStyle}">${userTip?.loserWins ?? '-'}</div>`;
+                    tdStatusClass = 'right-selected';
+                    content = userTip?.loserWins ?? '-';
                 }
             }
-            return `<div class="${userClass}" style="${visibilityStyle}">-</div>`;
+            return `<div class="${userClass} team-link-history" style="${visibilityStyle}" data-td-class="${tdStatusClass}">${content}</div>`;
         }
         return '';
     };
@@ -3594,17 +3731,65 @@ p.style.display = which === 'playoff' ? 'block' : 'none';
             day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
         });
         html += `<h3>${formattedDateTime}</h3><table class="matches-table"><thead class="matches-table-header"><tr><th colSpan="6">Zápasy</th></tr></thead><tbody>`;
+
         for (const match of matchesAtSameTime) {
+            // Získání objektů týmů pro loga
+            const homeTeamObj = teams.find(t => t.id === match.homeTeamId);
+            const awayTeamObj = teams.find(t => t.id === match.awayTeamId);
+
+            const homeLogoUrl = homeTeamObj?.logo ? `/logoteamu/${homeTeamObj.logo}` : '/images/logo.png';
+            const awayLogoUrl = awayTeamObj?.logo ? `/logoteamu/${awayTeamObj.logo}` : '/images/logo.png';
+
             let homeCellHTML = "", awayCellHTML = "", scoreCellHTML = "";
+
+            // Zjištění počátečních tříd pro initialUser (aby se obarvilo hned při načtení)
+            let initHomeClass = "", initAwayClass = "", initScoreClass = "";
+
             usersWithTips.forEach(u => {
+                // Generujeme vnitřní HTML
                 homeCellHTML += renderUserTip(u, match, 'home');
                 awayCellHTML += renderUserTip(u, match, 'away');
                 if (match.isPlayoff) scoreCellHTML += renderUserTip(u, match, 'score');
+
+                // Pokud je to výchozí uživatel, zjistíme jeho třídy přímo teď
+                if (u.username === initialUser) {
+                    // Musíme si "vyparsovat" tu třídu z toho stringu, co vrací renderUserTip, nebo to udělat chytřeji.
+                    // Tady použijeme jednoduchý trik: renderUserTip vrací string s `data-td-class="..."`.
+                    // Vytáhneme si ho regexem pro prvotní vykreslení.
+                    const homeMatch = renderUserTip(u, match, 'home').match(/data-td-class="([^"]*)"/);
+                    if (homeMatch) initHomeClass = homeMatch[1];
+
+                    const awayMatch = renderUserTip(u, match, 'away').match(/data-td-class="([^"]*)"/);
+                    if (awayMatch) initAwayClass = awayMatch[1];
+
+                    if(match.isPlayoff) {
+                        const scoreMatch = renderUserTip(u, match, 'score').match(/data-td-class="([^"]*)"/);
+                        if (scoreMatch) initScoreClass = scoreMatch[1];
+                    }
+                }
             });
+
+            // Vytvoření řádků s Watermarkem
+            // Watermark se vkládá PŘED obsah (homeCellHTML), díky absolutní pozici bude pod ním
             if (!match.isPlayoff) {
-                html += `<tr class="match-row"><td class="match-row">${homeCellHTML}</td><td class="vs">${match.result.scoreHome}</td><td class="vs">${match.result.ot === true ? "pp/sn" : ":"}</td><td class="vs">${match.result.scoreAway}</td><td class="match-row">${awayCellHTML}</td></tr>`;
+                html += `<tr class="match-row">
+                    <td class="match-row ${initHomeClass}">${watermarkHTML(homeLogoUrl)}${homeCellHTML}</td>
+                    <td class="vs">${match.result.scoreHome}</td>
+                    <td class="vs">${match.result.ot === true ? "pp/sn" : ":"}</td>
+                    <td class="vs">${match.result.scoreAway}</td>
+                    <td class="match-row ${initAwayClass}">${watermarkHTML(awayLogoUrl)}${awayCellHTML}</td>
+                </tr>`;
             } else {
-                html += `<tr class="match-row"><td>${homeCellHTML}</td><td class="vs">${match.result.scoreHome}</td><td class="vs">vs</td><td class="vs">${match.result.scoreAway}</td><td>${awayCellHTML}</td></tr><tr class="match-row"><td style="color: black" colspan="5">${scoreCellHTML}</td></tr>`;
+                html += `<tr class="match-row">
+                    <td class="${initHomeClass}">${watermarkHTML(homeLogoUrl)}${homeCellHTML}</td>
+                    <td class="vs">${match.result.scoreHome}</td>
+                    <td class="vs">vs</td>
+                    <td class="vs">${match.result.scoreAway}</td>
+                    <td class="${initAwayClass}">${watermarkHTML(awayLogoUrl)}${awayCellHTML}</td>
+                </tr>
+                <tr class="match-row">
+                    <td style="color: lightgrey" colspan="5" class="${initScoreClass}">${scoreCellHTML}</td>
+                </tr>`;
             }
         }
         html += `</tbody></table>`;
@@ -3619,11 +3804,10 @@ p.style.display = which === 'playoff' ? 'block' : 'none';
     if (!sidebar || !container) return;
 
     let lastScrollY = window.scrollY;
-    let topOffset = 20; // Výchozí odsazení odshora
-    const margin = 20; // Mezera nahoře i dole
+    let topOffset = 20; 
+    const margin = 20; 
 
     window.addEventListener('scroll', () => {
-        // Pokud je obrazovka dostatečně velká, že se tam panel vejde celý, normálně ho přilepíme k vršku
         if (sidebar.offsetHeight <= window.innerHeight) {
             sidebar.style.top = margin + 'px';
             return;
@@ -3634,20 +3818,17 @@ p.style.display = which === 'playoff' ? 'block' : 'none';
         const viewportHeight = window.innerHeight;
         const sidebarHeight = sidebar.offsetHeight;
         
-        // Minimální hodnota 'top', aby se ukázal spodek panelu (bude to záporné číslo)
         const minTop = viewportHeight - sidebarHeight - margin;
 
         if (scrollDelta > 0) {
-            // SCROLUJEME DOLŮ
             topOffset -= scrollDelta;
             if (topOffset < minTop) {
-                topOffset = minTop; // Zastavíme, když dorazíme na konec panelu (přilepí se ke spodku)
+                topOffset = minTop; 
             }
         } else if (scrollDelta < 0) {
-            // SCROLUJEME NAHORU
-            topOffset -= scrollDelta; // (odčítáme záporné číslo = přičítáme)
+            topOffset -= scrollDelta; 
             if (topOffset > margin) {
-                topOffset = margin; // Zastavíme, když dorazíme na začátek panelu (přilepí se k vršku)
+                topOffset = margin; 
             }
         }
 
@@ -4573,6 +4754,9 @@ function showTable(which) {
                     const realRank = globalRealRankMap[team.id] || '?';
                     const diff = userRank - realRank;
 
+                    // 1. DEFINICE LOGA
+                    const logoUrl = team.logo ? `/logoteamu/${team.logo}` : '/images/logo.png';
+
                     let bgStyle = "background-color: #1a1a1a; border: 1px solid #444;";
                     let diffText;
                     let diffColor = "gray";
@@ -4590,12 +4774,21 @@ function showTable(which) {
                         diffText = "Netipováno";
                     }
 
-                    html += `<li style="${bgStyle} display: flex; align-items: center; justify-content: space-between; margin: 5px 0; padding: 15px; color: #fff;">
-                        <div style="display:flex; align-items:center;">
+                    // 2. UPRAVENÉ LI S WATERMARKEM
+                    html += `
+                    <li style="${bgStyle} display: flex; align-items: center; justify-content: space-between; margin: 5px 0; padding: 15px; color: #fff;
+                                position: relative; overflow: hidden;"> <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+                                    width: 80%; height: 400%; 
+                                    background-image: url('${logoUrl}'); background-size: contain; background-repeat: no-repeat; background-position: center; 
+                                    opacity: 0.30; filter: grayscale(50%); pointer-events: none; z-index: 1;">
+                        </div>
+
+                        <div style="display:flex; align-items:center; position: relative; z-index: 2;">
                             <span class="rank-number" style="font-weight: bold; color: orangered; margin-right: 15px; width: 30px;">${userRank}.</span>
                             <span class="team-name" style="font-weight: bold;">${team.name}</span>
                         </div>
-                        <div style="display:flex; align-items:center; gap: 15px;">
+                        
+                        <div style="display:flex; align-items:center; gap: 15px; position: relative; z-index: 2;">
                             <span style="color: ${diffColor}; font-weight: normal; margin-right: 10px;">${diffText}</span>
                         </div>
                     </li>`;
@@ -5697,48 +5890,96 @@ document.addEventListener('DOMContentLoaded', () => {
             
             <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 15px; margin-top: 15px;">`;
 
+            // --- Uvnitř router.get("/prestupy", ...) v sekci else (kde jsou povolené přestupy) ---
+
+// 1. FUNKCE PRO OBARVOVÁNÍ (Vlož ji před cyklus forEach)
+            const formatPlayerName = (rawName) => {
+                let style = 'color: white;'; // Výchozí barva
+                let icon = '';
+                let name = rawName;
+
+                // A. Detekce značek
+                if (name.includes('(X)')) {
+                    style = 'color: #ff6666; text-decoration: line-through; opacity: 0.7;';
+                    icon = '❌ ';
+                    name = name.replace('(X)', '');
+                }
+                else if (name.includes('(!)')) {
+                    style = 'color: #ffd700; font-weight: bold; text-shadow: 0 0 8px rgba(255, 215, 0, 0.4);';
+                    icon = '🔥 ';
+                    name = name.replace('(!)', '');
+                }
+                else if (name.includes('(?)')) {
+                    style = 'color: #00d4ff; font-style: italic;';
+                    icon = '❓ ';
+                    name = name.replace('(?)', '');
+                }
+                else if (name.includes('(K)')) { // Konec smlouvy
+                    style = 'color: #ffaa00; font-weight: bold;';
+                    icon = '📄 ';
+                    name = name.replace('(K)', '');
+                }
+
+                // B. Detekce vlastní barvy přes hashtag (např. #00ff00)
+                const colorMatch = name.match(/#([0-9a-fA-F]{3,6})/);
+                if (colorMatch) {
+                    style = `color: ${colorMatch[0]}; font-weight: bold;`;
+                    name = name.replace(colorMatch[0], ''); // Odstraníme ten kód z textu
+                }
+
+                return `<span style="${style}">${icon}${name.trim()}</span>`;
+            };
+
+// 2. VYLEPŠENÝ RENDER LIST
+            const renderList = (arr) => {
+                if (!arr || arr.length === 0) return '<div style="color: gray; font-size: 0.8em; font-style: italic;">-</div>';
+
+                return arr.map(player => `
+        <div style="font-size: 0.95em; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+            ${formatPlayerName(player)}
+        </div>
+    `).join('');
+            };
+
+// 3. VYKRESLENÍ KARET (Zůstává podobné, jen volá vylepšený renderList)
             teamsInSelectedLiga.forEach(team => {
                 const tId = String(team.id);
-                // POZOR: Tady musíme číst 'confIn' a 'confOut', protože tak to ukládá Admin!
-                const tData = currentTransfers[tId] || { specIn: [], specOut: [], confIn: [], confOut: [] };
+                const tData = currentTransfers[tId] || { specIn: [], specOut: [], confIn: [], confOut: [] }; // Zde už používáme sjednocené názvy confIn/confOut
                 const logoUrl = team.logo ? `/logoteamu/${team.logo}` : '/images/logo.png';
 
-                const renderList = (arr) => arr && arr.length > 0 ? arr.map(player => `<div style="font-size: 0.9em; padding: 2px 0;">${player}</div>`).join('') : '<div style="color: gray; font-size: 0.8em; font-style: italic;">-</div>';
-
                 html += `
-                <div style="position: relative; background-color: #000; border: 2px solid #ff4500; border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; min-height: 250px;">
-                    
-                    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-10deg); width: 80%; height: 80%; background-image: url('${logoUrl}'); background-size: contain; background-repeat: no-repeat; background-position: center; opacity: 0.15; filter: grayscale(100%); z-index: 0; pointer-events: none;"></div>
+    <div style="position: relative; background-color: #000; border: 2px solid #ff4500; border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; min-height: 250px; box-shadow: 0 4px 15px rgba(0,0,0,0.8);">
+        
+        <div style="position: relative; z-index: 1; background: linear-gradient(to bottom, #222, #111); border-bottom: 3px solid #ff4500; display: flex; align-items: center; padding: 10px;">
+            <img src="${logoUrl}" alt="${team.name}" style="height: 45px; width: 45px; object-fit: contain; margin-right: 12px; filter: drop-shadow(0 0 5px rgba(255,255,255,0.2));">
+            <strong style="color: white; font-size: 1.3em; text-transform: uppercase; letter-spacing: 1px;">${team.name}</strong>
+        </div>
 
-                    <div style="position: relative; z-index: 1; background-color: #111; border-bottom: 3px solid #ff4500; display: flex; align-items: center; padding: 10px;">
-                        <img src="${logoUrl}" alt="${team.name}" style="height: 40px; width: 40px; object-fit: contain; margin-right: 10px;">
-                        <strong style="color: white; font-size: 1.2em;">${team.name}</strong>
-                    </div>
+        <div style="position: relative; z-index: 1; display: flex; flex-direction: row; flex: 1;">
+            
+            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-10deg); width: 80%; height: 80%; background-image: url('${logoUrl}'); background-size: contain; background-repeat: no-repeat; background-position: center; opacity: 0.30; filter: grayscale(50%); z-index: 0; pointer-events: none;"></div>
+            <div style="flex: 1; padding: 8px; border-right: 1px solid #333; background-color: rgba(0, 50, 80, 0.3);">
+                <div style="color: #00d4ff; font-size: 0.7em; font-weight: 900; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;">Spekulace IN</div>
+                ${renderList(tData.specIn)}
+            </div>
 
-                    <div style="position: relative; z-index: 1; display: flex; flex-direction: row; flex: 1; background: transparent;">
-                        
-                        <div style="flex: 1; padding: 5px; border-right: 1px solid #333; background-color: rgba(26, 0, 51, 0.6);">
-                            <div style="color: lightblue; font-size: 0.75em; font-weight: bold; margin-bottom: 5px; text-transform: uppercase;">Spekulace IN</div>
-                            <div style="color: white;">${renderList(tData.specIn)}</div>
-                        </div>
+            <div style="flex: 1; padding: 8px; border-right: 1px solid #333; background-color: rgba(0, 50, 80, 0.3);">
+                <div style="color: #00d4ff; font-size: 0.7em; font-weight: 900; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;">Spekulace OUT</div>
+                ${renderList(tData.specOut)}
+            </div>
 
-                        <div style="flex: 1; padding: 5px; border-right: 1px solid #333; background-color: rgba(26, 0, 51, 0.6);">
-                            <div style="color: lightblue; font-size: 0.75em; font-weight: bold; margin-bottom: 5px; text-transform: uppercase;">Spekulace OUT</div>
-                            <div style="color: white;">${renderList(tData.specOut)}</div>
-                        </div>
+            <div style="flex: 1; padding: 8px; border-right: 1px solid #333; background-color: rgba(0, 100, 0, 0.2);">
+                <div style="color: #00ff00; font-size: 0.7em; font-weight: 900; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;">Příchody</div>
+                ${renderList(tData.confIn)}
+            </div>
 
-                        <div style="flex: 1; padding: 5px; border-right: 1px solid #333; background-color: rgba(0, 0, 0, 0.3);">
-                            <div style="color: #00ff00; font-size: 0.75em; font-weight: bold; margin-bottom: 5px; text-transform: uppercase;">Příchody</div>
-                            <div style="color: white;">${renderList(tData.confIn)}</div>
-                        </div>
+            <div style="flex: 1; padding: 8px; background-color: rgba(100, 0, 0, 0.2);">
+                <div style="color: #ff4444; font-size: 0.7em; font-weight: 900; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;">Odchody</div>
+                ${renderList(tData.confOut)}
+            </div>
 
-                        <div style="flex: 1; padding: 5px; background-color: rgba(0, 0, 0, 0.3);">
-                            <div style="color: #ff4444; font-size: 0.75em; font-weight: bold; margin-bottom: 5px; text-transform: uppercase;">Odchody</div>
-                            <div style="color: white;">${renderList(tData.confOut)}</div>
-                        </div>
-
-                    </div>
-                </div>`;
+        </div>
+    </div>`;
             });
 
             html += `</div></section>`;

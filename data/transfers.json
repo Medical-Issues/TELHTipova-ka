@@ -1,16 +1,10 @@
 {
   "25/26": {
     "TELH": {
-      "0": {
-        "specIn": [
-          "Matěj Stránský"
-        ],
-        "specOut": [],
-        "confIn": [],
-        "confOut": []
-      },
       "1": {
-        "specIn": [],
+        "specIn": [
+          "Matěj Stránský (!)"
+        ],
         "specOut": [],
         "confIn": [],
         "confOut": []
@@ -82,6 +76,12 @@
         "confOut": []
       },
       "13": {
+        "specIn": [],
+        "specOut": [],
+        "confIn": [],
+        "confOut": []
+      },
+      "14": {
         "specIn": [],
         "specOut": [],
         "confIn": [],
