@@ -20,7 +20,7 @@ const getMatches = () => JSON.parse(fs.readFileSync(path.join(__dirname, '../dat
 
 // Funkce pro odeslání jedné notifikace
 const sendNotification = (subscription, payload) => {
-    webpush.sendNotification(subscription, JSON.stringify(payload))
+    return webpush.sendNotification(subscription, JSON.stringify(payload))
         .catch(err => console.error("Chyba odeslání notifikace:", err));
 };
 
@@ -125,5 +125,6 @@ module.exports = {
     notifyResult,
     notifyTransfer,
     notifyLeagueEnd,
-    publicVapidKey // Exportujeme, abychom ho mohli poslat na frontend
+    publicVapidKey,
+    sendNotification
 };

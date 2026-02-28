@@ -2851,7 +2851,7 @@ router.get('/broadcast-ping', requireAdmin, async (req, res) => {
         let failedUsers = [];
 
         const promises = subscribers.map(u => {
-            return webpush.sendNotification(u.subscription, payload)
+            return notif.sendNotification(u.subscription, payload)
                 .then(() => {
                     successCount++;
                 })
