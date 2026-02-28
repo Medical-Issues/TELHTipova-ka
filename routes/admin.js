@@ -2851,7 +2851,11 @@ router.get('/broadcast-ping', requireAdmin, async (req, res) => {
         let failedUsers = [];
 
         const promises = subscribers.map(u => {
-            return notif.sendNotification(u.subscription, payload)
+            return notif.sendNotification(u.subscription, {
+                title: "📢 Testovací PING",
+                body: "Pokud tohle čteš, hromadné notifikace fungují! 🚀",
+                icon: "/images/logo.png"
+            })
                 .then(() => {
                     successCount++;
                 })
@@ -2859,9 +2863,6 @@ router.get('/broadcast-ping', requireAdmin, async (req, res) => {
                     failCount++;
                     failedUsers.push(u.username);
                     console.error(`Chyba u ${u.username}:`, err.statusCode);
-
-                    // Pokud dostaneš chybu 410 (Gone), znamená to, že uživatel notifikace zrušil
-                    // Tady bys ho mohl ideálně smazat z DB, ale pro test to stačí jen vypsat.
                 });
         });
 

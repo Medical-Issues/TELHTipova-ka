@@ -179,5 +179,5 @@ module.exports = {
     notifyTransfer,
     notifyLeagueEnd,
     publicVapidKey,
-    sendDirectNotification: sendNotification // Export pro admin test
+    sendNotification: sendDirectNotification // Export pro admin test
 };
