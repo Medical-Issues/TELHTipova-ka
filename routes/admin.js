@@ -1824,9 +1824,6 @@ router.post('/leagues/manage', requireAdmin, express.urlencoded({ extended: true
             playin: Number(playin) || 0,
             relegation: Number(relegation) || 0
         });
-        if (req.body.finished === 'false') {
-            notif.notifyLeagueEnd(ligaName);
-        }
         fs.writeFileSync('./data/leagues.json', JSON.stringify(allSeasonData, null, 2));
     }
     res.redirect('/admin/leagues/manage');
@@ -1906,6 +1903,9 @@ router.post("/toggle-regular-season", requireAdmin, (req, res) => {
 
     // Ihned provedeme přepočet, aby se body aktualizovaly
     evaluateRegularSeasonTable(season, liga);
+    if (req.body.finished === 'false') {
+        notif.notifyLeagueEnd(liga);
+    }
 
     res.redirect('/admin'); // Nebo kdekoliv jsi byl
 });
