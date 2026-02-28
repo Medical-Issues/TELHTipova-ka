@@ -26,8 +26,7 @@ router.post('/backup', async (req, res) => {
     }
 });
 const storage = multer.diskStorage({
-    // noinspection JSUnusedGlobalSymbols
-    destination: function (req, file, cb) {
+    'destination': function (req, file, cb) {
         const uploadPath = path.resolve(__dirname, '..', 'data', 'images');
         if (!fs.existsSync(uploadPath)) {
             fs.mkdirSync(uploadPath, { recursive: true });
