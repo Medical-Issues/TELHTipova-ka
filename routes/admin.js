@@ -492,7 +492,7 @@ router.get('/teams/edit/:id', requireAdmin, (req, res) => {
     res.send(html);
 });
 
-router.post('/teams/edit/:id', requireAdmin, upload.single('logo'), (req, res) => {
+router.post('/teams/edit/:id', requireAdmin, upload.single('logo'), async (req, res) => {
     const teamId = parseInt(req.params.id);
     const teams = loadTeams();
 
@@ -512,6 +512,13 @@ router.post('/teams/edit/:id', requireAdmin, upload.single('logo'), (req, res) =
     }
 
     fs.writeFileSync('./data/teams.json', JSON.stringify(teams, null, 2));
+
+    try {
+        console.log("⏳ Spouštím okamžitou zálohu po editaci týmu...");
+        await backupJsonFilesToGitHub();
+    } catch (e) {
+        console.error("❌ Okamžitá záloha selhala, ale data jsou uložena lokálně:", e.message);
+    }
 
     res.redirect('/admin');
 });
