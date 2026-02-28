@@ -135,7 +135,7 @@ router.get('/', requireAdmin, (req, res) => {
         <a href="/admin/matches/import" class="btn new-btn-admin">Import zápasů</a>
         <a href="/admin/images/manage" class="btn new-btn-admin">Správce obrázků</a>
         <a href="/admin/transfers/manage" class="btn new-btn-admin">Správa přestupů</a>
-        <a href="/admin/test-notif" class="btn new-btn-admin">Test notifikace</a>
+        <a href="/admin/broadcast-ping" class="btn new-btn-admin">Test notifikace</a>
         <a id="backupBtn" class="btn new-btn-admin">Uložit data uživatelům (pouze pro administrativní účely)</a>
     </div>
   </div>
@@ -2825,29 +2825,61 @@ router.post('/transfers/save', requireAdmin, express.urlencoded({ extended: true
     res.redirect(`/admin/transfers/manage?liga=${encodeURIComponent(liga)}`);
 });
 
-router.get('/test-notif', requireAdmin, (req, res) => {
-    const username = req.session.user;
-    const users = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/users.json'), 'utf8'));
+router.get('/broadcast-ping', requireAdmin, async (req, res) => {
+    try {
+        // 1. Načteme uživatele
+        const usersPath = path.join(__dirname, '../data/users.json');
+        const users = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
 
-    // Najdeme tebe
-    const me = users.find(u => u.username === username);
+        // 2. Vyfiltrujeme jen ty, co mají zapnuté notifikace
+        const subscribers = users.filter(u => u.subscription);
 
-    if (me && me.subscription) {
-        try {
-            // Pošleme notifikaci přímo tobě (používáme interní webpush, ne tu wrapper funkci, pro test)
-            const webpush = require('web-push');
-
-            webpush.sendNotification(me.subscription, JSON.stringify({
-                title: "🔔 Test notifikace",
-                body: "Funguje to! Tohle je zpráva z adminu."
-            })).catch(err => console.error(err));
-
-            res.send("Notifikace odeslána! Zkontroluj pravý dolní roh (Windows) nebo pravý horní (Mac).");
-        } catch (e) {
-            res.send("Chyba: " + e.message);
+        if (subscribers.length === 0) {
+            return res.send("<h2>Nikdo nemá zapnuté notifikace 😢</h2>");
         }
-    } else {
-        res.send("Nemáš aktivní subscription v users.json!");
+
+        // 3. Připravíme zprávu
+        const payload = JSON.stringify({
+            title: "📢 Testovací PING",
+            body: "Pokud tohle čteš, hromadné notifikace fungují! 🚀",
+            icon: "/images/logo.png" // Cesta k tvému logu
+        });
+
+        // 4. Odesíláme všem najednou (paralelně)
+        let successCount = 0;
+        let failCount = 0;
+        let failedUsers = [];
+
+        const promises = subscribers.map(u => {
+            return webpush.sendNotification(u.subscription, payload)
+                .then(() => {
+                    successCount++;
+                })
+                .catch(err => {
+                    failCount++;
+                    failedUsers.push(u.username);
+                    console.error(`Chyba u ${u.username}:`, err.statusCode);
+
+                    // Pokud dostaneš chybu 410 (Gone), znamená to, že uživatel notifikace zrušil
+                    // Tady bys ho mohl ideálně smazat z DB, ale pro test to stačí jen vypsat.
+                });
+        });
+
+        // Počkáme, až se všechny odešlou
+        await Promise.all(promises);
+
+        // 5. Výsledek pro admina
+        res.send(`
+            <h1>Výsledek Broadcastu</h1>
+            <p>✅ Úspěšně odesláno: <strong>${successCount}</strong></p>
+            <p>❌ Selhalo: <strong>${failCount}</strong></p>
+            ${failCount > 0 ? `<p>Chyby u: ${failedUsers.join(', ')}</p>` : ''}
+            <br>
+            <a href="/admin">Zpět do adminu</a>
+        `);
+
+    } catch (e) {
+        res.send(`Chyba serveru: ${e.message}`);
     }
 });
 
