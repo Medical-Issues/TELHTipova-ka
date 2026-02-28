@@ -141,7 +141,7 @@ cron.schedule('* * * * *', () => {
 
     const oneHourMS = 60 * 60 * 1000;
     const fourHoursMS = 240 * 60 * 1000;
-    const margin = 1 * 60 * 1000; // 1 minuta tolerance, aby se trefil CRON
+    const margin = 60 * 1000; // 1 minuta tolerance, aby se trefil CRON
 
     matches.forEach(match => {
         if (match.result) return; // Zápas už skončil
