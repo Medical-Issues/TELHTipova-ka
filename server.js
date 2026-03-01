@@ -34,51 +34,40 @@ app.get('/wake', (req, res) => {
 app.use('/auth', authRoutes);
 app.use('/', userRoutes)
 app.use('/admin', adminRoutes);
-
 app.post('/api/subscribe', (req, res) => {
     const subscription = req.body;
     const username = req.session.user;
+    const usersPath = path.join(__dirname, '../data/users.json');
 
-    if (!username) return res.status(401).send('Nejste přihlášen');
+    let users = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
 
-    const usersPath = path.join(__dirname, 'data', 'users.json');
-
-    try {
-        const users = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
-        const userIndex = users.findIndex(u => u.username === username);
-
-        if (userIndex !== -1) {
-            const user = users[userIndex];
-
-            // 1. Pokud pole subscriptions ještě neexistuje, vytvoříme ho
-            // (a převedeme starý 'subscription' do pole, aby se neztratil)
-            if (!user.subscriptions) {
-                user.subscriptions = [];
-                if (user.subscription) {
-                    user.subscriptions.push(user.subscription);
-                    delete user.subscription; // Smažeme starý formát
-                }
-            }
-
-            // 2. Kontrola duplicit (aby tam stejný mobil nebyl 10x)
-            const deviceExists = user.subscriptions.some(s => s.endpoint === subscription.endpoint);
-
-            if (!deviceExists) {
-                user.subscriptions.push(subscription); // PŘIDÁME na konec seznamu
-                fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
-                console.log(`🔔 Nové zařízení přidáno pro: ${username}`);
-            } else {
-                console.log(`Zařízení už v seznamu je.`);
-            }
-
-            res.status(201).json({});
-        } else {
-            res.status(404).send('Uživatel nenalezen');
+    // --- HLAVNÍ LOGIKA: Jeden prohlížeč = jeden majitel ---
+    // Projdeme všechny uživatele a pokud někdo už má tento přesný endpoint, smažeme mu ho.
+    // Tím zajistíme, že se odběr "nepropíše" na dva lidi naráz na jednom PC.
+    users.forEach(u => {
+        if (u.subscriptions) {
+            u.subscriptions = u.subscriptions.filter(sub => sub.endpoint !== subscription.endpoint);
         }
-    } catch (error) {
-        console.error("Chyba:", error);
-        res.status(500).send("Chyba serveru");
+        // Ošetření starého formátu, pokud ho ještě někde máš
+        if (u.subscription && u.subscription.endpoint === subscription.endpoint) {
+            delete u.subscription;
+        }
+    });
+
+    // --- PŘIDÁNÍ ODBĚRU AKTUÁLNÍMU UŽIVATELI ---
+    const currentUser = users.find(u => u.username === username);
+    if (currentUser) {
+        if (!currentUser.subscriptions) currentUser.subscriptions = [];
+
+        // Přidáme nový odběr (pokud tam už náhodou není)
+        const exists = currentUser.subscriptions.some(s => s.endpoint === subscription.endpoint);
+        if (!exists) {
+            currentUser.subscriptions.push(subscription);
+        }
     }
+
+    fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+    res.status(201).json({ message: "Odběr aktivován" });
 });
 
 app.post('/api/unsubscribe', (req, res) => {
