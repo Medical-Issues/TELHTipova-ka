@@ -175,11 +175,18 @@ cron.schedule('* * * * *', () => {
                 if (!hasTip) {
                     const timeText = notificationType === "4h" ? "4 hodiny" : "hodinu";
 
-                    console.log(`[CRON] Posílám ${notificationType} upozornění: ${u.username} (${homeName} vs ${awayName})`);
+                    console.log(`[CRON] Posílám ${notificationType} upozornění že nemá tip: ${u.username} (${homeName} vs ${awayName})`);
 
                     sendToUserDevices(u, {
                         title: notificationType === "4h" ? "🔔 Nezapomeň si tipnout!" : "⏳ Poslední šance!",
                         body: `Za ${timeText} začíná zápas ${homeName} vs ${awayName}. Ještě nemáš tipnuto!`,
+                        icon: '/images/logo.png'
+                    });
+                } else if (hasTip && notificationType === "1h") {
+                    console.log(`[CRON] Posílám ${notificationType} upozornění že začíná zápas: ${u.username} (${homeName} vs ${awayName})`);
+                    sendToUserDevices(u, {
+                        title: "⏳ Za hodinu už si nezměníš tip!",
+                        body: `Za hodinu začíná zápas ${homeName} vs ${awayName}.`,
                         icon: '/images/logo.png'
                     });
                 }
