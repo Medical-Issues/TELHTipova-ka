@@ -67,7 +67,8 @@
         "p256dh": "BMKC0QhA8lzDPu3RE8Q-RgG1iuV6uqBCpmslqdOZdC_jbejtzGtZYnjJtM9ZWHgh6HiGBKfxKMxsSueFbHJTjnk",
         "auth": "m75Gyf5HRtyOByZ9BQEJLA"
       }
-    }
+    },
+    "subscriptions": []
   },
   {
     "username": "Ondra1893",
@@ -1794,6 +1795,41 @@
           },
           {
             "matchId": 440,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 441,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 442,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 443,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 444,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 445,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 446,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 447,
             "winner": "home",
             "loserWins": 0
           }
@@ -4551,14 +4587,40 @@
         }
       }
     },
-    "subscription": {
-      "endpoint": "https://fcm.googleapis.com/fcm/send/cSwLRmLwthY:APA91bEFsF0Bl63XO5EC0EsU61-DtBpECDzS8AoUHgBxefrARhLaCp-bUV7Z-3Yak57xKCrk9blVi6jDyfQdJu2K-rJl_8V0qdGNUKgFa7kN6UA6mDypobpouVyj8j32D_JoZkw2Ffgo",
-      "expirationTime": null,
-      "keys": {
-        "p256dh": "BBvIf7ln09PTrbWcBqTQjDErSMxw1-aTeUiExUaVaJZkyp0rsw3xRd4TqBUhmOxdvZBwYIK6hOfhaCaYnrGGngA",
-        "auth": "-Qyd5FS94hCZ6Q-1aye-zg"
+    "subscriptions": [
+      {
+        "endpoint": "https://fcm.googleapis.com/fcm/send/cSwLRmLwthY:APA91bEFsF0Bl63XO5EC0EsU61-DtBpECDzS8AoUHgBxefrARhLaCp-bUV7Z-3Yak57xKCrk9blVi6jDyfQdJu2K-rJl_8V0qdGNUKgFa7kN6UA6mDypobpouVyj8j32D_JoZkw2Ffgo",
+        "expirationTime": null,
+        "keys": {
+          "p256dh": "BBvIf7ln09PTrbWcBqTQjDErSMxw1-aTeUiExUaVaJZkyp0rsw3xRd4TqBUhmOxdvZBwYIK6hOfhaCaYnrGGngA",
+          "auth": "-Qyd5FS94hCZ6Q-1aye-zg"
+        }
+      },
+      {
+        "endpoint": "https://fcm.googleapis.com/fcm/send/fgTaCM2YQiM:APA91bG4qC9_VptWgjuUnwvoZbxn2YswwTy-EneORNXhF0NrD15KETTOskFKaICLsbgHLSguCx_kh5Ist8Ciqr9REtAxx01MIoruKrEVGqy2NIYKk6rch58S872Fvc9jDzcocxMqRDLC",
+        "expirationTime": null,
+        "keys": {
+          "p256dh": "BOc3NUl4CA2vNznKuCiHWkw6sJY6eYn01iBRxtI95gxxctdv_khH-AEtAG16mdaE7E1zYD8zOQFhWSI4LIlWoEA",
+          "auth": "bT1wypvGUAdUmphjAAIeCg"
+        }
+      },
+      {
+        "endpoint": "https://fcm.googleapis.com/fcm/send/dvRbG1JqO9M:APA91bEwa6oauyi8a3H1gWCws-stlCls3ll8frK2wXPuRaIDJk1w3p-c7wPyitVVxKi7ysB0TVBD0su_6Vy8un4N2KQjfkpwIDW3RxoQHpzmmZK_0Rlad5g64R7IVkm5MCn-2NMeqbDb",
+        "expirationTime": null,
+        "keys": {
+          "p256dh": "BB8nxzAL2A--xVvB0RrwKSp5v3o_y__mmZcaejdk-GODYfXMeGA8Fx1RM7BzbDJjXE96HZCYoclTjq4tLqgXTTM",
+          "auth": "P-hD-_UzCFa0SCOCiKaT0g"
+        }
+      },
+      {
+        "endpoint": "https://fcm.googleapis.com/fcm/send/cw2UsousLe0:APA91bFlJBeOcX70uKAKDRZnPedx07wivcqRJaL_4-tXmjx6F7RVxlX87r6dXYkLMWZFlVyc5PzDoIa-bK1z0W50SUKko5scyc4pYZ9_6WsMbPYXXwPJMJHychm5quBHEagQqebGnIsO",
+        "expirationTime": null,
+        "keys": {
+          "p256dh": "BLGeup7Ug5zK8HXxxz6mG7LGHcQPKWoVOk-ct0hILSZHEgYwi0n7EQaMj0gppW2RCutw2DowbDTOdOnnLj29oUw",
+          "auth": "wMCVsOj8r934XlRTFBUeWA"
+        }
       }
-    }
+    ]
   },
   {
     "username": "Actros001",
@@ -6240,6 +6302,41 @@
           },
           {
             "matchId": 440,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 441,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 442,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 443,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 444,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 445,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 446,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 447,
             "winner": "home",
             "loserWins": 0
           }

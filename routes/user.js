@@ -300,15 +300,13 @@ router.get("/table-tip", requireLogin, (req, res) => {
 <link rel="icon" href="/images/logo.png">
 </head>
 <script>
-                function showTable(which) {
-                    document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none';
-                    const p = document.getElementById('playoffTablePreview');
-                    p.style.display = which === 'playoff' ? 'block' : 'none';
-                }
-    // ZDE VLOŽ SVŮJ PUBLIC KLÍČ Z NODE.JS
+function showTable(which) { 
+    document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none'; 
+    const p = document.getElementById('playoffTablePreview'); p.style.display = which === 'playoff' ? 'block' : 'none'; 
+}
+
     const publicVapidKey = "${publicVapidKey}"; 
 
-    // Pomocná funkce pro převod klíče
     function urlBase64ToUint8Array(base64String) {
         const padding = '='.repeat((4 - base64String.length % 4) % 4);
         const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -322,94 +320,103 @@ router.get("/table-tip", requireLogin, (req, res) => {
 
     document.addEventListener('DOMContentLoaded', async () => {
         const btn = document.getElementById('notify-toggle-btn');
-        if (!btn || !('serviceWorker' in navigator)) return;
+        if (!btn) return;
 
         let isSubscribed = false;
         let swRegistration = null;
 
-        // --- FUNKCE PRO AKTUALIZACI VZHLEDU TLAČÍTKA ---
         function updateBtn() {
             if (isSubscribed) {
                 btn.textContent = "Vypnout notifikace 🔕";
-                btn.style.backgroundColor = "#555"; // Šedá/Červená pro vypnutí
-                btn.style.color = "white";
+                btn.style.backgroundColor = "#555"; 
             } else {
                 btn.textContent = "Zapnout notifikace 🔔";
-                btn.style.backgroundColor = "#ff4500"; // Tvoje oranžová
-                btn.style.color = "white";
+                btn.style.backgroundColor = "#ff4500"; 
             }
-            btn.style.display = 'inline-block'; // Zobrazíme tlačítko
+            btn.style.display = 'inline-block';
         }
 
-        // --- 1. ZJISTÍME STAV PŘI NAČTENÍ ---
+        // --- KONTROLA STAVU PO NAČTENÍ ---
         try {
-            // Zkusíme najít existující registraci Service Workera
-            swRegistration = await navigator.serviceWorker.getRegistration();
-            
-            if (swRegistration) {
-                const subscription = await swRegistration.pushManager.getSubscription();
-                if (subscription) {
-                    isSubscribed = true;
+            if ('serviceWorker' in navigator) {
+                // 1. Získáme registraci
+                swRegistration = await navigator.serviceWorker.getRegistration();
+                
+                if (swRegistration) {
+                    // 2. Získáme odběr z prohlížeče
+                    const subscription = await swRegistration.pushManager.getSubscription();
+                    
+                    if (subscription) {
+                        console.log("Odběr v prohlížeči nalezen, ptám se serveru...");
+                        
+                        // 3. Zeptáme se serveru, jestli tenhle odběr patří NÁM
+                        const response = await fetch('/api/check-subscription', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ endpoint: subscription.endpoint })
+                        });
+                        
+                        const data = await response.json();
+                        isSubscribed = data.belongsToMe;
+                        console.log("Odpověď serveru (belongsToMe):", isSubscribed);
+                    } else {
+                        console.log("V prohlížeči není žádný aktivní odběr.");
+                    }
                 }
             }
         } catch (err) {
-            console.error("Chyba při kontrole stavu:", err);
+            console.error("Chyba při inicializaci tlačítka:", err);
         }
 
-        updateBtn(); // Nastavíme správný text hned na začátku
+        updateBtn();
 
-        // --- 2. KLIKNUTÍ NA TLAČÍTKO ---
+        // --- KLIKNUTÍ ---
         btn.addEventListener('click', async (e) => {
             e.preventDefault();
-            btn.disabled = true; // Aby neklikal dvakrát rychle
+            btn.disabled = true;
 
             try {
                 if (isSubscribed) {
-                    // --- CHCE SE ODHLÁSIT ---
                     const sub = await swRegistration.pushManager.getSubscription();
                     if (sub) {
-                        // 1. Odhlásit v prohlížeči
+                        // Odhlásit v prohlížeči
                         await sub.unsubscribe();
-                        // 2. Odhlásit na serveru
+                        // Odhlásit na serveru
                         await fetch('/api/unsubscribe', { 
                             method: 'POST',
-                            body: JSON.stringify({ endpoint: sub.endpoint }), // <--- TOTO JE NOVÉ
-                            headers: { 'content-type': 'application/json' }
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ endpoint: sub.endpoint })
                         });
-                        
                         isSubscribed = false;
-                        alert("Notifikace vypnuty.");
                     }
                 } else {
-                    // --- CHCE SE PŘIHLÁSIT ---
-                    // 1. Registrace SW (pokud ještě není)
+                    // Registrace SW pokud není
                     if (!swRegistration) {
                         swRegistration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
                     }
                     
-                    // 2. Přihlášení k Push (vyskocí okno prohlížeče)
+                    // Přihlášení k Push
                     const subscription = await swRegistration.pushManager.subscribe({
                         userVisibleOnly: true,
                         applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
                     });
 
-                    // 3. Poslat na server
+                    // Poslat na server
                     await fetch('/api/subscribe', {
                         method: 'POST',
-                        body: JSON.stringify(subscription),
-                        headers: { 'content-type': 'application/json' }
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(subscription)
                     });
 
                     isSubscribed = true;
-                    alert("Paráda! Notifikace zapnuty.");
                 }
             } catch (err) {
-                console.error("Chyba akce:", err);
-                alert("Něco se nepovedlo (zkontroluj, jestli nemáš notifikace zakázané v prohlížeči).");
+                console.error("Chyba při akci tlačítka:", err);
+                alert("Nepodařilo se změnit stav notifikací.");
             }
 
-            updateBtn(); // Aktualizujeme barvu a text
-            btn.disabled = false; // Znovu povolíme tlačítko
+            updateBtn();
+            btn.disabled = false;
         });
     });
 </script>
@@ -1751,15 +1758,13 @@ router.get('/', requireLogin, (req, res) => {
 <link rel="icon" href="/images/logo.png">
 </head>
 <script>
-function showTable(which) {
-        document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none';
-        const p = document.getElementById('playoffTablePreview');
-        p.style.display = which === 'playoff' ? 'block' : 'none';
-    }
-    // ZDE VLOŽ SVŮJ PUBLIC KLÍČ Z NODE.JS
+function showTable(which) { 
+    document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none'; 
+    const p = document.getElementById('playoffTablePreview'); p.style.display = which === 'playoff' ? 'block' : 'none'; 
+}
+
     const publicVapidKey = "${publicVapidKey}"; 
 
-    // Pomocná funkce pro převod klíče
     function urlBase64ToUint8Array(base64String) {
         const padding = '='.repeat((4 - base64String.length % 4) % 4);
         const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -1773,94 +1778,91 @@ function showTable(which) {
 
     document.addEventListener('DOMContentLoaded', async () => {
         const btn = document.getElementById('notify-toggle-btn');
-        if (!btn || !('serviceWorker' in navigator)) return;
+        if (!btn) return;
 
         let isSubscribed = false;
         let swRegistration = null;
 
-        // --- FUNKCE PRO AKTUALIZACI VZHLEDU TLAČÍTKA ---
-        function updateBtn() {
-            if (isSubscribed) {
-                btn.textContent = "Vypnout notifikace 🔕";
-                btn.style.backgroundColor = "#555"; // Šedá/Červená pro vypnutí
-                btn.style.color = "white";
-            } else {
-                btn.textContent = "Zapnout notifikace 🔔";
-                btn.style.backgroundColor = "#ff4500"; // Tvoje oranžová
-                btn.style.color = "white";
-            }
-            btn.style.display = 'inline-block'; // Zobrazíme tlačítko
-        }
-
-        // --- 1. ZJISTÍME STAV PŘI NAČTENÍ ---
-        try {
-            // Zkusíme najít existující registraci Service Workera
+        async function checkStatus() {
+            if (!('serviceWorker' in navigator)) return;
             swRegistration = await navigator.serviceWorker.getRegistration();
-            
             if (swRegistration) {
-                const subscription = await swRegistration.pushManager.getSubscription();
-                if (subscription) {
-                    isSubscribed = true;
+                const sub = await swRegistration.pushManager.getSubscription();
+                if (sub) {
+                    console.log("🔍 Našel jsem odběr v prohlížeči, ověřuji u serveru...");
+                    const response = await fetch('/api/check-subscription', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ endpoint: sub.endpoint })
+                    });
+                    const data = await response.json();
+                    isSubscribed = data.belongsToMe;
+                    console.log("📡 Server říká o vlastnictví:", isSubscribed);
                 }
             }
-        } catch (err) {
-            console.error("Chyba při kontrole stavu:", err);
+            updateBtn();
         }
 
-        updateBtn(); // Nastavíme správný text hned na začátku
+        function updateBtn() {
+            btn.style.display = 'inline-block';
+            if (isSubscribed) {
+                btn.textContent = "Vypnout notifikace 🔕";
+                btn.style.backgroundColor = "#555"; 
+            } else {
+                btn.textContent = "Zapnout notifikace 🔔";
+                btn.style.backgroundColor = "#ff4500"; 
+            }
+        }
 
-        // --- 2. KLIKNUTÍ NA TLAČÍTKO ---
+        // Spustíme kontrolu hned po načtení
+        await checkStatus();
+
         btn.addEventListener('click', async (e) => {
             e.preventDefault();
-            btn.disabled = true; // Aby neklikal dvakrát rychle
+            btn.disabled = true;
 
             try {
                 if (isSubscribed) {
-                    // --- CHCE SE ODHLÁSIT ---
                     const sub = await swRegistration.pushManager.getSubscription();
                     if (sub) {
-                        // 1. Odhlásit v prohlížeči
                         await sub.unsubscribe();
-                        // 2. Odhlásit na serveru
                         await fetch('/api/unsubscribe', { 
                             method: 'POST',
-                            body: JSON.stringify({ endpoint: sub.endpoint }), // <--- TOTO JE NOVÉ
-                            headers: { 'content-type': 'application/json' }
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ endpoint: sub.endpoint })
                         });
-                        
                         isSubscribed = false;
-                        alert("Notifikace vypnuty.");
+                        console.log("✅ Odběr zrušen uživatelem");
                     }
                 } else {
-                    // --- CHCE SE PŘIHLÁSIT ---
-                    // 1. Registrace SW (pokud ještě není)
                     if (!swRegistration) {
                         swRegistration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
                     }
-                    
-                    // 2. Přihlášení k Push (vyskocí okno prohlížeče)
                     const subscription = await swRegistration.pushManager.subscribe({
                         userVisibleOnly: true,
                         applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
                     });
 
-                    // 3. Poslat na server
-                    await fetch('/api/subscribe', {
+                    console.log("🚀 Posílám nový odběr na server...");
+                    const res = await fetch('/api/subscribe', {
                         method: 'POST',
-                        body: JSON.stringify(subscription),
-                        headers: { 'content-type': 'application/json' }
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(subscription)
                     });
-
-                    isSubscribed = true;
-                    alert("Paráda! Notifikace zapnuty.");
+                    
+                    if (res.ok) {
+                        isSubscribed = true;
+                        console.log("✅ Server potvrdil uložení");
+                    } else {
+                        console.error("❌ Server odmítl uložení odběru");
+                    }
                 }
             } catch (err) {
-                console.error("Chyba akce:", err);
-                alert("Něco se nepovedlo (zkontroluj, jestli nemáš notifikace zakázané v prohlížeči).");
+                console.error("❌ Chyba:", err);
             }
 
-            updateBtn(); // Aktualizujeme barvu a text
-            btn.disabled = false; // Znovu povolíme tlačítko
+            updateBtn();
+            btn.disabled = false;
         });
     });
 </script>
@@ -5317,10 +5319,9 @@ function showTable(which) {
     document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none'; 
     const p = document.getElementById('playoffTablePreview'); p.style.display = which === 'playoff' ? 'block' : 'none'; 
 }
-// ZDE VLOŽ SVŮJ PUBLIC KLÍČ Z NODE.JS
-    const publicVapidKey = "${publicVapidKey}"; 
 
-    // Pomocná funkce pro převod klíče
+const publicVapidKey = "${publicVapidKey}"; 
+
     function urlBase64ToUint8Array(base64String) {
         const padding = '='.repeat((4 - base64String.length % 4) % 4);
         const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -5334,94 +5335,103 @@ function showTable(which) {
 
     document.addEventListener('DOMContentLoaded', async () => {
         const btn = document.getElementById('notify-toggle-btn');
-        if (!btn || !('serviceWorker' in navigator)) return;
+        if (!btn) return;
 
         let isSubscribed = false;
         let swRegistration = null;
 
-        // --- FUNKCE PRO AKTUALIZACI VZHLEDU TLAČÍTKA ---
         function updateBtn() {
             if (isSubscribed) {
                 btn.textContent = "Vypnout notifikace 🔕";
-                btn.style.backgroundColor = "#555"; // Šedá/Červená pro vypnutí
-                btn.style.color = "white";
+                btn.style.backgroundColor = "#555"; 
             } else {
                 btn.textContent = "Zapnout notifikace 🔔";
-                btn.style.backgroundColor = "#ff4500"; // Tvoje oranžová
-                btn.style.color = "white";
+                btn.style.backgroundColor = "#ff4500"; 
             }
-            btn.style.display = 'inline-block'; // Zobrazíme tlačítko
+            btn.style.display = 'inline-block';
         }
 
-        // --- 1. ZJISTÍME STAV PŘI NAČTENÍ ---
+        // --- KONTROLA STAVU PO NAČTENÍ ---
         try {
-            // Zkusíme najít existující registraci Service Workera
-            swRegistration = await navigator.serviceWorker.getRegistration();
-            
-            if (swRegistration) {
-                const subscription = await swRegistration.pushManager.getSubscription();
-                if (subscription) {
-                    isSubscribed = true;
+            if ('serviceWorker' in navigator) {
+                // 1. Získáme registraci
+                swRegistration = await navigator.serviceWorker.getRegistration();
+                
+                if (swRegistration) {
+                    // 2. Získáme odběr z prohlížeče
+                    const subscription = await swRegistration.pushManager.getSubscription();
+                    
+                    if (subscription) {
+                        console.log("Odběr v prohlížeči nalezen, ptám se serveru...");
+                        
+                        // 3. Zeptáme se serveru, jestli tenhle odběr patří NÁM
+                        const response = await fetch('/api/check-subscription', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ endpoint: subscription.endpoint })
+                        });
+                        
+                        const data = await response.json();
+                        isSubscribed = data.belongsToMe;
+                        console.log("Odpověď serveru (belongsToMe):", isSubscribed);
+                    } else {
+                        console.log("V prohlížeči není žádný aktivní odběr.");
+                    }
                 }
             }
         } catch (err) {
-            console.error("Chyba při kontrole stavu:", err);
+            console.error("Chyba při inicializaci tlačítka:", err);
         }
 
-        updateBtn(); // Nastavíme správný text hned na začátku
+        updateBtn();
 
-        // --- 2. KLIKNUTÍ NA TLAČÍTKO ---
+        // --- KLIKNUTÍ ---
         btn.addEventListener('click', async (e) => {
             e.preventDefault();
-            btn.disabled = true; // Aby neklikal dvakrát rychle
+            btn.disabled = true;
 
             try {
                 if (isSubscribed) {
-                    // --- CHCE SE ODHLÁSIT ---
                     const sub = await swRegistration.pushManager.getSubscription();
                     if (sub) {
-                        // 1. Odhlásit v prohlížeči
+                        // Odhlásit v prohlížeči
                         await sub.unsubscribe();
-                        // 2. Odhlásit na serveru
+                        // Odhlásit na serveru
                         await fetch('/api/unsubscribe', { 
                             method: 'POST',
-                            body: JSON.stringify({ endpoint: sub.endpoint }), // <--- TOTO JE NOVÉ
-                            headers: { 'content-type': 'application/json' }
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ endpoint: sub.endpoint })
                         });
-                        
                         isSubscribed = false;
-                        alert("Notifikace vypnuty.");
                     }
                 } else {
-                    // --- CHCE SE PŘIHLÁSIT ---
-                    // 1. Registrace SW (pokud ještě není)
+                    // Registrace SW pokud není
                     if (!swRegistration) {
                         swRegistration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
                     }
                     
-                    // 2. Přihlášení k Push (vyskocí okno prohlížeče)
+                    // Přihlášení k Push
                     const subscription = await swRegistration.pushManager.subscribe({
                         userVisibleOnly: true,
                         applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
                     });
 
-                    // 3. Poslat na server
+                    // Poslat na server
                     await fetch('/api/subscribe', {
                         method: 'POST',
-                        body: JSON.stringify(subscription),
-                        headers: { 'content-type': 'application/json' }
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(subscription)
                     });
 
                     isSubscribed = true;
-                    alert("Paráda! Notifikace zapnuty.");
                 }
             } catch (err) {
-                console.error("Chyba akce:", err);
-                alert("Něco se nepovedlo (zkontroluj, jestli nemáš notifikace zakázané v prohlížeči).");
+                console.error("Chyba při akci tlačítka:", err);
+                alert("Nepodařilo se změnit stav notifikací.");
             }
 
-            updateBtn(); // Aktualizujeme barvu a text
-            btn.disabled = false; // Znovu povolíme tlačítko
+            updateBtn();
+            btn.disabled = false;
         });
     });
 </script>
@@ -6403,4 +6413,5 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     res.send(html)
 });
+
 module.exports = router;
