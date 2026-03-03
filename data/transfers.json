@@ -30,10 +30,11 @@
       "2": {
         "specIn": [
           "D. Pavlát (?)",
-          "P. Kodýtek (?)",
           "R. Rulík (?)",
           "A. Kubík (?)",
-          "F. Přikryl (?)"
+          "F. Přikryl (?)",
+          "E. Tralmaks (?)",
+          "M. Kempný (?)"
         ],
         "specOut": [
           "J. Jágr (K)",
@@ -68,18 +69,18 @@
           "M.Adámek (K)",
           "A.Cedzo (K)",
           "M.Daňo (K)",
-          "V.Dravecký (K)",
           "M.Hrbas (K)",
           "L.Hudáček (K)",
           "M.Kubiesa (K)",
-          "T.Kundrátek (K)",
           "M.Marinčin (K)",
           "R.Nedomlel (K)",
-          "A.Nestrašil (K)",
           "M.Roman (K)",
           "M.Růžička (K)",
-          "P.Vrána (K)",
-          "P.Sikora (K)"
+          "P.Sikora (K)",
+          "V.Dravecký (!)",
+          "P.Vrána (!)",
+          "A.Nestrašil (!)",
+          "T.Kundrátek (!)"
         ],
         "confIn": [],
         "confOut": []
@@ -160,7 +161,9 @@
         "confOut": []
       },
       "7": {
-        "specIn": [],
+        "specIn": [
+          "J. Rychlovský (?)"
+        ],
         "specOut": [
           "Š. Lukeš (K)",
           "J. Weatherby (K)",
@@ -235,9 +238,7 @@
         "confOut": []
       },
       "10": {
-        "specIn": [
-          "E. Tralmaks (?)"
-        ],
+        "specIn": [],
         "specOut": [
           "J. Černoch (K)",
           "T. Dello (K)",
@@ -253,26 +254,82 @@
         "confOut": []
       },
       "11": {
-        "specIn": [],
-        "specOut": [],
+        "specIn": [
+          "M. Stránský (?)",
+          "T. Nosek (?)",
+          "J. Patera (?)",
+          "D. Tomášek (?)",
+          "M. Blumel (?)"
+        ],
+        "specOut": [
+          "H. Fejes (K)",
+          "D. Gazda (K)",
+          "D. Herčík (K)",
+          "R. Kaplan (K)",
+          "R. Kousal (K)",
+          "O. Mikliš (K)",
+          "M. Pekař (K)",
+          "J. Stránský (K)",
+          "M. Subban (K)",
+          "T. Vomáčka (K)"
+        ],
         "confIn": [],
         "confOut": []
       },
       "12": {
-        "specIn": [],
-        "specOut": [],
+        "specIn": [
+          "A. Nestrašil (?)",
+          "R. Holland (?)",
+          "N. Rubins (?)"
+        ],
+        "specOut": [
+          "M. Hanzl (K)",
+          "J. Hladonik (K)",
+          "V. Lednický (K)",
+          "M. Prčík (K)",
+          "M. Přibyl (K)",
+          "J. Zbořil (K)",
+          "L Klimeš (K)",
+          "B. Troock (K)"
+        ],
         "confIn": [],
         "confOut": []
       },
       "13": {
-        "specIn": [],
-        "specOut": [],
+        "specIn": [
+          "J. Pour (?)",
+          "M. Zachar (?)",
+          "Ro. Petrovický (?)",
+          "T. Kundrátek (?)"
+        ],
+        "specOut": [
+          "P. Novák (K)",
+          "M. Doudera (K)",
+          "M. Kašlík (K)",
+          "F. Přikryl (K)"
+        ],
         "confIn": [],
-        "confOut": []
+        "confOut": [
+          "L. Čihák (!)"
+        ]
       },
       "14": {
-        "specIn": [],
-        "specOut": [],
+        "specIn": [
+          "P. Zdráhal (?)",
+          "T. Vomáčka (?)",
+          "V. Čacho (?)"
+        ],
+        "specOut": [
+          "P. Kalina",
+          "J. Kasal (K)",
+          "F. Novotný (K)",
+          "P. Šimek (K)",
+          "J. Pour (K)",
+          "O. Dlapa (K)",
+          "P. Hašek(K)",
+          "D. Kusý (K)",
+          "Š. Marha (K)"
+        ],
         "confIn": [],
         "confOut": []
       }
