@@ -1034,33 +1034,21 @@ router.get('/playoff', requireAdmin, (req, res) => {
     // Vyfiltrujeme POUZE playoff zápasy pro vybranou ligu a sezónu
     const playoffMatches = matches.filter(m => m.season === selectedSeason && m.liga === selectedLeague && m.isPlayoff);
 
-    // 2. VÝPOČET STAVU SÉRIÍ (Zahrnuje i neodehrané a řeší BO1)
+    // 2. VÝPOČET STAVU SÉRIÍ (Pro tipování celé série jako jednoho "zápasu")
     const seriesMap = {};
     playoffMatches.forEach(m => {
-        // Vytvoříme unikátní klíč série (vždy menší ID - větší ID)
-        const idA = Math.min(m.homeTeamId, m.awayTeamId);
-        const idB = Math.max(m.homeTeamId, m.awayTeamId);
-        const sKey = `${idA}-${idB}`;
+        // Zde je jeden "zápas" v databázi roven celé sérii
+        const sKey = `series-${m.id}`;
 
-        if (!seriesMap[sKey]) {
-            seriesMap[sKey] = {
-                teamA_Id: idA, teamA_Name: teams.find(t => t.id === idA)?.name || 'Neznámý',
-                teamB_Id: idB, teamB_Name: teams.find(t => t.id === idB)?.name || 'Neznámý',
-                winsA: 0, winsB: 0, scoreA: null, scoreB: null, bo: m.bo || 4, isBo1: m.bo === 1
-            };
-        }
-
-        if (m.result) {
-            if (seriesMap[sKey].isBo1) {
-                if (m.homeTeamId === idA) { seriesMap[sKey].scoreA = m.result.scoreHome; seriesMap[sKey].scoreB = m.result.scoreAway; }
-                else { seriesMap[sKey].scoreA = m.result.scoreAway; seriesMap[sKey].scoreB = m.result.scoreHome; }
-            }
-            if (m.result.winner === 'home') {
-                if (m.homeTeamId === idA) seriesMap[sKey].winsA++; else seriesMap[sKey].winsB++;
-            } else if (m.result.winner === 'away') {
-                if (m.awayTeamId === idA) seriesMap[sKey].winsA++; else seriesMap[sKey].winsB++;
-            }
-        }
+        seriesMap[sKey] = {
+            teamA_Id: m.homeTeamId, teamA_Name: teams.find(t => t.id === m.homeTeamId)?.name || 'Neznámý',
+            teamB_Id: m.awayTeamId, teamB_Name: teams.find(t => t.id === m.awayTeamId)?.name || 'Neznámý',
+            scoreA: m.result ? m.result.scoreHome : null,
+            scoreB: m.result ? m.result.scoreAway : null,
+            bo: m.bo || 7,
+            isBo1: m.bo === 1,
+            hasResult: !!m.result
+        };
     });
 
     // 3. NAČTENÍ TABULKY A ŠABLON
@@ -1206,45 +1194,64 @@ router.get('/playoff', requireAdmin, (req, res) => {
 `;
 
     if (Object.keys(seriesMap).length === 0) {
-        html += `<p style="color: gray;">Zatím nejsou vytvořeny žádné zápasy playoff pro tuto ligu a sezónu.</p>`;
+        html += `<p style="color: gray;">Zatím nejsou vytvořeny žádné série playoff pro tuto ligu a sezónu.</p>`;
     } else {
+        const getWinText = (w) => {
+            if (w === null) return '0 výher';
+            return w === 1 ? '1 výhra' : (w > 1 && w < 5 ? `${w} výhry` : `${w} výher`);
+        };
+
         Object.values(seriesMap).forEach(series => {
             const isBo1 = series.isBo1;
-            const winsNeeded = isBo1 ? 1 : series.bo;
-            const isFinished = series.winsA >= winsNeeded || series.winsB >= winsNeeded;
+            const winsNeeded = isBo1 ? 1 : Math.ceil(series.bo / 2);
 
-            let colorA = "#333333"; let classA = "btn-ongoing";
-            let colorB = "#333333"; let classB = "btn-ongoing";
+            // Pokud uživatel už zadal výsledek (např. 2:1), ověříme jestli to stačí na postup
+            const isFinished = series.hasResult && (series.scoreA >= winsNeeded || series.scoreB >= winsNeeded);
+
+            let colorA = "#333333";
+            let colorB = "#333333";
 
             if (isFinished) {
-                if (series.winsA >= winsNeeded) { colorA = "#006400"; classA = "btn-advancing"; colorB = "#8b0000"; classB = "btn-eliminated"; }
-                else { colorB = "#006400"; classB = "btn-advancing"; colorA = "#8b0000"; classA = "btn-eliminated"; }
+                if (series.scoreA > series.scoreB) { colorA = "#006400"; colorB = "#8b0000"; }
+                else if (series.scoreB > series.scoreA) { colorB = "#006400"; colorA = "#8b0000"; }
             }
 
-            let scoreValueA, scoreValueB, displayA, displayB;
+            let displayScoreA, displayScoreB;
 
             if (isBo1) {
-                scoreValueA = series.scoreA !== null ? series.scoreA : '-';
-                scoreValueB = series.scoreB !== null ? series.scoreB : '-';
-                displayA = `<strong>${series.teamA_Name}</strong> - Skóre: ${scoreValueA}`;
-                displayB = `<strong>${series.teamB_Name}</strong> - Skóre: ${scoreValueB}`;
+                displayScoreA = series.hasResult ? `Skóre: ${series.scoreA}` : 'Skóre: -';
+                displayScoreB = series.hasResult ? `Skóre: ${series.scoreB}` : 'Skóre: -';
             } else {
-                scoreValueA = series.winsA;
-                scoreValueB = series.winsB;
-                displayA = `<strong>${series.teamA_Name}</strong> - ${series.winsA} výher`;
-                displayB = `<strong>${series.teamB_Name}</strong> - ${series.winsB} výher`;
+                displayScoreA = getWinText(series.scoreA);
+                displayScoreB = getWinText(series.scoreB);
             }
 
+            // Hodnoty, které se zapíšou do pavouka (u BO1 skóre, u BOX počet výher)
+            const valToInsertA = series.scoreA !== null ? series.scoreA : '-';
+            const valToInsertB = series.scoreB !== null ? series.scoreB : '-';
+
             html += `
-            <div class="series-card">
-              <div style="font-size: 0.8em; color: gray; margin-bottom: 5px; text-align: center;">
-                ${isBo1 ? 'Hraje se na 1 zápas (BO1)' : `Série na ${winsNeeded} vítězné`}
+            <div class="series-card" style="margin-bottom: 15px;">
+              <div style="font-size: 0.8em; color: gray; margin-bottom: 8px; text-align: center;">
+                ${isBo1 ? 'Hraje se na 1 zápas (BO1)' : `Série na ${winsNeeded} vítězné (BO${series.bo})`}
               </div>
-              <button type="button" class="${classA}" onclick="applyToCell('${series.teamA_Name}', '${scoreValueA}', '${colorA}')">
-                ${displayA}
+              
+              <button type="button" onclick="applyToCell('${series.teamA_Name}', '${valToInsertA}', '${colorA}')" style="display: flex; width: 100%; padding: 0; margin-bottom: 5px; border: 1px solid #444; border-radius: 5px; overflow: hidden; cursor: pointer; background: transparent; outline: none;">
+                <div style="flex: 1; background-color: ${colorA}; padding: 10px; color: white; text-align: left; transition: background-color 0.2s;">
+                    <strong>${series.teamA_Name}</strong>
+                </div>
+                <div style="background-color: #222222; padding: 10px; color: white; border-left: 1px solid #444; min-width: 80px; text-align: center;">
+                    ${displayScoreA}
+                </div>
               </button>
-              <button type="button" class="${classB}" onclick="applyToCell('${series.teamB_Name}', '${scoreValueB}', '${colorB}')">
-                ${displayB}
+
+              <button type="button" onclick="applyToCell('${series.teamB_Name}', '${valToInsertB}', '${colorB}')" style="display: flex; width: 100%; padding: 0; margin-bottom: 5px; border: 1px solid #444; border-radius: 5px; overflow: hidden; cursor: pointer; background: transparent; outline: none;">
+                <div style="flex: 1; background-color: ${colorB}; padding: 10px; color: white; text-align: left; transition: background-color 0.2s;">
+                    <strong>${series.teamB_Name}</strong>
+                </div>
+                <div style="background-color: #222222; padding: 10px; color: white; border-left: 1px solid #444; min-width: 80px; text-align: center;">
+                    ${displayScoreB}
+                </div>
               </button>
             </div>
             `;
@@ -1314,7 +1321,6 @@ router.get('/playoff', requireAdmin, (req, res) => {
           const nextCell = activeCell.nextElementSibling;
           if (nextCell && nextCell.tagName === 'TD') {
               nextCell.innerText = score;
-              if (shouldColor) { nextCell.style.backgroundColor = bgColor; nextCell.style.color = '#FFFFFF'; }
           }
       }
   }

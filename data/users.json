@@ -67,8 +67,7 @@
         "p256dh": "BMKC0QhA8lzDPu3RE8Q-RgG1iuV6uqBCpmslqdOZdC_jbejtzGtZYnjJtM9ZWHgh6HiGBKfxKMxsSueFbHJTjnk",
         "auth": "m75Gyf5HRtyOByZ9BQEJLA"
       }
-    },
-    "subscriptions": []
+    }
   },
   {
     "username": "Ondra1893",
@@ -78,11 +77,11 @@
     "stats": {
       "25/26": {
         "TELH": {
-          "correct": 191,
-          "totalRegular": 335,
+          "correct": 200,
+          "totalRegular": 349,
           "totalPlayoff": 0,
-          "tableCorrect": 2,
-          "tableDeviation": 44
+          "tableCorrect": 1,
+          "tableDeviation": 42
         },
         "MS": {
           "correct": 0,
@@ -112,11 +111,11 @@
           "tableDeviation": 6
         },
         "MAXA": {
-          "tableCorrect": 1,
-          "tableDeviation": 70,
-          "correct": 0,
+          "tableCorrect": 0,
+          "tableDeviation": 68,
+          "correct": 3,
           "totalRegular": 0,
-          "totalPlayoff": 0
+          "totalPlayoff": 1
         }
       }
     },
@@ -1832,6 +1831,41 @@
             "matchId": 447,
             "winner": "home",
             "loserWins": 0
+          },
+          {
+            "matchId": 448,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 449,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 450,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 451,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 452,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 453,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 454,
+            "winner": "home",
+            "loserWins": 0
           }
         ],
         "Euro Hockey Tour": [
@@ -2276,6 +2310,28 @@
             "winner": "home",
             "scoreHome": 3,
             "scoreAway": 1
+          }
+        ],
+        "MAXA": [
+          {
+            "matchId": 462,
+            "winner": "home",
+            "loserWins": 1
+          },
+          {
+            "matchId": 463,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 464,
+            "winner": "home",
+            "loserWins": 1
+          },
+          {
+            "matchId": 465,
+            "winner": "home",
+            "loserWins": 2
           }
         ]
       }
@@ -4050,7 +4106,7 @@
           },
           {
             "matchId": 455,
-            "winner": "home",
+            "winner": "away",
             "loserWins": 0
           },
           {
@@ -4545,11 +4601,11 @@
     "stats": {
       "25/26": {
         "TELH": {
-          "correct": 178,
-          "totalRegular": 331,
+          "correct": 187,
+          "totalRegular": 345,
           "totalPlayoff": 0,
-          "tableCorrect": 1,
-          "tableDeviation": 28
+          "tableCorrect": 2,
+          "tableDeviation": 22
         },
         "MS": {
           "correct": 0,
@@ -4579,11 +4635,11 @@
           "tableDeviation": 4
         },
         "MAXA": {
-          "tableCorrect": 3,
+          "tableCorrect": 1,
           "tableDeviation": 60,
           "correct": 0,
           "totalRegular": 0,
-          "totalPlayoff": 0
+          "totalPlayoff": 1
         }
       }
     },
@@ -4613,11 +4669,19 @@
         }
       },
       {
-        "endpoint": "https://fcm.googleapis.com/fcm/send/cw2UsousLe0:APA91bFlJBeOcX70uKAKDRZnPedx07wivcqRJaL_4-tXmjx6F7RVxlX87r6dXYkLMWZFlVyc5PzDoIa-bK1z0W50SUKko5scyc4pYZ9_6WsMbPYXXwPJMJHychm5quBHEagQqebGnIsO",
+        "endpoint": "https://fcm.googleapis.com/fcm/send/fKejssKF-8Y:APA91bFTJibcgLArX23daZuzJLzuqgFusm1i0XdmHOabESRjb_nrkAK8zWiBLMwOYM8rgwO2lJH3s7HKgECHv6kqO9xJkjeJCK0oViVw1mYESWDslqNVQUVo8sd1_EjPf1_7A_S_GMv-",
         "expirationTime": null,
         "keys": {
-          "p256dh": "BLGeup7Ug5zK8HXxxz6mG7LGHcQPKWoVOk-ct0hILSZHEgYwi0n7EQaMj0gppW2RCutw2DowbDTOdOnnLj29oUw",
-          "auth": "wMCVsOj8r934XlRTFBUeWA"
+          "p256dh": "BCLCsoUOrCzc2WdGnQPtrXz8SLQdGl2NUwS_l0TuSdIvHXQhLBTnj8DO-7qvgjG16RRxmvllW4WtkX61RhtetNI",
+          "auth": "miW4wOdVV7RUqu8sEyEfmw"
+        }
+      },
+      {
+        "endpoint": "https://fcm.googleapis.com/fcm/send/c1ytvKcJsqY:APA91bHOuWlY3k1VaAAhUGilTKXPmFLBRiFhrCoCs98e6B9Xf5VgVOPRtMtuZLxtsPFYKs-Z0MrK-yF5CLMom_Fq1T-DFRhuKkEB1roWm-2CcmJZxHiEeyrpNPF4GzT6xhOlQ9Lq_3ez",
+        "expirationTime": null,
+        "keys": {
+          "p256dh": "BPZ9FQ9rIDuYjb0XJz1yvjhKLQZWAKtW2xXJNSnkXrvOa8F01_ttHGJnqwkM8n_NMkalRZVyTnlmIioc3X1OVJg",
+          "auth": "Fd6lt5YVNCVvRK1hbR-d2A"
         }
       }
     ]
@@ -6339,6 +6403,41 @@
             "matchId": 447,
             "winner": "home",
             "loserWins": 0
+          },
+          {
+            "matchId": 448,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 449,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 450,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 451,
+            "winner": "away",
+            "loserWins": 0
+          },
+          {
+            "matchId": 452,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 453,
+            "winner": "home",
+            "loserWins": 0
+          },
+          {
+            "matchId": 454,
+            "winner": "home",
+            "loserWins": 0
           }
         ],
         "Euro Hockey Tour": [
@@ -6790,8 +6889,8 @@
     "stats": {
       "25/26": {
         "TELH": {
-          "correct": 186,
-          "totalRegular": 335,
+          "correct": 195,
+          "totalRegular": 349,
           "totalPlayoff": 0
         },
         "MS": {
