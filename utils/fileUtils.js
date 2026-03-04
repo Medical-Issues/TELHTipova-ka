@@ -559,18 +559,15 @@ function evaluateRegularSeasonTable(season, liga) {
 
     // 1. Načtení dat
     const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'));
-    // Filtrujeme týmy jen pro danou ligu
     const teams = JSON.parse(fs.readFileSync('./data/teams.json', 'utf8')).filter(t => t.active && t.liga === liga);
     const users = JSON.parse(fs.readFileSync('./data/users.json', 'utf8'));
-
-    // Zjistíme, jestli je liga multigroup (pro správné párování)
     const allSeasonData = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf8'));
     const isMultigroup = allSeasonData[season]?.leagues.find(l => l.name === liga)?.isMultigroup || false;
 
     let tableTips = {};
     try { tableTips = JSON.parse(fs.readFileSync('./data/tableTips.json', 'utf8')); } catch (e) {}
 
-    // 2. Vypočítat REÁLNÉ SKÓRE a BODY (Live tabulka)
+    // 2. Výpočet skóre a reálných bodů
     const scores = {};
     teams.forEach(t => scores[t.id] = { points: 0, gf: 0, ga: 0 });
 
@@ -594,7 +591,7 @@ function evaluateRegularSeasonTable(season, liga) {
         }
     });
 
-    // PŘIDÁNO: Načtení manuálních bodů a skóre pro vyhodnocení
+    // Započítání manuálních bodů/bonusů + tiebreakerů
     try {
         const teamBonusData = JSON.parse(fs.readFileSync('./data/teamBonuses.json', 'utf8'));
         const leagueBonuses = teamBonusData[season]?.[liga] || {};
@@ -605,6 +602,13 @@ function evaluateRegularSeasonTable(season, liga) {
                     scores[teamId].points += (bonus.points || 0);
                     scores[teamId].gf += (bonus.gf || 0);
                     scores[teamId].ga += (bonus.ga || 0);
+
+                    const teamRef = teams.find(t => t.id === Number(teamId) || t.id === String(teamId));
+                    if (teamRef) {
+                        if(!teamRef.stats) teamRef.stats = {};
+                        if(!teamRef.stats[season]) teamRef.stats[season] = {};
+                        teamRef.stats[season].tiebreaker = bonus.tiebreaker || 0;
+                    }
                 } else if (typeof bonus === 'number') {
                     scores[teamId].points += bonus;
                 }
@@ -612,21 +616,118 @@ function evaluateRegularSeasonTable(season, liga) {
         }
     } catch(e) {}
 
-    // 3. Příprava "Reálných skupin" (abychom věděli, kdo patří do Skupiny A, kdo do B)
+    // Naplnění bodů přímo do týmů (aby fungoval IIHF sort)
+    teams.forEach(t => {
+        if(!t.stats) t.stats = {};
+        if(!t.stats[season]) t.stats[season] = {};
+        t.stats[season].points = scores[t.id].points;
+    });
+
+    // Rozřazení do skupin pro backend
     const groupedTeamsReal = {};
     teams.forEach(t => {
-        // Klíč musí být stejný jako při ukládání (string)
         const gKey = isMultigroup ? String(t.group || 1) : "default";
         if (!groupedTeamsReal[gKey]) groupedTeamsReal[gKey] = [];
         groupedTeamsReal[gKey].push(t);
     });
 
-    // 4. Vyhodnocení každého uživatele
+    // 3. SEŘAZENÍ PODLE SPRÁVNÝCH IIHF PRAVIDEL (Vloženo z tvého frontendu)
+    const globalRealRankMap = {};
+
+    Object.keys(groupedTeamsReal).forEach(gKey => {
+        const teamsInGroup = groupedTeamsReal[gKey];
+
+        teamsInGroup.sort((a, b) => {
+            const aStats = a.stats?.[season] || {};
+            const bStats = b.stats?.[season] || {};
+            const pA = aStats.points || 0;
+            const pB = bStats.points || 0;
+
+            if (pB !== pA) return pB - pA; // 1. Body
+
+            const tieA = aStats.tiebreaker || 0;
+            const tieB = bStats.tiebreaker || 0;
+            if (tieB !== tieA) return tieA - tieB; // Manuální Tiebreaker
+
+            const tiedTeamIds = teamsInGroup
+                .filter(t => (t.stats?.[season]?.points || 0) === pA)
+                .map(t => Number(t.id));
+
+            const getMiniStats = (teamId) => {
+                let mPts = 0, mDiff = 0, mGF = 0;
+                const groupMatches = matches.filter(m =>
+                    m.season === season &&
+                    m.liga === liga &&
+                    m.result &&
+                    !m.isPlayoff &&
+                    tiedTeamIds.includes(Number(m.homeTeamId)) &&
+                    tiedTeamIds.includes(Number(m.awayTeamId)) &&
+                    (Number(m.homeTeamId) === teamId || Number(m.awayTeamId) === teamId)
+                );
+
+                groupMatches.forEach(m => {
+                    const isHome = Number(m.homeTeamId) === teamId;
+                    let sH = m.result?.scoreHome !== undefined ? Number(m.result.scoreHome) : (m.scoreHome !== undefined ? Number(m.scoreHome) : 0);
+                    let sA = m.result?.scoreAway !== undefined ? Number(m.result.scoreAway) : (m.scoreAway !== undefined ? Number(m.scoreAway) : 0);
+                    const isOt = m.result?.ot || m.ot;
+
+                    let hPts, aPts;
+                    if (sH > sA) { hPts = isOt ? 2 : 3; aPts = isOt ? 1 : 0; }
+                    else if (sA > sH) { aPts = isOt ? 2 : 3; hPts = isOt ? 1 : 0; }
+                    else { hPts = 1; aPts = 1; }
+
+                    let pts, gf, ga;
+                    if (isHome) { pts = hPts; gf = sH; ga = sA; }
+                    else { pts = aPts; gf = sA; ga = sH; }
+
+                    mPts += pts; mDiff += (gf - ga); mGF += gf;
+                });
+                return {pts: mPts, diff: mDiff, gf: mGF};
+            };
+
+            const msA = getMiniStats(Number(a.id));
+            const msB = getMiniStats(Number(b.id));
+
+            if (msB.pts !== msA.pts) return msB.pts - msA.pts; // 2. Body v minitabulce
+            if (msB.diff !== msA.diff) return msB.diff - msA.diff; // 3. Rozdíl skóre minitab.
+            if (msB.gf !== msA.gf) return msB.gf - msA.gf; // 4. Vstřelené góly minitab.
+
+            const directMatch = matches.find(m =>
+                m.season === season && m.liga === liga && m.result && !m.isPlayoff &&
+                ((Number(m.homeTeamId) === Number(a.id) && Number(m.awayTeamId) === Number(b.id)) ||
+                    (Number(m.homeTeamId) === Number(b.id) && Number(m.awayTeamId) === Number(a.id)))
+            );
+
+            if (directMatch) {
+                const isAHome = Number(directMatch.homeTeamId) === Number(a.id);
+                let sH = directMatch.result?.scoreHome ?? directMatch.scoreHome ?? 0;
+                let sA = directMatch.result?.scoreAway ?? directMatch.scoreAway ?? 0;
+
+                if (isAHome) { if (sH > sA) return -1; if (sA > sH) return 1; }
+                else { if (sA > sH) return -1; if (sH > sA) return 1; }
+            }
+
+            const sA_overall = scores[a.id] || {gf: 0, ga: 0};
+            const sB_overall = scores[b.id] || {gf: 0, ga: 0};
+            const diffA = sA_overall.gf - sA_overall.ga;
+            const diffB = sB_overall.gf - sB_overall.ga;
+            if (diffA !== diffB) return diffB - diffA; // 5. Celkové skóre
+
+            return 0;
+        });
+
+        // Uložení reálného pořadí
+        teamsInGroup.forEach((t, i) => {
+            globalRealRankMap[t.id] = i + 1;
+        });
+    });
+
+    // 4. VYHODNOCENÍ UŽIVATELŮ VŮČI IIHF POŘADÍ
     users.forEach(user => {
         let userTipData = tableTips?.[season]?.[liga]?.[user.username];
         if (!userTipData) return;
 
-        // BACKWARD COMPATIBILITY: Pokud má uživatel starý formát (pole), převedeme na objekt
+        // Kvůli zpětné kompatibilitě (pole vs objekt)
         if (Array.isArray(userTipData)) {
             userTipData = { "default": userTipData };
         }
@@ -634,39 +735,28 @@ function evaluateRegularSeasonTable(season, liga) {
         let totalCorrect = 0;
         let totalDeviation = 0;
 
-        // Projdeme všechny reálné skupiny (A, B, C...) a porovnáme s tipem
         Object.keys(groupedTeamsReal).forEach(gKey => {
+            const userGroupTip = userTipData[gKey] || [];
             const realTeamsInGroup = groupedTeamsReal[gKey];
 
-            // Seřadíme reálné týmy ve skupině podle bodů a SKÓRE
-            const realOrderIds = realTeamsInGroup.sort((a, b) => {
-                const sa = scores[a.id];
-                const sb = scores[b.id];
-                if (sb.points !== sa.points) return sb.points - sa.points;
-                return (sb.gf - sb.ga) - (sa.gf - sa.ga);
-            }).map(t => t.id);
+            realTeamsInGroup.forEach((realTeam) => {
+                const realRank = globalRealRankMap[realTeam.id];
 
-            // Vytáhneme uživatelův tip pro tuto skupinu
-            const userGroupTip = userTipData[gKey] || [];
+                // Zabrání bugu, kdy JS hledá string "12" a nenajde int 12
+                const userIndexNum = userGroupTip.indexOf(Number(realTeam.id));
+                const userIndexStr = userGroupTip.indexOf(String(realTeam.id));
+                const finalUserIndex = userIndexNum !== -1 ? userIndexNum : userIndexStr;
 
-            // Porovnáváme
-            realOrderIds.forEach((realId, realIndex) => {
-                const userIndex = userGroupTip.indexOf(realId);
-
-                if (userIndex !== -1) {
-                    // Tým nalezen v tipu -> počítáme rozdíl
-                    const diff = Math.abs(realIndex - userIndex);
+                if (finalUserIndex !== -1) {
+                    const diff = Math.abs((finalUserIndex + 1) - realRank);
                     totalDeviation += diff;
                     if (diff === 0) totalCorrect++;
                 } else {
-                    // Tým v tipu chybí (uživatel netipoval tuto skupinu kompletně)
-                    // Penalizace: Přičteme počet týmů ve skupině (nebo jiná logika)
-                    totalDeviation += realOrderIds.length;
+                    totalDeviation += realTeamsInGroup.length; // Penalizace, pokud tým v tipu úplně chybí
                 }
             });
         });
 
-        // Uložení výsledků
         if (!user.stats) user.stats = {};
         if (!user.stats[season]) user.stats[season] = {};
         if (!user.stats[season][liga]) user.stats[season][liga] = {};

@@ -1068,9 +1068,9 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
                     Playoff</h2></th>
             </tr>
             `;
-            playoffData.forEach((row) => {
-            html += '<tr>';
-            row.forEach(cell => {
+    playoffData.forEach((row) => {
+        html += '<tr>';
+        row.forEach(cell => {
             const bg = cell.bgColor || '';
             const textColor = cell.textColor || '';
             const styleParts = [];
@@ -1079,25 +1079,25 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
             const styleAttr = styleParts.length ? ` style="${styleParts.join(';')}"` : '';
             html += `<td${styleAttr}>${cell.text || ''}</td>`;
         });
-            html += '</tr>';
-        });
+        html += '</tr>';
+    });
 
-            const totalMatches = leagueObj.maxMatches; // Celkový počet zápasů v lize (dle nastavení)
+    const totalMatches = leagueObj.maxMatches; // Celkový počet zápasů v lize (dle nastavení)
 
-            // 1. Zápasy z databáze (matches.json)
-            let filledMatches = matches.filter(m => m.result && m.isPlayoff === false && m.liga === selectedLiga &&
-            m.season === selectedSeason).length;
+    // 1. Zápasy z databáze (matches.json)
+    let filledMatches = matches.filter(m => m.result && m.isPlayoff === false && m.liga === selectedLiga &&
+        m.season === selectedSeason).length;
 
-            // 2. NOVÉ: Připočítat manuální zápasy
-            // (Sečteme manuální zápasy všech týmů a vydělíme 2, protože jeden zápas hrají dva týmy)
-            const totalManualGames = teamsInSelectedLiga.reduce((sum, t) => sum +
-            (t.stats?.[selectedSeason]?.manualGames || 0), 0);
-            filledMatches += Math.floor(totalManualGames / 2);
+    // 2. NOVÉ: Připočítat manuální zápasy
+    // (Sečteme manuální zápasy všech týmů a vydělíme 2, protože jeden zápas hrají dva týmy)
+    const totalManualGames = teamsInSelectedLiga.reduce((sum, t) => sum +
+        (t.stats?.[selectedSeason]?.manualGames || 0), 0);
+    filledMatches += Math.floor(totalManualGames / 2);
 
-            // Výpočet procenta
-            const percentage = totalMatches > 0 ? Math.round((filledMatches / totalMatches) * 100) : 0;
+    // Výpočet procenta
+    const percentage = totalMatches > 0 ? Math.round((filledMatches / totalMatches) * 100) : 0;
 
-            html += `
+    html += `
         </table>
     </div>
 </table>
@@ -1109,8 +1109,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 </div>
 <p id="progress-text"></p>
 </section>
-     
-        </div>`;
+`;
 
     // --- STATISTIKY (OBNOVENO V PLNÉ PARÁDĚ) ---
     if (username) {
@@ -1268,7 +1267,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
             const diff = userRank - realRank;
             const isCorrect = (diff === 0);
             const logoUrl = team.logo ? `/logoteamu/${team.logo}` : '/images/logo.png';
-            
+
             let bgStyle = "background-color: #1a1a1a; border: 1px solid #444;";
             let diffText;
             let diffColor = "gray";
