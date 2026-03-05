@@ -7043,7 +7043,13 @@
     "liga": "TELH",
     "season": "25/26",
     "isPlayoff": false,
-    "result": null
+    "result": {
+      "scoreHome": 3,
+      "scoreAway": 2,
+      "ot": false,
+      "winner": "home"
+    },
+    "postponed": false
   },
   {
     "id": 449,
@@ -7053,7 +7059,13 @@
     "liga": "TELH",
     "season": "25/26",
     "isPlayoff": false,
-    "result": null
+    "result": {
+      "scoreHome": 0,
+      "scoreAway": 2,
+      "ot": false,
+      "winner": "away"
+    },
+    "postponed": false
   },
   {
     "id": 450,
@@ -7063,7 +7075,13 @@
     "liga": "TELH",
     "season": "25/26",
     "isPlayoff": false,
-    "result": null
+    "result": {
+      "scoreHome": 4,
+      "scoreAway": 0,
+      "ot": false,
+      "winner": "home"
+    },
+    "postponed": false
   },
   {
     "id": 451,
@@ -7073,7 +7091,13 @@
     "liga": "TELH",
     "season": "25/26",
     "isPlayoff": false,
-    "result": null
+    "result": {
+      "scoreHome": 4,
+      "scoreAway": 2,
+      "ot": false,
+      "winner": "home"
+    },
+    "postponed": false
   },
   {
     "id": 452,
@@ -7083,7 +7107,13 @@
     "liga": "TELH",
     "season": "25/26",
     "isPlayoff": false,
-    "result": null
+    "result": {
+      "scoreHome": 6,
+      "scoreAway": 3,
+      "ot": false,
+      "winner": "home"
+    },
+    "postponed": false
   },
   {
     "id": 453,
@@ -7093,7 +7123,13 @@
     "liga": "TELH",
     "season": "25/26",
     "isPlayoff": false,
-    "result": null
+    "result": {
+      "scoreHome": 1,
+      "scoreAway": 4,
+      "ot": false,
+      "winner": "away"
+    },
+    "postponed": false
   },
   {
     "id": 454,
@@ -7103,7 +7139,13 @@
     "liga": "TELH",
     "season": "25/26",
     "isPlayoff": false,
-    "result": null
+    "result": {
+      "scoreHome": 3,
+      "scoreAway": 2,
+      "ot": true,
+      "winner": "home"
+    },
+    "postponed": false
   },
   {
     "id": 455,
@@ -7195,7 +7237,13 @@
     "season": "25/26",
     "isPlayoff": true,
     "bo": 3,
-    "postponed": false
+    "postponed": false,
+    "result": {
+      "scoreHome": 2,
+      "scoreAway": 0,
+      "ot": false,
+      "winner": "home"
+    }
   },
   {
     "id": 464,
@@ -7216,5 +7264,16 @@
     "season": "25/26",
     "isPlayoff": true,
     "bo": 5
+  },
+  {
+    "id": 466,
+    "homeTeamId": 25,
+    "awayTeamId": 17,
+    "datetime": "2026-03-08T15:00",
+    "liga": "MAXA",
+    "season": "25/26",
+    "isPlayoff": true,
+    "bo": 5,
+    "postponed": false
   }
 ]

@@ -88,7 +88,9 @@
       "4": {
         "specIn": [
           "P. Zámorský (?)",
-          "J. Martel (?)"
+          "J. Martel (?)",
+          "D. Bruk (?)",
+          "J. Nedvěd (?)"
         ],
         "specOut": [
           "C. Berglund (K)",
@@ -174,7 +176,8 @@
       },
       "8": {
         "specIn": [
-          "M. Vitouch (?)"
+          "M. Vitouch (?)",
+          "P. Gewiese (?)"
         ],
         "specOut": [
           "L. Anděl (K)",
@@ -208,9 +211,10 @@
           "S. Svozil (?)",
           "M. Kunc (?)",
           "D. Mikyska (?)",
-          "E. Tralmaks (?)",
           "R. Nedomlel (?)",
-          "R. Kučeřík (?)"
+          "R. Kučeřík (?)",
+          "R. Leino (?)",
+          "J. Süss (?)"
         ],
         "specOut": [
           "T.Bartejs (K)",

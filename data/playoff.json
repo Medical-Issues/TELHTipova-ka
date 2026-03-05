@@ -2157,7 +2157,7 @@
           "textColor": "lightgrey"
         },
         {
-          "text": "HC Slavia Praha",
+          "text": "SC Marimex Kolín",
           "bgColor": "rgb(255, 255, 0)",
           "textColor": "rgb(0, 0, 0)"
         },
@@ -2250,11 +2250,11 @@
       [
         {
           "text": "SK Horácká Třebíč",
-          "bgColor": "rgb(255, 255, 0)",
-          "textColor": "rgb(0, 0, 0)"
+          "bgColor": "rgb(0, 100, 0)",
+          "textColor": "rgb(255, 255, 255)"
         },
         {
-          "text": "1",
+          "text": "2",
           "bgColor": "rgb(0, 0, 0)",
           "textColor": "lightgrey"
         },
@@ -2361,7 +2361,7 @@
           "textColor": "lightgrey"
         },
         {
-          "text": "8-10. místo",
+          "text": "SK Horácká Třebíč",
           "bgColor": "rgb(255, 0, 0)",
           "textColor": "rgb(0, 0, 0)"
         },
@@ -2454,8 +2454,8 @@
       [
         {
           "text": "HC Tábor",
-          "bgColor": "rgb(255, 255, 0)",
-          "textColor": "rgb(0, 0, 0)"
+          "bgColor": "rgb(139, 0, 0)",
+          "textColor": "rgb(255, 255, 255)"
         },
         {
           "text": "0",
@@ -2565,7 +2565,7 @@
           "textColor": "lightgrey"
         },
         {
-          "text": "SC Marimex Kolín",
+          "text": "HC Slavia Praha",
           "bgColor": "rgb(255, 255, 0)",
           "textColor": "rgb(0, 0, 0)"
         },
@@ -2866,7 +2866,7 @@
           "textColor": "rgb(0, 0, 0)"
         },
         {
-          "text": "0",
+          "text": "1",
           "bgColor": "rgb(0, 0, 0)",
           "textColor": "lightgrey"
         },

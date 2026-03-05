@@ -3868,7 +3868,7 @@ p.style.display = which === 'playoff' ? 'block' : 'none';
                 const parentTd = el.closest('td');
                 if (parentTd) {
                     // Resetujeme třídy (odstraníme staré barvy, necháme jen základ)
-                    parentTd.classList.remove('right-selected', 'wrong-selected', 'exact-score', 'diff-1', 'diff-2', 'diff-3plus');
+                    parentTd.classList.remove('right-selected', 'wrong-selected', 'wrong-selected-hidden', 'exact-score', 'diff-1', 'diff-2', 'diff-3plus');
                     
                     // Pokud má element data-td-class, přidáme ji rodiči
                     if (el.dataset.tdClass) {
@@ -3970,19 +3970,46 @@ p.style.display = which === 'playoff' ? 'block' : 'none';
             let content = '-';
             if (selectedWinner === "home" || selectedWinner === "away") {
                 if (bo === 1) {
-                    const tH = userTip?.scoreHome ?? 0;
-                    const tA = userTip?.scoreAway ?? 0;
-                    const totalDiff = Math.abs(tH - match.result.scoreHome) + Math.abs(tA - match.result.scoreAway);
-
-                    if (totalDiff === 0) tdStatusClass = 'exact-score';
-                    else if (totalDiff === 1) tdStatusClass = 'diff-1';
-                    else if (totalDiff === 2) tdStatusClass = 'diff-2';
-                    else tdStatusClass = 'diff-3plus';
-
+                    if (selectedWinner === match.result.winner) {
+                        const tH = userTip?.scoreHome ?? 0;
+                        const tA = userTip?.scoreAway ?? 0;
+                        const totalDiff = Math.abs(tH - match.result.scoreHome) + Math.abs(tA - match.result.scoreAway);
+                        if (totalDiff === 0) tdStatusClass = 'exact-score';
+                        else if (totalDiff === 1) tdStatusClass = 'diff-1';
+                        else if (totalDiff === 2) tdStatusClass = 'diff-2';
+                        else tdStatusClass = 'diff-3plus';
                     content = `${tH} : ${tA}`;
+                    } else {
+                        const tH = userTip?.scoreHome ?? 0;
+                        const tA = userTip?.scoreAway ?? 0;
+                        content = `${tH} : ${tA}`;
+                        tdStatusClass = 'wrong-selected-hidden';
+                    }
                 } else {
-                    tdStatusClass = 'right-selected';
+                    // --- OPRAVENÁ LOGIKA PRO SÉRIE (BO > 1) ---
                     content = userTip?.loserWins ?? '-';
+
+                    // Zjištění, kolik zápasů skutečně vyhrál poražený tým
+                    let realLoserWins = 0;
+                    if (match.result.winner === 'home') {
+                        realLoserWins = match.result.scoreAway || 0;
+                    } else if (match.result.winner === 'away') {
+                        realLoserWins = match.result.scoreHome || 0;
+                    }
+
+                    // Vyhodnocení tipu a barev podle tvé legendy
+                    if (selectedWinner === match.result.winner) {
+                        if (parseInt(userTip?.loserWins) === parseInt(realLoserWins)) {
+                            // 3 BODY: Trefil vítěze i přesný počet zápasů poraženého -> Zelená
+                            tdStatusClass = 'exact-score';
+                        } else {
+                            // 1 BOD: Trefil vítěze, ale netrefil počet zápasů -> Červená (třída diff-3plus má v CSS červenou)
+                            tdStatusClass = 'diff-3plus';
+                        }
+                    } else {
+                        // 0 BODŮ: Netrefil ani vítěze série -> Červená
+                        tdStatusClass = 'wrong-selected-hidden';
+                    }
                 }
             }
             return `<div class="${userClass} team-link-history" style="${visibilityStyle}" data-td-class="${tdStatusClass}">${content}</div>`;

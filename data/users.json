@@ -77,8 +77,8 @@
     "stats": {
       "25/26": {
         "TELH": {
-          "correct": 195,
-          "totalRegular": 342,
+          "correct": 200,
+          "totalRegular": 349,
           "totalPlayoff": 0,
           "tableCorrect": 1,
           "tableDeviation": 42
@@ -111,11 +111,11 @@
           "tableDeviation": 6
         },
         "MAXA": {
-          "tableCorrect": 1,
-          "tableDeviation": 70,
-          "correct": 0,
+          "tableCorrect": 0,
+          "tableDeviation": 68,
+          "correct": 3,
           "totalRegular": 0,
-          "totalPlayoff": 0
+          "totalPlayoff": 1
         }
       }
     },
@@ -4106,7 +4106,7 @@
           },
           {
             "matchId": 455,
-            "winner": "home",
+            "winner": "away",
             "loserWins": 0
           },
           {
@@ -4588,12 +4588,17 @@
           {
             "matchId": 464,
             "winner": "home",
-            "loserWins": 1
+            "loserWins": 0
           },
           {
             "matchId": 465,
             "winner": "home",
             "loserWins": 2
+          },
+          {
+            "matchId": 466,
+            "winner": "home",
+            "loserWins": 0
           }
         ]
       }
@@ -4601,11 +4606,11 @@
     "stats": {
       "25/26": {
         "TELH": {
-          "correct": 182,
-          "totalRegular": 338,
+          "correct": 187,
+          "totalRegular": 345,
           "totalPlayoff": 0,
-          "tableCorrect": 3,
-          "tableDeviation": 24
+          "tableCorrect": 2,
+          "tableDeviation": 22
         },
         "MS": {
           "correct": 0,
@@ -4635,11 +4640,11 @@
           "tableDeviation": 4
         },
         "MAXA": {
-          "tableCorrect": 3,
+          "tableCorrect": 1,
           "tableDeviation": 60,
           "correct": 0,
           "totalRegular": 0,
-          "totalPlayoff": 0
+          "totalPlayoff": 1
         }
       }
     },
@@ -6889,8 +6894,8 @@
     "stats": {
       "25/26": {
         "TELH": {
-          "correct": 191,
-          "totalRegular": 342,
+          "correct": 195,
+          "totalRegular": 349,
           "totalPlayoff": 0
         },
         "MS": {

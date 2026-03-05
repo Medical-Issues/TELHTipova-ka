@@ -277,8 +277,12 @@ main {
 
 .team-link-history.wrong-selected {
     background-color: #FF0000;
-    color: black;
+    color: #FF0000;
     font-weight: bold;
+}
+
+.wrong-selected-hidden {
+    background-color: #333
 }
 
 button:disabled {
