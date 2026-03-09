@@ -130,7 +130,6 @@ main {
     align-items: center;
     flex-direction: column;
     border: 3px solid orangered;
-    border-radius: 10px;
     padding: 50px;
     gap: 20px;
 }
@@ -160,7 +159,6 @@ main {
 .login_input {
     width: 492px;
     height: 44px;
-    border-radius: 10px;
     border: 1px solid orangered;
     background-color: #222222;
     color: white;
@@ -171,7 +169,6 @@ main {
     margin-top: 20px;
     width: 500px;
     height: 50px;
-    border-radius: 10px;
     background-color: orangered;
     color: white;
     border: none;
@@ -302,7 +299,6 @@ button:disabled {
     background: #4caf50;
     color: white;
     text-decoration: none;
-    border-radius: 4px;
     margin-bottom: 15px;
     transition: background 0.3s ease;
 }
@@ -315,7 +311,6 @@ button:disabled {
     padding: 5px 10px;
     font-size: 12px;
     border: none;
-    border-radius: 3px;
     cursor: pointer;
     color: white;
 }
@@ -480,7 +475,6 @@ button:disabled {
     background: #eee;
     padding: 10px;
     margin-bottom: 10px;
-    border-radius: 8px;
 }
 .toggle-button {
     margin-top: 10px;
@@ -661,7 +655,6 @@ tr.postponed {
     max-width: 500px;
     height: 25px;
     background: black;
-    border-radius: 20px;
     overflow: hidden;
     margin: 10px auto;
     box-shadow: 0 0 10px rgba(0,0,0,0.3);
@@ -674,7 +667,6 @@ tr.postponed {
     line-height: 25px;
     color: #fff;
     font-weight: bold;
-    border-radius: 20px 0 0 20px;
     transition: width 0.6s ease;
 }
 .rank-cell.quarterfinal {
@@ -837,8 +829,8 @@ tr.clinched-crosstable.locked td.points {
 #playoffTable td.selected { outline: 3px solid #00ff00; outline-offset: -2px; }
 #playoffTable td[contenteditable="true"]:empty::before { content: attr(data-placeholder); color: #666; }
 
-.assistant-panel { background: #111; border: 1px solid orangered; padding: 15px; border-radius: 8px; margin-left: 20px; flex: 1; height: fit-content; position: sticky; top: 20px; }
-.series-card { background: #222; border: 1px solid #444; padding: 10px; margin-bottom: 10px; border-radius: 4px; }
+.assistant-panel { background: #111; border: 1px solid orangered; padding: 15px; margin-left: 20px; flex: 1; height: fit-content; position: sticky; top: 20px; }
+.series-card { background: #222; border: 1px solid #444; padding: 10px; margin-bottom: 10px; }
 .series-card button { background: #333; color: white; border: 1px solid #555; padding: 5px 10px; cursor: pointer; margin-top: 5px; width: 100%; text-align: left; }
 .series-card button:hover { background: #444; }
 
@@ -846,7 +838,7 @@ tr.clinched-crosstable.locked td.points {
 .btn-eliminated { border-left: 4px solid #8b0000 !important; }
 .btn-ongoing { border-left: 4px solid #b8860b !important; }
 
-.quick-team-btn { background: #333; color: #ccc; border: 1px solid #555; padding: 6px; cursor: pointer; border-radius: 4px; margin: 2px; }
+.quick-team-btn { background: #333; color: #ccc; border: 1px solid #555; padding: 6px; cursor: pointer; margin: 2px; }
 .quick-team-btn:hover { background: #555; color: white; }
 /* ===================================================================== */
 /* === ADMIN PLAYOFF ASISTENT - ZLEPŠENÝ VZHLED === */
@@ -913,7 +905,6 @@ tr.clinched-crosstable.locked td.points {
     background: #111;
     border: 1px solid #ff4500;
     padding: 15px;
-    border-radius: 12px;
     margin-left: 20px;
     flex: 1;
     height: fit-content;
@@ -942,7 +933,6 @@ tr.clinched-crosstable.locked td.points {
     background: #111;
     border: 1px solid #ff4500;
     padding: 15px;
-    border-radius: 12px;
     margin-left: 20px;
     flex: 1;
     height: fit-content;
@@ -956,7 +946,6 @@ tr.clinched-crosstable.locked td.points {
     border: 1px solid #333;
     padding: 10px;
     margin-bottom: 12px;
-    border-radius: 8px;
 }
 
 .series-card button {
@@ -968,7 +957,6 @@ tr.clinched-crosstable.locked td.points {
     margin-top: 6px;
     width: 100%;
     text-align: left;
-    border-radius: 4px;
     font-size: 0.9em;
 }
 
@@ -983,7 +971,6 @@ tr.clinched-crosstable.locked td.points {
     background: #111;
     border: 1px solid #333;
     border-left: 4px solid orangered;
-    border-radius: 8px;
     margin-bottom: 20px;
     overflow: hidden;
     min-height: 200px;
@@ -1020,7 +1007,6 @@ textarea { width: 100%; height: 120px; background: rgba(0, 0, 0, 0.6); color: #f
      border-left: 5px solid orangered;
      padding: 15px;
      margin: 20px 0;
-     border-radius: 4px;
      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
  }
 .legend-grid {
@@ -1034,7 +1020,6 @@ textarea { width: 100%; height: 120px; background: rgba(0, 0, 0, 0.6); color: #f
     color: #ccc;
     background: #000;
     padding: 5px 10px;
-    border-radius: 4px;
     border: 1px solid #333;
 }
 .code-tag {
@@ -1050,15 +1035,14 @@ textarea { width: 100%; height: 120px; background: rgba(0, 0, 0, 0.6); color: #f
     background: #111;
     border: 1px solid #333;
     border-left: 4px solid orangered;
-    border-radius: 8px;
     margin-bottom: 20px;
     overflow: hidden;
     min-height: 200px;
 }
 .image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 20px; padding: 20px; }
-.image-card { border: 2px solid #444; padding: 10px; text-align: center; background: #222; border-radius: 8px; position: relative; }
+.image-card { border: 2px solid #444; padding: 10px; text-align: center; background: #222; position: relative; }
 .image-card.active { border-color: #00ff00; box-shadow: 0 0 10px rgba(0,255,0,0.2); }
-.status-badge { font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 4px; position: absolute; top: 5px; right: 5px; }
+.status-badge { font-size: 10px; font-weight: bold; padding: 2px 6px; position: absolute; top: 5px; right: 5px; }
 .status-active { background: #00ff00; color: black; }
 .status-unused { background: #555; color: white; }
 .image-card img { max-width: 100%; height: 80px; object-fit: contain; margin-bottom: 10px; display: block; margin-left: auto; margin-right: auto; }

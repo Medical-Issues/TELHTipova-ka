@@ -916,6 +916,12 @@ router.post('/edit/:id', requireAdmin, (req, res) => {
 
     const match = matches[matchIndex];
     const liga = match.liga;
+
+    // 1. Zjistíme staré hodnoty PŘED úpravou
+    const oldDatetime = match.datetime;
+    const oldPostponed = match.postponed === true;
+
+    // 2. Aktualizace na nové hodnoty
     match.homeTeamId = parseInt(homeTeamId);
     match.awayTeamId = parseInt(awayTeamId);
     match.datetime = datetime;
@@ -946,14 +952,45 @@ router.post('/edit/:id', requireAdmin, (req, res) => {
     } else {
         delete match.result;
     }
+
     fs.writeFileSync('./data/matches.json', JSON.stringify(matches, null, 2));
-    try {
-    if (season && liga) {
-        updateTeamsPoints(matches);
-        evaluateAndAssignPoints(matches[matchIndex].liga, matches[matchIndex].season);
-        evaluateRegularSeasonTable(season, liga);
-        notif.notifyResult(matchId, scoreHome, scoreAway);
+
+    // 3. NOTIFIKAČNÍ DETEKTIV - Kontrola změn (Pokud NENÍ zadaný výsledek)
+    if (!match.result) {
+        let changes = [];
+
+        // Kontrola změny času
+        if (oldDatetime !== match.datetime) {
+            const [datePart, timePart] = match.datetime.split('T');
+            const [year, month, day] = datePart.split('-');
+            const hezkyCas = `${day}. ${month}. ${year} v ${timePart}`;
+            changes.push(`Nový čas: ${hezkyCas}`);
+        }
+
+        // Kontrola odložení
+        if (!oldPostponed && match.postponed) {
+            changes.push('Zápas byl odložen');
+        } else if (oldPostponed && !match.postponed) {
+            changes.push('Zápas již není odložen');
+        }
+
+        // Pokud se něco změnilo, odešleme naši novou notifikaci
+        if (changes.length > 0) {
+            notif.notifyMatchUpdate(match.id, changes.join(' | '));
+        }
     }
+
+    try {
+        if (season && liga) {
+            updateTeamsPoints(matches);
+            evaluateAndAssignPoints(matches[matchIndex].liga, matches[matchIndex].season);
+            evaluateRegularSeasonTable(season, liga);
+
+            // 4. Odeslání výsledku (POUZE pokud má zápas výsledek, dřív to tu posílalo pořád)
+            if (match.result) {
+                notif.notifyResult(matchId, scoreHome, scoreAway);
+            }
+        }
     } catch (err) {
         console.error("Chyba při přepočtech, nebyla odeslána sezóna nebo liga", err);
     }
@@ -2125,7 +2162,7 @@ router.get('/teams/points', requireAdmin, (req, res) => {
                 savedData = { ...savedData, ...raw };
             }
         }
-        
+
         const myTotalPts = (realScores[t.id]?.points || 0) + (savedData.points || 0);
         const isTied = pointsCount[myTotalPts] > 1;
         let rowBgStyle = "";
@@ -2154,9 +2191,9 @@ router.get('/teams/points', requireAdmin, (req, res) => {
                             </td>
                             <td>
                                 ${isTied
-                                ? `<input type="number" name="tie_${tId}" value="${savedData.tiebreaker || 0}" style="width: 70px; text-align: center; border: 1px solid orangered; background-color: #111; color: white;" title="Pořadí v minitabulce (1 = nejlepší)">`
-                                : `<input type="hidden" name="tie_${tId}" value="0"><span style="color: gray;">—</span>`
-                                }
+            ? `<input type="number" name="tie_${tId}" value="${savedData.tiebreaker || 0}" style="width: 70px; text-align: center; border: 1px solid orangered; background-color: #111; color: white;" title="Pořadí v minitabulce (1 = nejlepší)">`
+            : `<input type="hidden" name="tie_${tId}" value="0"><span style="color: gray;">—</span>`
+        }
                             </td>
                         </tr>`;
     }).join('')}

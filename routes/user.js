@@ -3,7 +3,7 @@ const express = require("express");
 const router = express.Router();
 const path = require('path');
 const {
-    loadTeams, requireLogin, calculateTeamScores, getLeagueZones, getTeamZone
+    loadTeams, requireLogin, calculateTeamScores, getLeagueZones, getTeamZone, getTableMode
 } = require("../utils/fileUtils");
 const { publicVapidKey } = require('./notificationService');
 
@@ -152,6 +152,7 @@ router.get("/table-tip", requireLogin, (req, res) => {
         isTipsLocked = statusData?.[selectedSeason]?.[selectedLiga]?.tableTipsLocked || false;
     } catch (e) {
     }
+    const tableMode = getTableMode(req, isRegularSeasonFinished);
 
     let teamBonusData = {};
     try {
@@ -434,7 +435,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <a class="history-btn changed" href="/?liga=${encodeURIComponent(selectedLiga)}">Tipovačka</a>
 <a class="history-btn changed" href="/prestupy?liga=${encodeURIComponent(selectedLiga)}">Přestupy TELH</a>
 <div style="text-align: center; margin: 20px;">
-    <button type="button" id="notify-toggle-btn" style="display: none; padding: 10px 20px; cursor: pointer; border-radius: 5px; font-weight: bold; border: none;">
+    <button type="button" id="notify-toggle-btn" style="display: none; width: 200px; height: 30px; cursor: pointer; font-weight: bold; border: none;">
         Načítám stav...
     </button>
 </div>
@@ -445,10 +446,18 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <section class="stats-container">
 <div class="left-panel">
 <div style="display: flex; flex-direction: row; justify-content: space-around; margin:20px 0; text-align:center;">
-<button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('regular')">Základní část</button>
-<button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('playoff')">Playoff</button>
+    <a href="?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}&mode=${clinchMode}&tableMode=regular" 
+       style="cursor: pointer; width: 120px; text-decoration: none; border: none; padding: 10px; ${tableMode === 'regular' ? 'color: black; background-color: orangered;' : 'color: orangered; background-color: black;'}" 
+       class="history-btn">
+       Základní část
+    </a>
+    <a href="?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}&mode=${clinchMode}&tableMode=playoff" 
+       style="cursor: pointer; width: 120px; text-decoration: none; border: none; padding: 10px; ${tableMode === 'playoff' ? 'color: black; background-color: orangered;' : 'color: orangered; background-color: black;'}" 
+       class="history-btn">
+       Playoff
+    </a>
 </div>
-<div id="regularTable">
+<div id="regularTable" style="display:${tableMode === 'regular' ? 'block' : 'none'};">
 `;
 
     const crossGroupTeams = [];
@@ -456,11 +465,11 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
     html += `
     <div style="display: flex; justify-content: flex-start; align-items: center; margin-bottom: 10px; gap: 10px;">
         <span style="color: gray; font-size: 0.85em;">Logika obarvování:</span>
-        <a href="?liga=${encodeURIComponent(selectedLiga)}&mode=strict" 
+        <a href="?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}&mode=strict&tableMode=${tableMode}" 
            style="${clinchMode === 'strict' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; text-decoration: none; font-size: 0.85em;">
            Striktní (Jistá meta)
         </a>
-        <a href="?liga=${encodeURIComponent(selectedLiga)}&mode=cascade" 
+        <a href="?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}&mode=cascade&tableMode=${tableMode}" 
            style="${clinchMode === 'cascade' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; text-decoration: none; font-size: 0.85em;">
            Kaskádová (Minimální meta)
         </a>
@@ -1061,7 +1070,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
     }
     html += `
     </div>
-    <div id="playoffTablePreview" style="display:none; overflow:auto; max-width:100%;">
+    <div id="playoffTablePreview" style="display:${tableMode === 'playoff' ? 'block' : 'none'}; overflow:auto; max-width:100%;">
         <table class="points-table">
             <tr>
                 <th scope="col" id="points-table-header" colSpan="20"><h2>Týmy - ${selectedLiga} ${selectedSeason} -
@@ -1521,7 +1530,11 @@ router.post("/tip", requireLogin, (req, res) => {
     const match = matches.find(m => m.id === matchId);
     if (!match) return res.status(400).send("Neplatný zápas.");
 
-    if (new Date(match.datetime) <= new Date()) {
+    // Bezpečnostní kontrola času: Převedeme aktuální čas na český ISO formát pro přesné porovnání
+    const currentPragueTimeISO = new Date().toLocaleString('sv-SE', {timeZone: 'Europe/Prague'}).replace(' ', 'T');
+
+    // Porovnáváme dva textové řetězce (např. "2024-03-10T18:00" <= "2024-03-10T18:05")
+    if (match.datetime <= currentPragueTimeISO) {
         return res.status(403).send("Tipování na tento zápas již není možné, zápas už začal.");
     }
 
@@ -1639,6 +1652,7 @@ router.get('/', requireLogin, (req, res) => {
         isRegularSeasonFinished = statusData?.[selectedSeason]?.[selectedLiga]?.regularSeasonFinished || false;
     } catch (e) {
     }
+    const tableMode = getTableMode(req, isRegularSeasonFinished);
     const statusStyle = isRegularSeasonFinished ? "color: lightgrey; font-weight: bold;" : "color: white; opacity: 0.7; background-color: black";
 
     // --- 3. STATISTIKY UŽIVATELŮ ---
@@ -1879,7 +1893,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <a class="history-btn changed" href="/table-tip?liga=${encodeURIComponent(selectedLiga)}">Základní část</a>
 <a class="history-btn changed" href="/prestupy?liga=${encodeURIComponent(selectedLiga)}">Přestupy TELH</a>
 <div style="text-align: center; margin: 20px;">
-    <button type="button" id="notify-toggle-btn" style="display: none; padding: 10px 20px; cursor: pointer; border-radius: 5px; font-weight: bold; border: none;">
+    <button type="button" id="notify-toggle-btn" style="display: none; width: 200px; height: 30px; cursor: pointer; font-weight: bold; border: none;">
         Načítám stav...
     </button>
 </div>
@@ -1890,20 +1904,28 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <section class="stats-container">
 <div class="left-panel">
 <div style="display: flex; flex-direction: row; justify-content: space-around; margin:20px 0; text-align:center;">
-<button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('regular')">Základní část</button>
-<button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('playoff')">Playoff</button>
+    <a href="?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}&mode=${clinchMode}&tableMode=regular" 
+       style="cursor: pointer; width: 120px; text-decoration: none; border: none; padding: 10px; ${tableMode === 'regular' ? 'color: black; background-color: orangered;' : 'color: orangered; background-color: black;'}" 
+       class="history-btn">
+       Základní část
+    </a>
+    <a href="?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}&mode=${clinchMode}&tableMode=playoff" 
+       style="cursor: pointer; width: 120px; text-decoration: none; border: none; padding: 10px; ${tableMode === 'playoff' ? 'color: black; background-color: orangered;' : 'color: orangered; background-color: black;'}" 
+       class="history-btn">
+       Playoff
+    </a>
 </div>
-<div id="regularTable">
+<div id="regularTable" style="display:${tableMode === 'regular' ? 'block' : 'none'};">
 `
 
     html += `
     <div style="display: flex; justify-content: flex-start; align-items: center; margin-bottom: 10px; gap: 10px;">
         <span style="color: gray; font-size: 0.85em;">Logika obarvování:</span>
-        <a href="?liga=${encodeURIComponent(selectedLiga)}&mode=strict" 
+        <a href="?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}&mode=strict&tableMode=${tableMode}" 
            style="${clinchMode === 'strict' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; text-decoration: none; font-size: 0.85em;">
            Striktní (Jistá meta)
         </a>
-        <a href="?liga=${encodeURIComponent(selectedLiga)}&mode=cascade" 
+        <a href="?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}&mode=cascade&tableMode=${tableMode}" 
            style="${clinchMode === 'cascade' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; text-decoration: none; font-size: 0.85em;">
            Kaskádová (Minimální meta)
         </a>
@@ -2490,7 +2512,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
     // --- ZBYTEK STRÁNKY ---
     html += `
 </div>
-<div id="playoffTablePreview" style="display:none; overflow:auto; max-width:100%;">
+<div id="playoffTablePreview" style="display:${tableMode === 'playoff' ? 'block' : 'none'}; overflow:auto; max-width:100%;">
 <table class="points-table"><tr><th scope="col" id="points-table-header" colspan="20"><h2>Týmy - ${selectedLiga} ${selectedSeason} - Playoff</h2></th></tr>`;
     playoffData.forEach((row) => {
         html += '<tr>';
@@ -3117,6 +3139,7 @@ router.get('/history/a', requireLogin, (req, res) => {
         isRegularSeasonFinished = statusData?.[selectedSeason]?.[selectedLiga]?.regularSeasonFinished || false;
     } catch (e) {
     }
+    const tableMode = getTableMode(req, isRegularSeasonFinished);
 // --- HTML START ---
     let html = `
 <!DOCTYPE html>
@@ -3150,20 +3173,28 @@ p.style.display = which === 'playoff' ? 'block' : 'none';
 <section class="stats-container">
 <div class="left-panel">
 <div style="display: flex; flex-direction: row; justify-content: space-around; margin:20px 0; text-align:center;">
-<button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('regular')">Základní část</button>
-<button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('playoff')">Playoff</button>
+    <a href="?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}&mode=${clinchMode}&tableMode=regular" 
+       style="cursor: pointer; width: 120px; text-decoration: none; border: none; padding: 10px; ${tableMode === 'regular' ? 'color: black; background-color: orangered;' : 'color: orangered; background-color: black;'}" 
+       class="history-btn">
+       Základní část
+    </a>
+    <a href="?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}&mode=${clinchMode}&tableMode=playoff" 
+       style="cursor: pointer; width: 120px; text-decoration: none; border: none; padding: 10px; ${tableMode === 'playoff' ? 'color: black; background-color: orangered;' : 'color: orangered; background-color: black;'}" 
+       class="history-btn">
+       Playoff
+    </a>
 </div>
-<div id="regularTable">
+<div id="regularTable" style="display:${tableMode === 'regular' ? 'block' : 'none'};">
 `;
 
     html += `
     <div style="display: flex; justify-content: flex-start; align-items: center; margin-bottom: 10px; gap: 10px;">
         <span style="color: gray; font-size: 0.85em;">Logika obarvování:</span>
-        <a href="/history/a/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}&mode=strict" 
+        <a href="?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}&mode=strict&tableMode=${tableMode}" 
            style="${clinchMode === 'strict' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; text-decoration: none; font-size: 0.85em;">
            Striktní (Jistá meta)
         </a>
-        <a href="/history/a/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}&mode=cascade" 
+        <a href="?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}&mode=cascade&tableMode=${tableMode}" 
            style="${clinchMode === 'cascade' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; text-decoration: none; font-size: 0.85em;">
            Kaskádová (Minimální meta)
         </a>
@@ -3746,7 +3777,7 @@ p.style.display = which === 'playoff' ? 'block' : 'none';
 
         html += `</tbody></table><br>`;
     }
-    html += `</div><div id="playoffTablePreview" style="display:none; overflow:auto; max-width:100%;"><table class="points-table"><tr><th scope="col" id="points-table-header" colspan="20"><h2>Týmy - Playoff</h2></th></tr>`;
+    html += `</div><div id="playoffTablePreview" style="display:${tableMode === 'playoff' ? 'block' : 'none'}; overflow:auto; max-width:100%;"><table class="points-table"><tr><th scope="col" id="points-table-header" colspan="20"><h2>Týmy - Playoff</h2></th></tr>`;
     playoffData.forEach((row) => {
         html += '<tr>';
         row.forEach(cell => {
@@ -4439,7 +4470,7 @@ router.get('/history/table', requireLogin, (req, res) => {
         isRegularSeasonFinished = statusData?.[selectedSeason]?.[selectedLiga]?.regularSeasonFinished || false;
     } catch (e) {
     }
-
+    const tableMode = getTableMode(req, isRegularSeasonFinished);
 // --- HTML START ---
     let html = `
 <!DOCTYPE html>
@@ -4472,20 +4503,28 @@ function showTable(which) {
 <section class="stats-container">
 <div class="left-panel">
 <div style="display: flex; flex-direction: row; justify-content: space-around; margin:20px 0; text-align:center;">
-<button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('regular')">Základní část</button>
-<button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('playoff')">Playoff</button>
+    <a href="?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}&mode=${clinchMode}&tableMode=regular" 
+       style="cursor: pointer; width: 120px; text-decoration: none; border: none; padding: 10px; ${tableMode === 'regular' ? 'color: black; background-color: orangered;' : 'color: orangered; background-color: black;'}" 
+       class="history-btn">
+       Základní část
+    </a>
+    <a href="?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}&mode=${clinchMode}&tableMode=playoff" 
+       style="cursor: pointer; width: 120px; text-decoration: none; border: none; padding: 10px; ${tableMode === 'playoff' ? 'color: black; background-color: orangered;' : 'color: orangered; background-color: black;'}" 
+       class="history-btn">
+       Playoff
+    </a>
 </div>
-<div id="regularTable">
+<div id="regularTable" style="display:${tableMode === 'regular' ? 'block' : 'none'};">
 `;
 
     html += `
     <div style="display: flex; justify-content: flex-start; align-items: center; margin-bottom: 10px; gap: 10px;">
         <span style="color: gray; font-size: 0.85em;">Logika obarvování:</span>
-        <a href="?liga=${encodeURIComponent(selectedLiga)}&mode=strict" 
+        <a href="?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}&mode=strict&tableMode=${tableMode}" 
            style="${clinchMode === 'strict' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; text-decoration: none; font-size: 0.85em;">
            Striktní (Jistá meta)
         </a>
-        <a href="?liga=${encodeURIComponent(selectedLiga)}&mode=cascade" 
+        <a href="?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}&mode=cascade&tableMode=${tableMode}" 
            style="${clinchMode === 'cascade' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; text-decoration: none; font-size: 0.85em;">
            Kaskádová (Minimální meta)
         </a>
@@ -4912,7 +4951,7 @@ function showTable(which) {
 
         html += `</tbody></table><br>`;
     }
-    html += `</div><div id="playoffTablePreview" style="display:none; overflow:auto; max-width:100%;"><table class="points-table"><tr><th scope="col" id="points-table-header" colspan="20"><h2>Týmy - Playoff</h2></th></tr>`;
+    html += `</div><div id="playoffTablePreview" style="display:${tableMode === 'playoff' ? 'block' : 'none'}; overflow:auto; max-width:100%;"><table class="points-table"><tr><th scope="col" id="points-table-header" colspan="20"><h2>Týmy - Playoff</h2></th></tr>`;
     playoffData.forEach((row) => {
         html += '<tr>';
         row.forEach(cell => {
@@ -5327,6 +5366,7 @@ router.get("/prestupy", requireLogin, (req, res) => {
         isRegularSeasonFinished = statusData?.[selectedSeason]?.[selectedLiga]?.regularSeasonFinished || false;
     } catch (e) {
     }
+    const tableMode = getTableMode(req, isRegularSeasonFinished);
     const statusStyle = isRegularSeasonFinished ? "color: lightgrey; font-weight: bold;" : "color: white; opacity: 0.7; background-color: black";
 
 // --- HTML START ---
@@ -5475,7 +5515,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <a class="history-btn changed" href="/?liga=${encodeURIComponent(selectedLiga)}">Tipovačka</a>
 <a class="history-btn changed" href="/table-tip?liga=${encodeURIComponent(selectedLiga)}">Základní část</a>
 <div style="text-align: center; margin: 20px;">
-    <button type="button" id="notify-toggle-btn" style="display: none; padding: 10px 20px; cursor: pointer; border-radius: 5px; font-weight: bold; border: none;">
+    <button type="button" id="notify-toggle-btn" style="display: none; width: 200px; height: 30px; cursor: pointer; font-weight: bold; border: none;">
         Načítám stav...
     </button>
 </div>
@@ -5531,20 +5571,28 @@ document.addEventListener('DOMContentLoaded', () => {
 <section class="stats-container">
 <div class="left-panel">
 <div style="display: flex; flex-direction: row; justify-content: space-around; margin:20px 0; text-align:center;">
-<button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('regular')">Základní část</button>
-<button style="cursor: pointer; border: none; color: orangered; background-color: black" class="history-btn" onclick="showTable('playoff')">Playoff</button>
+    <a href="?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}&mode=${clinchMode}&tableMode=regular" 
+       style="cursor: pointer; width: 120px; text-decoration: none; border: none; padding: 10px; ${tableMode === 'regular' ? 'color: black; background-color: orangered;' : 'color: orangered; background-color: black;'}" 
+       class="history-btn">
+       Základní část
+    </a>
+    <a href="?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}&mode=${clinchMode}&tableMode=playoff" 
+       style="cursor: pointer; width: 120px; text-decoration: none; border: none; padding: 10px; ${tableMode === 'playoff' ? 'color: black; background-color: orangered;' : 'color: orangered; background-color: black;'}" 
+       class="history-btn">
+       Playoff
+    </a>
 </div>
-<div id="regularTable">
+<div id="regularTable" style="display:${tableMode === 'regular' ? 'block' : 'none'};">
 `;
 
     html += `
     <div style="display: flex; justify-content: flex-start; align-items: center; margin-bottom: 10px; gap: 10px;">
         <span style="color: gray; font-size: 0.85em;">Logika obarvování:</span>
-        <a href="?liga=${encodeURIComponent(selectedLiga)}&mode=strict" 
+        <a href="?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}&mode=strict&tableMode=${tableMode}" 
            style="${clinchMode === 'strict' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; text-decoration: none; font-size: 0.85em;">
            Striktní (Jistá meta)
         </a>
-        <a href="?liga=${encodeURIComponent(selectedLiga)}&mode=cascade" 
+        <a href="?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}&mode=cascade&tableMode=${tableMode}" 
            style="${clinchMode === 'cascade' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; text-decoration: none; font-size: 0.85em;">
            Kaskádová (Minimální meta)
         </a>
@@ -6131,7 +6179,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     html += `
             </div>
-            <div id="playoffTablePreview" style="display:none; overflow:auto; max-width:100%;">
+            <div id="playoffTablePreview" style="display:${tableMode === 'playoff' ? 'block' : 'none'}; overflow:auto; max-width:100%;">
       <table class="points-table"><tr><th scope="col" id="points-table-header" colspan="20"><h2>Týmy - ${selectedLiga} ${selectedSeason} - Playoff</h2></th></tr>`;
     playoffData.forEach((row) => {
         html += '<tr>';
@@ -6339,7 +6387,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // --- SEKCE PŘESTUPŮ ---
             html += `<h2 style="margin-top: 0; text-align: center; border-bottom: 2px solid orangered; padding-bottom: 10px;">Přestupy a Spekulace - ${selectedLiga}</h2>
             
-            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 15px; margin-top: 15px;">`;
+            <div style="display: grid; gap: 15px; margin-top: 15px;">`;
 
             // --- Uvnitř router.get("/prestupy", ...) v sekci else (kde jsou povolené přestupy) ---
 

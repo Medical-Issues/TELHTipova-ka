@@ -28,7 +28,7 @@ function requireLogin(req, res, next) {
                 </style>
             </head>
             <body>
-                <img src="/images/logo.png" alt="Logo" style="width: 400px; margin-bottom: 20px;">
+                <img src="/images/logo.png" alt="Logo" class="logo-large-margin">
                 <h1>Musíš se přihlásit</h1>
                 <p>Pro zobrazení této stránky je nutné přihlášení.</p>
                 <a href="/auth/login" class="btn">Přejít na přihlášení</a>
@@ -69,7 +69,7 @@ function requireAdmin(req, res, next) {
                 </style>
             </head>
             <body>
-                <img src="/images/logo.png" alt="Logo" style="width: 400px; margin-bottom: 20px;">
+                <img src="/images/logo.png" alt="Logo" class="logo-large-margin">
                 <h1>403 - Přístup odepřen</h1>
                 <p>Gratuluji, našel jsi dveře pro Admina. Bohužel na to nemáš klíče ani mozek. Zkus to znova, až vyhraješ v loterii, ty žebráku.</p>
                 <p>Zároveň byl zaznamenán pokus o ojebání systému. Tvoje IP adresa byla odeslána na svaz a tvoje stará už ví, že jsi prohrál výplatu. Tady velí mafie, ne ty zmrde.</p>
@@ -796,6 +796,21 @@ function renderErrorHtml(res, message, code = 500) {
     `);
 }
 
+function getTableMode(req, isRegularSeasonFinished) {
+    let mode = isRegularSeasonFinished ? 'playoff' : 'regular'; // Výchozí stav
+
+    if (req.query.tableMode === 'regular' || req.query.tableMode === 'playoff') {
+        if (req.session) req.session.userTableMode = req.query.tableMode;
+        mode = req.query.tableMode;
+    } else if (req.session && req.session.userTableMode) {
+        mode = req.session.userTableMode;
+    }
+
+    return mode;
+}
+
+
+
 module.exports = {
     requireLogin,
     requireAdmin,
@@ -810,4 +825,5 @@ module.exports = {
     renameLeagueGlobal,
     evaluateRegularSeasonTable,
     renderErrorHtml,
+    getTableMode,
 }
