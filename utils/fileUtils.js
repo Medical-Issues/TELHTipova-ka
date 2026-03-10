@@ -1601,16 +1601,10 @@ module.exports = {
     evaluateAndAssignPoints,
     generateSeasonRange,
     removeTipsForDeletedMatch,
-    calculateTeamScores,
-    getLeagueZones,
-    getTeamZone,
     renameLeagueGlobal,
     evaluateRegularSeasonTable,
     renderErrorHtml,
-    getTableMode,
     prepareDashboardData,
     getGroupDisplayLabel,
-    generateStatsHtml,
     generateLeftPanel,
-
 }
