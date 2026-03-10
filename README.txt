@@ -1,5 +1,3 @@
-možnost locknutí tipování u v případě importu úprav vytváření zápasu atd.
-
 admin role místo admin účtu včetně logovani změn 
 
 přechod na free databázi z json souborů 
