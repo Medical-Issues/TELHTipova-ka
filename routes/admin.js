@@ -16,11 +16,13 @@ const {
     renameLeagueGlobal,
     evaluateRegularSeasonTable,
     renderErrorHtml,
+    logAdminAction,
 } = require("../utils/fileUtils");
 router.post('/backup', async (req, res) => {
     try {
         await backupJsonFilesToGitHub();
         res.json({ success: true, message: '✅ Záloha provedena' });
+        logAdminAction(req.session.user, "ZÁLOHA_DAT", `Spuštěna manuální záloha na GitHub`);
     } catch (err) {
         console.error(err);
         res.status(500).json({ success: false, message: '❌ Chyba při záloze' });
@@ -525,7 +527,7 @@ router.post('/teams/edit/:id', requireAdmin, upload.single('logo'), async (req, 
     }
 
     fs.writeFileSync('./data/teams.json', JSON.stringify(teams, null, 2));
-
+    logAdminAction(req.session.user, "ÚPRAVA_TÝMU", `Upraven tým ID: ${teamId} (Nový název: ${name})`);
     res.redirect('/admin');
 });
 
@@ -641,6 +643,10 @@ router.get('/new/match', requireAdmin, (req, res) => {
                                 <option value="9">BO9</option>
                             </select>
                     </div>
+                    <label style="display: flex; align-items: center; flex-direction: row; gap: 5px;">
+                    Manuálně uzamčeno pro tipování
+                    <input type="checkbox" name="locked" id="locked" />
+                    </label>
                 </div>
                 <button class="action-btn btn" type="submit">Vytvořit zápas</button>
 
@@ -655,7 +661,7 @@ router.get('/new/match', requireAdmin, (req, res) => {
 });
 
 router.post('/new/match', requireAdmin, (req, res) => {
-    const { homeTeamId, awayTeamId, datetime, season, isPlayoff, bo } = req.body;
+    const { homeTeamId, awayTeamId, datetime, season, isPlayoff, bo, locked } = req.body;
 
     let matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'));
     const teams = loadTeams().filter(t => t.active);
@@ -675,7 +681,8 @@ router.post('/new/match', requireAdmin, (req, res) => {
         datetime,
         liga,
         season,
-        isPlayoff: isPlayoff === 'on'
+        isPlayoff: isPlayoff === 'on',
+        locked: locked === 'on'
     };
 
     if (isPlayoff === 'on' && bo) {
@@ -685,6 +692,7 @@ router.post('/new/match', requireAdmin, (req, res) => {
     matches.push(newMatch);
     notif.notifyNewMatches();
     fs.writeFileSync('./data/matches.json', JSON.stringify(matches, null, 2));
+    logAdminAction(req.session.user, "NOVÝ_ZÁPAS", `Vytvořen nový zápas: ${homeTeam.name} vs ${awayTeam.name} (${liga})`);
     res.redirect('/admin');
 });
 
@@ -792,7 +800,7 @@ router.post('/new/team', requireAdmin, upload.single('logo'), express.urlencoded
     teams.push(newTeam);
 
     fs.writeFileSync('./data/teams.json', JSON.stringify(teams, null, 2), 'utf-8');
-
+    logAdminAction(req.session.user, "NOVÝ_TÝM", `Vytvořen nový tým: ${name} (${liga})`);
     res.redirect('/admin');
 });
 
@@ -870,6 +878,16 @@ router.get('/edit/:id', requireAdmin, (req, res) => {
       </label>
     </div>
 
+    <label style="display: flex; flex-direction: row; align-items: center; margin-top: 1rem; gap: 5px;" for="postponed">
+      <input type="checkbox" id="postponed" name="postponed" ${match.postponed ? 'checked' : ''} />
+      Zápas je odložen
+    </label>
+
+    <label style="display: flex; flex-direction: row; align-items: center; margin-top: 1rem; margin-bottom: 1rem; gap: 5px;" for="locked">
+      <input type="checkbox" id="locked" name="locked" ${match.locked ? 'checked' : ''} />
+      Zápas je manuálně uzamčen pro tipování
+    </label>
+
     <fieldset class="edit-score">
       <legend>Výsledek (pokud je vyhodnocen)</legend>
       <label for="scoreHome">Skóre domácích
@@ -928,6 +946,11 @@ router.post('/edit/:id', requireAdmin, (req, res) => {
     match.season = season;
     match.isPlayoff = req.body.isPlayoff === 'on';
     match.postponed = req.body.postponed === 'on';
+    match.locked = req.body.locked === 'on';
+
+    if (match.locked) {
+        removeTipsForDeletedMatch(matchId);
+    }
 
     if (match.isPlayoff && req.body.bo && !isNaN(parseInt(req.body.bo))) {
         match.bo = parseInt(req.body.bo);
@@ -994,6 +1017,7 @@ router.post('/edit/:id', requireAdmin, (req, res) => {
     } catch (err) {
         console.error("Chyba při přepočtech, nebyla odeslána sezóna nebo liga", err);
     }
+    logAdminAction(req.session.user, "ÚPRAVA_ZÁPASU", `Upraven zápas ID: ${matchId} (Liga: ${match.liga})`);
     res.redirect('/admin');
 });
 
@@ -1004,6 +1028,7 @@ router.post('/teams/delete/:id', requireAdmin, (req, res) => {
     teams = teams.filter(t => t.id !== teamsId);
 
     fs.writeFileSync('./data/teams.json', JSON.stringify(teams, null, 2));
+    logAdminAction(req.session.user, "SMAZÁNÍ_TÝMU", `Smazán tým s ID: ${teamsId}`);
     res.redirect('/admin');
 });
 
@@ -1033,7 +1058,7 @@ router.post('/delete/:id', requireAdmin, (req, res) => {
     evaluateAndAssignPoints(matchLiga, matchSeason);
 
     evaluateAndAssignPoints(matchLiga, matchSeason);
-
+    logAdminAction(req.session.user, "SMAZÁNÍ_ZÁPASU", `Smazán zápas ID: ${matchId} (Liga: ${matchLiga})`);
     res.redirect('/admin');
 });
 
@@ -1599,6 +1624,7 @@ router.post('/playoff/save', (req, res) => {
                 console.error('Chyba při zápisu do souboru:', err);
                 return res.status(500).send('Nepodařilo se uložit data');
             }
+            logAdminAction(req.session.user, "PLAYOFF_ULOŽENÍ", `Uložena/upravena playoff mřížka pro ${league} (${season})`);
             res.redirect(`/admin/playoff?league=${encodeURIComponent(league)}`);
         });
     });
@@ -1636,7 +1662,7 @@ router.post('/playoff/delete', requireAdmin, (req, res) => {
                 console.error('Chyba při zápisu do souboru:', err);
                 return res.status(500).send('Nepodařilo se smazat data');
             }
-
+            logAdminAction(req.session.user, "PLAYOFF_RESET", `KOMPLETNĚ SMAZÁNA playoff mřížka pro ${league} (${season})`);
             res.redirect('/admin/playoff');
         });
     });
@@ -1651,6 +1677,7 @@ router.get('/togglePostponed/:id', requireAdmin, (req, res) => {
     match.postponed = !match.postponed;
 
     fs.writeFileSync('./data/matches.json', JSON.stringify(matches, null, 2));
+    logAdminAction(req.session.user, "ODLOŽENÍ_ZÁPASU", `Zápas ID ${matchId} byl ${match.postponed ? 'ODLOŽEN' : 'VRÁCEN DO BĚŽNÉHO STAVU'}`);
     res.redirect('/admin');
 });
 
@@ -1916,7 +1943,7 @@ router.post('/leagues/update', requireAdmin, express.urlencoded({ extended: true
             fs.writeFileSync('./data/leagues.json', JSON.stringify(allSeasonData, null, 2));
         }
     }
-
+    logAdminAction(req.session.user, "ÚPRAVA_LIGY", `Upraveno nastavení ligy: ${leagueName}`);
     res.redirect('/admin/leagues/manage');
 });
 
@@ -1931,11 +1958,11 @@ router.post('/leagues/delete', requireAdmin, express.urlencoded({ extended: true
 
         fs.writeFileSync('./data/leagues.json', JSON.stringify(allSeasonData, null, 2));
     }
-
+    logAdminAction(req.session.user, "SMAZÁNÍ_LIGY", `Kompletně smazána liga: ${league}`);
     res.redirect('/admin/leagues/manage');
 });
 router.post("/toggle-regular-season", requireAdmin, (req, res) => {
-    if (req.session.user !== "Admin") return renderErrorHtml(res, "Nemáte oprávnění k této akci.", 403);
+    if (req.session.role !== "admin") return renderErrorHtml(res, "Nemáte oprávnění k této akci.", 403);
 
     const { season, liga } = req.body;
     const isFinishedNow = req.body.finished === 'true'; // Pokud je checkbox zaškrtnutý
@@ -1966,7 +1993,7 @@ router.post("/toggle-regular-season", requireAdmin, (req, res) => {
         console.log(`Posílám notifikaci o ukončení ligy: ${liga}`);
         notif.notifyLeagueEnd(liga);
     }
-
+    logAdminAction(req.session.user, "ZÁKLADNÍ_ČÁST", `Změněn stav základní části pro ${liga} (${season}) na: ${req.body.isFinished === 'on' ? 'DOKONČENO' : 'PROBÍHÁ'}`);
     res.redirect('/admin');
 });
 
@@ -2016,6 +2043,7 @@ router.post("/toggle-table-tips-lock", requireAdmin, express.urlencoded({ extend
     }
 
     fs.writeFileSync('./data/leagueStatus.json', JSON.stringify(statusData, null, 2));
+    logAdminAction(req.session.user, "ZÁMEK_TABULKY", `Změněn zámek tipů na tabulku pro ${liga} (Skupina: ${group || 'GLOBÁLNÍ'}) na: ${shouldLock ? 'ZAMČENO' : 'ODEMČENO'}`);
     res.redirect('/admin/leagues/manage');
 });
 
@@ -2245,6 +2273,7 @@ router.post('/teams/points', requireAdmin, express.urlencoded({ extended: true }
     });
 
     fs.writeFileSync('./data/teamBonuses.json', JSON.stringify(bonusData, null, 2));
+    logAdminAction(req.session.user, "MANUÁLNÍ_BODY", `Upraveny extra body v lize: ${liga}, Sezóna: ${season}`);
     res.redirect(`/admin/teams/points?liga=${encodeURIComponent(liga)}`);
 });
 
@@ -2282,7 +2311,7 @@ router.post('/settings/clinch', requireAdmin, (req, res) => {
     } catch (err) {
         console.error("Kritická chyba při zápisu do souboru:", err);
     }
-
+    logAdminAction(req.session.user, "NASTAVENÍ_TABULKY", `Režim obarvování tabulky (clinch mode) změněn na: ${settings.clinchMode}`);
     // Návrat na předchozí stránku (odkud se formulář odeslal)
     res.redirect('/admin');
 });
@@ -2396,7 +2425,14 @@ router.get('/matches/import', requireAdmin, (req, res) => {
                             </select>
                         </label>
                     </div>
-
+                    
+                    <div style="display:flex; margin-top: 10px; padding: 10px; background: rgba(255, 69, 0, 0.1); border: 1px dashed orangered;">
+                        <label style="display: flex; align-items: center; gap: 10px; color: white; cursor: pointer;">
+                            <input type="checkbox" name="lockImported" style="transform: scale(1.3);">
+                            <strong>Zamknout všechny importované zápasy pro tipování (Lze později odemknout)</strong>
+                        </label>
+                    </div>
+                    
                     <button type="submit" class="login_button" style="width: 100%; margin-top: 10px;">Stáhnout data</button>
                 </form>
             </div>
@@ -2408,7 +2444,9 @@ router.get('/matches/import', requireAdmin, (req, res) => {
 });
 
 router.post('/matches/import-run', requireAdmin, async (req, res) => {
-    const { url, liga, season, dateFrom, dateTo } = req.body;
+    const { url, liga, season, dateFrom, dateTo, lockImported } = req.body;
+
+    const shouldLock = lockImported === 'on';
 
     try {
         console.log(`🔍 DEBUG: Začínám import pro ligu '${liga}'...`);
@@ -2547,6 +2585,8 @@ router.post('/matches/import-run', requireAdmin, async (req, res) => {
                             liga: liga,             // "TELH"
                             season: season,         // "25/26"
                             isPlayoff: false,       // false
+                            postponed: false,       // Výchozí stav (neodloženo)
+                            locked: shouldLock,     // Výchozí stav (odemčeno)
                             result: null            // null (výsledek zatím není)
                         });
                         newMatchesCount++;
@@ -2612,6 +2652,7 @@ router.post('/matches/import-run', requireAdmin, async (req, res) => {
         </body>
         </html>
         `;
+        logAdminAction(req.session.user, "IMPORT_ZÁPASŮ", `Hromadně importováno ${newMatchesCount} zápasů pro ligu ${liga} (${season})`);
         res.send(htmlRes);
 
     } catch (error) {
@@ -2738,7 +2779,7 @@ router.get('/images/delete/:filename', requireAdmin, async (req, res) => {
             console.error(`⚠️ Chyba při mazání ${filename} z GitHubu:`, err.message);
         }
     }
-
+    logAdminAction(req.session.user, "SMAZÁNÍ_OBRÁZKU", `Permanentně smazán obrázek z webu i zálohy: ${filename}`);
     res.redirect('/admin/images/manage');
 });
 
@@ -2949,7 +2990,7 @@ router.post('/transfers/save', requireAdmin, express.urlencoded({ extended: true
     } else {
         console.log("Žádné nové pohyby k oznámení.");
     }
-
+    logAdminAction(req.session.user, "PŘESTUPY", `Uloženy přestupy pro ligu ${liga} (Nové pohyby: ${newTransfersNotification.length})`);
     res.redirect(`/admin/transfers/manage?liga=${encodeURIComponent(liga)}`);
 });
 
@@ -3024,6 +3065,7 @@ router.get('/users', requireAdmin, (req, res) => {
                 <thead>
                     <tr style="background: #fb6a18; color: black;">
                         <th style="padding: 12px; text-align: left;">Uživatel</th>
+                        <th style="padding: 12px; text-align: center;">Role</th>
                         <th style="padding: 12px; text-align: center;">Notifikace</th>
                         <th style="padding: 12px; text-align: right;">Akce</th>
                     </tr>
@@ -3032,6 +3074,11 @@ router.get('/users', requireAdmin, (req, res) => {
                     ${users.map(user => `
                         <tr style="border-bottom: 1px solid #444;">
                             <td style="padding: 12px;"><strong>${user.username}</strong></td>
+                            <td style="padding: 12px; text-align: center;">
+                                <span style="color: ${user.role === 'admin' ? 'red' : 'lightgreen'}; font-weight: bold;">
+                                    ${user.role === 'admin' ? 'Administrátor' : 'Uživatel'}
+                                </span>
+                            </td>
                             <td style="padding: 12px; text-align: center;">${(user.subscriptions?.length > 0 || user.subscription) ? '🔔' : '❌'}</td>
                             <td style="padding: 12px; text-align: right;">
                                 <a href="/admin/users/edit/${encodeURIComponent(user.username)}" class="btn-edit" style="background: orange; color: black; padding: 5px 10px; text-decoration: none; font-weight: bold;">Upravit</a>
@@ -3087,9 +3134,11 @@ router.post('/users/delete', requireAdmin, (req, res) => {
         }
 
         console.log(`🧹 Uživatel ${usernameToDelete} byl kompletně vymazán ze všech souborů.`);
+        logAdminAction(req.session.user, "SMAZÁNÍ_UŽIVATELE", `Smazán účet: ${usernameToDelete}`);
         res.redirect('/admin/users');
     } catch (error) {
         console.error("Kritická chyba při mazání:", error);
+        logAdminAction(req.session.user, "POKUS_SMAZÁNÍ_UŽIVATELE", `Účet: ${usernameToDelete}`);
         res.status(500).send("Chyba při hloubkovém mazání uživatele.");
     }
 });
@@ -3109,6 +3158,7 @@ router.get('/users/edit/:username', requireAdmin, (req, res) => {
     <head>
         <meta charset="UTF-8">
         <link rel="stylesheet" href="/css/styles.css">
+        <link rel="icon" href="/public/images/logo.png">
         <title>Upravit uživatele - ${user.username}</title>
         <style>
             .edit-card {
@@ -3189,6 +3239,16 @@ router.get('/users/edit/:username', requireAdmin, (req, res) => {
                         <input type="password" name="newPassword" placeholder="Ponechte prázdné pro beze změny">
                     </div>
 
+                    <div class="form-group">
+                        <label>Role</label>
+                        <select name="newRole">
+                            <option value="user" ${user.role !== 'admin' ? 'selected' : ''}>Běžný uživatel</option>
+                            <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Administrátor</option>
+                        </select>
+                    </div>
+
+                    ${user.username === req.session.user ? `<p style="color: red; font-size: 12px;">⚠️ Upravuješ svůj vlastní účet. Systém tě nenechá odebrat si roli Administrátora.</p>` : ''}
+
                     <button type="submit" class="btn-save">ULOŽIT ZMĚNY</button>
                     <a href="/admin/users" class="back-link">← Zpět na seznam</a>
                 </form>
@@ -3200,7 +3260,7 @@ router.get('/users/edit/:username', requireAdmin, (req, res) => {
 
 // Uložení úpravy
 router.post('/users/update', requireAdmin, (req, res) => {
-    const { oldUsername, newUsername, newPassword } = req.body;
+    const { oldUsername, newUsername, newPassword, newRole } = req.body;
     const usersPath = path.join(__dirname, '../data/users.json');
     let users = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
 
@@ -3210,6 +3270,13 @@ router.post('/users/update', requireAdmin, (req, res) => {
     // Aktualizace v users.json
     users[idx].username = newUsername;
     if (newPassword && newPassword.trim() !== "") users[idx].password = newPassword; // Zde ideálně hashovat
+
+    if (oldUsername === req.session.user && newRole !== 'admin') {
+        // Pokud se snažíš odebrat práva sám sobě, systém to ignoruje a nechá ti admina
+        users[idx].role = 'admin';
+    } else if (newRole) {
+        users[idx].role = newRole;
+    }
 
     fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
 
@@ -3227,7 +3294,26 @@ router.post('/users/update', requireAdmin, (req, res) => {
             }
         });
     }
+    logAdminAction(req.session.user, "ÚPRAVA_UŽIVATELE", `Úprava účtu: ${oldUsername} -> ${newUsername}, Nová role: ${newRole || 'beze změny'}`);
     res.redirect('/admin/users');
+});
+
+router.get('/toggleLocked/:id', requireAdmin, (req, res) => {
+    const matchId = parseInt(req.params.id);
+    const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'));
+    const match = matches.find(m => m.id === matchId);
+    if (!match) return renderErrorHtml(res, "Zápas nebyl nalezen.", 404);
+
+    // Provede změnu stavu zámku (true na false a naopak)
+    match.locked = !match.locked;
+
+    if (match.locked) {
+        removeTipsForDeletedMatch(matchId);
+    }
+
+    fs.writeFileSync('./data/matches.json', JSON.stringify(matches, null, 2));
+    logAdminAction(req.session.user, "ZÁMEK_ZÁPASU", `Zápas ID ${matchId} byl manuálně ${match.locked ? 'UZAMČEN' : 'ODEMČEN'}`);
+    res.redirect('/admin');
 });
 
 module.exports = router;

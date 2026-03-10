@@ -191,6 +191,10 @@ cron.schedule('* * * * *', () => {
     const margin = 60 * 1000; // 1 minuta tolerance
 
     matches.forEach(match => {
+        // Pokud je zápas odložený nebo manuálně zamčený, neposíláme upozornění (uživatel stejně nemůže tipovat)
+        if (match.postponed || match.locked) {
+            return; // Přeskočí tento zápas a jde na další
+        }
         if (match.result) return; // Zápas už skončil
         if (!match.datetime) return; // Chybí čas
 

@@ -28,7 +28,7 @@ function requireLogin(req, res, next) {
                 </style>
             </head>
             <body>
-                <img src="/images/logo.png" alt="Logo" class="logo-large-margin">
+                <img style="width: 400px" src="/images/logo.png" alt="Logo" class="logo-large-margin">
                 <h1>Musíš se přihlásit</h1>
                 <p>Pro zobrazení této stránky je nutné přihlášení.</p>
                 <a href="/auth/login" class="btn">Přejít na přihlášení</a>
@@ -40,7 +40,7 @@ function requireLogin(req, res, next) {
 }
 
 function requireAdmin(req, res, next) {
-    if (!req.session.user || req.session.user !== 'Admin') {
+    if (!req.session.user || req.session.role !== 'admin') {
         return res.status(403).send(`
             <!DOCTYPE html>
             <html lang="cs">
@@ -69,7 +69,7 @@ function requireAdmin(req, res, next) {
                 </style>
             </head>
             <body>
-                <img src="/images/logo.png" alt="Logo" style="width=500px" class="logo-large-margin">
+                <img style="width: 400px" src="/images/logo.png" alt="Logo" class="logo-large-margin">
                 <h1>403 - Přístup odepřen</h1>
                 <p>Gratuluji, našel jsi dveře pro Admina. Bohužel na to nemáš klíče ani mozek. Zkus to znova, až vyhraješ v loterii, ty žebráku.</p>
                 <p>Zároveň byl zaznamenán pokus o ojebání systému. Tvoje IP adresa byla odeslána na svaz a tvoje stará už ví, že jsi prohrál výplatu. Tady velí mafie, ne ty zmrde.</p>
@@ -1593,6 +1593,17 @@ function generateLeftPanel(data, isHistory = false) {
     return html;
 }
 
+function logAdminAction(username, action, details) {
+    // Vytvoříme hezký časový údaj
+    const time = new Date().toLocaleString('cs-CZ', { timeZone: 'Europe/Prague' });
+
+    // Složíme textovou zprávu
+    const logMessage = `[${time}] ADMIN: ${username} | AKCE: ${action} | DETAILY: ${details}\n`;
+
+    // Připíšeme na konec souboru (pokud neexistuje, sám se vytvoří)
+    fs.appendFileSync('./data/admin_log.txt', logMessage);
+}
+
 module.exports = {
     requireLogin,
     requireAdmin,
@@ -1607,4 +1618,5 @@ module.exports = {
     prepareDashboardData,
     getGroupDisplayLabel,
     generateLeftPanel,
+    logAdminAction,
 }

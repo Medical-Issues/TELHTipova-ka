@@ -502,9 +502,15 @@ router.post("/tip", requireLogin, (req, res) => {
     if (!match) return res.status(400).send("Neplatný zápas.");
 
     // Bezpečnostní kontrola času: Převedeme aktuální čas na český ISO formát pro přesné porovnání
+    // Bezpečnostní kontrola času: Převedeme aktuální čas na český ISO formát pro přesné porovnání
     const currentPragueTimeISO = new Date().toLocaleString('sv-SE', {timeZone: 'Europe/Prague'}).replace(' ', 'T');
 
-    // Porovnáváme dva textové řetězce (např. "2024-03-10T18:00" <= "2024-03-10T18:05")
+    // 1. Ochrana proti manuálnímu zamčení
+    if (match.locked) {
+        return res.status(403).send("Tento zápas je manuálně uzamčen, nelze na něj tipovat.");
+    }
+
+    // 2. Porovnáváme dva textové řetězce (např. "2024-03-10T18:00" <= "2024-03-10T18:05")
     if (match.datetime <= currentPragueTimeISO) {
         return res.status(403).send("Tipování na tento zápas již není možné, zápas už začal.");
     }
@@ -792,7 +798,11 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 
                 const existingTip = userTips.find(t => t.matchId === match.id);
                 const selectedWinner = existingTip?.winner;
-                const matchStarted = match.postponed ? true : (match.datetime <= currentPragueTimeISO);
+
+                // Zjištění, zda je zápas zamčen (buď manuálně, odložením, nebo časem)
+                const isLockedManually = match.locked === true;
+                const matchStarted = isLockedManually ? true : (match.postponed ? true : (match.datetime <= currentPragueTimeISO));
+                const vsText = isLockedManually ? '🔒' : 'vs'; // Pokud je zamčeno, ukáže se zámek
                 const isPlayoff = match.isPlayoff;
 
                 if (match.postponed) {
@@ -807,8 +817,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
                                 <div style="z-index: 5;">${homeTeamName}</div>
                             </button>
                         </td>
-                        <td class="vs">vs</td>
-                        <td style="position: relative; overflow: hidden;">${watermarkHTML(awayLogoUrl)}
+                        <td class="vs">${vsText}</td> <td style="position: relative; overflow: hidden;">${watermarkHTML(awayLogoUrl)}
                             <button type="button" class="team-link away-btn ${selectedWinner === "away" ? "selected" : ""}" data-winner="away" ${matchStarted ? 'disabled' : ''}
                                     style="overflow: hidden;">
                                 <div style="z-index: 5;">${awayTeamName}</div>
@@ -829,8 +838,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
                                 <span style="z-index: 5;">${homeTeamName}</span>
                             </button>
                         </td>
-                        <td class="vs">vs</td>
-                        <td style="position: relative; overflow: hidden;">${watermarkHTML(awayLogoUrl)}
+                        <td class="vs">${vsText}</td> <td style="position: relative; overflow: hidden;">${watermarkHTML(awayLogoUrl)}
                             <button type="button" class="team-link away-btn ${selectedWinner === "away" ? "selected" : ""}" data-winner="away" ${matchStarted ? 'disabled' : ''}
                                     style="overflow: hidden;">
                                 <span style="z-index: 5;">${awayTeamName}</span>
@@ -843,9 +851,11 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
                                 <input type="hidden" name="matchId" value="${match.id}">
                                 <input type="hidden" name="winner" value="${existingTip?.winner ?? ''}">
                                 ${match.bo === 1 ?
-                        `Skóre: <input type="number" name="scoreHome" value="${existingTip?.scoreHome ?? ''}" min="0" style="width:50px"> : <input type="number" name="scoreAway" value="${existingTip?.scoreAway ?? ''}" min="0" style="width:50px">`
+                        /* ZMĚNA: Přidán disabled atribut i na zadávání skóre */
+                        `Skóre: <input type="number" name="scoreHome" value="${existingTip?.scoreHome ?? ''}" min="0" style="width:50px" ${matchStarted ? 'disabled' : ''}> : <input type="number" name="scoreAway" value="${existingTip?.scoreAway ?? ''}" min="0" style="width:50px" ${matchStarted ? 'disabled' : ''}>`
                         :
-                        `Kolik zápasů vyhrál poražený: <select name="loserWins">${Array.from({length: maxLoserWins + 1}, (_, i) => `<option value="${i}" ${i === existingLoserWins ? 'selected' : ''}>${i}</option>`).join('')}</select>`
+                        /* ZMĚNA: Přidán disabled atribut i na select */
+                        `Kolik zápasů vyhrál poražený: <select name="loserWins" ${matchStarted ? 'disabled' : ''}>${Array.from({length: maxLoserWins + 1}, (_, i) => `<option value="${i}" ${i === existingLoserWins ? 'selected' : ''}>${i}</option>`).join('')}</select>`
                     }
                             </form>
                         </td>

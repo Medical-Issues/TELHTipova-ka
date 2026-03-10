@@ -22,6 +22,7 @@ router.post("/register", async (req, res) => {
             {
                 username,
                 password: hashedPassword,
+                role: "user",
                 correct: 0,
                 total: 0
             }
@@ -54,6 +55,7 @@ router.post('/login', async (req, res) => {
     }
 
     req.session.user = username;
+    req.session.role = user.role || "user";
 
     req.session.save((err) => {
         if (err) {
