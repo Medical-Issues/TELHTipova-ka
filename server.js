@@ -144,7 +144,7 @@ app.use((req, res) => {
                 p { font-size: 1.2em; color: #ccc; }
                 a { color: white; text-decoration: underline; margin-top: 20px; font-size: 1.1em; }
                 a:hover { color: orangered; }
-                .logo { width: 100px; margin-bottom: 20px; }
+                .logo { width: 300px; margin-bottom: 20px; }
             </style>
         </head>
         <body>

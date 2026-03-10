@@ -2692,13 +2692,51 @@ router.get('/images/delete/:filename', requireAdmin, async (req, res) => {
     const filename = req.params.filename;
     const filePath = path.join(__dirname, '..', 'data', 'images', filename);
 
+    // 1. Lokální smazání ze serveru
     try {
         if (fs.existsSync(filePath)) {
             fs.unlinkSync(filePath);
-            console.log(`🗑️ Soubor ${filename} byl smazán.`);
+            console.log(`🗑️ Lokální soubor ${filename} byl smazán.`);
         }
     } catch (err) {
-        console.error("Chyba při mazání souboru:", err);
+        console.error("Chyba při lokálním mazání souboru:", err);
+    }
+
+    // 2. Permanentní smazání z GitHub zálohy (aby se po restartu nevrátil)
+    try {
+        const { Octokit } = require("@octokit/rest");
+        const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+
+        // Nastavení tvého repozitáře (stejné jako v githubBackup.js)
+        const REPO_OWNER = 'Medical-Issues';
+        const REPO_NAME = 'TELHTipovackaZaloha';
+        const BRANCH = 'main';
+        const remotePath = `data/images/${filename}`;
+
+        // GitHub vyžaduje pro smazání souboru jeho unikátní "sha" kód
+        const { data } = await octokit.repos.getContent({
+            owner: REPO_OWNER,
+            repo: REPO_NAME,
+            path: remotePath,
+            ref: BRANCH
+        });
+
+        // Odeslání požadavku na smazání
+        await octokit.repos.deleteFile({
+            owner: REPO_OWNER,
+            repo: REPO_NAME,
+            path: remotePath,
+            message: `🗑️ Auto-delete: Permanentně odstraněn obrázek ${filename}`,
+            sha: data.sha,
+            branch: BRANCH
+        });
+
+        console.log(`✅ Soubor ${filename} byl permanentně smazán i z GitHubu.`);
+    } catch (err) {
+        // Pokud vrátí 404, znamená to, že na GitHubu už soubor nebyl (což je v pořádku)
+        if (err.status !== 404) {
+            console.error(`⚠️ Chyba při mazání ${filename} z GitHubu:`, err.message);
+        }
     }
 
     res.redirect('/admin/images/manage');
