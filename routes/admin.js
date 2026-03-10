@@ -6,6 +6,7 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const multer = require('multer');
 const notif = require('./notificationService');
+const bcrypt = require("bcrypt");
 const {
     requireAdmin,
     loadTeams,
@@ -3259,7 +3260,8 @@ router.get('/users/edit/:username', requireAdmin, (req, res) => {
 });
 
 // Uložení úpravy
-router.post('/users/update', requireAdmin, (req, res) => {
+// Uložení úpravy (Přidáno slovo 'async')
+router.post('/users/update', requireAdmin, async (req, res) => {
     const { oldUsername, newUsername, newPassword, newRole } = req.body;
     const usersPath = path.join(__dirname, '../data/users.json');
     let users = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
@@ -3269,7 +3271,11 @@ router.post('/users/update', requireAdmin, (req, res) => {
 
     // Aktualizace v users.json
     users[idx].username = newUsername;
-    if (newPassword && newPassword.trim() !== "") users[idx].password = newPassword; // Zde ideálně hashovat
+
+    // PŘIDÁNO: Skutečné zašifrování hesla pomocí bcryptu
+    if (newPassword && newPassword.trim() !== "") {
+        users[idx].password = await bcrypt.hash(newPassword, 10);
+    }
 
     if (oldUsername === req.session.user && newRole !== 'admin') {
         // Pokud se snažíš odebrat práva sám sobě, systém to ignoruje a nechá ti admina
