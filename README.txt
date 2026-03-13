@@ -18,3 +18,4 @@ postupný přesun inline stylů do css souborů
 
 lepší playoff systém
 
+Domyslet baráž
