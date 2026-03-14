@@ -1391,7 +1391,7 @@ function toggleSeriesDetails(btn) {
             </tr>
             ${playedMatchesHtml}
             <tr class="match-row">
-                <td style="height: 25px; position: relative; border-bottom:none;" colspan="5" class="${initScoreClass}">${scoreCellHTML}</td>
+                <td style="height: 25px; position: relative;" colspan="5" class="${initScoreClass}">${scoreCellHTML}</td>
             </tr>`;
             }
             }
