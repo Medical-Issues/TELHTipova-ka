@@ -174,7 +174,15 @@ router.get('/', requireAdmin, (req, res) => {
     for (const m of pendingMatches) {
         const homeTeam = teams.find(t => t.id === m.homeTeamId)?.name || '???';
         const awayTeam = teams.find(t => t.id === m.awayTeamId)?.name || '???';
-        const result = '-';
+        let result = '-';
+        if (m.isPlayoff && m.bo > 1 && m.playedMatches && m.playedMatches.length > 0) {
+            let sH = 0, sA = 0;
+            m.playedMatches.forEach(pm => {
+                if (pm.scoreHome > pm.scoreAway) sH++;
+                else if (pm.scoreAway > pm.scoreHome) sA++;
+            });
+            result = `${sH} : ${sA} (série)`;
+        }
         const dateObj = new Date(m.datetime);
         const formattedDate = dateObj.toLocaleString('cs-CZ', {
             year: 'numeric',
@@ -593,6 +601,14 @@ router.get('/new/match', requireAdmin, (req, res) => {
                 updateSelect(homeSelect);
                 updateSelect(awaySelect);
             }
+            
+            function toggleBarazLiga() {
+                const cb = document.getElementById('isBarazCb');
+                const field = document.getElementById('barazLigaField');
+                if (cb && field) {
+                    field.style.display = cb.checked ? 'flex' : 'none';
+                }
+            }
         </script>
         </head>
         <body>
@@ -624,6 +640,20 @@ router.get('/new/match', requireAdmin, (req, res) => {
                 <label style="display: flex; flex-direction: column" for="datetime">Datum a čas
                     <input class="league-select" style="width: 150px" type="datetime-local" id="datetime" name="datetime" required />
                 </label>
+                <div style="display: flex; align-items: center; gap: 10px; border-left: 2px solid orangered; padding-left: 10px; margin-left: 5px;">
+                    <label style="display: flex; align-items: center; flex-direction: row; gap: 5px; font-weight: bold; color: orangered;">
+                        Zápas je BARÁŽ
+                        <input type="checkbox" name="isBaraz" id="isBarazCb" onchange="toggleBarazLiga()" />
+                    </label>
+                </div>
+
+                <div id="barazLigaField" style="display: none; flex-direction: column; align-items: center; gap: 10px;">
+                    <label>Liga (Kde se baráž zobrazí)
+                        <select class="league-select" name="matchLiga">
+                            ${uniqueLeagues.map(l => `<option value="${l}">${l}</option>`).join('')}
+                        </select>
+                    </label>
+                </div>
                 <label style="display: flex; flex-direction: column">Sezóna
                     <select class="league-select" name="season" id="seasonSelect" required>
                         ${allSeasons.map(s => `<option value="${s}">${s}</option>`).join('')}
@@ -662,17 +692,22 @@ router.get('/new/match', requireAdmin, (req, res) => {
 });
 
 router.post('/new/match', requireAdmin, (req, res) => {
-    const { homeTeamId, awayTeamId, datetime, season, isPlayoff, bo, locked } = req.body;
+    const { homeTeamId, awayTeamId, datetime, season, isPlayoff, bo, locked, matchLiga, isBaraz } = req.body;
 
     let matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'));
     const teams = loadTeams().filter(t => t.active);
     const homeTeam = teams.find(t => t.id === parseInt(homeTeamId));
     const awayTeam = teams.find(t => t.id === parseInt(awayTeamId));
 
-    let liga = 'Přátelský zápas';
+    // Pokud to NENÍ baráž, automaticky zjistíme ligu podle týmů
+    let defaultLiga = 'Přátelský zápas';
     if (homeTeam && awayTeam && homeTeam.liga === awayTeam.liga) {
-        liga = homeTeam.liga;
+        defaultLiga = homeTeam.liga;
     }
+
+    // Pokud to JE baráž a admin vybral ligu, použijeme ji, jinak použijeme default
+    const isBarazBool = isBaraz === 'on';
+    const finalLiga = (isBarazBool && matchLiga) ? matchLiga : defaultLiga;
 
     const maxId = matches.reduce((max, m) => Math.max(max, m.id), 0);
     const newMatch = {
@@ -680,11 +715,13 @@ router.post('/new/match', requireAdmin, (req, res) => {
         homeTeamId: parseInt(homeTeamId),
         awayTeamId: parseInt(awayTeamId),
         datetime,
-        liga,
+        liga: finalLiga,
         season,
         isPlayoff: isPlayoff === 'on',
+        isBaraz: isBarazBool,
         locked: locked === 'on'
     };
+    // ... zbytek kódu zůstává stejný ...
 
     if (isPlayoff === 'on' && bo) {
         newMatch.bo = parseInt(bo);
@@ -693,7 +730,7 @@ router.post('/new/match', requireAdmin, (req, res) => {
     matches.push(newMatch);
     notif.notifyNewMatches();
     fs.writeFileSync('./data/matches.json', JSON.stringify(matches, null, 2));
-    logAdminAction(req.session.user, "NOVÝ_ZÁPAS", `Vytvořen nový zápas: ${homeTeam.name} vs ${awayTeam.name} (${liga})`);
+    logAdminAction(req.session.user, "NOVÝ_ZÁPAS", `Vytvořen nový zápas: ${homeTeam.name} vs ${awayTeam.name} (${finalLiga})`);
     res.redirect('/admin');
 });
 
@@ -816,11 +853,31 @@ router.get('/edit/:id', requireAdmin, (req, res) => {
     const seasonsFromTeams = teams.map(t => t.season).filter(Boolean);
     const seasonsFromMatches = matches.map(m => m.season).filter(Boolean);
     const allSeasons = [...new Set([...seasonsFromTeams, ...seasonsFromMatches])];
+    const uniqueLeagues = [...new Set(teams.map(t => t.liga))].sort();
     allSeasons.sort();
 
     const resultHome = match.result?.scoreHome ?? '';
     const resultAway = match.result?.scoreAway ?? '';
     const selectedSeason = match.season ?? allSeasons[0] ?? '';
+
+    const isSeries = match.isPlayoff && match.bo > 1;
+
+    let matchInputs = `<fieldset id="series-score-fields" style="display: ${isSeries ? 'block' : 'none'}; margin-top: 1rem;"><legend>Jednotlivé zápasy série</legend>`;
+    for (let i = 0; i < 9; i++) {
+        const mResult = match.playedMatches && match.playedMatches[i] ? match.playedMatches[i] : {};
+        const isMatchVisible = i < (match.bo || 1);
+        matchInputs += `
+            <div id="match_row_${i}" style="margin-bottom: 10px; border-bottom: 1px solid #444; padding-bottom: 10px; display: ${isMatchVisible ? 'block' : 'none'};">
+                <strong>Zápas ${i + 1}</strong><br>
+                <div style="display: flex; gap: 10px; align-items: center; margin-top: 5px;">
+                    <label>Domácí: <input class="league-select" type="number" name="match_${i}_home" value="${mResult.scoreHome ?? ''}" style="width: 60px"></label>
+                    <label>Hosté: <input class="league-select" type="number" name="match_${i}_away" value="${mResult.scoreAway ?? ''}" style="width: 60px"></label>
+                    <label style="display: flex; align-items: center; gap: 5px;"><input type="checkbox" name="match_${i}_ot" ${mResult.ot ? 'checked' : ''}> Po prodloužení / nájezdech</label>
+                </div>
+            </div>
+         `;
+    }
+    matchInputs += '</fieldset>';
 
     const html = `
 <!DOCTYPE html>
@@ -833,9 +890,52 @@ router.get('/edit/:id', requireAdmin, (req, res) => {
   <link rel="icon" href="/images/logo.png">
   <script>
     function toggleBOInput() {
-      const checkbox = document.getElementById('isPlayoff');
-      const boField = document.getElementById('boField');
-      boField.style.display = checkbox.checked ? 'block' : 'none';
+        const checkbox = document.getElementById('isPlayoff');
+        const boField = document.getElementById('boField');
+        const boInput = document.getElementById('bo');
+        
+        const normalScore = document.getElementById('normal-score-fields');
+        const seriesScore = document.getElementById('series-score-fields');
+        const seriesInfo = document.getElementById('series-info');
+
+        if (checkbox && boField) {
+            const isPlayoff = checkbox.checked;
+            boField.style.display = isPlayoff ? 'block' : 'none';
+            
+            const boValue = parseInt(boInput.value) || 1;
+            if (isPlayoff && boValue > 1) {
+                if (normalScore) normalScore.style.display = 'none';
+                if (seriesInfo) seriesInfo.style.display = 'block';
+                if (seriesScore) {
+                    seriesScore.style.display = 'block';
+                    for(let i = 0; i < 9; i++) {
+                        const matchDiv = document.getElementById('match_row_' + i);
+                        if (matchDiv) {
+                            matchDiv.style.display = i < boValue ? 'block' : 'none';
+                        }
+                    }
+                }
+            } else {
+                if (normalScore) normalScore.style.display = 'block';
+                if (seriesInfo) seriesInfo.style.display = 'none';
+                if (seriesScore) seriesScore.style.display = 'none';
+            }
+        }
+    }
+    window.addEventListener('DOMContentLoaded', () => {
+        toggleBOInput();
+        const boInput = document.getElementById('bo');
+        if (boInput) boInput.addEventListener('input', toggleBOInput);
+        const isPlayoffCb = document.getElementById('isPlayoff');
+        if (isPlayoffCb) isPlayoffCb.addEventListener('change', toggleBOInput);
+    });
+    
+    function toggleBarazLigaEdit() {
+        const cb = document.getElementById('isBarazCbEdit');
+        const field = document.getElementById('barazLigaFieldEdit');
+        if (cb && field) {
+            field.style.display = cb.checked ? 'flex' : 'none';
+        }
     }
   </script>
 </head>
@@ -867,6 +967,19 @@ router.get('/edit/:id', requireAdmin, (req, res) => {
         ${allSeasons.map(sez => `<option value="${sez}" ${sez === selectedSeason ? 'selected' : ''}>${sez}</option>`).join('')}
       </select>
     </label>
+    
+    <label style="display: flex; flex-direction: row; align-items: center; margin-top: 1rem; color: orangered; font-weight: bold;">
+      <input type="checkbox" id="isBarazCbEdit" name="isBaraz" ${match.isBaraz ? 'checked' : ''} onchange="toggleBarazLigaEdit()" />
+      Tento zápas je BARÁŽ
+    </label>
+
+    <div id="barazLigaFieldEdit" style="display: ${match.isBaraz ? 'flex' : 'none'}; flex-direction: column; margin-top: 10px;">
+        <label>Liga (Kde se baráž zobrazí)
+          <select class="league-select" style="width: 200px;" name="matchLiga">
+            ${uniqueLeagues.map(l => `<option value="${l}" ${l === match.liga ? 'selected' : ''}>${l}</option>`).join('')}
+          </select>
+        </label>
+    </div>
 
     <label style="display: flex; flex-direction: row; align-items: center" for="isPlayoff" style="margin-top: 1rem;">
       <input type="checkbox" id="isPlayoff" name="isPlayoff" ${match.isPlayoff ? 'checked' : ''} onchange="toggleBOInput()" />
@@ -891,34 +1004,32 @@ router.get('/edit/:id', requireAdmin, (req, res) => {
 
     <fieldset class="edit-score">
       <legend>Výsledek (pokud je vyhodnocen)</legend>
-      <label for="scoreHome">Skóre domácích
-        <input class="league-select" type="number" id="scoreHome" name="scoreHome" value="${resultHome}" min="0" />
-      </label>
-      <label for="scoreAway">Skóre hostů:
-        <input class="league-select" type="number" id="scoreAway" name="scoreAway" value="${resultAway}" min="0" />
-      </label>
-      <label style="display: flex; flex-direction: row; align-items: center" for="overtime">
-        <input type="checkbox" id="overtime" name="overtime" ${match.result?.ot ? 'checked' : ''} />
-        Rozhodnuto v prodloužení?
-      </label>
+      
+      <div id="normal-score-fields" style="display: ${isSeries ? 'none' : 'block'};">
+          <label for="scoreHome">Skóre domácích
+            <input class="league-select" type="number" id="scoreHome" name="scoreHome" value="${resultHome}" min="0" />
+          </label>
+          <label for="scoreAway">Skóre hostů:
+            <input class="league-select" type="number" id="scoreAway" name="scoreAway" value="${resultAway}" min="0" />
+          </label>
+          <label style="display: flex; flex-direction: row; align-items: center" for="overtime">
+            <input type="checkbox" id="overtime" name="overtime" ${match.result?.ot ? 'checked' : ''} />
+            Rozhodnuto v prodloužení?
+          </label>
+      </div>
+      
+      <div id="series-info" style="display: ${isSeries ? 'block' : 'none'}; color: gray;">
+         Skóre série a celkový výsledek se vypočítá automaticky podle zapsaných zápasů níže.
+      </div>
     </fieldset>
-    <button class="action-btn edit-btn" type="submit">Uložit změny</button>
+    
+    ${matchInputs}
+    
+    <button class="action-btn edit-btn" type="submit" style="margin-top: 15px;">Uložit změny</button>
   </form>
   <a href="/admin" class="back-link">← Zpět na správu zápasů</a>
 </main>
 </body>
-<script>
-    function toggleBOInput() {
-        // Opraveno ID z 'boCheckbox' na 'isPlayoff'
-        const checkbox = document.getElementById('isPlayoff');
-        const boField = document.getElementById('boField');
-        if (checkbox && boField) {
-            boField.style.display = checkbox.checked ? 'block' : 'none';
-        }
-    }
-    // Zavoláme hned při načtení, aby se pole ukázalo, pokud už je zápas uložen jako playoff
-    window.addEventListener('DOMContentLoaded', toggleBOInput);
-</script>
 </html>
     `;
     res.send(html);
@@ -945,6 +1056,10 @@ router.post('/edit/:id', requireAdmin, (req, res) => {
     match.awayTeamId = parseInt(awayTeamId);
     match.datetime = datetime;
     match.season = season;
+    match.isBaraz = req.body.isBaraz === 'on';
+    if (match.isBaraz && req.body.matchLiga) {
+        match.liga = req.body.matchLiga;
+    }
     match.isPlayoff = req.body.isPlayoff === 'on';
     match.postponed = req.body.postponed === 'on';
     match.locked = req.body.locked === 'on';
@@ -959,20 +1074,48 @@ router.post('/edit/:id', requireAdmin, (req, res) => {
         delete match.bo;
     }
 
-    const parsedHome = scoreHome === '' ? null : parseInt(scoreHome);
-    const parsedAway = scoreAway === '' ? null : parseInt(scoreAway);
-    let winner;
-    if (parsedHome !== null && parsedAway !== null) {
-        if (parsedHome > parsedAway) winner = "home";
-        else if (parsedHome < parsedAway) winner = 'away';
-        else winner = null;
+    const isSeries = match.isPlayoff && match.bo > 1;
 
-        match.result = {
-            scoreHome: parsedHome,
-            scoreAway: parsedAway,
-            ot: req.body.overtime === 'on',
-            winner: winner,
-        };
+    // --- ULOŽÍME SI STARÝ POČET ODEHRANÝCH ZÁPASŮ ---
+    const oldPlayedCount = (match.isPlayoff && match.playedMatches) ? match.playedMatches.length : 0;
+
+    if (isSeries) {
+        match.playedMatches = [];
+        let seriesHomeWins = 0;
+        let seriesAwayWins = 0;
+        const requiredWins = Math.ceil(match.bo / 2);
+
+        for (let i = 0; i < match.bo; i++) {
+            const h = req.body[`match_${i}_home`];
+            const a = req.body[`match_${i}_away`];
+            const ot = req.body[`match_${i}_ot`] === 'on';
+
+            if (h !== '' && a !== '' && h !== undefined && a !== undefined) {
+                const sH = parseInt(h);
+                const sA = parseInt(a);
+                match.playedMatches.push({ scoreHome: sH, scoreAway: sA, ot });
+
+                if (sH > sA) seriesHomeWins++;
+                else if (sA > sH) seriesAwayWins++;
+            }
+        }
+
+        // Vyhodnocení série pouze v případě dosažení potřebného počtu výher
+        if (seriesHomeWins >= requiredWins || seriesAwayWins >= requiredWins) {
+            match.result = {
+                scoreHome: seriesHomeWins,
+                scoreAway: seriesAwayWins,
+                winner: seriesHomeWins > seriesAwayWins ? 'home' : 'away'
+            };
+        } else {
+            delete match.result; // Série ještě neskončila
+
+            // --- ODESLÁNÍ PRŮBĚŽNÉHO STAVU SÉRIE ---
+            if (match.playedMatches.length > oldPlayedCount) {
+                const lastM = match.playedMatches[match.playedMatches.length - 1];
+                notif.notifySeriesProgress(matchId, match.playedMatches.length, lastM.scoreHome, lastM.scoreAway, lastM.ot, seriesHomeWins, seriesAwayWins);
+            }
+        }
     } else {
         delete match.result;
     }
@@ -1078,57 +1221,89 @@ router.post('/season', express.urlencoded({ extended: true }), requireAdmin, (re
 });
 
 router.get('/playoff', requireAdmin, (req, res) => {
-    // Načtení sezóny
     const selectedSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
-
-    // Získání lig
     const allSeasonData = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf-8'));
     const leagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues) ? allSeasonData[selectedSeason].leagues : [];
     const allLeagues = leagues.map(l => l.name);
     const selectedLeague = req.query.league || allLeagues[0] || "Neurčeno";
 
-    // 1. NAČTENÍ ZÁPASŮ A TÝMŮ PRO AUTOMATIZACI
+    // Zjistíme formát vybrané ligy
+    const leagueObj = leagues.find(l => l.name === selectedLeague);
+    const playoffFormat = leagueObj?.playoffFormat || 'none';
+
     const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'));
-    const teams = JSON.parse(fs.readFileSync('./data/teams.json', 'utf8'));
+    const teams = loadTeams();
 
-    // Týmy vybrané ligy pro rychlé vložení "čekajících"
-    const teamsInSelectedLiga = teams.filter(t => t.liga === selectedLeague && t.active);
-
-    // Vyfiltrujeme POUZE playoff zápasy pro vybranou ligu a sezónu
     const playoffMatches = matches.filter(m => m.season === selectedSeason && m.liga === selectedLeague && m.isPlayoff);
 
-    // 2. VÝPOČET STAVU SÉRIÍ (Pro tipování celé série jako jednoho "zápasu")
-    const seriesMap = {};
-    playoffMatches.forEach(m => {
-        // Zde je jeden "zápas" v databázi roven celé sérii
-        const sKey = `series-${m.id}`;
+    // Vytvoříme seznam sérií do roletky
+    // (Toto už tam máš)
+    const seriesOptionsHTML = playoffMatches.map(m => {
+        const teamA = teams.find(t => t.id === m.homeTeamId)?.name || 'Neznámý';
+        const teamB = teams.find(t => t.id === m.awayTeamId)?.name || 'Neznámý';
+        return `<option value="series-${m.id}">${teamA} vs ${teamB} (Série ${m.id})</option>`;
+    }).join('');
 
-        seriesMap[sKey] = {
-            teamA_Id: m.homeTeamId, teamA_Name: teams.find(t => t.id === m.homeTeamId)?.name || 'Neznámý',
-            teamB_Id: m.awayTeamId, teamB_Name: teams.find(t => t.id === m.awayTeamId)?.name || 'Neznámý',
-            scoreA: m.result ? m.result.scoreHome : null,
-            scoreB: m.result ? m.result.scoreAway : null,
-            bo: m.bo || 7,
-            isBo1: m.bo === 1,
-            hasResult: !!m.result
-        };
-    });
+    // --- 1. PŘIDEJ TOTO (Seznam týmů pro čekající sloty) ---
+    const teamsInLeague = teams.filter(t => t.liga === selectedLeague);
+    const teamsOptionsHTML = teamsInLeague.map(t => `<option value="${t.name}">${t.name}</option>`).join('');
 
-    // 3. NAČTENÍ TABULKY A ŠABLON
+    // --- CHYBĚJÍCÍ BLOK: Načteme už uložené přiřazení slotů ---
     const filePath = path.join(__dirname, '../data/playoff.json');
-    let playoffData = {};
-    try { if (fs.existsSync(filePath)) playoffData = JSON.parse(fs.readFileSync(filePath, 'utf-8')); } catch (e) { playoffData = {}; }
+    let savedSlots = {};
+    try {
+        const pd = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        if (pd[selectedSeason] && pd[selectedSeason][selectedLeague]) {
+            savedSlots = pd[selectedSeason][selectedLeague];
+        }
+    } catch (e) {}
 
-    if (!playoffData[selectedSeason]) playoffData[selectedSeason] = {};
-    if (!playoffData[selectedSeason][selectedLeague]) {
-        playoffData[selectedSeason][selectedLeague] = Array.from({ length: 20 }, () => Array.from({ length: 20 }, () => ({ textColor: '', bgColor: '' })));
+    // --- 2. NAHRAĎ PŮVODNÍ FUNKCI renderSlot TÍMTO ---
+    const renderSlot = (slotId, label) => {
+        const selectedVal = savedSlots[slotId] || '';
+        const waitTeam1 = savedSlots[`${slotId}_t1`] || '';
+        const waitTeam2 = savedSlots[`${slotId}_t2`] || '';
+
+        return `
+            <div style="margin-bottom: 10px; background: #222; padding: 10px; border: 1px solid #444; border-left: 3px solid orangered;">
+                <label style="display:block; font-weight: bold; margin-bottom: 5px; color: lightgrey;">${label}</label>
+                
+                <select name="${slotId}" class="league-select" style="width: 100%; max-width: 400px; margin-bottom: 5px;">
+                    <option value="">-- Prázdný slot (Čeká se na vytvoření série) --</option>
+                    ${seriesOptionsHTML.replace(`value="${selectedVal}"`, `value="${selectedVal}" selected`)}
+                </select>
+                
+                <div style="display: flex; gap: 10px; font-size: 0.9em; margin-top: 5px; max-width: 400px;">
+                    <select name="${slotId}_t1" class="league-select" style="flex: 1; padding: 3px;">
+                        <option value="">-- Čekající tým 1 --</option>
+                        ${teamsOptionsHTML.replace(`value="${waitTeam1}"`, `value="${waitTeam1}" selected`)}
+                    </select>
+                    <span style="color: gray; align-self: center;">vs</span>
+                    <select name="${slotId}_t2" class="league-select" style="flex: 1; padding: 3px;">
+                        <option value="">-- Čekající tým 2 --</option>
+                        ${teamsOptionsHTML.replace(`value="${waitTeam2}"`, `value="${waitTeam2}" selected`)}
+                    </select>
+                </div>
+            </div>
+        `;
+    };
+
+    let slotsHTML = '';
+    // 1. Načtení šablon
+    const tplPath = './data/playoffTemplates.json';
+    const allTemplates = fs.existsSync(tplPath) ? JSON.parse(fs.readFileSync(tplPath, 'utf8')) : {};
+    const currentTemplate = allTemplates[playoffFormat];
+    if (!currentTemplate) {
+        slotsHTML = '<p style="color: gray;">Tato liga nemá nastavený platný formát. <a href="/admin/playoff/templates" style="color:orangered">Vytvoř ho zde</a> a pak ho přiřaď lize v nastavení.</p>';
+    } else {
+        // Generujeme sekce podle šablony
+        currentTemplate.columns.forEach(col => {
+            slotsHTML += `<h3>${col.title}</h3>`;
+            col.slots.forEach(slotId => {
+                slotsHTML += renderSlot(slotId, slotId.toUpperCase());
+            });
+        });
     }
-    const tableData = playoffData[selectedSeason][selectedLeague];
-
-    // Načtení databáze šablon (pokud existuje)
-    const tplPath = path.join(__dirname, '../data/playoffTemplates.json');
-    let templatesDB = {};
-    try { if (fs.existsSync(tplPath)) templatesDB = JSON.parse(fs.readFileSync(tplPath, 'utf8')); } catch (e) {}
 
     const leagueOptions = allLeagues.map(liga => `<option value="${liga}" ${liga === selectedLeague ? 'selected' : ''}>${liga}</option>`).join('\n');
 
@@ -1137,498 +1312,71 @@ router.get('/playoff', requireAdmin, (req, res) => {
 <html lang="cs">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Admin - Správa playoff tabulky</title>
+  <title>Správa Playoff</title>
   <link rel="stylesheet" href="/css/styles.css" />
-  <link rel="icon" href="/images/logo.png">
+  <link rel="icon" href="/images/logo.png"/>
 </head>
-<body style="background: #222;">
-
-<header>
-  <div class="logo_title"><img class="image_logo" src="/images/logo.png" alt="Logo"><h1 id="title">Tipovačka</h1></div>
-  <h1>Playoff tabulka - sezóna: ${selectedSeason}</h1>
+<body class="admin_site">
+<header class="header">
+  <div class="logo_title"><img class="image_logo" src="/images/logo.png" alt="Logo"><h1>Tipovačka</h1></div>
+  <h1>Přiřazení sérií do pavouka (${selectedSeason})</h1>
   <form id="leagueForm" method="GET" action="/admin/playoff" style="padding: 10px;">
-    <label for="leagueSelect" style="color: orangered;">Vyber ligu:</label>
-    <select name="league" class="league-select" style="margin-left: 10px;" onchange="this.form.submit()">
+    <select name="league" class="league-select" onchange="this.form.submit()">
       ${leagueOptions}
     </select>
   </form>
 </header>
+<main style="padding: 20px; max-width: 800px; margin: 0 auto;">
+    
+    <div style="background: #1a1a1a; padding: 20px; border: 1px solid #333; margin-bottom: 20px;">
+        <h2 style="color: orangered; margin-top: 0;">Přiřazení slotů</h2>
+        <p style="color: gray; font-size: 0.9em;">
+            Zde pouze vybereš, která série (zápas vytvořený v "Nový zápas") patří do kterého místa v pavouku. 
+            O barvy, čáry a skóre se už postará systém na webu sám!
+        </p>
 
-<div style="display: flex; padding: 0 20px;">
-  
-  <div style="flex: 3; overflow-x: auto;">
-      <form id="saveForm" action="/admin/playoff/save" method="POST">
-        <input type="hidden" name="season" value="${selectedSeason}">
-        <input type="hidden" name="league" value="${selectedLeague}">
-        <input type="hidden" name="tableData" id="tableData" />
+        <form action="/admin/playoff/save" method="POST">
+            <input type="hidden" name="season" value="${selectedSeason}">
+            <input type="hidden" name="league" value="${selectedLeague}">
+            
+            ${slotsHTML}
+
+            ${playoffFormat !== 'none' ? `<button type="submit" class="action-btn edit-btn" style="width: 100%; padding: 15px; font-size: 1.1em; margin-top: 20px;">Uložit pavouka</button>` : ''}
+        </form>
         
-        <div style="display: flex; align-items: center; background: #111; padding: 10px; border: 1px solid #444; margin-bottom: 10px;">
-          <button type="submit" class="action-btn edit-btn" style="padding:5px 15px; font-size: 1.1em;">Uložit tabulku</button>
-          <label for="colorPicker" style="margin-left: 20px; color: orangered; font-weight: 600;">Vyber barvu:</label>
-          <input type="color" id="colorPicker" value="#FF0000" style="vertical-align: middle; margin-left: 5px;">
-          <label for="textColorPicker" style="margin-left: 20px; color: orangered; font-weight: 600;">Barva textu:</label>
-          <input type="color" id="textColorPicker" value="#FFFFFF" style="vertical-align: middle; margin-left: 5px;">
-        </div>
-
-        <table id="playoffTable">
-`;
-
-    for (let i = 0; i < 20; i++) {
-        html += '<tr>';
-        for (let j = 0; j < 20; j++) {
-            const cell = tableData[i][j] || { text: '', bgColor: '' };
-            const style = `style="background-color:${cell.bgColor || '#333'};color:${cell.textColor || 'lightgrey'}"`;
-            const content = cell.text || '';
-            html += `<td contenteditable="true" data-placeholder="…" ${style}>${content}</td>`;
-        }
-        html += '</tr>';
-    }
-
-    html += `
-        </table>
-      </form>
-      
-      <div style="margin-top: 30px; background: #1a1a1a; padding: 15px; border: 1px solid #444;">
-          <h3 style="color: orangered; margin-top: 0;">Generátor a Šablony</h3>
-          
-          <div style="display: flex; gap: 30px; flex-wrap: wrap;">
-              
-              <div style="flex: 1; border-right: 1px solid #333; padding-right: 15px;">
-                  <label style="color: lightgrey; font-size: 0.9em; display:block; margin-bottom:5px;">Automaticky vygenerovat pavouka:</label>
-                  <div style="display: flex; gap: 10px;">
-                      <select id="autoGeneratorSelect" style="background:#333; color:white; border:1px solid #555; padding: 5px; flex: 1;">
-                          <option value="4">4 týmy (Jen SF a Finále)</option>
-                          <option value="6">6 týmů (Spengler Cup)</option>
-                          <option value="8">8 týmů (Klasika QF, SF, Finále)</option>
-                          <option value="8_bronz">8 týmů + Zápas o bronz (MS/OH)</option>
-                          <option value="10">10 týmů (Maxa liga)</option>
-                          <option value="12">12 týmů (Extraliga)</option>
-                          <option value="olympics">Olympiáda (8 týmů + Bronz)</option>
-                      </select>
-                      <button type="button" class="action-btn" style="background:#555; padding:5px 10px;" onclick="generateBracket()">Generovat</button>
-                  </div>
-              </div>
-
-              <div style="flex: 1;">
-                  <form action="/admin/playoff/save-template" method="POST" id="saveTemplateForm" onsubmit="return prepareTemplateData()">
-                      <input type="hidden" name="league" value="${selectedLeague}">
-                      <input type="hidden" name="templateData" id="templateDataInput">
-                      <label style="color: lightgrey; font-size: 0.9em; display:block; margin-bottom:5px;">Uložit mřížku jako novou šablonu:</label>
-                      <div style="display:flex; gap: 10px;">
-                          <input type="text" name="templateName" placeholder="Název šablony..." required style="background:#333; color:white; border:1px solid #555; padding: 5px; flex: 1;">
-                          <button type="submit" class="action-btn edit-btn" style="padding:5px 10px;">Uložit šablonu</button>
-                      </div>
-                  </form>
-                  
-                  <div style="display:flex; gap: 10px; margin-top: 15px;">
-                      <select id="templateSelect" style="background:#333; color:white; border:1px solid #555; padding: 5px; flex: 1;">
-                          <option value="">-- Vyber uloženou šablonu --</option>
-                          ${Object.keys(templatesDB).map(k => `<option value="${k}">${k}</option>`).join('')}
-                      </select>
-                      <button type="button" class="action-btn" style="background: #555; padding:5px 10px;" onclick="loadSelectedTemplate()">Načíst šablonu</button>
-                  </div>
-              </div>
-              
-          </div>
-      </div>
-
-      <form action="/admin/playoff/delete" method="POST" style="margin-top: 30px;" onsubmit="return confirm('Opravdu chceš smazat celou playoff tabulku? Tohle nelze vrátit zpět!');">
-        <input type="hidden" name="season" value="${selectedSeason}">
-        <input type="hidden" name="league" value="${selectedLeague}">
-        <button type="submit" class="action-btn delete-btn" style="padding:5px 10px;">Smazat celou tabulku (Reset)</button>
-      </form>
-      <p style="margin-top:20px;"><a href="/admin" style="color: orangered;">Zpět na administraci</a></p>
-  </div>
-
-  <div class="assistant-panel">
-    <h2 style="margin-top: 0; color: orangered;">Automatické stavy sérií</h2>
-    <p style="font-size: 0.85em; color: lightgrey; margin-bottom: 10px;">
-      1. Klikni na buňku pro <strong>TÝM</strong> (buňka se označí zeleně).<br>
-      2. Klikni na tým vpravo. Skript vloží jméno a do <strong>vedlejší buňky doprava</strong> vloží skóre!
-    </p>
-    
-    <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85em; margin-bottom: 20px; color: lightgrey; cursor: pointer;">
-      <input type="checkbox" id="autoColorCheck" checked>
-      Automaticky přepisovat barvu pozadí buňky (Zelená/Červená)
-    </label>
-    
-    <div style="max-height: 50vh; overflow-y: auto; padding-right: 10px;">
-`;
-
-    if (Object.keys(seriesMap).length === 0) {
-        html += `<p style="color: gray;">Zatím nejsou vytvořeny žádné série playoff pro tuto ligu a sezónu.</p>`;
-    } else {
-        const getWinText = (w) => {
-            if (w === null) return '0 výher';
-            return w === 1 ? '1 výhra' : (w > 1 && w < 5 ? `${w} výhry` : `${w} výher`);
-        };
-
-        Object.values(seriesMap).forEach(series => {
-            const isBo1 = series.isBo1;
-            const winsNeeded = isBo1 ? 1 : Math.ceil(series.bo / 2);
-
-            // Pokud uživatel už zadal výsledek (např. 2:1), ověříme jestli to stačí na postup
-            const isFinished = series.hasResult && (series.scoreA >= winsNeeded || series.scoreB >= winsNeeded);
-
-            let colorA = "#333333";
-            let colorB = "#333333";
-
-            if (isFinished) {
-                if (series.scoreA > series.scoreB) { colorA = "#006400"; colorB = "#8b0000"; }
-                else if (series.scoreB > series.scoreA) { colorB = "#006400"; colorA = "#8b0000"; }
-            }
-
-            let displayScoreA, displayScoreB;
-
-            if (isBo1) {
-                displayScoreA = series.hasResult ? `Skóre: ${series.scoreA}` : 'Skóre: -';
-                displayScoreB = series.hasResult ? `Skóre: ${series.scoreB}` : 'Skóre: -';
-            } else {
-                displayScoreA = getWinText(series.scoreA);
-                displayScoreB = getWinText(series.scoreB);
-            }
-
-            // Hodnoty, které se zapíšou do pavouka (u BO1 skóre, u BOX počet výher)
-            const valToInsertA = series.scoreA !== null ? series.scoreA : '-';
-            const valToInsertB = series.scoreB !== null ? series.scoreB : '-';
-
-            html += `
-            <div class="series-card" style="margin-bottom: 15px;">
-              <div style="font-size: 0.8em; color: gray; margin-bottom: 8px; text-align: center;">
-                ${isBo1 ? 'Hraje se na 1 zápas (BO1)' : `Série na ${winsNeeded} vítězné (BO${series.bo})`}
-              </div>
-              
-              <button type="button" onclick="applyToCell('${series.teamA_Name}', '${valToInsertA}', '${colorA}')" style="display: flex; width: 100%; padding: 0; margin-bottom: 5px; border: 1px solid #444; border-radius: 5px; overflow: hidden; cursor: pointer; background: transparent; outline: none;">
-                <div style="flex: 1; background-color: ${colorA}; padding: 10px; color: white; text-align: left; transition: background-color 0.2s;">
-                    <strong>${series.teamA_Name}</strong>
-                </div>
-                <div style="background-color: #222222; padding: 10px; color: white; border-left: 1px solid #444; min-width: 80px; text-align: center;">
-                    ${displayScoreA}
-                </div>
-              </button>
-
-              <button type="button" onclick="applyToCell('${series.teamB_Name}', '${valToInsertB}', '${colorB}')" style="display: flex; width: 100%; padding: 0; margin-bottom: 5px; border: 1px solid #444; border-radius: 5px; overflow: hidden; cursor: pointer; background: transparent; outline: none;">
-                <div style="flex: 1; background-color: ${colorB}; padding: 10px; color: white; text-align: left; transition: background-color 0.2s;">
-                    <strong>${series.teamB_Name}</strong>
-                </div>
-                <div style="background-color: #222222; padding: 10px; color: white; border-left: 1px solid #444; min-width: 80px; text-align: center;">
-                    ${displayScoreB}
-                </div>
-              </button>
-            </div>
-            `;
-        });
-    }
-
-    html += `
+        ${playoffFormat !== 'none' ? `
+        <form action="/admin/playoff/delete" method="POST" onsubmit="return confirm('Opravdu vymazat celého pavouka pro tuto ligu? Všechny naklikané série ze slotů zmizí.');">
+            <input type="hidden" name="season" value="${selectedSeason}">
+            <input type="hidden" name="league" value="${selectedLeague}">
+            <button type="submit" class="action-btn delete-btn" style="width: 100%; padding: 15px; font-size: 1.1em; margin-top: 10px;">Vyresetovat pavouka</button>
+        </form>` : ''}
     </div>
-    
-    <h3 style="color: orangered; margin-top: 30px; border-top: 1px solid #444; padding-top: 15px;">Čekající týmy</h3>
-    <div style="display: flex; flex-wrap: wrap;">
-    `;
 
-    teamsInSelectedLiga.forEach(t => {
-        html += `<button type="button" class="quick-team-btn" onclick="applyToCell('${t.name}', '', '#333333')">${t.name}</button>`;
-    });
-
-    html += `
-    </div>
-  </div>
-</div>
-
-<script>
-  // --- ZÁKLADNÍ DATA ---
-  const frontendTemplates = ${JSON.stringify(templatesDB)};
-  let selectedBgColor = document.getElementById('colorPicker').value;
-  let selectedTextColor = document.getElementById('textColorPicker').value;
-  let activeCell = null;
-
-  document.getElementById('colorPicker').addEventListener('input', e => selectedBgColor = e.target.value);
-  document.getElementById('textColorPicker').addEventListener('input', e => selectedTextColor = e.target.value);
-
-  // --- OVLÁDÁNÍ MŘÍŽKY ---
-  document.querySelectorAll('#playoffTable td').forEach(cell => {
-    cell.addEventListener('click', () => {
-        document.querySelectorAll('#playoffTable td').forEach(c => c.classList.remove('selected'));
-        cell.classList.add('selected');
-        activeCell = cell;
-    });
-
-    cell.addEventListener('keydown', e => {
-      if ((e.key === 'Backspace' || e.key === 'Delete') && cell.innerText.trim() === '') {
-        e.preventDefault(); cell.innerText = '';
-      }
-      if (e.key === 'Enter') e.preventDefault();
-    });
-
-    cell.addEventListener('contextmenu', e => {
-      e.preventDefault();
-      if (e.shiftKey) {
-        if (e.ctrlKey || e.metaKey) cell.style.color = 'lightgrey'; else cell.style.color = selectedTextColor;
-      } else {
-        if (e.ctrlKey || e.metaKey) cell.style.backgroundColor = '#333'; else cell.style.backgroundColor = selectedBgColor;
-      }
-    });
-  });
-
-  // --- FUNKCE PRO ASISTENTA VKLÁDÁNÍ ---
-  function applyToCell(teamName, score, bgColor) {
-      if (!activeCell) { alert('Nejprve klikni do tabulky na buňku!'); return; }
-      const shouldColor = document.getElementById('autoColorCheck').checked;
-      
-      activeCell.innerText = teamName;
-      if (shouldColor) { activeCell.style.backgroundColor = bgColor; activeCell.style.color = '#FFFFFF'; }
-      
-      if (score !== '') {
-          const nextCell = activeCell.nextElementSibling;
-          if (nextCell && nextCell.tagName === 'TD') {
-              nextCell.innerText = score;
-          }
-      }
-  }
-
-  // --- ULOŽENÍ A NAČTENÍ VLASTNÍ ŠABLONY ---
-  function prepareTemplateData() {
-      const table = document.getElementById('playoffTable');
-      const data = [];
-      for (let row of table.rows) {
-        const rowData = [];
-        for (let cell of row.cells) {
-          rowData.push({ text: '', bgColor: cell.style.backgroundColor || '', textColor: cell.style.color || '' });
-        }
-        data.push(rowData);
-      }
-      document.getElementById('templateDataInput').value = JSON.stringify(data);
-      return true;
-  }
-
-  function loadSelectedTemplate() {
-      const tName = document.getElementById('templateSelect').value;
-      if (!tName || !frontendTemplates[tName]) return alert('Vyberte šablonu ze seznamu.');
-      if (!confirm('Opravdu načíst šablonu? Současná mřížka se přepíše.')) return;
-      
-      const table = document.getElementById('playoffTable');
-      const grid = frontendTemplates[tName];
-      for (let i = 0; i < 20; i++) {
-          for (let j = 0; j < 20; j++) {
-              if (grid[i] && grid[i][j]) {
-                  const cell = table.rows[i].cells[j];
-                  cell.innerText = ''; 
-                  cell.style.backgroundColor = grid[i][j].bgColor || '#333';
-                  cell.style.color = grid[i][j].textColor || 'lightgrey';
-              }
-          }
-      }
-  }
-
-  // --- MAGICKÝ GENERÁTOR (ALGORITMY) ---
-  function generateBracket() {
-      if (!confirm('Opravdu vygenerovat nového pavouka? Současná mřížka bude ZCELA smazána!')) return;
-      
-      const type = document.getElementById('autoGeneratorSelect').value;
-      const table = document.getElementById('playoffTable');
-      const tBox = "#333333"; 
-      const tLine = "#ff4500"; 
-      const tWin = "#FFD700"; 
-      const tBronze = "#CD7F32";
-
-      // 1. Vyčištění mřížky
-      for (let r = 0; r < 20; r++) {
-          for (let c = 0; c < 20; c++) {
-              if (table.rows[r] && table.rows[r].cells[c]) {
-                  table.rows[r].cells[c].style.backgroundColor = ''; 
-                  table.rows[r].cells[c].innerText = '';
-              }
-          }
-      }
-
-      function box(r, c, w, color) { for(let i=0; i<w; i++) if(c+i<20 && table.rows[r]) table.rows[r].cells[c+i].style.backgroundColor=color; }
-      function lineH(r, sc, ec, color) { for(let c=Math.min(sc,ec); c<=Math.max(sc,ec); c++) if(c<20 && table.rows[r]) table.rows[r].cells[c].style.backgroundColor=color; }
-      function lineV(c, sr, er, color) { for(let r=Math.min(sr,er); r<=Math.max(sr,er); r++) if(r<20 && table.rows[r]) table.rows[r].cells[c].style.backgroundColor=color; }
-
-      if (type === 'olympics') {
-          // --- PŘEDKOLO (Qualification Playoffs) ---
-          box(1, 0, 2, tBox); box(2, 0, 2, tBox);   // P1
-          box(4, 0, 2, tBox); box(5, 0, 2, tBox);   // P2
-          box(14, 0, 2, tBox); box(15, 0, 2, tBox); // P3
-          box(17, 0, 2, tBox); box(18, 0, 2, tBox); // P4
-
-          // --- ČTVRTFINÁLE (4 týmy čekaly, 4 postoupily) ---
-          box(1, 4, 2, tBox); box(3, 4, 2, tBox);   // QF1 (nasazený vs P1)
-          box(6, 4, 2, tBox); box(8, 4, 2, tBox);   // QF2 (nasazený vs P2)
-          box(11, 4, 2, tBox); box(13, 4, 2, tBox); // QF3 (nasazený vs P3)
-          box(16, 4, 2, tBox); box(18, 4, 2, tBox); // QF4 (nasazený vs P4)
-
-          // --- SEMIFINÁLE ---
-          box(4, 9, 2, tBox); box(5, 9, 2, tBox);   // SF1
-          box(14, 9, 2, tBox); box(15, 9, 2, tBox); // SF2
-
-          // --- FINÁLE A BRONZ ---
-          box(9, 14, 2, tBox); box(10, 14, 2, tBox); // FINÁLE
-          box(14, 14, 2, tBox); box(15, 14, 2, tBox);// O BRONZ
-
-          // --- VÍTĚZOVÉ ---
-          box(9, 18, 2, tWin);    // ZLATO
-          box(14, 18, 2, tBronze); // BRONZ
-
-          // --- ČÁRY (Postupové cesty) ---
-          lineH(2, 2, 3, tLine); lineH(5, 2, 3, tLine); lineH(14, 2, 3, tLine); lineH(18, 2, 3, tLine);
-          lineH(3, 6, 7, tLine); lineV(7, 3, 4, tLine); lineH(4, 7, 8, tLine);
-          lineH(7, 6, 7, tLine); lineV(7, 5, 7, tLine); lineH(5, 7, 8, tLine);
-          lineH(12, 6, 7, tLine); lineV(7, 12, 14, tLine); lineH(14, 7, 8, tLine);
-          lineH(17, 6, 7, tLine); lineV(7, 15, 17, tLine); lineH(15, 7, 8, tLine);
-          lineH(4, 11, 12, tLine); lineV(12, 4, 9, tLine); lineH(9, 12, 13, tLine);
-          lineH(15, 11, 12, tLine); lineV(12, 10, 15, tLine); lineH(10, 12, 13, tLine);
-          lineH(9, 16, 17, tLine); lineH(14, 16, 17, tLine);
-      }
-      if (type === '4') {
-          box(4, 3, 2, tBox); box(5, 3, 2, tBox); box(12, 3, 2, tBox); box(13, 3, 2, tBox);
-          box(8, 9, 2, tBox); box(9, 9, 2, tBox); box(8, 14, 2, tWin);
-          lineH(4, 5, 6, tLine); lineV(6, 4, 8, tLine); lineH(8, 6, 8, tLine);
-          lineH(12, 5, 6, tLine); lineV(6, 9, 12, tLine); lineH(9, 6, 8, tLine);
-          lineH(8, 11, 13, tLine);
-      } else if (type === '6') {
-          box(5, 2, 2, tBox); box(6, 2, 2, tBox); box(13, 2, 2, tBox); box(14, 2, 2, tBox);
-          box(3, 7, 2, tBox); box(5, 7, 2, tBox); box(14, 7, 2, tBox); box(16, 7, 2, tBox);
-          box(9, 12, 2, tBox); box(10, 12, 2, tBox); box(9, 16, 2, tWin);
-          lineH(5, 4, 6, tLine); lineH(14, 4, 6, tLine);
-          lineH(4, 9, 10, tLine); lineV(10, 4, 9, tLine); lineH(9, 10, 11, tLine);
-          lineH(15, 9, 10, tLine); lineV(10, 10, 15, tLine); lineH(10, 10, 11, tLine);
-          lineH(9, 14, 15, tLine);
-      } else if (type === '8' || type === '8_bronz') {
-          box(2, 1, 2, tBox); box(3, 1, 2, tBox); box(6, 1, 2, tBox); box(7, 1, 2, tBox);
-          box(12, 1, 2, tBox); box(13, 1, 2, tBox); box(16, 1, 2, tBox); box(17, 1, 2, tBox);
-          box(4, 6, 2, tBox); box(5, 6, 2, tBox); box(14, 6, 2, tBox); box(15, 6, 2, tBox);
-          lineH(2, 3, 4, tLine); lineV(4, 2, 4, tLine); lineH(4, 4, 5, tLine);
-          lineH(7, 3, 4, tLine); lineV(4, 5, 7, tLine); lineH(5, 4, 5, tLine);
-          lineH(12, 3, 4, tLine); lineV(4, 12, 14, tLine); lineH(14, 4, 5, tLine);
-          lineH(17, 3, 4, tLine); lineV(4, 15, 17, tLine); lineH(15, 4, 5, tLine);
-          if (type === '8') {
-              box(9, 11, 2, tBox); box(10, 11, 2, tBox); box(9, 15, 2, tWin);
-              lineH(4, 8, 9, tLine); lineV(9, 4, 9, tLine); lineH(9, 9, 10, tLine);
-              lineH(15, 8, 9, tLine); lineV(9, 10, 15, tLine); lineH(10, 9, 10, tLine);
-              lineH(9, 13, 14, tLine);
-          } else {
-              box(7, 11, 2, tBox); box(8, 11, 2, tBox); box(12, 11, 2, tBox); box(13, 11, 2, tBox);
-              box(7, 15, 2, tWin); box(12, 15, 2, tBronze);
-              lineH(4, 8, 9, tLine); lineV(9, 4, 7, tLine); lineH(7, 9, 10, tLine);
-              lineH(15, 8, 9, tLine); lineV(9, 8, 15, tLine); lineH(8, 9, 10, tLine);
-              lineH(7, 13, 14, tLine); lineH(12, 13, 14, tLine);
-          }
-      } else if (type === '10') {
-          box(1, 0, 2, tBox); box(2, 0, 2, tBox); box(17, 0, 2, tBox); box(18, 0, 2, tBox);
-          box(1, 4, 2, tBox); box(3, 4, 2, tBox); box(6, 4, 2, tBox); box(7, 4, 2, tBox);
-          box(12, 4, 2, tBox); box(13, 4, 2, tBox); box(16, 4, 2, tBox); box(18, 4, 2, tBox);
-          box(4, 9, 2, tBox); box(5, 9, 2, tBox); box(14, 9, 2, tBox); box(15, 9, 2, tBox);
-          box(9, 14, 2, tBox); box(10, 14, 2, tBox); box(9, 18, 2, tWin);
-          lineH(1, 2, 3, tLine); lineH(18, 2, 3, tLine);
-          lineH(2, 6, 7, tLine); lineV(7, 2, 4, tLine); lineH(4, 7, 8, tLine);
-          lineH(6, 6, 7, tLine); lineV(7, 5, 6, tLine); lineH(5, 7, 8, tLine);
-          lineH(13, 6, 7, tLine); lineV(7, 13, 14, tLine); lineH(14, 7, 8, tLine);
-          lineH(17, 6, 7, tLine); lineV(7, 15, 17, tLine); lineH(15, 7, 8, tLine);
-          lineH(4, 11, 12, tLine); lineV(12, 4, 9, tLine); lineH(9, 12, 13, tLine);
-          lineH(15, 11, 12, tLine); lineV(12, 10, 15, tLine); lineH(10, 12, 13, tLine);
-          lineH(9, 16, 17, tLine);
-      } else if (type === '12') {
-          box(1, 0, 2, tBox); box(2, 0, 2, tBox); box(5, 0, 2, tBox); box(6, 0, 2, tBox);
-          box(13, 0, 2, tBox); box(14, 0, 2, tBox); box(17, 0, 2, tBox); box(18, 0, 2, tBox);
-          box(3, 4, 2, tBox); box(4, 4, 2, tBox); box(7, 4, 2, tBox); box(8, 4, 2, tBox);
-          box(11, 4, 2, tBox); box(12, 4, 2, tBox); box(15, 4, 2, tBox); box(16, 4, 2, tBox);
-          box(5, 9, 2, tBox); box(6, 9, 2, tBox); box(13, 9, 2, tBox); box(14, 9, 2, tBox);
-          box(9, 14, 2, tBox); box(10, 14, 2, tBox); box(9, 18, 2, tWin);
-          lineH(2, 2, 2, tLine); lineV(2, 2, 4, tLine); lineH(4, 2, 3, tLine);
-          lineH(6, 2, 2, tLine); lineV(2, 6, 8, tLine); lineH(8, 2, 3, tLine);
-          lineH(13, 2, 2, tLine); lineV(2, 11, 13, tLine); lineH(11, 2, 3, tLine);
-          lineH(17, 2, 2, tLine); lineV(2, 15, 17, tLine); lineH(15, 2, 3, tLine);
-          lineH(3, 6, 7, tLine); lineV(7, 3, 5, tLine); lineH(5, 7, 8, tLine);
-          lineH(8, 6, 7, tLine); lineV(7, 6, 8, tLine); lineH(6, 7, 8, tLine);
-          lineH(11, 6, 7, tLine); lineV(7, 11, 13, tLine); lineH(13, 7, 8, tLine);
-          lineH(16, 6, 7, tLine); lineV(7, 14, 16, tLine); lineH(14, 7, 8, tLine);
-          lineH(5, 11, 12, tLine); lineV(12, 5, 9, tLine); lineH(9, 12, 13, tLine);
-          lineH(14, 11, 12, tLine); lineV(12, 10, 14, tLine); lineH(10, 12, 13, tLine);
-          lineH(9, 16, 17, tLine);
-      }
-      document.getElementById('saveForm').dispatchEvent(new Event('submit'));
-  }
-
-  // Uložení aktuální mřížky zápasů
-  document.getElementById('saveForm').addEventListener('submit', () => {
-    const table = document.getElementById('playoffTable');
-    const data = [];
-    for (let row of table.rows) {
-      const rowData = [];
-      for (let cell of row.cells) {
-        rowData.push({ text: cell.innerText.trim(), bgColor: cell.style.backgroundColor || '', textColor: cell.style.color || '' });
-      }
-      data.push(rowData);
-    }
-    document.getElementById('tableData').value = JSON.stringify(data);
-  });
-</script>
-
+    <a href="/admin" style="color: orangered;">Zpět na administraci</a>
+</main>
 </body>
 </html>`;
 
     res.send(html);
 });
 
+router.post('/playoff/save', requireAdmin, (req, res) => {
+    const { league, season, ...slots } = req.body; // Všechny sloty (qf1, sf1...) se nacpou do objektu slots
 
-// =====================================================================
-// === ROUTA PRO ULOŽENÍ VLASTNÍ ŠABLONY PLAYOFF ===
-// =====================================================================
-router.post('/playoff/save-template', requireAdmin, (req, res) => {
-    const { templateName, templateData, league } = req.body;
-    if (!templateName || !templateData) return res.status(400).send("Chybí data šablony.");
-
-    const tplPath = path.join(__dirname, '../data/playoffTemplates.json');
-    let templates = {};
-    try { if (fs.existsSync(tplPath)) templates = JSON.parse(fs.readFileSync(tplPath, 'utf8')); } catch(e) {}
-
-    try {
-        templates[templateName] = JSON.parse(templateData);
-        fs.writeFileSync(tplPath, JSON.stringify(templates, null, 2));
-    } catch(e) {
-        console.error("Chyba při zápisu šablony", e);
-        return res.status(500).send("Chyba při ukládání šablony.");
-    }
-    res.redirect('/admin/playoff?league=' + encodeURIComponent(league));
-});
-
-router.post('/playoff/save', (req, res) => {
-    const { tableData, league, season } = req.body;
-
-    if (!tableData || !league || !season) {
-        return renderErrorHtml(res, "Chybí data k uložení.", 400);
-    }
+    if (!league || !season) return renderErrorHtml(res, "Chybí data k uložení.", 400);
 
     const filePath = path.join(__dirname, '../data/playoff.json');
-    fs.readFile(filePath, 'utf8', (err, jsonData) => {
-        let playoffData = {};
-        if (!err && jsonData) {
-            try {
-                playoffData = JSON.parse(jsonData);
-            } catch {
-                playoffData = {};
-            }
-        }
+    let playoffData = {};
+    try { if (fs.existsSync(filePath)) playoffData = JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch (e) {}
 
-        if (!playoffData[season]) playoffData[season] = {};
-        try {
-            playoffData[season][league] = JSON.parse(tableData);
-        } catch(e) {
-            return res.status(400).send('Špatný formát tableData');
-        }
+    if (!playoffData[season]) playoffData[season] = {};
 
-        fs.writeFile(filePath, JSON.stringify(playoffData, null, 2), err => {
-            if (err) {
-                console.error('Chyba při zápisu do souboru:', err);
-                return res.status(500).send('Nepodařilo se uložit data');
-            }
-            logAdminAction(req.session.user, "PLAYOFF_ULOŽENÍ", `Uložena/upravena playoff mřížka pro ${league} (${season})`);
-            res.redirect(`/admin/playoff?league=${encodeURIComponent(league)}`);
-        });
-    });
+    // Uložíme jednoduše slovník: { "qf1": "series-468", "sf1": "series-500", ... }
+    playoffData[season][league] = slots;
+
+    fs.writeFileSync(filePath, JSON.stringify(playoffData, null, 2));
+    logAdminAction(req.session.user, "PLAYOFF_ULOŽENÍ", `Aktualizovány sloty playoff pro ${league} (${season})`);
+    res.redirect(`/admin/playoff?league=${encodeURIComponent(league)}`);
 });
 
 router.post('/playoff/delete', requireAdmin, (req, res) => {
@@ -1693,6 +1441,17 @@ router.get('/leagues/manage', requireAdmin, (req, res) => {
     } catch (e) {
         statusData = {};
     }
+
+    let allTemplates = {};
+    try {
+        const tplPath = './data/playoffTemplates.json';
+        if (fs.existsSync(tplPath)) {
+            allTemplates = JSON.parse(fs.readFileSync(tplPath, 'utf8'));
+        }
+    } catch (e) {
+        console.error("Chyba při načítání šablon:", e);
+    }
+
 
     const seasonLeagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues)
         ? allSeasonData[selectedSeason].leagues
@@ -1797,6 +1556,14 @@ router.get('/leagues/manage', requireAdmin, (req, res) => {
                             <label>ČF: <input type="number" name="quarterfinal" value="${l.quarterfinal || 0}" min="0" style="width:40px;"></label>
                             <label>P-in: <input type="number" name="playin" value="${l.playin || 0}" min="0" style="width:40px;"></label>
                             <label>Bar: <input type="number" name="relegation" value="${l.relegation || 0}" min="0" style="width:40px;"></label>
+                            <label>Playoff formát: 
+                                <select name="playoffFormat" style="width: 120px; padding: 2px;">
+                                    <option value="none">Žádný</option>
+                                    ${Object.keys(allTemplates).map(key => `
+                                    <option value="${key}" ${l.playoffFormat === key ? 'selected' : ''}>${allTemplates[key].label}</option>
+                                    `).join('')}
+                                </select>
+                            </label>
                         </div>
 
                         <div class="cross-table-settings">
@@ -1907,7 +1674,7 @@ router.post('/leagues/update', requireAdmin, express.urlencoded({ extended: true
     const {
         originalLeagueName, leagueName, maxMatches, quarterfinal, playin, relegation,
         // Nová pole z formuláře
-        crossGroupEnabled, crossGroupPosition, crossQuarterfinal, crossPlayin, crossRelegation
+        crossGroupEnabled, crossGroupPosition, crossQuarterfinal, crossPlayin, crossRelegation, playoffFormat
     } = req.body;
 
     const allSeasonData = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf8'));
@@ -1929,6 +1696,7 @@ router.post('/leagues/update', requireAdmin, express.urlencoded({ extended: true
             allSeasonData[selectedSeason].leagues[index].quarterfinal = Number(quarterfinal) || 0;
             allSeasonData[selectedSeason].leagues[index].playin = Number(playin) || 0;
             allSeasonData[selectedSeason].leagues[index].relegation = Number(relegation) || 0;
+            allSeasonData[selectedSeason].leagues[index].playoffFormat = playoffFormat || 'none';
 
             // 3. Nastavení X-tých týmů
             allSeasonData[selectedSeason].leagues[index].crossGroupTable = (crossGroupEnabled === 'on');
@@ -3320,6 +3088,55 @@ router.get('/toggleLocked/:id', requireAdmin, (req, res) => {
     fs.writeFileSync('./data/matches.json', JSON.stringify(matches, null, 2));
     logAdminAction(req.session.user, "ZÁMEK_ZÁPASU", `Zápas ID ${matchId} byl manuálně ${match.locked ? 'UZAMČEN' : 'ODEMČEN'}`);
     res.redirect('/admin');
+});
+
+router.get('/playoff/templates', requireAdmin, (req, res) => {
+    const tplPath = './data/playoffTemplates.json';
+    const templates = fs.existsSync(tplPath) ? JSON.parse(fs.readFileSync(tplPath, 'utf8')) : {};
+
+    res.send(`
+        <!DOCTYPE html>
+        <html lang="cs">
+        <head><meta charset="UTF-8">
+        <title>Editor formátů</title>
+        <link rel="stylesheet" href="/css/styles.css">
+        <link rel="icon" href="/images/logo.png"/>
+        </head>
+        <body class="admin_site">
+            <h1>Editor formátů playoff</h1>
+            <div style="background: #1a1a1a; padding: 20px; border: 1px solid #333;">
+                <form action="/admin/playoff/templates/save" method="POST">
+                    <label>Kód formátu (bez mezer, např. spengler_6): <input type="text" name="key" required class="league-select"></label><br><br>
+                    <label>Název (pro lidi): <input type="text" name="label" required class="league-select"></label><br><br>
+                    <label>JSON struktura sloupců (viz manuál):<br>
+                        <textarea name="structure" style="width:100%; height:200px; background:#000; color:lime; font-family:monospace;">[
+  { "title": "Čtvrtfinále", "slots": ["qf1", "qf2"], "gap": "60px" },
+  { "title": "Semifinále", "slots": ["sf1", "sf2"], "gap": "30px" },
+  { "title": "Finále", "slots": ["fin"], "gap": "30px" }
+]</textarea>
+                    </label><br>
+                    <button type="submit" class="action-btn edit-btn">Uložit nový formát</button>
+                </form>
+            </div>
+            <a href="/admin/playoff">← Zpět na Playoff</a>
+            <h3>Stávající formáty:</h3>
+            <pre style="color: gray;">${JSON.stringify(templates, null, 2)}</pre>
+        </body></html>
+    `);
+});
+
+router.post('/playoff/templates/save', requireAdmin, (req, res) => {
+    const { key, label, structure } = req.body;
+    const tplPath = './data/playoffTemplates.json';
+    let templates = fs.existsSync(tplPath) ? JSON.parse(fs.readFileSync(tplPath, 'utf8')) : {};
+
+    try {
+        templates[key] = { label, columns: JSON.parse(structure) };
+        fs.writeFileSync(tplPath, JSON.stringify(templates, null, 2));
+        res.redirect('/admin/playoff/templates');
+    } catch (e) {
+        res.status(400).send("Chyba v JSON struktuře!");
+    }
 });
 
 module.exports = router;

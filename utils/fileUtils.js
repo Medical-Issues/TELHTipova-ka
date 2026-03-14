@@ -797,16 +797,13 @@ function renderErrorHtml(res, message, code = 500) {
 }
 
 function getTableMode(req, isRegularSeasonFinished) {
-    let mode = isRegularSeasonFinished ? 'playoff' : 'regular'; // Výchozí stav
-
+    // 1. Priorita: Co je v URL (pokud uživatel klikne na tlačítko)
     if (req.query.tableMode === 'regular' || req.query.tableMode === 'playoff') {
-        if (req.session) req.session.userTableMode = req.query.tableMode;
-        mode = req.query.tableMode;
-    } else if (req.session && req.session.userTableMode) {
-        mode = req.session.userTableMode;
+        return req.query.tableMode;
     }
 
-    return mode;
+    // 2. Default: Pokud v URL nic není, rozhodne stav ligy (hotovo -> playoff, probíhá -> regular)
+    return isRegularSeasonFinished ? 'playoff' : 'regular';
 }
 // --- POMOCNÉ ČTECÍ FUNKCE (Vlož nahoru do fileUtils.js) ---
 function getChosenSeason() {
@@ -1186,7 +1183,7 @@ function generateLeftPanel(data, isHistory = false) {
         username, selectedSeason, selectedLiga, teamsInSelectedLiga,
         matches, clinchMode, tableMode, isRegularSeasonFinished,
         leagueObj, sortedGroups, teamsByGroup, playoffData, scores,
-        currentUserStats, userStats
+        currentUserStats, userStats, teams
     } = data;
 
     let html = `
@@ -1543,21 +1540,134 @@ function generateLeftPanel(data, isHistory = false) {
     html += `</div>`; // Ukončení divu regularTable
 
     // ==========================================
-    // 3. PLAYOFF TABULKA
+    // 3. PLAYOFF TABULKA (NOVÝ AUTOMATICKÝ PAVOUK)
     // ==========================================
-    html += `<div id="playoffTablePreview" style="display:${tableMode === 'playoff' ? 'block' : 'none'}; overflow:auto; max-width:100%;">
-             <table class="points-table"><tr><th scope="col" id="points-table-header" colspan="20"><h2>Týmy - ${selectedLiga} ${selectedSeason} - Playoff</h2></th></tr>`;
-    playoffData.forEach((row) => {
-        html += '<tr>';
-        row.forEach(cell => {
-            const bg = cell.bgColor ? `background-color:${cell.bgColor};` : '';
-            const tc = cell.textColor ? `color:${cell.textColor};` : '';
-            const style = (bg || tc) ? ` style="${bg}${tc}"` : '';
-            html += `<td${style}>${cell.text || ''}</td>`;
+    const format = leagueObj?.playoffFormat || 'none';
+    const savedSlots = playoffData || {};
+
+    function getSeriesInfo(slotKey) {
+        const seriesIdStr = savedSlots[slotKey];
+
+        // Pokud admin nevybral hotovou sérii, zjistíme, jestli nenaklikal čekající týmy
+        if (!seriesIdStr) {
+            const t1 = savedSlots[`${slotKey}_t1`];
+            const t2 = savedSlots[`${slotKey}_t2`];
+            if (t1 || t2) {
+                return {
+                    isWaiting: true, // Značka, že jde o čekací mezistav
+                    home: t1 || 'TBD',
+                    away: t2 || 'TBD',
+                    scoreH: '-', scoreA: '-',
+                    hWinner: false, aWinner: false
+                };
+            }
+            return null; // Slot je úplně prázdný
+        }
+
+        const mId = parseInt(seriesIdStr.replace('series-', ''));
+        const match = matches.find(m => m.id === mId);
+        if (!match) return null;
+
+        const homeTeam = teams.find(t => t.id === match.homeTeamId) || { name: 'Neznámý' };
+        const awayTeam = teams.find(t => t.id === match.awayTeamId) || { name: 'Neznámý' };
+
+        let scoreH = 0; let scoreA = 0;
+        if (match.result) {
+            scoreH = match.result.scoreHome;
+            scoreA = match.result.scoreAway;
+        } else if (match.playedMatches && match.playedMatches.length > 0) {
+            match.playedMatches.forEach(pm => {
+                if (pm.scoreHome > pm.scoreAway) scoreH++;
+                else if (pm.scoreAway > pm.scoreHome) scoreA++;
+            });
+        }
+
+        const winsNeeded = match.bo > 1 ? Math.ceil(match.bo / 2) : 1;
+        const hWinner = scoreH >= winsNeeded;
+        const aWinner = scoreA >= winsNeeded;
+
+        return {
+            isWaiting: false,
+            home: homeTeam.name, away: awayTeam.name,
+            scoreH, scoreA, hWinner, aWinner
+        };
+    }
+
+    function renderBox(slotKey) {
+        const info = getSeriesInfo(slotKey);
+
+        // Zcela prázdný slot (TBD vs TBD)
+        if (!info) {
+            return `
+            <div style="background: #111; border: 1px solid #333; border-radius: 6px; overflow: hidden; opacity: 0.5; min-width: 170px;">
+                <div style="padding: 8px 10px; border-bottom: 1px solid #222; color: #666; font-size: 0.85em; display:flex; justify-content: space-between;"><span>TBD</span><span style="background: #000; padding: 2px 6px; border-radius: 3px;">-</span></div>
+                <div style="padding: 8px 10px; color: #666; font-size: 0.85em; display:flex; justify-content: space-between;"><span>TBD</span><span style="background: #000; padding: 2px 6px; border-radius: 3px;">-</span></div>
+            </div>`;
+        }
+
+        // Čekající mezistav (např. Sparta vs TBD)
+        if (info.isWaiting) {
+            const renderTeam = (name, isTop) => {
+                const isTbd = name === 'TBD';
+                const border = isTop ? 'border-bottom: 1px solid #222;' : '';
+                return `
+                <div style="padding: 8px 10px; ${border} font-size: 0.85em; display:flex; justify-content: space-between; align-items: center; color: ${isTbd ? '#666' : 'lightgrey'}; font-weight: ${!isTbd ? 'bold' : 'normal'};">
+                    <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px;">${name}</span>
+                    <span style="background: #000; padding: 2px 6px; border-radius: 3px; margin-left: 5px; font-family: monospace; opacity: 0.5;">-</span>
+                </div>`;
+            };
+
+            return `
+            <div style="background: #111; border: 1px solid #444; border-radius: 6px; overflow: hidden; min-width: 170px; opacity: 0.8;">
+                ${renderTeam(info.home, true)}
+                ${renderTeam(info.away, false)}
+            </div>`;
+        }
+
+        // Klasický vyhodnocovaný zápas (Série)
+        return `
+        <div style="background: #111; border: 1px solid #444; border-radius: 6px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.5); min-width: 170px; position: relative;">
+            <div style="padding: 8px 10px; border-bottom: 1px solid #222; font-size: 0.85em; display:flex; justify-content: space-between; align-items: center; ${info.hWinner ? 'background: rgba(0,100,0,0.25); font-weight:bold; color:white;' : (info.aWinner ? 'color:#555;' : 'color:lightgrey;')}">
+                <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px;">${info.home}</span>
+                <span style="background: #000; padding: 2px 6px; border-radius: 3px; margin-left: 5px; font-family: monospace;">${info.scoreH}</span>
+            </div>
+            <div style="padding: 8px 10px; font-size: 0.85em; display:flex; justify-content: space-between; align-items: center; ${info.aWinner ? 'background: rgba(0,100,0,0.25); font-weight:bold; color:white;' : (info.hWinner ? 'color:#555;' : 'color:lightgrey;')}">
+                <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px;">${info.away}</span>
+                <span style="background: #000; padding: 2px 6px; border-radius: 3px; margin-left: 5px; font-family: monospace;">${info.scoreA}</span>
+            </div>
+        </div>`;
+    }
+
+    html += `<div id="playoffTablePreview" style="display:${tableMode === 'playoff' ? 'block' : 'none'}; overflow-x:auto; padding: 20px 0; max-width:100%;">
+             <h2 style="text-align:center; color:white; margin-bottom: 30px;">Playoff - ${selectedLiga} ${selectedSeason}</h2>
+             <div style="display: flex; gap: 40px; min-width: min-content; margin: 0 auto; justify-content: center;">`;
+
+    // Načtení šablony ze souboru
+    const tplPath = require('path').join(__dirname, '../data/playoffTemplates.json');
+    const allTemplates = fs.existsSync(tplPath) ? JSON.parse(fs.readFileSync(tplPath, 'utf8')) : {};
+    const currentTemplate = allTemplates[format];
+
+    if (currentTemplate) {
+        html += `<div id="playoffTablePreview" style="display:${tableMode === 'playoff' ? 'block' : 'none'}; overflow-x:auto; padding: 20px 0; max-width:100%;">
+                 <h2 style="text-align:center; color:white; margin-bottom: 30px;">Playoff - ${selectedLiga} ${selectedSeason}</h2>
+                 <div style="display: flex; gap: 40px; min-width: min-content; margin: 0 auto; justify-content: center;">`;
+
+        currentTemplate.columns.forEach(col => {
+            html += `
+            <div style="display: flex; flex-direction: column; justify-content: space-around; gap: ${col.gap || '20px'};">
+                <div style="text-align:center; color:orangered; font-size:0.8em; font-weight:bold; text-transform:uppercase; margin-bottom: 10px;">${col.title}</div>
+                ${col.slots.map(slotId => renderBox(slotId)).join('')}
+            </div>`;
         });
-        html += '</tr>';
-    });
-    html += `</table></div>`;
+
+        html += `</div></div>`;
+    } else {
+        html += `<div id="playoffTablePreview" style="display:${tableMode === 'playoff' ? 'block' : 'none'}; width: 100%; text-align: center; padding: 40px 20px; background: #1a1a1a; border-radius: 8px; border: 1px dashed #444;">
+            <p style="color: gray; margin: 0;">Pro ligu ${selectedLiga} není nastaven formát pavouka.</p>
+        </div>`;
+    }
+
+    html += `</div></div>`;
 
     // ==========================================
     // 4. PROGRESS BAR (Zobrazí se jen když NENÍ isHistory)

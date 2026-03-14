@@ -32,229 +32,236 @@ const getTeams = () => {
     catch (e) { return []; }
 };
 
-// --- CORE FUNKCE PRO ODESÍLÁNÍ ---
-
-const sendDirectNotification = (subscription, payload) => {
-    return webpush.sendNotification(subscription, JSON.stringify(payload));
-};
-
-// --- PŘIDANÁ FUNKCE PRO ÚKLID MRTVÝCH ODBĚRŮ (Chyba 410) ---
-const removeInvalidSubscription = (username, endpointToRemove) => {
-    const usersPath = path.join(__dirname, '../data/users.json');
-    try {
-        let users = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
-        const userIndex = users.findIndex(u => u.username === username);
-
-        if (userIndex > -1) {
-            let changed = false;
-            const user = users[userIndex];
-
-            // Kontrola pro starý formát (single subscription)
-            if (user.subscription && user.subscription.endpoint === endpointToRemove) {
-                delete user.subscription;
-                changed = true;
-            }
-
-            // Kontrola pro nový formát (pole subscriptions)
-            if (user.subscriptions && Array.isArray(user.subscriptions)) {
-                const originalLength = user.subscriptions.length;
-                user.subscriptions = user.subscriptions.filter(s => s.endpoint !== endpointToRemove);
-                if (user.subscriptions.length < originalLength) changed = true;
-            }
-
-            if (changed) {
-                fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
-                console.log(`🗑️ Mrtvý odběr (410) pro uživatele ${username} byl smazán z databáze.`);
-            }
-        }
-    } catch (e) {
-        console.error("Chyba při mazání neplatného odběru:", e);
-    }
-};
-
+// --- ODESÍLACÍ FUNKCE PRO JEDNOHO UŽIVATELE (ZVLÁDNE VÍCE ZAŘÍZENÍ) ---
 const sendToUserDevices = (user, payload) => {
-    console.log(`Zkouším poslat notifikaci uživateli: ${user.username}`);
-    const payloadString = JSON.stringify(payload);
+    let hasChanges = false;
+    let activeSubscriptions = [];
 
-    // A) Nový formát: Uživatel má pole 'subscriptions'
-    if (user.subscriptions && Array.isArray(user.subscriptions)) {
-        user.subscriptions.forEach(sub => {
-            webpush.sendNotification(sub, payloadString)
-                .catch(err => {
-                    if (err.statusCode === 410) {
-                        removeInvalidSubscription(user.username, sub.endpoint);
-                    } else {
-                        console.error(`Chyba notifikace pro ${user.username}:`, err.statusCode);
-                    }
-                });
-        });
+    // 1. Podpora pro starý formát (jeden objekt)
+    if (user.subscription && !user.subscriptions) {
+        user.subscriptions = [user.subscription];
+        delete user.subscription;
+        hasChanges = true;
     }
-    // B) Starý formát: Uživatel má jen jedno 'subscription'
-    else if (user.subscription) {
-        webpush.sendNotification(user.subscription, payloadString)
+
+    if (!user.subscriptions || user.subscriptions.length === 0) return;
+
+    // 2. Projdeme všechna zařízení uživatele a odešleme notifikaci
+    const promises = user.subscriptions.map(sub => {
+        return webpush.sendNotification(sub, JSON.stringify(payload))
+            .then(() => {
+                activeSubscriptions.push(sub); // Odeslání úspěšné, ponecháme
+            })
             .catch(err => {
-                if (err.statusCode === 410) {
-                    removeInvalidSubscription(user.username, user.subscription.endpoint);
+                if (err.statusCode === 410 || err.statusCode === 404) {
+                    console.log(`[Push] Odběr expiroval pro uživatele ${user.username}, mažu jej.`);
+                    hasChanges = true;
                 } else {
-                    console.error(`Chyba (single) pro ${user.username}:`, err.statusCode || err);
+                    console.error(`[Push] Chyba při odesílání pro ${user.username}:`, err);
+                    activeSubscriptions.push(sub); // Pro jiné chyby zatím ponecháme
                 }
             });
-    }
-};
+    });
 
-const broadcast = (title, body) => {
-    const users = getUsers();
-    users.forEach(u => {
-        sendToUserDevices(u, { title, body, icon: '/images/logo.png' });
+    // 3. Počkáme na odeslání na všechna zařízení a případně promažeme neplatné
+    Promise.all(promises).then(() => {
+        if (hasChanges) {
+            user.subscriptions = activeSubscriptions;
+            const users = getUsers();
+            const userIndex = users.findIndex(u => u.username === user.username);
+            if (userIndex !== -1) {
+                users[userIndex].subscriptions = activeSubscriptions;
+                // Úklid starého klíče, pokud existoval
+                delete users[userIndex].subscription;
+                fs.writeFileSync(path.join(__dirname, '../data/users.json'), JSON.stringify(users, null, 2));
+            }
+        }
     });
 };
 
-// --- LOGIKA UDÁLOSTÍ ---
+// --- NOTIFIKAČNÍ FUNKCE PRO RŮZNÉ UDÁLOSTI ---
 
-let newMatchTimer = null;
 const notifyNewMatches = () => {
-    if (newMatchTimer) {
-        clearTimeout(newMatchTimer);
-        console.log("Timer resetován, čekám dalších 5 minut...");
-    } else {
-        console.log("Timer spuštěn, za 5 minut odešlu notifikaci...");
-    }
-
-    newMatchTimer = setTimeout(() => {
-        broadcast("Nové zápasy!", "Právě byly vypsány nové zápasy k tipování. Běž na to!");
-        newMatchTimer = null;
-        console.log("📢 Notifikace o nových zápasech odeslána.");
-    }, 5 * 60 * 1000);
+    const payload = {
+        title: "🏒 Nové zápasy/série!",
+        body: "Byly vypsány nové zápasy k tipování. Nezapomeň si tipnout!",
+        icon: '/images/logo.png',
+        url: '/'
+    };
+    getUsers().forEach(u => sendToUserDevices(u, payload));
 };
 
 const notifyResult = (matchId, scoreHome, scoreAway) => {
-    const users = getUsers();
     const matches = getMatches();
-    const teams = getTeams();
-
-    const match = matches.find(m => m.id === matchId);
+    const match = matches.find(m => m.id === parseInt(matchId));
     if (!match) return;
 
-    const homeTeamName = teams.find(t => t.id === match.homeTeamId)?.name || 'Domácí';
-    const awayTeamName = teams.find(t => t.id === match.awayTeamId)?.name || 'Hosté';
+    const teams = getTeams();
+    const homeTeam = teams.find(t => t.id === match.homeTeamId);
+    const awayTeam = teams.find(t => t.id === match.awayTeamId);
+    if (!homeTeam || !awayTeam) return;
 
-    const title = "Výsledek zápasu";
-    const body = `${homeTeamName} vs ${awayTeamName} - ${scoreHome}:${scoreAway}.`;
+    const isSeries = match.isPlayoff && match.bo > 1;
 
-    users.forEach(u => {
-        sendToUserDevices(u, { title, body, icon: '/images/logo.png' });
-    });
+    let title, body;
+    if (isSeries) {
+        title = "🏆 Konec série!";
+        body = `Série ${homeTeam.name} vs ${awayTeam.name} skončila. Konečný stav: ${scoreHome}:${scoreAway}`;
+    } else {
+        title = "🏒 Zápas vyhodnocen!";
+        const otText = match.result && match.result.ot ? " (pp/sn)" : "";
+        body = `Výsledek: ${homeTeam.name} ${scoreHome}:${scoreAway}${otText} ${awayTeam.name}`;
+    }
+
+    const payload = {
+        title,
+        body,
+        icon: '/images/logo.png',
+        url: `/?liga=${encodeURIComponent(match.liga)}`
+    };
+
+    getUsers().forEach(u => sendToUserDevices(u, payload));
 };
 
-const notifyMatchUpdate = (matchId, changesText) => {
-    const users = getUsers();
+// PRŮBĚŽNÝ STAV SÉRIE (Nová smysluplná funkce pro jednotlivé zápasy série)
+const notifySeriesProgress = (matchId, matchIndex, scoreHome, scoreAway, ot, seriesScoreH, seriesScoreA) => {
     const matches = getMatches();
-    const teams = getTeams();
-
-    const match = matches.find(m => Number(m.id) === Number(matchId));
+    const match = matches.find(m => m.id === parseInt(matchId));
     if (!match) return;
 
-    const homeTeamName = teams.find(t => Number(t.id) === Number(match.homeTeamId))?.name || 'Domácí';
-    const awayTeamName = teams.find(t => Number(t.id) === Number(match.awayTeamId))?.name || 'Hosté';
+    const teams = getTeams();
+    const homeTeam = teams.find(t => t.id === match.homeTeamId);
+    const awayTeam = teams.find(t => t.id === match.awayTeamId);
+    if (!homeTeam || !awayTeam) return;
 
-    const title = "Úprava zápasu ✏️";
-    // Do těla zprávy dáme název zápasu a pod to text s tím, co se změnilo
-    const body = `${homeTeamName} vs ${awayTeamName}\nZměna: ${changesText}`;
+    const otText = ot ? " pp" : "";
+    const payload = {
+        title: `🏒 Playoff: ${homeTeam.name} vs ${awayTeam.name}`,
+        body: `${matchIndex}. zápas: ${scoreHome}:${scoreAway}${otText} | Průběžný stav série: ${seriesScoreH}:${seriesScoreA}`,
+        icon: '/images/logo.png',
+        url: `/?liga=${encodeURIComponent(match.liga)}`
+    };
 
-    users.forEach(u => {
-        sendToUserDevices(u, { title, body, icon: '/images/logo.png' });
-    });
+    getUsers().forEach(u => sendToUserDevices(u, payload));
 };
 
-const notifyTransfer = (text) => {
-    broadcast("Přestupová bomba! 💣", text);
+const notifyMatchUpdate = (matchId, details) => {
+    const matches = getMatches();
+    const match = matches.find(m => m.id === parseInt(matchId));
+    if (!match) return;
+
+    const teams = getTeams();
+    const homeTeam = teams.find(t => t.id === match.homeTeamId);
+    const awayTeam = teams.find(t => t.id === match.awayTeamId);
+
+    if (!homeTeam || !awayTeam) return;
+
+    const matchTypeStr = (match.isPlayoff && match.bo > 1) ? "série" : "zápasu";
+
+    const payload = {
+        title: `⚠️ Změna u ${matchTypeStr}!`,
+        body: `${homeTeam.name} vs ${awayTeam.name}\nDetaily: ${details}`,
+        icon: '/images/logo.png',
+        url: `/?liga=${encodeURIComponent(match.liga)}`
+    };
+
+    getUsers().forEach(u => sendToUserDevices(u, payload));
 };
 
-const notifyLeagueEnd = (leagueName) => {
-    broadcast("Liga vyhodnocena 🏆", `Liga ${leagueName} byla uzavřena. Podívej se, jak jsi dopadl!`);
+const notifyTransfer = (message) => {
+    const payload = {
+        title: "🔄 Nové přestupy!",
+        body: message,
+        icon: '/images/logo.png',
+        url: '/prestupy'
+    };
+    getUsers().forEach(u => sendToUserDevices(u, payload));
 };
 
-// E) CRON: UPOZORNĚNÍ NA LOCK (Každou minutu)
-cron.schedule('* * * * *', () => {
+const notifyLeagueEnd = (liga) => {
+    const payload = {
+        title: "🏁 Základní část skončila!",
+        body: `Základní část ligy ${liga} byla ukončena. Podívej se na konečné pořadí a rozdělení bodů za tabulku!`,
+        icon: '/images/logo.png',
+        url: `/history/table/?liga=${encodeURIComponent(liga)}`
+    };
+    getUsers().forEach(u => sendToUserDevices(u, payload));
+};
+
+// --- AUTOMATICKÉ NOTIFIKACE (CRON) ---
+cron.schedule('0 * * * *', () => {
+    const now = new Date();
     const matches = getMatches();
     const users = getUsers();
-    const teams = getTeams();
 
-    // 1. Získáme naprosto přesný aktuální čas v Praze ve formátu YYYY-MM-DDTHH:mm:ss
-    const currentPragueTimeISO = new Date().toLocaleString('sv-SE', {timeZone: 'Europe/Prague'}).replace(' ', 'T');
+    if (!users || users.length === 0) return;
 
-    // 2. Převedeme ho na milisekundy tak, že k němu uměle přidáme "Z" (aby ho Node.js načetl konzistentně kdekoli)
-    const nowMs = new Date(currentPragueTimeISO + "Z").getTime();
+    const targetTimes = [
+        { diffMs: 4 * 60 * 60 * 1000, type: "4h" },
+        { diffMs: 60 * 60 * 1000, type: "1h" }
+    ];
 
-    const oneHourMS = 60 * 60 * 1000;
-    const fourHoursMS = 240 * 60 * 1000;
-    const margin = 60 * 1000; // 1 minuta tolerance
+    targetTimes.forEach(({ diffMs, type }) => {
+        const targetTime = new Date(now.getTime() + diffMs);
 
-    matches.forEach(match => {
-        // Pokud je zápas odložený nebo manuálně zamčený, neposíláme upozornění (uživatel stejně nemůže tipovat)
-        if (match.postponed || match.locked) {
-            return; // Přeskočí tento zápas a jde na další
-        }
-        if (match.result) return; // Zápas už skončil
-        if (!match.datetime) return; // Chybí čas
+        const upcomingMatches = matches.filter(m => {
+            if (m.result || m.postponed || m.locked) return false;
+            const matchDate = new Date(m.datetime);
+            return (
+                matchDate.getFullYear() === targetTime.getFullYear() &&
+                matchDate.getMonth() === targetTime.getMonth() &&
+                matchDate.getDate() === targetTime.getDate() &&
+                matchDate.getHours() === targetTime.getHours()
+            );
+        });
 
-        // 3. I k času zápasu (který ukládáš v pražském čase z administrace) přidáme "Z"
-        // Takto spočítáme čistý matematický rozdíl a nezajímá nás, v jakém pásmu server hostingu běží.
-        const matchMs = new Date(match.datetime + "Z").getTime();
+        if (upcomingMatches.length === 0) return;
 
-        const diff = matchMs - nowMs;
+        const teams = getTeams();
 
-        let notificationType = null;
+        upcomingMatches.forEach(match => {
+            const homeName = teams.find(t => t.id === match.homeTeamId)?.name || 'Neznámý tým';
+            const awayName = teams.find(t => t.id === match.awayTeamId)?.name || 'Neznámý tým';
 
-        // Kontrola 4 hodiny předem
-        if (diff >= (fourHoursMS - margin) && diff <= fourHoursMS) {
-            notificationType = "4h";
-        }
-        // Kontrola 1 hodinu předem
-        else if (diff >= (oneHourMS - margin) && diff <= oneHourMS) {
-            notificationType = "1h";
-        }
-
-        if (notificationType) {
-            const homeName = teams.find(t => Number(t.id) === Number(match.homeTeamId))?.name || 'Domácí';
-            const awayName = teams.find(t => Number(t.id) === Number(match.awayTeamId))?.name || 'Hosté';
+            const isSeries = match.isPlayoff && match.bo > 1;
+            const matchTypeStr = isSeries ? "sérii" : "zápas";
+            const matchTypeSubj = isSeries ? "série" : "zápas";
 
             users.forEach(u => {
-                const hasSub = (u.subscriptions && u.subscriptions.length > 0) || u.subscription;
-                if (!hasSub) return;
+                if (!u.subscriptions || u.subscriptions.length === 0) return;
 
                 const userTipsForSeason = u.tips?.[match.season]?.[match.liga] || [];
                 const hasTip = userTipsForSeason.find(t => Number(t.matchId) === Number(match.id));
 
                 if (!hasTip) {
-                    const timeText = notificationType === "4h" ? "4 hodiny" : "hodinu";
-                    console.log(`[CRON] Posílám ${notificationType} upozornění že nemá tip: ${u.username} (${homeName} vs ${awayName})`);
+                    const timeText = type === "4h" ? "4 hodiny" : "hodinu";
+                    console.log(`[CRON] Posílám ${type} upozornění že nemá tip: ${u.username} (${homeName} vs ${awayName})`);
                     sendToUserDevices(u, {
-                        title: notificationType === "4h" ? "🔔 Nezapomeň si tipnout!" : "⏳ Poslední šance!",
-                        body: `Za ${timeText} začíná zápas ${homeName} vs ${awayName}. Ještě nemáš tipnuto!`,
-                        icon: '/images/logo.png'
+                        title: type === "4h" ? "🔔 Nezapomeň si tipnout!" : "⏳ Poslední šance!",
+                        body: `Za ${timeText} začíná ${matchTypeSubj} ${homeName} vs ${awayName}. Ještě nemáš tipnuto na tuto ${matchTypeStr}!`,
+                        icon: '/images/logo.png',
+                        url: `/?liga=${encodeURIComponent(match.liga)}`
                     });
-                } else if (hasTip && notificationType === "1h") {
-                    console.log(`[CRON] Posílám ${notificationType} upozornění že začíná zápas: ${u.username} (${homeName} vs ${awayName})`);
+                } else if (hasTip && type === "1h") {
+                    console.log(`[CRON] Posílám ${type} upozornění že začíná zápas: ${u.username} (${homeName} vs ${awayName})`);
                     sendToUserDevices(u, {
                         title: "⏳ Za hodinu už si nezměníš tip!",
-                        body: `Za hodinu začíná zápas ${homeName} vs ${awayName}.`,
-                        icon: '/images/logo.png'
+                        body: `Za hodinu začíná ${matchTypeSubj} ${homeName} vs ${awayName}.`,
+                        icon: '/images/logo.png',
+                        url: `/?liga=${encodeURIComponent(match.liga)}`
                     });
                 }
             });
-        }
+        });
     });
 });
 
 module.exports = {
     notifyNewMatches,
     notifyResult,
+    notifySeriesProgress,
     notifyMatchUpdate,
     notifyTransfer,
     notifyLeagueEnd,
-    publicVapidKey,
-    sendNotification: sendDirectNotification,
-    sendToUserDevices,
-    removeInvalidSubscription,
+    sendToUserDevices
 };

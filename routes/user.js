@@ -793,7 +793,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
                     <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-10deg); 
                                 width: 120%; height: 400%; 
                                 background-image: url('${url}'); background-size: contain; background-repeat: no-repeat; background-position: center; 
-                                opacity: 0.50; filter: grayscale(50%); pointer-events: none; z-index: 1;">
+                                opacity: 0.50; filter: grayscale(50%); pointer-events: none; z-index: 5;">
                     </div>`;
 
                 const existingTip = userTips.find(t => t.matchId === match.id);
@@ -830,36 +830,56 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
                     const bo = match.bo || 7;
                     const maxLoserWins = Math.floor(bo / 2);
 
+                    let playedMatchesHtml = '';
+                    if (match.isPlayoff && match.bo > 1 && match.playedMatches && match.playedMatches.length > 0) {
+                        let currentH = 0; let currentA = 0;
+                        const matchesDetails = match.playedMatches.map((pm, idx) => {
+                            if (pm.scoreHome > pm.scoreAway) currentH++; else currentA++;
+                            return `<span style="white-space: nowrap;">${idx + 1}. ${pm.scoreHome}:${pm.scoreAway}${pm.ot ? ' pp' : ''}</span>`;
+                        }).join(' | ');
+
+                        // Tento formát by se měl hezky vejít pod názvy týmů nebo pod výsledek
+                        playedMatchesHtml = `
+                <tr style="background: #1a1a1a; border-top: none;">
+                    <td colspan="5" class="matches-of-series-show">
+                        <div class="matches-of-series-header">
+                            Stav série: ${currentH}:${currentA}
+                        </div>
+                        <div class="matches-of-series-text">
+                            ${matchesDetails}
+                        </div>
+                    </td>
+                </tr>
+            `;
+                    }
+
                     html += `
-                    <tr class="match-row playoff-parent-row" data-match-id="${match.id}">
-                        <td style="position: relative; overflow: hidden;">${watermarkHTML(homeLogoUrl)}
-                            <button type="button" class="team-link home-btn ${selectedWinner === "home" ? "selected" : ""}" data-winner="home" ${matchStarted ? 'disabled' : ''}
-                                    style="overflow: hidden;">
-                                <span style="z-index: 5;">${homeTeamName}</span>
-                            </button>
-                        </td>
-                        <td class="vs">${vsText}</td> <td style="position: relative; overflow: hidden;">${watermarkHTML(awayLogoUrl)}
-                            <button type="button" class="team-link away-btn ${selectedWinner === "away" ? "selected" : ""}" data-winner="away" ${matchStarted ? 'disabled' : ''}
-                                    style="overflow: hidden;">
-                                <span style="z-index: 5;">${awayTeamName}</span>
-                            </button>
-                        </td>
-                    </tr>
-                    <tr class="match-row loser-row" style="display:${existingTip ? 'table-row' : 'none'}">
-                        <td colspan="3">
-                            <form class="loserwins-form" onsubmit="return false;" data-bo="${match.bo}">
-                                <input type="hidden" name="matchId" value="${match.id}">
-                                <input type="hidden" name="winner" value="${existingTip?.winner ?? ''}">
-                                ${match.bo === 1 ?
-                        /* ZMĚNA: Přidán disabled atribut i na zadávání skóre */
-                        `Skóre: <input type="number" name="scoreHome" value="${existingTip?.scoreHome ?? ''}" min="0" style="width:50px" ${matchStarted ? 'disabled' : ''}> : <input type="number" name="scoreAway" value="${existingTip?.scoreAway ?? ''}" min="0" style="width:50px" ${matchStarted ? 'disabled' : ''}>`
-                        :
-                        /* ZMĚNA: Přidán disabled atribut i na select */
+        <tr class="match-row playoff-parent-row" data-match-id="${match.id}">
+            <td style="position: relative; overflow: hidden;">${watermarkHTML(homeLogoUrl)}
+                <button type="button" class="team-link home-btn ${selectedWinner === "home" ? "selected" : ""}" data-winner="home" ${matchStarted ? 'disabled' : ''} style="overflow: hidden;">
+                    <span style="z-index: 5;">${homeTeamName}</span>
+                </button>
+            </td>
+            <td class="vs">${vsText}</td>
+            <td style="position: relative; overflow: hidden;">${watermarkHTML(awayLogoUrl)}
+                <button type="button" class="team-link away-btn ${selectedWinner === "away" ? "selected" : ""}" data-winner="away" ${matchStarted ? 'disabled' : ''} style="overflow: hidden;">
+                    <span style="z-index: 5;">${awayTeamName}</span>
+                </button>
+            </td>
+        </tr>
+        ${playedMatchesHtml}
+        <tr class="match-row loser-row" style="display:${existingTip ? 'table-row' : 'none'}">
+            <td style="border-top: none" colspan="3">
+                <form class="loserwins-form" onsubmit="return false;" data-bo="${match.bo}">
+                    <input type="hidden" name="matchId" value="${match.id}">
+                    <input type="hidden" name="winner" value="${existingTip?.winner ?? ''}">
+                    ${match.bo === 1 ?
+                        `Skóre: <input type="number" name="scoreHome" value="${existingTip?.scoreHome ?? ''}" min="0" style="width:50px" ${matchStarted ? 'disabled' : ''}> : <input type="number" name="scoreAway" value="${existingTip?.scoreAway ?? ''}" min="0" style="width:50px" ${matchStarted ? 'disabled' : ''}>` :
                         `Kolik zápasů vyhrál poražený: <select name="loserWins" ${matchStarted ? 'disabled' : ''}>${Array.from({length: maxLoserWins + 1}, (_, i) => `<option value="${i}" ${i === existingLoserWins ? 'selected' : ''}>${i}</option>`).join('')}</select>`
                     }
-                            </form>
-                        </td>
-                    </tr>`;
+                </form>
+            </td>
+        </tr>`;
                 }
             }
             html += `</tbody></table>`;
@@ -878,16 +898,42 @@ fetch('/tip', { method: 'POST', headers: { 'x-requested-with': 'fetch' }, body: 
 .catch(err => { console.error(err); alert('Chyba připojení.'); });
 }
 document.querySelectorAll('button[data-winner]').forEach(btn => {
-btn.addEventListener('click', (e) => { e.preventDefault();
-const row = btn.closest('tr'); const matchId = row.dataset.matchId; const winner = btn.dataset.winner;
-const homeBtn = row.querySelector('.home-btn'); const awayBtn = row.querySelector('.away-btn');
-const nextRow = row.nextElementSibling; let loserRow = null; let loserForm = null;
-if (nextRow && nextRow.classList.contains('loser-row')) { loserRow = nextRow; loserForm = loserRow.querySelector('form'); }
-if (loserForm) { const wInput = loserForm.querySelector('input[name="winner"]'); if (wInput) wInput.value = winner; }
-const formData = new URLSearchParams(); formData.append('matchId', matchId); formData.append('winner', winner);
-sendTip(formData, homeBtn, awayBtn, loserRow);
-});
-});
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const row = btn.closest('tr');
+                    const matchId = row.dataset.matchId;
+                    const winner = btn.dataset.winner;
+                    const homeBtn = row.querySelector('.home-btn');
+                    const awayBtn = row.querySelector('.away-btn');
+                    
+                    // Preskočíme informačný riadok o stave série (ak existuje)
+                    let nextRow = row.nextElementSibling;
+                    if (nextRow && nextRow.classList.contains('played-matches-row')) {
+                        nextRow = nextRow.nextElementSibling;
+                    }
+                    
+                    let targetRow = null;
+                    let targetForm = null;
+
+                    // Chytíme riadok s tipom nezávisle na tom, či je to "loser-row" (playoff) alebo "score-row" (základná časť)
+                    if (nextRow && (nextRow.classList.contains('loser-row') || nextRow.classList.contains('score-row'))) {
+                        targetRow = nextRow;
+                        targetForm = targetRow.querySelector('form');
+                    }
+
+                    if (targetForm) {
+                        const wInput = targetForm.querySelector('input[name="winner"]');
+                        if (wInput) wInput.value = winner;
+                    }
+
+                    const formData = new URLSearchParams();
+                    formData.append('matchId', matchId);
+                    formData.append('winner', winner);
+
+                    // Odošleme dáta (targetRow pošleme do funkcie, aby vedela, čo má zobraziť/skryť)
+                    sendTip(formData, homeBtn, awayBtn, targetRow);
+                });
+            });
 document.querySelectorAll('.loserwins-form').forEach(form => {
 const matchId = form.querySelector('input[name="matchId"]').value; const winnerInput = form.querySelector('input[name="winner"]');
 form.querySelectorAll('input[type="number"]').forEach(input => {
@@ -1252,25 +1298,45 @@ html += generateLeftPanel(data, true);
             // OPRAVENO: Odstraněna třída match-row u tagů <td>!
             if (!match.isPlayoff) {
                 html += `<tr class="match-row">
-                    <td class="${initHomeClass}" style="position: relative; overflow: hidden; width: 44%;">${watermarkHTML(homeLogoUrl)}${homeCellHTML}</td>
+                    <td class="${initHomeClass}" style="position: relative; overflow: hidden; width: 40%;">${watermarkHTML(homeLogoUrl)}${homeCellHTML}</td>
                     <td class="vs" style="width: 3%;">${match.result.scoreHome}</td>
                     <td class="vs" style="width: 6%;">${match.result.ot === true ? "pp/sn" : ":"}</td>
                     <td class="vs" style="width: 3%;">${match.result.scoreAway}</td>
-                    <td class="${initAwayClass}" style="position: relative; overflow: hidden; width: 44%;">${watermarkHTML(awayLogoUrl)}${awayCellHTML}</td>
+                    <td class="${initAwayClass}" style="position: relative; overflow: hidden; width: 40%;">${watermarkHTML(awayLogoUrl)}${awayCellHTML}</td>
                 </tr>`;
             } else {
-                html += `<tr class="match-row">
-                    <td class="${initHomeClass}" style="; position: relative; overflow: hidden; width: 40%;">${watermarkHTML(homeLogoUrl)}${homeCellHTML}</td>
-                    <td class="vs" style="width: 6%;">${match.result.scoreHome}</td>
-                    <td class="vs" style="width: 8%;">vs</td>
-                    <td class="vs" style="width: 6%;">${match.result.scoreAway}</td>
+                let playedMatchesHtml = '';
+                html += `<tr style="border-top: none" class="match-row">
+                    <td class="${initHomeClass}" style="position: relative; overflow: hidden; width: 40%;">${watermarkHTML(homeLogoUrl)}${homeCellHTML}</td>
+                    <td class="vs" style="width: 3%;">${match.result.scoreHome}</td>
+                    <td class="vs" style="width: 6%;">vs</td>
+                    <td class="vs" style="width: 3%;">${match.result.scoreAway}</td>
                     <td class="${initAwayClass}" style="position: relative; overflow: hidden; width: 40%;">${watermarkHTML(awayLogoUrl)}${awayCellHTML}</td>
                 </tr>
+                ${playedMatchesHtml}
                 <tr class="match-row">
-                    <td style="color: lightgrey; position: relative;" colspan="5" class="${initScoreClass}">${scoreCellHTML}</td>
+                    <td style="height: 25px; lightgrey; position: relative; border-bottom:none;" colspan="5" class="${initScoreClass}">${scoreCellHTML}</td>
                 </tr>`;
+                if (match.bo > 1 && match.playedMatches && match.playedMatches.length > 0) {
+                    let currentH = 0;
+                    let currentA = 0;
+                    const matchesDetails = match.playedMatches.map((pm, idx) => {
+                        if (pm.scoreHome > pm.scoreAway) currentH++; else currentA++;
+                        return `<span style="white-space: nowrap;">${idx + 1}. ${pm.scoreHome}:${pm.scoreAway}${pm.ot ? ' pp' : ''}</span>`;
+                    }).join(' | ');
+
+                    html += `
+                    <tr style="background: #1a1a1a; border-top: none;">
+                    <td colspan="5" class="matches-of-series-show-history">
+                        <div class="matches-of-series-text">
+                            ${matchesDetails}
+                        </div>
+                    </td>
+                </tr>
+            `;
+                }
             }
-        }
+            }
         html += `</tbody></table>`;
     }
 
