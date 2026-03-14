@@ -133,6 +133,7 @@ router.get('/', requireAdmin, (req, res) => {
         <a href="/admin/new/match" class="btn new-btn-admin">Vytvořit nový zápas</a>
         <a href="/admin/new/team" class="btn new-btn-admin">Vytvořit nový tým</a>
         <a href="/admin/playoff" class="btn new-btn-admin">Playoff tabulky</a>
+        <a href="/admin/playoff/templates" class="btn new-btn-admin">Templaty playoff tabulek</a>
         <a href="/admin/leagues/manage" class="btn new-btn-admin">Správa lig</a>
         <a href="/admin/teams/points" class="btn new-btn-admin">Manuální body</a>
         <a href="/admin/matches/import" class="btn new-btn-admin">Import zápasů</a>

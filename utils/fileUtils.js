@@ -867,9 +867,15 @@ function prepareDashboardData(req, isHistory = false) {
     const leaguesFromTeams = [...new Set(teams.map(t => t.liga))];
     const leaguesFromMatches = [...new Set(matches.map(m => m.liga))];
     const allLeagues = [...new Set([...leaguesFromTeams, ...leaguesFromMatches])];
-    const uniqueLeagues = allLeagues.filter(l => allowedLeagues.includes(l));
 
-    const selectedLiga = req.query.liga && uniqueLeagues.includes(req.query.liga) ? req.query.liga : uniqueLeagues[0];
+    const uniqueLeagues = isHistory
+        ? allLeagues
+        : allLeagues.filter(l => allowedLeagues.includes(l));
+
+    const selectedLiga = req.query.liga && uniqueLeagues.includes(req.query.liga)
+        ? req.query.liga
+        : (uniqueLeagues[0] || "Neurčeno");
+
     const teamsInSelectedLiga = teams.filter(t => t.liga === selectedLiga);
 
     const leagueObj = leagues.find(l => l.name === selectedLiga) || {
@@ -1639,7 +1645,6 @@ function generateLeftPanel(data, isHistory = false) {
     }
 
     html += `<div id="playoffTablePreview" style="display:${tableMode === 'playoff' ? 'block' : 'none'}; overflow-x:auto; padding: 20px 0; max-width:100%;">
-             <h2 style="text-align:center; color:white; margin-bottom: 30px;">Playoff - ${selectedLiga} ${selectedSeason}</h2>
              <div style="display: flex; gap: 40px; min-width: min-content; margin: 0 auto; justify-content: center;">`;
 
     // Načtení šablony ze souboru
