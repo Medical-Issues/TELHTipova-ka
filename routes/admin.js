@@ -863,17 +863,33 @@ router.get('/edit/:id', requireAdmin, (req, res) => {
 
     const isSeries = match.isPlayoff && match.bo > 1;
 
+    // Úprava v admin.js (router.get('/edit/:id'))
     let matchInputs = `<fieldset id="series-score-fields" style="display: ${isSeries ? 'block' : 'none'}; margin-top: 1rem;"><legend>Jednotlivé zápasy série</legend>`;
     for (let i = 0; i < 9; i++) {
         const mResult = match.playedMatches && match.playedMatches[i] ? match.playedMatches[i] : {};
         const isMatchVisible = i < (match.bo || 1);
+        const isSwapped = mResult.sideSwap === true; // Načtení stavu z DB
+
         matchInputs += `
-            <div id="match_row_${i}" style="margin-bottom: 10px; border-bottom: 1px solid #444; padding-bottom: 10px; display: ${isMatchVisible ? 'block' : 'none'};">
-                <strong>Zápas ${i + 1}</strong><br>
-                <div style="display: flex; gap: 10px; align-items: center; margin-top: 5px;">
-                    <label>Domácí: <input class="league-select" type="number" name="match_${i}_home" value="${mResult.scoreHome ?? ''}" style="width: 60px"></label>
-                    <label>Hosté: <input class="league-select" type="number" name="match_${i}_away" value="${mResult.scoreAway ?? ''}" style="width: 60px"></label>
-                    <label style="display: flex; align-items: center; gap: 5px;"><input type="checkbox" name="match_${i}_ot" ${mResult.ot ? 'checked' : ''}> Po prodloužení / nájezdech</label>
+            <div id="match_row_${i}" style="margin-bottom: 15px; border: 1px solid #444; padding: 10px; background: #1a1a1a; display: ${isMatchVisible ? 'block' : 'none'};">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <strong style="color: orangered;">Zápas ${i + 1}</strong>
+                    <button type="button" class="edit-btn" style="font-size: 0.7em; padding: 2px 8px;" onclick="swapSides(${i})">🔄 Prohodit strany (Kdo je doma)</button>
+                    <input type="hidden" name="match_${i}_swap" id="match_${i}_swap" value="${isSwapped}">
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <label style="display: flex; flex-direction: column;">
+                        <span id="label_home_${i}" style="font-size: 0.75em; color: ${isSwapped ? '#888' : '#00ff00'}">${isSwapped ? 'Hosté (venku)' : 'Domácí (doma)'}:</span>
+                        <input class="league-select" type="number" name="match_${i}_home" value="${mResult.scoreHome ?? ''}" style="width: 65px">
+                    </label>
+                    <span style="margin-top: 15px;">:</span>
+                    <label style="display: flex; flex-direction: column;">
+                        <span id="label_away_${i}" style="font-size: 0.75em; color: ${isSwapped ? '#00ff00' : '#888'}">${isSwapped ? 'Domácí (doma)' : 'Hosté (venku)'}:</span>
+                        <input class="league-select" type="number" name="match_${i}_away" value="${mResult.scoreAway ?? ''}" style="width: 65px">
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 5px; margin-top: 15px; margin-left: 10px; font-size: 0.85em;">
+                        <input type="checkbox" name="match_${i}_ot" ${mResult.ot ? 'checked' : ''}> pp/sn
+                    </label>
                 </div>
             </div>
          `;
@@ -936,6 +952,23 @@ router.get('/edit/:id', requireAdmin, (req, res) => {
         const field = document.getElementById('barazLigaFieldEdit');
         if (cb && field) {
             field.style.display = cb.checked ? 'flex' : 'none';
+        }
+    }
+    // Hledej v admin.js funkci toggleBarazLigaEdit() a pod ni vlož toto:
+    function swapSides(idx) {
+        const swapInput = document.getElementById('match_' + idx + '_swap');
+        const labelHome = document.getElementById('label_home_' + idx);
+        const labelAway = document.getElementById('label_away_' + idx);
+
+        const isSwapped = swapInput.value === 'true';
+        if (isSwapped) {
+            swapInput.value = 'false';
+            labelHome.innerText = 'Domácí (doma):'; labelHome.style.color = '#00ff00';
+            labelAway.innerText = 'Hosté (venku):'; labelAway.style.color = '#888';
+        } else {
+            swapInput.value = 'true';
+            labelHome.innerText = 'Hosté (venku):'; labelHome.style.color = '#888';
+            labelAway.innerText = 'Domácí (doma):'; labelAway.style.color = '#00ff00';
         }
     }
   </script>
@@ -1090,11 +1123,13 @@ router.post('/edit/:id', requireAdmin, (req, res) => {
             const h = req.body[`match_${i}_home`];
             const a = req.body[`match_${i}_away`];
             const ot = req.body[`match_${i}_ot`] === 'on';
+            const swap = req.body[`match_${i}_swap`] === 'true'; // PŘIDÁNO: Načtení stavu swapu
 
             if (h !== '' && a !== '' && h !== undefined && a !== undefined) {
                 const sH = parseInt(h);
                 const sA = parseInt(a);
-                match.playedMatches.push({ scoreHome: sH, scoreAway: sA, ot });
+                // PŘIDÁNO: Uložení sideSwap do objektu
+                match.playedMatches.push({ scoreHome: sH, scoreAway: sA, ot, sideSwap: swap });
 
                 if (sH > sA) seriesHomeWins++;
                 else if (sA > sH) seriesAwayWins++;

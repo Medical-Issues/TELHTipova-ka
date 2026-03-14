@@ -833,24 +833,44 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
                     let playedMatchesHtml = '';
                     if (match.isPlayoff && match.bo > 1 && match.playedMatches && match.playedMatches.length > 0) {
                         let currentH = 0; let currentA = 0;
-                        const matchesDetails = match.playedMatches.map((pm, idx) => {
-                            if (pm.scoreHome > pm.scoreAway) currentH++; else currentA++;
-                            return `<span style="white-space: nowrap;">${idx + 1}. ${pm.scoreHome}:${pm.scoreAway}${pm.ot ? ' pp' : ''}</span>`;
-                        }).join(' | ');
 
-                        // Tento formát by se měl hezky vejít pod názvy týmů nebo pod výsledek
+                        // Generování řádků pro jednotlivé zápasy série
+                        const detailedRows = match.playedMatches.map((pm, idx) => {
+                            if (pm.scoreHome > pm.scoreAway) currentH++; else currentA++;
+
+                            // Pokud je v adminu nastaven sideSwap, vizuálně prohodíme jména v řádku
+                            const displayHome = pm.sideSwap ? awayTeamName : homeTeamName;
+                            const displayAway = pm.sideSwap ? homeTeamName : awayTeamName;
+                            const displayScoreH = pm.sideSwap ? pm.scoreAway : pm.scoreHome;
+                            const displayScoreA = pm.sideSwap ? pm.scoreHome : pm.scoreAway;
+                            const hWinnerClass = (pm.scoreHome > pm.scoreAway && !pm.sideSwap) || (pm.scoreAway > pm.scoreHome && pm.sideSwap);
+                            const aWinnerClass = (pm.scoreAway > pm.scoreHome && !pm.sideSwap) || (pm.scoreHome > pm.scoreAway && pm.sideSwap);
+
+                            return `
+                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 5px 10px; border-bottom: 1px solid #222; font-size: 0.8em; background: #0c0c0c;">
+                                    <span style="color: #555; width: 15px; font-weight: bold;">${idx + 1}.</span>
+                                    <span style="flex: 1; text-align: right; ${hWinnerClass ? 'color: #00ff00; font-weight: bold;' : 'color: #888;'}">${displayHome}</span>
+                                    <span style="background: #222; padding: 2px 6px; border-radius: 4px; font-family: monospace; min-width: 35px; text-align: center; border: 1px solid #333;">
+                                        ${displayScoreH}:${displayScoreA}${pm.ot ? '<small style="font-size:0.7em">p</small>' : ''}
+                                    </span>
+                                    <span style="flex: 1; text-align: left; ${aWinnerClass ? 'color: #00ff00; font-weight: bold;' : 'color: #888;'}">${displayAway}</span>
+                                    <span style="color: #555; width: 15px; font-weight: bold;">${idx + 1}.</span>
+                                </div>
+                            `;
+                        }).join('');
+
                         playedMatchesHtml = `
-                <tr style="background: #1a1a1a; border-top: none;">
-                    <td colspan="5" class="matches-of-series-show">
-                        <div class="matches-of-series-header">
-                            Stav série: ${currentH}:${currentA}
-                        </div>
-                        <div class="matches-of-series-text">
-                            ${matchesDetails}
-                        </div>
-                    </td>
-                </tr>
-            `;
+                            <tr style="background: #111; border-top: none;">
+                                <td colspan="3" style="padding: 0; border-top: none;">
+                                    <div style="background: #ff4500; color: white; font-size: 0.7em; font-weight: bold; text-align: center; padding: 2px 0; text-transform: uppercase;">
+                                        Stav série: ${currentH}:${currentA}
+                                    </div>
+                                    <div style="max-height: 200px; overflow-y: auto; border: 1px solid #ff4500; border-top: none;">
+                                        ${detailedRows}
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
                     }
 
                     html += `
@@ -1155,6 +1175,21 @@ html += generateLeftPanel(data, true);
         }
         });
         }
+        // Přidej do <script> v proměnné html v user.js
+function toggleSeriesDetails(btn) {
+    const details = btn.nextElementSibling;
+    if (details.style.display === "none") {
+        details.style.display = "block";
+        btn.innerText = btn.innerText.replace("▼", "▲").replace("Zobrazit", "Skrýt");
+        btn.style.background = "#ff4500";
+        btn.style.color = "black";
+    } else {
+        details.style.display = "none";
+        btn.innerText = btn.innerText.replace("▲", "▼").replace("Skrýt", "Zobrazit");
+        btn.style.background = "#222";
+        btn.style.color = "#ff4500";
+    }
+}
         </script>
         <section class="matches-container">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
@@ -1305,36 +1340,59 @@ html += generateLeftPanel(data, true);
                     <td class="${initAwayClass}" style="position: relative; overflow: hidden; width: 40%;">${watermarkHTML(awayLogoUrl)}${awayCellHTML}</td>
                 </tr>`;
             } else {
+                // NOVÁ "DROPDOWN" VERZE PRO HISTORII
                 let playedMatchesHtml = '';
-                html += `<tr style="border-top: none" class="match-row">
-                    <td class="${initHomeClass}" style="position: relative; overflow: hidden; width: 40%;">${watermarkHTML(homeLogoUrl)}${homeCellHTML}</td>
-                    <td class="vs" style="width: 3%;">${match.result.scoreHome}</td>
-                    <td class="vs" style="width: 6%;">vs</td>
-                    <td class="vs" style="width: 3%;">${match.result.scoreAway}</td>
-                    <td class="${initAwayClass}" style="position: relative; overflow: hidden; width: 40%;">${watermarkHTML(awayLogoUrl)}${awayCellHTML}</td>
-                </tr>
-                ${playedMatchesHtml}
-                <tr class="match-row">
-                    <td style="height: 25px; lightgrey; position: relative; border-bottom:none;" colspan="5" class="${initScoreClass}">${scoreCellHTML}</td>
-                </tr>`;
-                if (match.bo > 1 && match.playedMatches && match.playedMatches.length > 0) {
-                    let currentH = 0;
-                    let currentA = 0;
-                    const matchesDetails = match.playedMatches.map((pm, idx) => {
-                        if (pm.scoreHome > pm.scoreAway) currentH++; else currentA++;
-                        return `<span style="white-space: nowrap;">${idx + 1}. ${pm.scoreHome}:${pm.scoreAway}${pm.ot ? ' pp' : ''}</span>`;
-                    }).join(' | ');
+                if (match.isPlayoff && match.bo > 1 && match.playedMatches && match.playedMatches.length > 0) {
+                    let currentH = 0; let currentA = 0;
 
-                    html += `
-                    <tr style="background: #1a1a1a; border-top: none;">
-                    <td colspan="5" class="matches-of-series-show-history">
-                        <div class="matches-of-series-text">
-                            ${matchesDetails}
+                    const detailedRows = match.playedMatches.map((pm, idx) => {
+                        if (pm.scoreHome > pm.scoreAway) currentH++; else currentA++;
+
+                        const displayHome = pm.sideSwap ? (teams.find(t => t.id === match.awayTeamId)?.name || '???') : (teams.find(t => t.id === match.homeTeamId)?.name || '???');
+                        const displayAway = pm.sideSwap ? (teams.find(t => t.id === match.homeTeamId)?.name || '???') : (teams.find(t => t.id === match.awayTeamId)?.name || '???');
+                        const displayScoreH = pm.sideSwap ? pm.scoreAway : pm.scoreHome;
+                        const displayScoreA = pm.sideSwap ? pm.scoreHome : pm.scoreAway;
+
+                        const hWinner = (pm.scoreHome > pm.scoreAway && !pm.sideSwap) || (pm.scoreAway > pm.scoreHome && pm.sideSwap);
+                        const aWinner = (pm.scoreAway > pm.scoreHome && !pm.sideSwap) || (pm.scoreHome > pm.scoreAway && pm.sideSwap);
+
+                        return `
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 4px 10px; border-bottom: 1px solid #222; font-size: 0.85em; background: #0c0c0c;">
+                            <span style="color: #555; width: 15px; font-weight: bold;">${idx + 1}.</span>
+                            <span style="flex: 1; text-align: right; ${hWinner ? 'color: #00ff00; font-weight: bold;' : 'color: #888;'}">${displayHome}</span>
+                            <span style="background: #222; padding: 1px 6px; border-radius: 4px; font-family: monospace; min-width: 35px; text-align: center; border: 1px solid #333;">
+                                ${displayScoreH}:${displayScoreA}${pm.ot ? '<small>p</small>' : ''}
+                            </span>
+                            <span style="flex: 1; text-align: left; ${aWinner ? 'color: #00ff00; font-weight: bold;' : 'color: #888;'}">${displayAway}</span>
+                            <span style="color: #555; width: 15px; font-weight: bold;">${idx + 1}.</span>
+                        </div>`;
+                    }).join('');
+
+                    playedMatchesHtml = `
+                <tr style="background: #111; border-top: none;">
+                    <td colspan="5" style="padding: 0; border-top: none;">
+                        <div onclick="toggleSeriesDetails(this)" style="cursor: pointer; background: #222; color: #ff4500; font-size: 0.65em; font-weight: bold; text-align: center; padding: 5px 0; text-transform: uppercase; border-bottom: 1px solid #333; transition: 0.3s;">
+                            ▼ Zobrazit průběh série (${currentH}:${currentA}) ▼
+                        </div>
+                        <div class="series-details" style="display: none; max-height: 300px; overflow-y: auto; border-bottom: 2px solid #ff4500; transition: all 0.5s ease;">
+                            ${detailedRows}
                         </div>
                     </td>
-                </tr>
-            `;
+                </tr>`;
                 }
+
+                // Samotné vykreslení (zůstává stejné jako minule)
+                html += `<tr style="border-top: none" class="match-row">
+                <td class="${initHomeClass}" style="position: relative; overflow: hidden; width: 40%;">${watermarkHTML(homeLogoUrl)}${homeCellHTML}</td>
+                <td class="vs" style="width: 3%;">${match.result.scoreHome}</td>
+                <td class="vs" style="width: 6%;">vs</td>
+                <td class="vs" style="width: 3%;">${match.result.scoreAway}</td>
+                <td class="${initAwayClass}" style="position: relative; overflow: hidden; width: 40%;">${watermarkHTML(awayLogoUrl)}${awayCellHTML}</td>
+            </tr>
+            ${playedMatchesHtml}
+            <tr class="match-row">
+                <td style="height: 25px; position: relative; border-bottom:none;" colspan="5" class="${initScoreClass}">${scoreCellHTML}</td>
+            </tr>`;
             }
             }
         html += `</tbody></table>`;
