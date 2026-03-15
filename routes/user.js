@@ -31,6 +31,7 @@ function showTable(which) {
 }
 
     // Pomocná funkce pro převod klíče
+// Pomocná funkce zůstává stejná
 function urlBase64ToUint8Array(base64String) {
     const padding = '='.repeat((4 - base64String.length % 4) % 4);
     const base64 = (base64String + padding).replace(/\\-/g, '+').replace(/_/g, '/');
@@ -42,26 +43,25 @@ function urlBase64ToUint8Array(base64String) {
     return outputArray;
 }
 
-// HLAVNÍ FUNKCE PRO TLAČÍTKO
 async function toggleNotifications() {
     const btn = document.getElementById('notify-toggle-btn');
     btn.disabled = true;
+    btn.textContent = "Pracuji...";
 
     try {
         const registration = await navigator.serviceWorker.ready;
         const subscription = await registration.pushManager.getSubscription();
 
         if (subscription) {
-            // --- ODHLÁŠENÍ ---
+            // ODHLÁŠENÍ
             await subscription.unsubscribe();
             await fetch('/api/unsubscribe', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ endpoint: subscription.endpoint })
             });
-            alert('Notifikace vypnuty.');
         } else {
-            // --- PŘIHLÁŠENÍ ---
+            // PŘIHLÁŠENÍ
             const vapidRes = await fetch('/api/vapid-public-key');
             const vapidPublicKey = await vapidRes.text();
 
@@ -75,41 +75,46 @@ async function toggleNotifications() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newSub)
             });
-            alert('Notifikace zapnuty!');
         }
     } catch (e) {
         console.error(e);
         alert('Chyba: ' + e.message);
     }
     
-    checkSubscriptionStatus(); // Aktualizujeme vzhled tlačítka
+    await checkSubscriptionStatus();
     btn.disabled = false;
 }
 
-// KONTROLA STAVU PŘI NAČTENÍ STRÁNKY
 async function checkSubscriptionStatus() {
     const btn = document.getElementById('notify-toggle-btn');
     if (!btn) return;
 
-    if (!('serviceWorker' in navigator)) {
-        btn.style.display = 'none';
+    // KONTROLA PODPORY (Důležité pro iPhone!)
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        btn.textContent = "Notifikace nepodporovány";
+        btn.style.backgroundColor = "#222";
+        btn.disabled = true;
+        btn.title = "Na iPhone musíte web přidat na plochu.";
         return;
     }
 
-    const registration = await navigator.serviceWorker.ready;
-    const subscription = await registration.pushManager.getSubscription();
+    try {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
 
-    if (subscription) {
-        btn.textContent = "Vypnout notifikace 🔕";
-        btn.style.backgroundColor = "#555";
-    } else {
-        btn.textContent = "Zapnout notifikace 🔔";
-        btn.style.backgroundColor = "#ff4500";
+        if (subscription) {
+            btn.textContent = "Vypnout notifikace 🔕";
+            btn.style.backgroundColor = "#555";
+        } else {
+            btn.textContent = "Zapnout notifikace 🔔";
+            btn.style.backgroundColor = "#ff4500";
+        }
+    } catch (e) {
+        btn.textContent = "Chyba načítání";
     }
-    btn.style.display = 'inline-block';
 }
 
-// Spustíme kontrolu hned po načtení
+// Spustíme hned po načtení
 document.addEventListener('DOMContentLoaded', checkSubscriptionStatus);
 
 </script>
@@ -127,8 +132,9 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <a class="history-btn changed" href="/?liga=${encodeURIComponent(selectedLiga)}">Tipovačka</a>
 <a class="history-btn changed" href="/prestupy?liga=${encodeURIComponent(selectedLiga)}">Přestupy TELH</a>
 <div style="text-align: center; margin: 20px;">
-    <button type="button" id="notify-toggle-btn" onclick="toggleNotifications()" style="display: none; width: 200px; height: 35px; cursor: pointer; font-weight: bold; border: none; color: white;">
-        Načítám...
+    <button type="button" id="notify-toggle-btn" onclick="toggleNotifications()" 
+        style="width: 220px; height: 40px; cursor: pointer; font-weight: bold; border: none; color: white; border-radius: 5px; background-color: #444;">
+        Zjišťuji stav...
     </button>
 </div>
 </form>
@@ -573,7 +579,7 @@ function showTable(which) {
     const p = document.getElementById('playoffTablePreview'); p.style.display = which === 'playoff' ? 'block' : 'none'; 
 }
 
-    // Pomocná funkce pro převod klíče
+// Pomocná funkce zůstává stejná
 function urlBase64ToUint8Array(base64String) {
     const padding = '='.repeat((4 - base64String.length % 4) % 4);
     const base64 = (base64String + padding).replace(/\\-/g, '+').replace(/_/g, '/');
@@ -585,26 +591,25 @@ function urlBase64ToUint8Array(base64String) {
     return outputArray;
 }
 
-// HLAVNÍ FUNKCE PRO TLAČÍTKO
 async function toggleNotifications() {
     const btn = document.getElementById('notify-toggle-btn');
     btn.disabled = true;
+    btn.textContent = "Pracuji...";
 
     try {
         const registration = await navigator.serviceWorker.ready;
         const subscription = await registration.pushManager.getSubscription();
 
         if (subscription) {
-            // --- ODHLÁŠENÍ ---
+            // ODHLÁŠENÍ
             await subscription.unsubscribe();
             await fetch('/api/unsubscribe', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ endpoint: subscription.endpoint })
             });
-            alert('Notifikace vypnuty.');
         } else {
-            // --- PŘIHLÁŠENÍ ---
+            // PŘIHLÁŠENÍ
             const vapidRes = await fetch('/api/vapid-public-key');
             const vapidPublicKey = await vapidRes.text();
 
@@ -618,41 +623,46 @@ async function toggleNotifications() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newSub)
             });
-            alert('Notifikace zapnuty!');
         }
     } catch (e) {
         console.error(e);
         alert('Chyba: ' + e.message);
     }
     
-    checkSubscriptionStatus(); // Aktualizujeme vzhled tlačítka
+    await checkSubscriptionStatus();
     btn.disabled = false;
 }
 
-// KONTROLA STAVU PŘI NAČTENÍ STRÁNKY
 async function checkSubscriptionStatus() {
     const btn = document.getElementById('notify-toggle-btn');
     if (!btn) return;
 
-    if (!('serviceWorker' in navigator)) {
-        btn.style.display = 'none';
+    // KONTROLA PODPORY (Důležité pro iPhone!)
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        btn.textContent = "Notifikace nepodporovány";
+        btn.style.backgroundColor = "#222";
+        btn.disabled = true;
+        btn.title = "Na iPhone musíte web přidat na plochu.";
         return;
     }
 
-    const registration = await navigator.serviceWorker.ready;
-    const subscription = await registration.pushManager.getSubscription();
+    try {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
 
-    if (subscription) {
-        btn.textContent = "Vypnout notifikace 🔕";
-        btn.style.backgroundColor = "#555";
-    } else {
-        btn.textContent = "Zapnout notifikace 🔔";
-        btn.style.backgroundColor = "#ff4500";
+        if (subscription) {
+            btn.textContent = "Vypnout notifikace 🔕";
+            btn.style.backgroundColor = "#555";
+        } else {
+            btn.textContent = "Zapnout notifikace 🔔";
+            btn.style.backgroundColor = "#ff4500";
+        }
+    } catch (e) {
+        btn.textContent = "Chyba načítání";
     }
-    btn.style.display = 'inline-block';
 }
 
-// Spustíme kontrolu hned po načtení
+// Spustíme hned po načtení
 document.addEventListener('DOMContentLoaded', checkSubscriptionStatus);
 
 </script>
@@ -670,8 +680,9 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <a class="history-btn changed" href="/table-tip?liga=${encodeURIComponent(selectedLiga)}">Základní část</a>
 <a class="history-btn changed" href="/prestupy?liga=${encodeURIComponent(selectedLiga)}">Přestupy TELH</a>
 <div style="text-align: center; margin: 20px;">
-    <button type="button" id="notify-toggle-btn" onclick="toggleNotifications()" style="display: none; width: 200px; height: 35px; cursor: pointer; font-weight: bold; border: none; color: white;">
-        Načítám...
+    <button type="button" id="notify-toggle-btn" onclick="toggleNotifications()" 
+        style="width: 220px; height: 40px; cursor: pointer; font-weight: bold; border: none; color: white; border-radius: 5px; background-color: #444;">
+        Zjišťuji stav...
     </button>
 </div>
 </form>
@@ -1620,7 +1631,7 @@ function showTable(which) {
     const p = document.getElementById('playoffTablePreview'); p.style.display = which === 'playoff' ? 'block' : 'none'; 
 }
 
-    // Pomocná funkce pro převod klíče
+ // Pomocná funkce zůstává stejná
 function urlBase64ToUint8Array(base64String) {
     const padding = '='.repeat((4 - base64String.length % 4) % 4);
     const base64 = (base64String + padding).replace(/\\-/g, '+').replace(/_/g, '/');
@@ -1632,26 +1643,25 @@ function urlBase64ToUint8Array(base64String) {
     return outputArray;
 }
 
-// HLAVNÍ FUNKCE PRO TLAČÍTKO
 async function toggleNotifications() {
     const btn = document.getElementById('notify-toggle-btn');
     btn.disabled = true;
+    btn.textContent = "Pracuji...";
 
     try {
         const registration = await navigator.serviceWorker.ready;
         const subscription = await registration.pushManager.getSubscription();
 
         if (subscription) {
-            // --- ODHLÁŠENÍ ---
+            // ODHLÁŠENÍ
             await subscription.unsubscribe();
             await fetch('/api/unsubscribe', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ endpoint: subscription.endpoint })
             });
-            alert('Notifikace vypnuty.');
         } else {
-            // --- PŘIHLÁŠENÍ ---
+            // PŘIHLÁŠENÍ
             const vapidRes = await fetch('/api/vapid-public-key');
             const vapidPublicKey = await vapidRes.text();
 
@@ -1665,41 +1675,46 @@ async function toggleNotifications() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newSub)
             });
-            alert('Notifikace zapnuty!');
         }
     } catch (e) {
         console.error(e);
         alert('Chyba: ' + e.message);
     }
     
-    checkSubscriptionStatus(); // Aktualizujeme vzhled tlačítka
+    await checkSubscriptionStatus();
     btn.disabled = false;
 }
 
-// KONTROLA STAVU PŘI NAČTENÍ STRÁNKY
 async function checkSubscriptionStatus() {
     const btn = document.getElementById('notify-toggle-btn');
     if (!btn) return;
 
-    if (!('serviceWorker' in navigator)) {
-        btn.style.display = 'none';
+    // KONTROLA PODPORY (Důležité pro iPhone!)
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        btn.textContent = "Notifikace nepodporovány";
+        btn.style.backgroundColor = "#222";
+        btn.disabled = true;
+        btn.title = "Na iPhone musíte web přidat na plochu.";
         return;
     }
 
-    const registration = await navigator.serviceWorker.ready;
-    const subscription = await registration.pushManager.getSubscription();
+    try {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
 
-    if (subscription) {
-        btn.textContent = "Vypnout notifikace 🔕";
-        btn.style.backgroundColor = "#555";
-    } else {
-        btn.textContent = "Zapnout notifikace 🔔";
-        btn.style.backgroundColor = "#ff4500";
+        if (subscription) {
+            btn.textContent = "Vypnout notifikace 🔕";
+            btn.style.backgroundColor = "#555";
+        } else {
+            btn.textContent = "Zapnout notifikace 🔔";
+            btn.style.backgroundColor = "#ff4500";
+        }
+    } catch (e) {
+        btn.textContent = "Chyba načítání";
     }
-    btn.style.display = 'inline-block';
 }
 
-// Spustíme kontrolu hned po načtení
+// Spustíme hned po načtení
 document.addEventListener('DOMContentLoaded', checkSubscriptionStatus);
 </script>
 <body class="usersite">
@@ -1716,8 +1731,9 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <a class="history-btn changed" href="/?liga=${encodeURIComponent(selectedLiga)}">Tipovačka</a>
 <a class="history-btn changed" href="/table-tip?liga=${encodeURIComponent(selectedLiga)}">Základní část</a>
 <div style="text-align: center; margin: 20px;">
-    <button type="button" id="notify-toggle-btn" onclick="toggleNotifications()" style="display: none; width: 200px; height: 35px; cursor: pointer; font-weight: bold; border: none; color: white;">
-        Načítám...
+    <button type="button" id="notify-toggle-btn" onclick="toggleNotifications()" 
+        style="width: 220px; height: 40px; cursor: pointer; font-weight: bold; border: none; color: white; border-radius: 5px; background-color: #444;">
+        Zjišťuji stav...
     </button>
 </div>
 </form>
