@@ -44,19 +44,18 @@ function urlBase64ToUint8Array(base64String) {
 
 async function toggleNotifications() {
     const btn = document.getElementById('notify-toggle-btn');
+    if (!btn) return;
+    
     btn.disabled = true;
     btn.textContent = "Pracuji...";
 
     try {
-        // 1. Agresivní registrace: Nečekáme jen na ready, ale aktivně registrujeme
         let registration = await navigator.serviceWorker.getRegistration();
         
         if (!registration) {
-            console.log("SW nenalezen, registruji...");
             registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
         }
 
-        // 2. Krátké čekání na aktivaci (s timeoutem)
         let retry = 0;
         while (!registration.active && retry < 10) {
             await new Promise(res => setTimeout(res, 500));
@@ -64,22 +63,35 @@ async function toggleNotifications() {
             retry++;
         }
 
-        if (!registration.active) throw new Error("Service Worker se nepodařilo aktivovat.");
+        if (!registration.active) {
+            alert("Service Worker se nepodařilo aktivovat.");
+            btn.disabled = false;
+            await checkSubscriptionStatus();
+            return;
+        }
 
         const subscription = await registration.pushManager.getSubscription();
 
         if (subscription) {
-            // ODHLÁŠENÍ (zůstává stejné)
-            await fetch('/api/unsubscribe', {
+            // ODHLÁŠENÍ
+            const res = await fetch('/api/unsubscribe', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ endpoint: subscription.endpoint })
             });
-            await subscription.unsubscribe();
-            alert('Notifikace vypnuty.');
+            if (res.ok) {
+                await subscription.unsubscribe();
+                alert('Notifikace vypnuty.');
+            }
         } else {
             // PŘIHLÁŠENÍ
             const vapidRes = await fetch('/api/vapid-public-key');
+            if (!vapidRes.ok) {
+                alert('Server neodpovídá (chyba při získávání klíče).');
+                btn.disabled = false;
+                await checkSubscriptionStatus();
+                return;
+            }
             const vapidPublicKey = await vapidRes.text();
 
             const newSub = await registration.pushManager.subscribe({
@@ -87,16 +99,21 @@ async function toggleNotifications() {
                 applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
             });
 
-            await fetch('/api/subscribe', {
+            const saveRes = await fetch('/api/subscribe', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newSub)
             });
-            alert('Notifikace zapnuty!');
+            
+            if (saveRes.ok) {
+                alert('Notifikace zapnuty!');
+            } else {
+                alert('Nepodařilo se uložit odběr na server.');
+            }
         }
     } catch (e) {
-        console.error(e);
-        alert('Chyba: ' + e.message);
+        console.error("Kritická chyba notifikací:", e);
+        alert('Došlo k nečekané chybě: ' + e.message);
     }
     
     await checkSubscriptionStatus();
@@ -608,19 +625,18 @@ function urlBase64ToUint8Array(base64String) {
 
 async function toggleNotifications() {
     const btn = document.getElementById('notify-toggle-btn');
+    if (!btn) return;
+    
     btn.disabled = true;
     btn.textContent = "Pracuji...";
 
     try {
-        // 1. Agresivní registrace: Nečekáme jen na ready, ale aktivně registrujeme
         let registration = await navigator.serviceWorker.getRegistration();
         
         if (!registration) {
-            console.log("SW nenalezen, registruji...");
             registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
         }
 
-        // 2. Krátké čekání na aktivaci (s timeoutem)
         let retry = 0;
         while (!registration.active && retry < 10) {
             await new Promise(res => setTimeout(res, 500));
@@ -628,22 +644,35 @@ async function toggleNotifications() {
             retry++;
         }
 
-        if (!registration.active) throw new Error("Service Worker se nepodařilo aktivovat.");
+        if (!registration.active) {
+            alert("Service Worker se nepodařilo aktivovat.");
+            btn.disabled = false;
+            await checkSubscriptionStatus();
+            return;
+        }
 
         const subscription = await registration.pushManager.getSubscription();
 
         if (subscription) {
-            // ODHLÁŠENÍ (zůstává stejné)
-            await fetch('/api/unsubscribe', {
+            // ODHLÁŠENÍ
+            const res = await fetch('/api/unsubscribe', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ endpoint: subscription.endpoint })
             });
-            await subscription.unsubscribe();
-            alert('Notifikace vypnuty.');
+            if (res.ok) {
+                await subscription.unsubscribe();
+                alert('Notifikace vypnuty.');
+            }
         } else {
             // PŘIHLÁŠENÍ
             const vapidRes = await fetch('/api/vapid-public-key');
+            if (!vapidRes.ok) {
+                alert('Server neodpovídá (chyba při získávání klíče).');
+                btn.disabled = false;
+                await checkSubscriptionStatus();
+                return;
+            }
             const vapidPublicKey = await vapidRes.text();
 
             const newSub = await registration.pushManager.subscribe({
@@ -651,16 +680,21 @@ async function toggleNotifications() {
                 applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
             });
 
-            await fetch('/api/subscribe', {
+            const saveRes = await fetch('/api/subscribe', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newSub)
             });
-            alert('Notifikace zapnuty!');
+            
+            if (saveRes.ok) {
+                alert('Notifikace zapnuty!');
+            } else {
+                alert('Nepodařilo se uložit odběr na server.');
+            }
         }
     } catch (e) {
-        console.error(e);
-        alert('Chyba: ' + e.message);
+        console.error("Kritická chyba notifikací:", e);
+        alert('Došlo k nečekané chybě: ' + e.message);
     }
     
     await checkSubscriptionStatus();
@@ -1676,19 +1710,18 @@ function urlBase64ToUint8Array(base64String) {
 
 async function toggleNotifications() {
     const btn = document.getElementById('notify-toggle-btn');
+    if (!btn) return;
+    
     btn.disabled = true;
     btn.textContent = "Pracuji...";
 
     try {
-        // 1. Agresivní registrace: Nečekáme jen na ready, ale aktivně registrujeme
         let registration = await navigator.serviceWorker.getRegistration();
         
         if (!registration) {
-            console.log("SW nenalezen, registruji...");
             registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
         }
 
-        // 2. Krátké čekání na aktivaci (s timeoutem)
         let retry = 0;
         while (!registration.active && retry < 10) {
             await new Promise(res => setTimeout(res, 500));
@@ -1696,22 +1729,35 @@ async function toggleNotifications() {
             retry++;
         }
 
-        if (!registration.active) throw new Error("Service Worker se nepodařilo aktivovat.");
+        if (!registration.active) {
+            alert("Service Worker se nepodařilo aktivovat.");
+            btn.disabled = false;
+            await checkSubscriptionStatus();
+            return;
+        }
 
         const subscription = await registration.pushManager.getSubscription();
 
         if (subscription) {
-            // ODHLÁŠENÍ (zůstává stejné)
-            await fetch('/api/unsubscribe', {
+            // ODHLÁŠENÍ
+            const res = await fetch('/api/unsubscribe', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ endpoint: subscription.endpoint })
             });
-            await subscription.unsubscribe();
-            alert('Notifikace vypnuty.');
+            if (res.ok) {
+                await subscription.unsubscribe();
+                alert('Notifikace vypnuty.');
+            }
         } else {
             // PŘIHLÁŠENÍ
             const vapidRes = await fetch('/api/vapid-public-key');
+            if (!vapidRes.ok) {
+                alert('Server neodpovídá (chyba při získávání klíče).');
+                btn.disabled = false;
+                await checkSubscriptionStatus();
+                return;
+            }
             const vapidPublicKey = await vapidRes.text();
 
             const newSub = await registration.pushManager.subscribe({
@@ -1719,16 +1765,21 @@ async function toggleNotifications() {
                 applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
             });
 
-            await fetch('/api/subscribe', {
+            const saveRes = await fetch('/api/subscribe', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newSub)
             });
-            alert('Notifikace zapnuty!');
+            
+            if (saveRes.ok) {
+                alert('Notifikace zapnuty!');
+            } else {
+                alert('Nepodařilo se uložit odběr na server.');
+            }
         }
     } catch (e) {
-        console.error(e);
-        alert('Chyba: ' + e.message);
+        console.error("Kritická chyba notifikací:", e);
+        alert('Došlo k nečekané chybě: ' + e.message);
     }
     
     await checkSubscriptionStatus();
