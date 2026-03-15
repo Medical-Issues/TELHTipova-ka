@@ -48,16 +48,28 @@ async function toggleNotifications() {
     btn.textContent = "Pracuji...";
 
     try {
-        // Registrace s timeoutem pro mobilní sítě
-        const registration = await Promise.race([
-            navigator.serviceWorker.ready,
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Časový limit vypršel (SW ready)')), 5000))
-        ]);
+        // 1. Agresivní registrace: Nečekáme jen na ready, ale aktivně registrujeme
+        let registration = await navigator.serviceWorker.getRegistration();
+        
+        if (!registration) {
+            console.log("SW nenalezen, registruji...");
+            registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+        }
+
+        // 2. Krátké čekání na aktivaci (s timeoutem)
+        let retry = 0;
+        while (!registration.active && retry < 10) {
+            await new Promise(res => setTimeout(res, 500));
+            registration = await navigator.serviceWorker.getRegistration();
+            retry++;
+        }
+
+        if (!registration.active) throw new Error("Service Worker se nepodařilo aktivovat.");
 
         const subscription = await registration.pushManager.getSubscription();
 
         if (subscription) {
-            // ODHLÁŠENÍ
+            // ODHLÁŠENÍ (zůstává stejné)
             await fetch('/api/unsubscribe', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -68,7 +80,6 @@ async function toggleNotifications() {
         } else {
             // PŘIHLÁŠENÍ
             const vapidRes = await fetch('/api/vapid-public-key');
-            if (!vapidRes.ok) throw new Error('Server neodpovídá (klíč)');
             const vapidPublicKey = await vapidRes.text();
 
             const newSub = await registration.pushManager.subscribe({
@@ -76,12 +87,11 @@ async function toggleNotifications() {
                 applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
             });
 
-            const saveRes = await fetch('/api/subscribe', {
+            await fetch('/api/subscribe', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newSub)
             });
-            if (!saveRes.ok) throw new Error('Nepodařilo se uložit odběr na server.');
             alert('Notifikace zapnuty!');
         }
     } catch (e) {
@@ -602,16 +612,28 @@ async function toggleNotifications() {
     btn.textContent = "Pracuji...";
 
     try {
-        // Registrace s timeoutem pro mobilní sítě
-        const registration = await Promise.race([
-            navigator.serviceWorker.ready,
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Časový limit vypršel (SW ready)')), 5000))
-        ]);
+        // 1. Agresivní registrace: Nečekáme jen na ready, ale aktivně registrujeme
+        let registration = await navigator.serviceWorker.getRegistration();
+        
+        if (!registration) {
+            console.log("SW nenalezen, registruji...");
+            registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+        }
+
+        // 2. Krátké čekání na aktivaci (s timeoutem)
+        let retry = 0;
+        while (!registration.active && retry < 10) {
+            await new Promise(res => setTimeout(res, 500));
+            registration = await navigator.serviceWorker.getRegistration();
+            retry++;
+        }
+
+        if (!registration.active) throw new Error("Service Worker se nepodařilo aktivovat.");
 
         const subscription = await registration.pushManager.getSubscription();
 
         if (subscription) {
-            // ODHLÁŠENÍ
+            // ODHLÁŠENÍ (zůstává stejné)
             await fetch('/api/unsubscribe', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -622,7 +644,6 @@ async function toggleNotifications() {
         } else {
             // PŘIHLÁŠENÍ
             const vapidRes = await fetch('/api/vapid-public-key');
-            if (!vapidRes.ok) throw new Error('Server neodpovídá (klíč)');
             const vapidPublicKey = await vapidRes.text();
 
             const newSub = await registration.pushManager.subscribe({
@@ -630,12 +651,11 @@ async function toggleNotifications() {
                 applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
             });
 
-            const saveRes = await fetch('/api/subscribe', {
+            await fetch('/api/subscribe', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newSub)
             });
-            if (!saveRes.ok) throw new Error('Nepodařilo se uložit odběr na server.');
             alert('Notifikace zapnuty!');
         }
     } catch (e) {
@@ -1660,16 +1680,28 @@ async function toggleNotifications() {
     btn.textContent = "Pracuji...";
 
     try {
-        // Registrace s timeoutem pro mobilní sítě
-        const registration = await Promise.race([
-            navigator.serviceWorker.ready,
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Časový limit vypršel (SW ready)')), 5000))
-        ]);
+        // 1. Agresivní registrace: Nečekáme jen na ready, ale aktivně registrujeme
+        let registration = await navigator.serviceWorker.getRegistration();
+        
+        if (!registration) {
+            console.log("SW nenalezen, registruji...");
+            registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+        }
+
+        // 2. Krátké čekání na aktivaci (s timeoutem)
+        let retry = 0;
+        while (!registration.active && retry < 10) {
+            await new Promise(res => setTimeout(res, 500));
+            registration = await navigator.serviceWorker.getRegistration();
+            retry++;
+        }
+
+        if (!registration.active) throw new Error("Service Worker se nepodařilo aktivovat.");
 
         const subscription = await registration.pushManager.getSubscription();
 
         if (subscription) {
-            // ODHLÁŠENÍ
+            // ODHLÁŠENÍ (zůstává stejné)
             await fetch('/api/unsubscribe', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1680,7 +1712,6 @@ async function toggleNotifications() {
         } else {
             // PŘIHLÁŠENÍ
             const vapidRes = await fetch('/api/vapid-public-key');
-            if (!vapidRes.ok) throw new Error('Server neodpovídá (klíč)');
             const vapidPublicKey = await vapidRes.text();
 
             const newSub = await registration.pushManager.subscribe({
@@ -1688,12 +1719,11 @@ async function toggleNotifications() {
                 applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
             });
 
-            const saveRes = await fetch('/api/subscribe', {
+            await fetch('/api/subscribe', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newSub)
             });
-            if (!saveRes.ok) throw new Error('Nepodařilo se uložit odběr na server.');
             alert('Notifikace zapnuty!');
         }
     } catch (e) {

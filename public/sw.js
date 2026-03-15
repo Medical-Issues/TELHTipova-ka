@@ -1,5 +1,12 @@
 console.log("Service Worker Loaded...");
+// Force update - okamžitá aktivace nové verze
+self.addEventListener('install', event => {
+    self.skipWaiting();
+});
 
+self.addEventListener('activate', event => {
+    event.waitUntil(clients.claim());
+});
 // 1. PŘÍJEM NOTIFIKACE
 self.addEventListener('push', e => {
     const payload = e.data.json();
