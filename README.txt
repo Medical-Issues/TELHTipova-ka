@@ -12,6 +12,8 @@ Domyslet baráž ✅
 
 lepší playoff systém ✅
 
+Responzivita
+
 přechod na free databázi z json souborů
 ->
 na základě přechodu zrychlení provozu serveru a funkce převést na asynchronní všude kde to půjde
