@@ -30,8 +30,7 @@ function showTable(which) {
     const p = document.getElementById('playoffTablePreview'); p.style.display = which === 'playoff' ? 'block' : 'none'; 
 }
 
-    // Pomocná funkce pro převod klíče
-// Pomocná funkce zůstává stejná
+ // Převod klíče
 function urlBase64ToUint8Array(base64String) {
     const padding = '='.repeat((4 - base64String.length % 4) % 4);
     const base64 = (base64String + padding).replace(/\\-/g, '+').replace(/_/g, '/');
@@ -49,20 +48,27 @@ async function toggleNotifications() {
     btn.textContent = "Pracuji...";
 
     try {
-        const registration = await navigator.serviceWorker.ready;
+        // Registrace s timeoutem pro mobilní sítě
+        const registration = await Promise.race([
+            navigator.serviceWorker.ready,
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Časový limit vypršel (SW ready)')), 5000))
+        ]);
+
         const subscription = await registration.pushManager.getSubscription();
 
         if (subscription) {
             // ODHLÁŠENÍ
-            await subscription.unsubscribe();
             await fetch('/api/unsubscribe', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ endpoint: subscription.endpoint })
             });
+            await subscription.unsubscribe();
+            alert('Notifikace vypnuty.');
         } else {
             // PŘIHLÁŠENÍ
             const vapidRes = await fetch('/api/vapid-public-key');
+            if (!vapidRes.ok) throw new Error('Server neodpovídá (klíč)');
             const vapidPublicKey = await vapidRes.text();
 
             const newSub = await registration.pushManager.subscribe({
@@ -70,11 +76,13 @@ async function toggleNotifications() {
                 applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
             });
 
-            await fetch('/api/subscribe', {
+            const saveRes = await fetch('/api/subscribe', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newSub)
             });
+            if (!saveRes.ok) throw new Error('Nepodařilo se uložit odběr na server.');
+            alert('Notifikace zapnuty!');
         }
     } catch (e) {
         console.error(e);
@@ -89,18 +97,16 @@ async function checkSubscriptionStatus() {
     const btn = document.getElementById('notify-toggle-btn');
     if (!btn) return;
 
-    // KONTROLA PODPORY (Důležité pro iPhone!)
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-        btn.textContent = "Notifikace nepodporovány";
-        btn.style.backgroundColor = "#222";
+        btn.textContent = "Nepodporováno";
         btn.disabled = true;
-        btn.title = "Na iPhone musíte web přidat na plochu.";
         return;
     }
 
     try {
-        const registration = await navigator.serviceWorker.ready;
-        const subscription = await registration.pushManager.getSubscription();
+        // Kontrola stavu bez zbytečného čekání
+        const registration = await navigator.serviceWorker.getRegistration();
+        const subscription = registration ? await registration.pushManager.getSubscription() : null;
 
         if (subscription) {
             btn.textContent = "Vypnout notifikace 🔕";
@@ -110,11 +116,10 @@ async function checkSubscriptionStatus() {
             btn.style.backgroundColor = "#ff4500";
         }
     } catch (e) {
-        btn.textContent = "Chyba načítání";
+        btn.textContent = "Klikni pro stav";
     }
 }
 
-// Spustíme hned po načtení
 document.addEventListener('DOMContentLoaded', checkSubscriptionStatus);
 
 </script>
@@ -579,7 +584,7 @@ function showTable(which) {
     const p = document.getElementById('playoffTablePreview'); p.style.display = which === 'playoff' ? 'block' : 'none'; 
 }
 
-// Pomocná funkce zůstává stejná
+// Převod klíče
 function urlBase64ToUint8Array(base64String) {
     const padding = '='.repeat((4 - base64String.length % 4) % 4);
     const base64 = (base64String + padding).replace(/\\-/g, '+').replace(/_/g, '/');
@@ -597,20 +602,27 @@ async function toggleNotifications() {
     btn.textContent = "Pracuji...";
 
     try {
-        const registration = await navigator.serviceWorker.ready;
+        // Registrace s timeoutem pro mobilní sítě
+        const registration = await Promise.race([
+            navigator.serviceWorker.ready,
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Časový limit vypršel (SW ready)')), 5000))
+        ]);
+
         const subscription = await registration.pushManager.getSubscription();
 
         if (subscription) {
             // ODHLÁŠENÍ
-            await subscription.unsubscribe();
             await fetch('/api/unsubscribe', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ endpoint: subscription.endpoint })
             });
+            await subscription.unsubscribe();
+            alert('Notifikace vypnuty.');
         } else {
             // PŘIHLÁŠENÍ
             const vapidRes = await fetch('/api/vapid-public-key');
+            if (!vapidRes.ok) throw new Error('Server neodpovídá (klíč)');
             const vapidPublicKey = await vapidRes.text();
 
             const newSub = await registration.pushManager.subscribe({
@@ -618,11 +630,13 @@ async function toggleNotifications() {
                 applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
             });
 
-            await fetch('/api/subscribe', {
+            const saveRes = await fetch('/api/subscribe', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newSub)
             });
+            if (!saveRes.ok) throw new Error('Nepodařilo se uložit odběr na server.');
+            alert('Notifikace zapnuty!');
         }
     } catch (e) {
         console.error(e);
@@ -637,18 +651,16 @@ async function checkSubscriptionStatus() {
     const btn = document.getElementById('notify-toggle-btn');
     if (!btn) return;
 
-    // KONTROLA PODPORY (Důležité pro iPhone!)
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-        btn.textContent = "Notifikace nepodporovány";
-        btn.style.backgroundColor = "#222";
+        btn.textContent = "Nepodporováno";
         btn.disabled = true;
-        btn.title = "Na iPhone musíte web přidat na plochu.";
         return;
     }
 
     try {
-        const registration = await navigator.serviceWorker.ready;
-        const subscription = await registration.pushManager.getSubscription();
+        // Kontrola stavu bez zbytečného čekání
+        const registration = await navigator.serviceWorker.getRegistration();
+        const subscription = registration ? await registration.pushManager.getSubscription() : null;
 
         if (subscription) {
             btn.textContent = "Vypnout notifikace 🔕";
@@ -658,11 +670,10 @@ async function checkSubscriptionStatus() {
             btn.style.backgroundColor = "#ff4500";
         }
     } catch (e) {
-        btn.textContent = "Chyba načítání";
+        btn.textContent = "Klikni pro stav";
     }
 }
 
-// Spustíme hned po načtení
 document.addEventListener('DOMContentLoaded', checkSubscriptionStatus);
 
 </script>
@@ -1631,7 +1642,7 @@ function showTable(which) {
     const p = document.getElementById('playoffTablePreview'); p.style.display = which === 'playoff' ? 'block' : 'none'; 
 }
 
- // Pomocná funkce zůstává stejná
+// Převod klíče
 function urlBase64ToUint8Array(base64String) {
     const padding = '='.repeat((4 - base64String.length % 4) % 4);
     const base64 = (base64String + padding).replace(/\\-/g, '+').replace(/_/g, '/');
@@ -1649,20 +1660,27 @@ async function toggleNotifications() {
     btn.textContent = "Pracuji...";
 
     try {
-        const registration = await navigator.serviceWorker.ready;
+        // Registrace s timeoutem pro mobilní sítě
+        const registration = await Promise.race([
+            navigator.serviceWorker.ready,
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Časový limit vypršel (SW ready)')), 5000))
+        ]);
+
         const subscription = await registration.pushManager.getSubscription();
 
         if (subscription) {
             // ODHLÁŠENÍ
-            await subscription.unsubscribe();
             await fetch('/api/unsubscribe', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ endpoint: subscription.endpoint })
             });
+            await subscription.unsubscribe();
+            alert('Notifikace vypnuty.');
         } else {
             // PŘIHLÁŠENÍ
             const vapidRes = await fetch('/api/vapid-public-key');
+            if (!vapidRes.ok) throw new Error('Server neodpovídá (klíč)');
             const vapidPublicKey = await vapidRes.text();
 
             const newSub = await registration.pushManager.subscribe({
@@ -1670,11 +1688,13 @@ async function toggleNotifications() {
                 applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
             });
 
-            await fetch('/api/subscribe', {
+            const saveRes = await fetch('/api/subscribe', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newSub)
             });
+            if (!saveRes.ok) throw new Error('Nepodařilo se uložit odběr na server.');
+            alert('Notifikace zapnuty!');
         }
     } catch (e) {
         console.error(e);
@@ -1689,18 +1709,16 @@ async function checkSubscriptionStatus() {
     const btn = document.getElementById('notify-toggle-btn');
     if (!btn) return;
 
-    // KONTROLA PODPORY (Důležité pro iPhone!)
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-        btn.textContent = "Notifikace nepodporovány";
-        btn.style.backgroundColor = "#222";
+        btn.textContent = "Nepodporováno";
         btn.disabled = true;
-        btn.title = "Na iPhone musíte web přidat na plochu.";
         return;
     }
 
     try {
-        const registration = await navigator.serviceWorker.ready;
-        const subscription = await registration.pushManager.getSubscription();
+        // Kontrola stavu bez zbytečného čekání
+        const registration = await navigator.serviceWorker.getRegistration();
+        const subscription = registration ? await registration.pushManager.getSubscription() : null;
 
         if (subscription) {
             btn.textContent = "Vypnout notifikace 🔕";
@@ -1710,12 +1728,12 @@ async function checkSubscriptionStatus() {
             btn.style.backgroundColor = "#ff4500";
         }
     } catch (e) {
-        btn.textContent = "Chyba načítání";
+        btn.textContent = "Klikni pro stav";
     }
 }
 
-// Spustíme hned po načtení
 document.addEventListener('DOMContentLoaded', checkSubscriptionStatus);
+
 </script>
 <body class="usersite">
 <header class="header">

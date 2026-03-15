@@ -36,6 +36,9 @@ app.use('/', userRoutes)
 app.use('/admin', adminRoutes);
 
 app.get('/api/vapid-public-key', (req, res) => {
+    if (!process.env.VAPID_PUBLIC_KEY) {
+        return res.status(500).send("VAPID_PUBLIC_KEY chybí na serveru");
+    }
     res.send(process.env.VAPID_PUBLIC_KEY);
 });
 
@@ -133,7 +136,7 @@ app.post('/api/check-subscription', (req, res) => {
 // Odhlášení z notifikací
 app.post('/api/unsubscribe', (req, res) => {
     const { endpoint } = req.body;
-    const usersPath = './data/users.json';
+    const usersPath = path.join(__dirname, 'data', 'users.json');
     let users = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
 
     const userIndex = users.findIndex(u => u.username === req.session.user);
