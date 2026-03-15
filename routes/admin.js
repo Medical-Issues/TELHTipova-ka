@@ -3133,7 +3133,7 @@ router.get('/playoff/templates', requireAdmin, (req, res) => {
     const tplPath = './data/playoffTemplates.json';
     const templates = fs.existsSync(tplPath) ? JSON.parse(fs.readFileSync(tplPath, 'utf8')) : {};
 
-    let templatesListHTML = '';
+    let templatesListHTML;
     if (Object.keys(templates).length === 0) {
         templatesListHTML = '<p style="color: gray;">Zatím nejsou vytvořeny žádné formáty.</p>';
     } else {
