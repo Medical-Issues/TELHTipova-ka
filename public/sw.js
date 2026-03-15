@@ -1,6 +1,6 @@
 console.log("Service Worker Loaded...");
 // Force update - okamžitá aktivace nové verze
-self.addEventListener('install', event => {
+self.addEventListener('install', () => {
     self.skipWaiting();
 });
 
@@ -15,16 +15,15 @@ self.addEventListener('push', e => {
     e.waitUntil(
         self.registration.showNotification(payload.title, {
             body: payload.body,
-            icon: '/images/logo.png',     // Velká ikona
-            badge: '/images/logo.png',   // Malá notifikační ikona pro lištu na Androidu
+            icon: '/images/logo.png',
+            badge: '/images/logo.png',
+            image: payload.image || null,
+            // --------------------------------
             vibrate: payload.vibrate || [100, 100, 250, 500, 100, 100, 250],
-
-            // Načtení nových vlastností z backendu (pokud tam nejsou, dáme výchozí hodnoty)
             tag: payload.tag || 'obecne-upozorneni',
-            renotify: payload.renotify || false,
+            renotify: true,
             requireInteraction: payload.requireInteraction || false,
             actions: payload.actions || [],
-
             data: {
                 url: payload.url || '/'
             }
