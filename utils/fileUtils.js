@@ -1652,19 +1652,27 @@ function generateLeftPanel(data, isHistory = false) {
     const allTemplates = fs.existsSync(tplPath) ? JSON.parse(fs.readFileSync(tplPath, 'utf8')) : {};
     const currentTemplate = allTemplates[format];
 
+    // TOTO JE NOVÝ KÓD:
     if (currentTemplate) {
         html += `<div id="playoffTablePreview" style="display:${tableMode === 'playoff' ? 'block' : 'none'}; overflow-x:auto; padding: 20px 0; max-width:100%;">
-                 <h2 style="text-align:center; color:white; margin-bottom: 30px;">Playoff - ${selectedLiga} ${selectedSeason}</h2>
-                 <div style="display: flex; gap: 40px; min-width: min-content; margin: 0 auto; justify-content: center;">`;
+                 <h2 style="text-align:center; color:white; margin-bottom: 30px;">Playoff - ${selectedLiga} ${selectedSeason}</h2>`;
 
+        // 1. ŘÁDEK S NADPISY (Odděleno od samotných zápasů)
+        html += `<div style="display: flex; gap: 40px; min-width: min-content; margin: 0 auto 15px auto; justify-content: center;">`;
         currentTemplate.columns.forEach(col => {
+            html += `<div style="width: 170px; text-align:center; color:orangered; font-size:0.8em; font-weight:bold; text-transform:uppercase;">${col.title}</div>`;
+        });
+        html += `</div>`;
+
+        // 2. ŘÁDEK SE SLOUPCI ZÁPASŮ (align-items: stretch zajistí stejnou výšku všech sloupců)
+        html += `<div style="display: flex; gap: 40px; min-width: min-content; margin: 0 auto; justify-content: center; align-items: stretch;">`;
+        currentTemplate.columns.forEach(col => {
+            // Přidán margin-top, který si bere hodnotu z col.gap (např. "60px")
             html += `
-            <div style="display: flex; flex-direction: column; justify-content: space-around; gap: ${col.gap || '20px'};">
-                <div style="text-align:center; color:orangered; font-size:0.8em; font-weight:bold; text-transform:uppercase; margin-bottom: 10px;">${col.title}</div>
+            <div style="display: flex; gap: 20px; flex-direction: column; justify-content: space-around; width: 170px; margin-top: ${col.gap || '0px'};">
                 ${col.slots.map(slotId => renderBox(slotId)).join('')}
             </div>`;
         });
-
         html += `</div></div>`;
     } else {
         html += `<div id="playoffTablePreview" style="display:${tableMode === 'playoff' ? 'block' : 'none'}; width: 100%; text-align: center; padding: 40px 20px; background: #1a1a1a; border-radius: 8px; border: 1px dashed #444;">

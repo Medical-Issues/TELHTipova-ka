@@ -3126,9 +3126,31 @@ router.get('/toggleLocked/:id', requireAdmin, (req, res) => {
     res.redirect('/admin');
 });
 
+// ==========================================
+// SPRÁVA TEMPLATŮ PRO PLAYOFF (VÝPIS A TVORBA)
+// ==========================================
 router.get('/playoff/templates', requireAdmin, (req, res) => {
     const tplPath = './data/playoffTemplates.json';
     const templates = fs.existsSync(tplPath) ? JSON.parse(fs.readFileSync(tplPath, 'utf8')) : {};
+
+    let templatesListHTML = '';
+    if (Object.keys(templates).length === 0) {
+        templatesListHTML = '<p style="color: gray;">Zatím nejsou vytvořeny žádné formáty.</p>';
+    } else {
+        templatesListHTML = Object.keys(templates).map(key => `
+            <div style="background: #1a1a1a; padding: 15px; margin-bottom: 10px; border: 1px solid #333; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <strong style="color: orangered; font-size: 1.2em;">${templates[key].label}</strong> <span style="color: gray;">(${key})</span>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <a href="/admin/playoff/templates/edit/${key}" class="action-btn edit-btn">Upravit</a>
+                    <form action="/admin/playoff/templates/delete/${key}" method="POST" style="display:inline;" onsubmit="return confirm('Opravdu smazat formát ${key}?');">
+                        <button type="submit" class="action-btn delete-btn">Smazat</button>
+                    </form>
+                </div>
+            </div>
+        `).join('');
+    }
 
     res.send(`
         <!DOCTYPE html>
@@ -3139,24 +3161,28 @@ router.get('/playoff/templates', requireAdmin, (req, res) => {
         <link rel="icon" href="/images/logo.png"/>
         </head>
         <body class="admin_site">
-            <h1>Editor formátů playoff</h1>
-            <div style="background: #1a1a1a; padding: 20px; border: 1px solid #333;">
+            <h1>Správa formátů playoff</h1>
+            <div style="background: #1a1a1a; padding: 20px; border: 1px solid #333; margin-bottom: 20px;">
+                <h2>Vytvořit nový formát</h2>
                 <form action="/admin/playoff/templates/save" method="POST">
-                    <label>Kód formátu (bez mezer, např. spengler_6): <input type="text" name="key" required class="league-select"></label><br><br>
-                    <label>Název (pro lidi): <input type="text" name="label" required class="league-select"></label><br><br>
+                    <label>Kód formátu (bez mezer, např. spengler_6): <input type="text" name="key" required class="league-select" style="width: 250px;"></label><br><br>
+                    <label>Název (pro lidi): <input type="text" name="label" required class="league-select" style="width: 250px;"></label><br><br>
                     <label>JSON struktura sloupců (viz manuál):<br>
-                        <textarea name="structure" style="width:100%; height:200px; background:#000; color:lime; font-family:monospace;">[
+                        <textarea name="structure" style="width:100%; height:150px; background:#000; color:lime; font-family:monospace; padding: 10px;">[
   { "title": "Čtvrtfinále", "slots": ["qf1", "qf2"], "gap": "60px" },
   { "title": "Semifinále", "slots": ["sf1", "sf2"], "gap": "30px" },
   { "title": "Finále", "slots": ["fin"], "gap": "30px" }
 ]</textarea>
                     </label><br>
-                    <button type="submit" class="action-btn edit-btn">Uložit nový formát</button>
+                    <button type="submit" class="action-btn edit-btn" style="margin-top: 10px;">Uložit nový formát</button>
                 </form>
             </div>
-            <a href="/admin/playoff">← Zpět na Playoff</a>
-            <h3>Stávající formáty:</h3>
-            <pre style="color: gray;">${JSON.stringify(templates, null, 2)}</pre>
+            
+            <h2>Stávající formáty</h2>
+            ${templatesListHTML}
+
+            <br>
+            <a href="/admin/playoff" class="back-link">← Zpět na Playoff</a>
         </body></html>
     `);
 });
@@ -3173,6 +3199,77 @@ router.post('/playoff/templates/save', requireAdmin, (req, res) => {
     } catch (e) {
         res.status(400).send("Chyba v JSON struktuře!");
     }
+});
+
+// ==========================================
+// UPRAVIT EXISTUJÍCÍ FORMÁT
+// ==========================================
+router.get('/playoff/templates/edit/:key', requireAdmin, (req, res) => {
+    const key = req.params.key;
+    const tplPath = './data/playoffTemplates.json';
+    const templates = fs.existsSync(tplPath) ? JSON.parse(fs.readFileSync(tplPath, 'utf8')) : {};
+
+    const template = templates[key];
+    if (!template) return res.status(404).send("Formát nenalezen.");
+
+    // Převedeme zpět na text, aby šel editovat
+    const jsonString = JSON.stringify(template.columns, null, 2);
+
+    res.send(`
+        <!DOCTYPE html>
+        <html lang="cs">
+        <head><meta charset="UTF-8">
+        <title>Upravit formát</title>
+        <link rel="stylesheet" href="/css/styles.css">
+        <link rel="icon" href="/images/logo.png"/>
+        </head>
+        <body class="admin_site">
+            <h1>Upravit formát playoff: <span style="color: orangered;">${key}</span></h1>
+            <div style="background: #1a1a1a; padding: 20px; border: 1px solid #333; margin-bottom: 20px;">
+                <form action="/admin/playoff/templates/edit/${key}" method="POST">
+                    <label>Název (pro lidi): <br><input type="text" name="label" value="${template.label}" required class="league-select" style="width: 300px; margin-top: 5px;"></label><br><br>
+                    <label>JSON struktura sloupců:<br>
+                        <textarea name="structure" style="width:100%; height:300px; background:#000; color:lime; font-family:monospace; padding: 10px; margin-top: 5px;">${jsonString}</textarea>
+                    </label><br>
+                    <button type="submit" class="action-btn edit-btn" style="margin-top: 15px;">Uložit změny</button>
+                </form>
+            </div>
+            <a href="/admin/playoff/templates" class="back-link">← Zpět na seznam formátů</a>
+        </body></html>
+    `);
+});
+
+router.post('/playoff/templates/edit/:key', requireAdmin, (req, res) => {
+    const key = req.params.key;
+    const { label, structure } = req.body;
+    const tplPath = './data/playoffTemplates.json';
+    let templates = fs.existsSync(tplPath) ? JSON.parse(fs.readFileSync(tplPath, 'utf8')) : {};
+
+    if (!templates[key]) return res.status(404).send("Formát nenalezen.");
+
+    try {
+        templates[key].label = label;
+        templates[key].columns = JSON.parse(structure);
+        fs.writeFileSync(tplPath, JSON.stringify(templates, null, 2));
+        res.redirect('/admin/playoff/templates');
+    } catch (e) {
+        res.status(400).send("Chyba v JSON struktuře!");
+    }
+});
+
+// ==========================================
+// SMAZAT FORMÁT
+// ==========================================
+router.post('/playoff/templates/delete/:key', requireAdmin, (req, res) => {
+    const key = req.params.key;
+    const tplPath = './data/playoffTemplates.json';
+    let templates = fs.existsSync(tplPath) ? JSON.parse(fs.readFileSync(tplPath, 'utf8')) : {};
+
+    if (templates[key]) {
+        delete templates[key];
+        fs.writeFileSync(tplPath, JSON.stringify(templates, null, 2));
+    }
+    res.redirect('/admin/playoff/templates');
 });
 
 module.exports = router;
