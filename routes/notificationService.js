@@ -2,6 +2,7 @@ const webpush = require('web-push');
 const cron = require('node-cron');
 const fs = require('fs');
 const path = require('path');
+const { createCanvas, loadImage } = require('canvas'); // NOVÝ IMPORT
 require('dotenv').config();
 
 // --- NASTAVENÍ KLÍČŮ ---
@@ -13,7 +14,7 @@ if (!publicVapidKey || !privateVapidKey) {
 }
 
 webpush.setVapidDetails(
-    'mailto:admin@tvoje-domena.cz', // Kontaktní email
+    'mailto:veselsky.honza@gmail.com',
     publicVapidKey,
     privateVapidKey
 );
@@ -32,6 +33,116 @@ const getTeams = () => {
     catch (e) { return []; }
 };
 
+// --- FUNKCE PRO VYTVOŘENÍ "VERSUS" OBRÁZKU ---
+async function createVersusImage(homeTeam, awayTeam, matchId) {
+    if (!homeTeam || !awayTeam) return null;
+
+    // Připravíme si složku, kam se budou notifikační obrázky ukládat
+    const outDir = path.join(__dirname, '../public/images/notifications');
+    if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+
+    const outPath = path.join(outDir, `match-${matchId}.png`);
+    const publicUrl = `/images/notifications/match-${matchId}.png`;
+
+    // Vytvoříme plátno o velikosti 800x400 (ideální 2:1 poměr pro notifikace)
+    const width = 800;
+    const height = 400;
+    const canvas = createCanvas(width, height);
+    const ctx = canvas.getContext('2d');
+
+    // Vykreslíme tmavé pozadí
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(0, 0, width, height);
+
+    // Doprostřed napíšeme velkým písmem "VS"
+    ctx.fillStyle = '#ff4500'; // Oranžovo-červená (podle tvého webu)
+    ctx.font = 'bold 80px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('VS', width / 2, height / 2);
+
+    // Načteme a vykreslíme logo domácích (vlevo)
+    if (homeTeam.logo) {
+        try {
+            const homeImgPath = path.join(__dirname, '../data/images', homeTeam.logo);
+            const homeImg = await loadImage(homeImgPath);
+            // Nakreslíme logo: x=50, y=50, šířka=300, výška=300
+            ctx.drawImage(homeImg, 50, 50, 300, 300);
+        } catch (e) {
+            console.error("Nepodařilo se načíst logo domácích:", e.message);
+        }
+    }
+
+    // Načteme a vykreslíme logo hostů (vpravo)
+    if (awayTeam.logo) {
+        try {
+            const awayImgPath = path.join(__dirname, '../data/images', awayTeam.logo);
+            const awayImg = await loadImage(awayImgPath);
+            // Nakreslíme logo: x=450, y=50, šířka=300, výška=300
+            ctx.drawImage(awayImg, 450, 50, 300, 300);
+        } catch (e) {
+            console.error("Nepodařilo se načíst logo hostů:", e.message);
+        }
+    }
+
+    // Uložíme plátno jako reálný obrázek do složky public
+    const buffer = canvas.toBuffer('image/png');
+    fs.writeFileSync(outPath, buffer);
+
+    return publicUrl;
+}
+
+// ... TVOJE ODESÍLACÍ FUNKCE A NOTIFY FUNKCE TADY ZŮSTÁVAJÍ (nechal jsem je beze změny) ...
+
+// --- FUNKCE PRO VYTVOŘENÍ OBRÁZKU VÝMĚNY (TRADE) ---
+async function createTransferImage(team1, team2) {
+    if (!team1 || !team2) return null;
+
+    const outDir = path.join(__dirname, '../public/images/notifications');
+    if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+
+    // Vytvoříme název na základě ID týmů
+    const outPath = path.join(outDir, `transfer-${team1.id}-${team2.id}.png`);
+    const publicUrl = `/images/notifications/transfer-${team1.id}-${team2.id}.png`;
+
+    const width = 800;
+    const height = 400;
+    const canvas = createCanvas(width, height);
+    const ctx = canvas.getContext('2d');
+
+    // Tmavé pozadí
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(0, 0, width, height);
+
+    // Text uprostřed (modrý, hodí se k přestupům)
+    ctx.fillStyle = '#00d4ff';
+    ctx.font = 'bold 50px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('PŘESTUP', width / 2, height / 2);
+
+    // Nakreslení levého loga
+    if (team1.logo) {
+        try {
+            const img1 = await loadImage(path.join(__dirname, '../data/images', team1.logo));
+            ctx.drawImage(img1, 50, 50, 300, 300);
+        } catch (e) { console.error("Chyba načtení loga 1:", e); }
+    }
+
+    // Nakreslení pravého loga
+    if (team2.logo) {
+        try {
+            const img2 = await loadImage(path.join(__dirname, '../data/images', team2.logo));
+            ctx.drawImage(img2, 450, 50, 300, 300);
+        } catch (e) { console.error("Chyba načtení loga 2:", e); }
+    }
+
+    const buffer = canvas.toBuffer('image/png');
+    fs.writeFileSync(outPath, buffer);
+
+    return publicUrl;
+}
+
 // --- ODESÍLACÍ FUNKCE PRO JEDNOHO UŽIVATELE (ZVLÁDNE VÍCE ZAŘÍZENÍ) ---
 const sendToUserDevices = (user, payload) => {
     let hasChanges = false;
@@ -45,10 +156,13 @@ const sendToUserDevices = (user, payload) => {
     }
 
     if (!user.subscriptions || user.subscriptions.length === 0) return;
-
+    const options = {
+        // Pokud payload obsahuje ttl (v sekundách), použijeme ho. Jinak dáme default 24 hodin (86400)
+        TTL: payload.ttl || 86400
+    };
     // 2. Projdeme všechna zařízení uživatele a odešleme notifikaci
     const promises = user.subscriptions.map(sub => {
-        return webpush.sendNotification(sub, JSON.stringify(payload))
+        return webpush.sendNotification(sub, JSON.stringify(payload), options)
             .then(() => {
                 activeSubscriptions.push(sub); // Odeslání úspěšné, ponecháme
             })
@@ -83,15 +197,21 @@ const sendToUserDevices = (user, payload) => {
 
 const notifyNewMatches = () => {
     const payload = {
-        title: "🏒 Nové zápasy/série!",
-        body: "Byly vypsány nové zápasy k tipování. Nezapomeň si tipnout!",
+        title: "🏒 Nové zápasy k tipování!",
+        body: "Byly vypsány nové zápasy nebo série. Nezapomeň si tipnout co nejdříve!",
         icon: '/images/logo.png',
-        url: '/'
+        vibrate: [100, 100, 250, 500, 100, 100, 250],
+        url: '/',
+        requireInteraction: true,
+        actions: [
+            { action: 'open_match', title: 'Jdu tipnout! 🚀' },
+            { action: 'close', title: 'Zavřít' }
+        ]
     };
     getUsers().forEach(u => sendToUserDevices(u, payload));
 };
 
-const notifyResult = (matchId, scoreHome, scoreAway) => {
+const notifyResult = async (matchId, scoreHome, scoreAway) => {
     const matches = getMatches();
     const match = matches.find(m => m.id === parseInt(matchId));
     if (!match) return;
@@ -113,18 +233,34 @@ const notifyResult = (matchId, scoreHome, scoreAway) => {
         body = `Výsledek: ${homeTeam.name} ${scoreHome}:${scoreAway}${otText} ${awayTeam.name}`;
     }
 
+    // VYGENEROVÁNÍ DYNAMICKÉHO OBRÁZKU
+    let heroImageUrl = null;
+    try {
+        heroImageUrl = await createVersusImage(homeTeam, awayTeam, match.id);
+    } catch (err) {
+        console.error("Chyba při generování Versus obrázku:", err);
+    }
+
     const payload = {
         title,
         body,
         icon: '/images/logo.png',
-        url: `/?liga=${encodeURIComponent(match.liga)}`
+        image: heroImageUrl, // PŘIDANÝ OBRÁZEK
+        vibrate: [200, 200, 200, 400, 100, 100, 100, 100, 100], // Oslavné skandování
+        url: `/?liga=${encodeURIComponent(match.liga)}`,
+        tag: `vyhodnoceni-${match.id}`, // Aby to nepřekrývalo zbytečně všechno
+        requireInteraction: true,
+        actions: [
+            { action: 'open_match', title: 'Kouknout na tabulku' },
+            { action: 'close', title: 'Zavřít' }
+        ]
     };
 
     getUsers().forEach(u => sendToUserDevices(u, payload));
 };
 
 // PRŮBĚŽNÝ STAV SÉRIE (Nová smysluplná funkce pro jednotlivé zápasy série)
-const notifySeriesProgress = (matchId, matchIndex, scoreHome, scoreAway, ot, seriesScoreH, seriesScoreA) => {
+const notifySeriesProgress = async (matchId, matchIndex, scoreHome, scoreAway, ot, seriesScoreH, seriesScoreA) => {
     const matches = getMatches();
     const match = matches.find(m => m.id === parseInt(matchId));
     if (!match) return;
@@ -133,19 +269,34 @@ const notifySeriesProgress = (matchId, matchIndex, scoreHome, scoreAway, ot, ser
     const homeTeam = teams.find(t => t.id === match.homeTeamId);
     const awayTeam = teams.find(t => t.id === match.awayTeamId);
     if (!homeTeam || !awayTeam) return;
+
+    // VYGENEROVÁNÍ DYNAMICKÉHO OBRÁZKU
+    let heroImageUrl = null;
+    try {
+        heroImageUrl = await createVersusImage(homeTeam, awayTeam, match.id);
+    } catch (err) {
+        console.error("Chyba při generování Versus obrázku:", err);
+    }
 
     const otText = ot ? " pp" : "";
     const payload = {
         title: `🏒 Playoff: ${homeTeam.name} vs ${awayTeam.name}`,
         body: `${matchIndex}. zápas: ${scoreHome}:${scoreAway}${otText} | Průběžný stav série: ${seriesScoreH}:${seriesScoreA}`,
         icon: '/images/logo.png',
-        url: `/?liga=${encodeURIComponent(match.liga)}`
+        image: heroImageUrl, // PŘIDANÝ OBRÁZEK
+        vibrate: [200, 200, 200, 400, 100, 100, 100, 100, 100],
+        url: `/?liga=${encodeURIComponent(match.liga)}`,
+        tag: `serie-progress-${match.id}`,
+        actions: [
+            { action: 'open_match', title: 'Zobrazit pavouka' },
+            { action: 'close', title: 'Zavřít' }
+        ]
     };
 
     getUsers().forEach(u => sendToUserDevices(u, payload));
 };
 
-const notifyMatchUpdate = (matchId, details) => {
+const notifyMatchUpdate = async (matchId, details) => {
     const matches = getMatches();
     const match = matches.find(m => m.id === parseInt(matchId));
     if (!match) return;
@@ -155,6 +306,14 @@ const notifyMatchUpdate = (matchId, details) => {
     const awayTeam = teams.find(t => t.id === match.awayTeamId);
 
     if (!homeTeam || !awayTeam) return;
+
+    // VYGENEROVÁNÍ DYNAMICKÉHO OBRÁZKU
+    let heroImageUrl = null;
+    try {
+        heroImageUrl = await createVersusImage(homeTeam, awayTeam, match.id);
+    } catch (err) {
+        console.error("Chyba při generování Versus obrázku:", err);
+    }
 
     const matchTypeStr = (match.isPlayoff && match.bo > 1) ? "série" : "zápasu";
 
@@ -162,34 +321,76 @@ const notifyMatchUpdate = (matchId, details) => {
         title: `⚠️ Změna u ${matchTypeStr}!`,
         body: `${homeTeam.name} vs ${awayTeam.name}\nDetaily: ${details}`,
         icon: '/images/logo.png',
-        url: `/?liga=${encodeURIComponent(match.liga)}`
+        image: heroImageUrl, // PŘIDANÝ OBRÁZEK
+        vibrate: [50, 50, 50, 50, 50, 50], // Rychlý poplach
+        url: `/?liga=${encodeURIComponent(match.liga)}`,
+        tag: `update-${match.id}`
     };
 
     getUsers().forEach(u => sendToUserDevices(u, payload));
 };
 
-const notifyTransfer = (message) => {
+// ZMĚNA: Přidáno async a parametr involvedTeams
+const notifyTransfer = async (message, involvedTeams = []) => {
+    let heroImageUrl = null;
+
+    // Pokud se měnil jen 1 tým, použijeme rovnou jeho logo na celou šířku
+    if (involvedTeams.length === 1 && involvedTeams[0].logo) {
+        heroImageUrl = `/logoteamu/${encodeURIComponent(involvedTeams[0].logo)}`;
+    }
+    // Pokud se měnily přesně 2 týmy, vygenerujeme koláž z plátna
+    else if (involvedTeams.length === 2) {
+        try {
+            heroImageUrl = await createTransferImage(involvedTeams[0], involvedTeams[1]);
+        } catch (err) {
+            console.error("Chyba při tvorbě obrázku přestupu:", err);
+        }
+    }
+    // Pokud je týmů více (např. jsi uložil změny u 5 týmů najednou), obrázek necháme null
+    // (Případně sem později můžeš dopsat: heroImageUrl = '/images/notifications/general-transfer.jpg';)
+
     const payload = {
-        title: "🔄 Nové přestupy!",
+        title: "🔄 Nové pohyby v kádru!",
         body: message,
         icon: '/images/logo.png',
-        url: '/prestupy'
+        image: heroImageUrl, // PŘIDÁNO LOKÁLNÍ LOGO / VYGENEROVANÝ OBRÁZEK
+        vibrate: [200, 100, 200, 100, 200], // Speciální "dvojité" vrnění
+        url: '/prestupy',
+        requireInteraction: true,
+        actions: [
+            { action: 'open_transfers', title: 'Kouknout na tabulku přestupů 👀' },
+            { action: 'close', title: 'Zavřít' }
+        ]
     };
     getUsers().forEach(u => sendToUserDevices(u, payload));
 };
 
 const notifyLeagueEnd = (liga) => {
     const payload = {
-        title: "🏁 Základní část skončila!",
-        body: `Základní část ligy ${liga} byla ukončena. Podívej se na konečné pořadí a rozdělení bodů za tabulku!`,
+        title: `🏁 Základní část ${liga} skončila!`,
+        body: `Základní část ligy ${liga} byla právě ukončena. Běž se podívat na konečné pořadí a zkontroluj, kolik bodů jsi získal za svůj tip tabulky! 🏆`,
         icon: '/images/logo.png',
-        url: `/history/table/?liga=${encodeURIComponent(liga)}`
+
+        vibrate: [300, 100, 300, 100, 300, 400, 200, 200, 200], // Slavnostní dlouhé vibrace (fanfára/skandování)
+
+        // Chování
+        url: `/history/table/?liga=${encodeURIComponent(liga)}`,
+        tag: `konec-ligy-${liga}`,
+        requireInteraction: true, // Tohle nesmí uživatel minout, zpráva nezmizí sama
+
+        // Tlačítka
+        actions: [
+            { action: 'open_table', title: 'Ukázat konečnou tabulku 🏆' },
+            { action: 'close', title: 'Zavřít' }
+        ]
     };
+
     getUsers().forEach(u => sendToUserDevices(u, payload));
 };
 
 // --- AUTOMATICKÉ NOTIFIKACE (CRON) ---
-cron.schedule('0 * * * *', () => {
+// Změna: přidali jsme 'async' před callback funkci
+cron.schedule('0 * * * *', async () => {
     const now = new Date();
     const matches = getMatches();
     const users = getUsers();
@@ -201,7 +402,7 @@ cron.schedule('0 * * * *', () => {
         { diffMs: 60 * 60 * 1000, type: "1h" }
     ];
 
-    targetTimes.forEach(({ diffMs, type }) => {
+    for (const { diffMs, type } of targetTimes) {
         const targetTime = new Date(now.getTime() + diffMs);
 
         const upcomingMatches = matches.filter(m => {
@@ -215,17 +416,29 @@ cron.schedule('0 * * * *', () => {
             );
         });
 
-        if (upcomingMatches.length === 0) return;
+        if (upcomingMatches.length === 0) continue;
 
         const teams = getTeams();
 
-        upcomingMatches.forEach(match => {
-            const homeName = teams.find(t => t.id === match.homeTeamId)?.name || 'Neznámý tým';
-            const awayName = teams.find(t => t.id === match.awayTeamId)?.name || 'Neznámý tým';
+        // Změna: Používáme for...of místo forEach, abychom mohli počkat na obrázek
+        for (const match of upcomingMatches) {
+            const homeTeam = teams.find(t => t.id === match.homeTeamId);
+            const awayTeam = teams.find(t => t.id === match.awayTeamId);
+
+            const homeName = homeTeam?.name || 'Neznámý tým';
+            const awayName = awayTeam?.name || 'Neznámý tým';
 
             const isSeries = match.isPlayoff && match.bo > 1;
             const matchTypeStr = isSeries ? "sérii" : "zápas";
             const matchTypeSubj = isSeries ? "série" : "zápas";
+
+            // VYGENERUJEME OBRÁZEK PRO TENTO ZÁPAS
+            let heroImageUrl = null;
+            try {
+                heroImageUrl = await createVersusImage(homeTeam, awayTeam, match.id);
+            } catch (err) {
+                console.error("Chyba při generování Versus obrázku:", err);
+            }
 
             users.forEach(u => {
                 if (!u.subscriptions || u.subscriptions.length === 0) return;
@@ -238,9 +451,18 @@ cron.schedule('0 * * * *', () => {
                     console.log(`[CRON] Posílám ${type} upozornění že nemá tip: ${u.username} (${homeName} vs ${awayName})`);
                     sendToUserDevices(u, {
                         title: type === "4h" ? "🔔 Nezapomeň si tipnout!" : "⏳ Poslední šance!",
+                        TTL: type === "4h" ? 14400 : 3600,
                         body: `Za ${timeText} začíná ${matchTypeSubj} ${homeName} vs ${awayName}. Ještě nemáš tipnuto na tuto ${matchTypeStr}!`,
                         icon: '/images/logo.png',
-                        url: `/?liga=${encodeURIComponent(match.liga)}`
+                        image: heroImageUrl, // PŘIDANÝ VYGENEROVANÝ OBRÁZEK
+                        vibrate: [50, 50, 50, 50, 50, 50, 50, 50],
+                        url: `/?liga=${encodeURIComponent(match.liga)}`,
+                        tag: `zapas-${match.id}`,
+                        requireInteraction: true,
+                        actions: [
+                            { action: 'open_match', title: 'Jdu tipnout! 🚀' },
+                            { action: 'close', title: 'Zavřít' }
+                        ]
                     });
                 } else if (hasTip && type === "1h") {
                     console.log(`[CRON] Posílám ${type} upozornění že začíná zápas: ${u.username} (${homeName} vs ${awayName})`);
@@ -248,10 +470,54 @@ cron.schedule('0 * * * *', () => {
                         title: "⏳ Za hodinu už si nezměníš tip!",
                         body: `Za hodinu začíná ${matchTypeSubj} ${homeName} vs ${awayName}.`,
                         icon: '/images/logo.png',
-                        url: `/?liga=${encodeURIComponent(match.liga)}`
+                        image: heroImageUrl, // PŘIDANÝ VYGENEROVANÝ OBRÁZEK
+                        vibrate: [100, 100, 250, 500, 100, 100, 250],
+                        url: `/?liga=${encodeURIComponent(match.liga)}`,
+                        tag: `zapas-${match.id}`,
+                        requireInteraction: false,
+                        actions: [
+                            { action: 'open_match', title: 'Kouknout na tabulku' },
+                            { action: 'close', title: 'Zavřít' }
+                        ]
                     });
                 }
             });
+        }
+    }
+});
+
+// ==========================================
+// AUTOMATICKÝ ÚKLID STARÝCH OBRÁZKŮ
+// ==========================================
+cron.schedule('0 3 * * *', () => { // Spustí se každý den ve 3:00 ráno
+    const dir = path.join(__dirname, '../public/images/notifications');
+    if (!fs.existsSync(dir)) return;
+
+    fs.readdir(dir, (err, files) => {
+        if (err) {
+            console.error("[ÚKLID] Chyba při čtení složky notifikací:", err);
+            return;
+        }
+
+        const now = Date.now();
+        const MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000; // 3 dny v milisekundách
+
+        files.forEach(file => {
+            // Chceme mazat JEN dynamicky generované soubory (zápasy a přestupy)
+            if (file.startsWith('match-') || file.startsWith('transfer-')) {
+                const filePath = path.join(dir, file);
+
+                fs.stat(filePath, (err, stats) => {
+                    if (err) return;
+
+                    // Pokud je soubor starší než 3 dny, smažeme ho
+                    if (now - stats.mtimeMs > MAX_AGE_MS) {
+                        fs.unlink(filePath, err => {
+                            if (!err) console.log(`[ÚKLID] Smazán starý notifikační obrázek: ${file}`);
+                        });
+                    }
+                });
+            }
         });
     });
 });

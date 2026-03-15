@@ -517,27 +517,142 @@ router.get('/teams/edit/:id', requireAdmin, (req, res) => {
     res.send(html);
 });
 
-router.post('/teams/edit/:id', requireAdmin, upload.single('logo'), async (req, res) => {
-    const teamId = parseInt(req.params.id);
-    const teams = loadTeams();
+router.post('/edit/:id', requireAdmin, (req, res) => {
+    const matchId = parseInt(req.params.id);
+    const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'));
 
-    const teamIndex = teams.findIndex(t => t.id === teamId);
-    if (teamIndex === -1) return renderErrorHtml(res, "Tým s tímto ID nebyl nalezen.", 404);
+    const {homeTeamId, awayTeamId, datetime, season, scoreHome, scoreAway} = req.body;
 
-    const {name, liga, active, group} = req.body;
+    const matchIndex = matches.findIndex(m => m.id === matchId);
+    if (matchIndex === -1) return renderErrorHtml(res, "Zápas nebyl nalezen.", 404);
 
-    teams[teamIndex].name = name.trim();
-    teams[teamIndex].liga = liga;
-    teams[teamIndex].active = active === 'on';
-    if (teams.isMultigroup) {
-        teams[teamIndex].group = Number(group);
+    const match = matches[matchIndex];
+    const liga = match.liga;
+
+    // 1. Zjistíme staré hodnoty PŘED úpravou
+    const oldDatetime = match.datetime;
+    const oldPostponed = match.postponed === true;
+
+    // 2. Aktualizace na nové hodnoty
+    match.homeTeamId = parseInt(homeTeamId);
+    match.awayTeamId = parseInt(awayTeamId);
+    match.datetime = datetime;
+    match.season = season;
+    match.isBaraz = req.body.isBaraz === 'on';
+    if (match.isBaraz && req.body.matchLiga) {
+        match.liga = req.body.matchLiga;
     }
-    if (req.file) {
-        teams[teamIndex].logo = req.file.filename;
+    match.isPlayoff = req.body.isPlayoff === 'on';
+    match.postponed = req.body.postponed === 'on';
+    match.locked = req.body.locked === 'on';
+
+    if (match.locked) {
+        removeTipsForDeletedMatch(matchId);
     }
 
-    fs.writeFileSync('./data/teams.json', JSON.stringify(teams, null, 2));
-    logAdminAction(req.session.user, "ÚPRAVA_TÝMU", `Upraven tým ID: ${teamId} (Nový název: ${name})`);
+    if (match.isPlayoff && req.body.bo && !isNaN(parseInt(req.body.bo))) {
+        match.bo = parseInt(req.body.bo);
+    } else {
+        delete match.bo;
+    }
+
+    const isSeries = match.isPlayoff && match.bo > 1;
+
+    // --- ULOŽÍME SI STARÝ POČET ODEHRANÝCH ZÁPASŮ ---
+    const oldPlayedCount = (match.isPlayoff && match.playedMatches) ? match.playedMatches.length : 0;
+
+    if (isSeries) {
+        match.playedMatches = [];
+        let seriesHomeWins = 0;
+        let seriesAwayWins = 0;
+        const requiredWins = Math.ceil(match.bo / 2);
+
+        for (let i = 0; i < match.bo; i++) {
+            const h = req.body[`match_${i}_home`];
+            const a = req.body[`match_${i}_away`];
+            const ot = req.body[`match_${i}_ot`] === 'on';
+            const swap = req.body[`match_${i}_swap`] === 'true';
+
+            if (h !== '' && a !== '' && h !== undefined && a !== undefined) {
+                const sH = parseInt(h);
+                const sA = parseInt(a);
+                match.playedMatches.push({ scoreHome: sH, scoreAway: sA, ot, sideSwap: swap });
+
+                if (sH > sA) seriesHomeWins++;
+                else if (sA > sH) seriesAwayWins++;
+            }
+        }
+
+        // Vyhodnocení série pouze v případě dosažení potřebného počtu výher
+        if (seriesHomeWins >= requiredWins || seriesAwayWins >= requiredWins) {
+            match.result = {
+                scoreHome: seriesHomeWins,
+                scoreAway: seriesAwayWins,
+                winner: seriesHomeWins > seriesAwayWins ? 'home' : 'away'
+            };
+        } else {
+            delete match.result; // Série ještě neskončila
+
+            // --- ODESLÁNÍ PRŮBĚŽNÉHO STAVU SÉRIE ---
+            if (match.playedMatches.length > oldPlayedCount) {
+                const lastM = match.playedMatches[match.playedMatches.length - 1];
+                notif.notifySeriesProgress(matchId, match.playedMatches.length, lastM.scoreHome, lastM.scoreAway, lastM.ot, seriesHomeWins, seriesAwayWins);
+            }
+        }
+    } else {
+        // --- OPRAVA: ZDE CHYBĚLO ULOŽENÍ VÝSLEDKU BĚŽNÉHO ZÁPASU ---
+        if (scoreHome !== '' && scoreAway !== '' && scoreHome !== undefined && scoreAway !== undefined) {
+            match.result = {
+                scoreHome: parseInt(scoreHome),
+                scoreAway: parseInt(scoreAway),
+                ot: req.body.overtime === 'on'
+            };
+        } else {
+            delete match.result;
+        }
+    }
+
+    fs.writeFileSync('./data/matches.json', JSON.stringify(matches, null, 2));
+
+    // 3. NOTIFIKAČNÍ DETEKTIV - Kontrola změn (Pokud NENÍ zadaný výsledek)
+    if (!match.result) {
+        let changes = [];
+
+        if (oldDatetime !== match.datetime) {
+            const [datePart, timePart] = match.datetime.split('T');
+            const [year, month, day] = datePart.split('-');
+            const hezkyCas = `${day}. ${month}. ${year} v ${timePart}`;
+            changes.push(`Nový čas: ${hezkyCas}`);
+        }
+
+        if (!oldPostponed && match.postponed) {
+            changes.push('Zápas byl odložen');
+        } else if (oldPostponed && !match.postponed) {
+            changes.push('Zápas již není odložen');
+        }
+
+        if (changes.length > 0) {
+            notif.notifyMatchUpdate(match.id, changes.join(' | '));
+        }
+    }
+
+    try {
+        if (season && liga) {
+            updateTeamsPoints(matches);
+            evaluateAndAssignPoints(matches[matchIndex].liga, matches[matchIndex].season);
+            evaluateRegularSeasonTable(season, liga);
+
+            // 4. Odeslání výsledku (POUZE pokud má zápas výsledek)
+            if (match.result) {
+                // --- OPRAVA: POSÍLÁME ULOŽENÝ VÝSLEDEK, NIKOLIV SUROVÁ DATA Z FORMULÁŘE ---
+                notif.notifyResult(matchId, match.result.scoreHome, match.result.scoreAway);
+            }
+        }
+    } catch (err) {
+        console.error("Chyba při přepočtech, nebyla odeslána sezóna nebo liga", err);
+    }
+
+    logAdminAction(req.session.user, "ÚPRAVA_ZÁPASU", `Upraven zápas ID: ${matchId} (Liga: ${match.liga})`);
     res.redirect('/admin');
 });
 
@@ -2690,8 +2805,6 @@ router.post('/transfers/save', requireAdmin, express.urlencoded({ extended: true
 
     const { liga, season, t } = req.body;
 
-    // --- DEBUG 1: Co přišlo z formuláře? ---
-    console.log(`PŘIJATÝ POST: Liga: ${liga}, Sezóna: ${season}`);
     if (!t) {
         console.error("CHYBA: Objekt 't' s daty týmů chybí v req.body!");
         return res.redirect('back');
@@ -2716,48 +2829,41 @@ router.post('/transfers/save', requireAdmin, express.urlencoded({ extended: true
     if (!transfersData[season][liga]) transfersData[season][liga] = {};
 
     let newTransfersNotification = [];
+    let involvedTeams = []; // NOVÉ: Pole pro sledování týmů, kterých se změna týká
 
-    // Iterujeme přes týmy
     for (const rawKey in t) {
         const teamId = rawKey.replace('id_', '');
         const teamObj = t[rawKey];
 
         const cleanList = (text) => text ? text.split('\n').map(name => name.trim()).filter(name => name !== "") : [];
 
-        // 1. Načtení nových seznamů z formuláře
         const newConfIn = cleanList(teamObj.confIn);
         const newConfOut = cleanList(teamObj.confOut);
         const newSpecIn = cleanList(teamObj.specIn);
         const newSpecOut = cleanList(teamObj.specOut);
 
-        // 2. Načtení starých dat pro porovnání
         const oldData = transfersData[season][liga][teamId] || {};
         const oldConfIn = Array.isArray(oldData.confIn) ? oldData.confIn.map(p => p.trim()) : [];
         const oldConfOut = Array.isArray(oldData.confOut) ? oldData.confOut.map(p => p.trim()) : [];
         const oldSpecIn = Array.isArray(oldData.specIn) ? oldData.specIn.map(p => p.trim()) : [];
         const oldSpecOut = Array.isArray(oldData.specOut) ? oldData.specOut.map(p => p.trim()) : [];
 
-        // Najdeme jméno týmu
         const teamName = teams.find(tm => Number(tm.id) === Number(teamId))?.name || `Tým ${teamId}`;
-
-        // Pomocná funkce pro nalezení skutečně nových jmen
         const getAdded = (newArr, oldArr) => newArr.filter(p => p !== "" && !oldArr.includes(p));
 
-        // 3. DETEKCE ZMĚN
+        let hasChanged = false; // Detekce, zda se u tohoto týmu něco změnilo
 
-        // Potvrzené příchody
-        getAdded(newConfIn, oldConfIn).forEach(p => newTransfersNotification.push(`✅ ${p} -> ${teamName}`));
+        getAdded(newConfIn, oldConfIn).forEach(p => { newTransfersNotification.push(`✅ ${p} -> ${teamName}`); hasChanged = true; });
+        getAdded(newConfOut, oldConfOut).forEach(p => { newTransfersNotification.push(`❌ ${p} opouští ${teamName}`); hasChanged = true; });
+        getAdded(newSpecIn, oldSpecIn).forEach(p => { newTransfersNotification.push(`❓ ${p} (spekulace) -> ${teamName}`); hasChanged = true; });
+        getAdded(newSpecOut, oldSpecOut).forEach(p => { newTransfersNotification.push(`⚠️ ${p} (možný odchod) -> ${teamName}`); hasChanged = true; });
 
-        // Potvrzené odchody
-        getAdded(newConfOut, oldConfOut).forEach(p => newTransfersNotification.push(`❌ ${p} opouští ${teamName}`));
+        // Pokud se tým změnil, přidáme ho do seznamu pro obrázek v notifikaci
+        if (hasChanged) {
+            const teamFullInfo = teams.find(tm => Number(tm.id) === Number(teamId));
+            if (teamFullInfo) involvedTeams.push(teamFullInfo);
+        }
 
-        // Spekulace příchody
-        getAdded(newSpecIn, oldSpecIn).forEach(p => newTransfersNotification.push(`❓ ${p} (spekulace) -> ${teamName}`));
-
-        // Spekulace odchody
-        getAdded(newSpecOut, oldSpecOut).forEach(p => newTransfersNotification.push(`⚠️ ${p} (možný odchod) -> ${teamName}`));
-
-        // 4. AKTUALIZACE DAT V PAMĚTI
         transfersData[season][liga][teamId] = {
             specIn: newSpecIn,
             specOut: newSpecOut,
@@ -2766,18 +2872,14 @@ router.post('/transfers/save', requireAdmin, express.urlencoded({ extended: true
         };
     }
 
-    // --- ZÁPIS DO SOUBORU ---
     try {
         fs.writeFileSync(transfersPath, JSON.stringify(transfersData, null, 2));
-        console.log("Data úspěšně uložena do transfers.json");
     } catch (err) {
         console.error("Chyba při zápisu do souboru:", err);
     }
 
-    // --- ODESLÁNÍ NOTIFIKACE ---
     if (newTransfersNotification.length > 0) {
         let message;
-        // Pokud je změn málo, vypíšeme je. Pokud hodně, pošleme souhrnnou zprávu.
         if (newTransfersNotification.length <= 4) {
             message = `Změny v kádrech: ${newTransfersNotification.join(', ')}`;
         } else {
@@ -2785,17 +2887,14 @@ router.post('/transfers/save', requireAdmin, express.urlencoded({ extended: true
             message = `Nové pohyby v lize (${newTransfersNotification.length}): ${firstFew} a další...`;
         }
 
-        console.log("ODESÍLÁM NOTIFIKACI:", message);
-
         try {
-            notif.notifyTransfer(message);
+            // ZDE POSÍLÁME I TÝMY PRO GENEROVÁNÍ OBRÁZKU
+            await notif.notifyTransfer(message, involvedTeams);
         } catch (err) {
             console.error("Selhalo volání notif.notifyTransfer:", err);
         }
-    } else {
-        console.log("Žádné nové pohyby k oznámení.");
     }
-    logAdminAction(req.session.user, "PŘESTUPY", `Uloženy přestupy pro ligu ${liga} (Nové pohyby: ${newTransfersNotification.length})`);
+    logAdminAction(req.session.user, "PŘESTUPY", `Uloženy přestupy pro ligu ${liga}`);
     res.redirect(`/admin/transfers/manage?liga=${encodeURIComponent(liga)}`);
 });
 

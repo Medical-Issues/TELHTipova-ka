@@ -1,12 +1,59 @@
 console.log("Service Worker Loaded...");
 
+// 1. PŘÍJEM NOTIFIKACE
 self.addEventListener('push', e => {
-    const data = e.data.json();
-    console.log("Push Received...");
-    self.registration.showNotification(data.title, {
-        body: data.body,
-        icon: '/images/logo.png', // Cesta k tvému logu
-        badge: '/images/badge.png', // Malá ikona pro lištu (volitelné)
-        vibrate: [100, 50, 100]
-    });
+    const payload = e.data.json();
+    console.log("Push Received...", payload);
+
+    e.waitUntil(
+        self.registration.showNotification(payload.title, {
+            body: payload.body,
+            icon: '/images/logo.png',     // Velká ikona
+            badge: '/images/logo.png',   // Malá notifikační ikona pro lištu na Androidu
+            vibrate: payload.vibrate || [100, 100, 250, 500, 100, 100, 250],
+
+            // Načtení nových vlastností z backendu (pokud tam nejsou, dáme výchozí hodnoty)
+            tag: payload.tag || 'obecne-upozorneni',
+            renotify: payload.renotify || false,
+            requireInteraction: payload.requireInteraction || false,
+            actions: payload.actions || [],
+
+            data: {
+                url: payload.url || '/'
+            }
+        })
+    );
+});
+
+// 2. REAKCE NA KLIKNUTÍ (Tělo zprávy i tlačítka)
+self.addEventListener('notificationclick', e => {
+    // Okamžitě zavřeme notifikaci, ať tam nevisí
+    e.notification.close();
+
+    // Zjistíme, jestli uživatel klikl na nějaké konkrétní tlačítko
+    const action = e.action;
+    const targetUrl = e.notification.data.url;
+
+    // Pokud uživatel klikl na tlačítko "Zavřít", neděláme nic (notifikaci už jsme zavřeli nahoře)
+    if (action === 'close') {
+        return;
+    }
+
+    // Prokliknutí do aplikace (klik na "open_match" nebo kamkoliv do textu notifikace)
+    e.waitUntil(
+        clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
+            // Pokud už má uživatel náš web někde otevřený, přepneme ho do něj a přesměrujeme
+            for (let i = 0; i < windowClients.length; i++) {
+                const client = windowClients[i];
+                if (client.url.includes(self.registration.scope) && 'focus' in client) {
+                    client.navigate(targetUrl);
+                    return client.focus();
+                }
+            }
+            // Pokud web otevřený nemá, otevřeme nové okno
+            if (clients.openWindow) {
+                return clients.openWindow(targetUrl);
+            }
+        })
+    );
 });
