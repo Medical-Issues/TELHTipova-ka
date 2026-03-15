@@ -5,8 +5,6 @@ require('path');
 const {
     requireLogin, prepareDashboardData, getGroupDisplayLabel, generateLeftPanel,
 } = require("../utils/fileUtils");
-const { publicVapidKey } = require('./notificationService');
-
 router.get("/table-tip", requireLogin, (req, res) => {
     // 1. ZAVOLÁME MOZEK, KTERÝ VŠE VYPOČÍTÁ BĚHEM MILISEKUNDY
     const data = prepareDashboardData(req);
@@ -32,120 +30,88 @@ function showTable(which) {
     const p = document.getElementById('playoffTablePreview'); p.style.display = which === 'playoff' ? 'block' : 'none'; 
 }
 
-    const publicVapidKey = "${publicVapidKey}"; 
+    // Pomocná funkce pro převod klíče
+function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/\\-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+}
 
-    function urlBase64ToUint8Array(base64String) {
-        const padding = '='.repeat((4 - base64String.length % 4) % 4);
-        const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-        const rawData = window.atob(base64);
-        const outputArray = new Uint8Array(rawData.length);
-        for (let i = 0; i < rawData.length; ++i) {
-            outputArray[i] = rawData.charCodeAt(i);
+// HLAVNÍ FUNKCE PRO TLAČÍTKO
+async function toggleNotifications() {
+    const btn = document.getElementById('notify-toggle-btn');
+    btn.disabled = true;
+
+    try {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+
+        if (subscription) {
+            // --- ODHLÁŠENÍ ---
+            await subscription.unsubscribe();
+            await fetch('/api/unsubscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ endpoint: subscription.endpoint })
+            });
+            alert('Notifikace vypnuty.');
+        } else {
+            // --- PŘIHLÁŠENÍ ---
+            const vapidRes = await fetch('/api/vapid-public-key');
+            const vapidPublicKey = await vapidRes.text();
+
+            const newSub = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
+            });
+
+            await fetch('/api/subscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newSub)
+            });
+            alert('Notifikace zapnuty!');
         }
-        return outputArray;
+    } catch (e) {
+        console.error(e);
+        alert('Chyba: ' + e.message);
+    }
+    
+    checkSubscriptionStatus(); // Aktualizujeme vzhled tlačítka
+    btn.disabled = false;
+}
+
+// KONTROLA STAVU PŘI NAČTENÍ STRÁNKY
+async function checkSubscriptionStatus() {
+    const btn = document.getElementById('notify-toggle-btn');
+    if (!btn) return;
+
+    if (!('serviceWorker' in navigator)) {
+        btn.style.display = 'none';
+        return;
     }
 
-    document.addEventListener('DOMContentLoaded', async () => {
-        const btn = document.getElementById('notify-toggle-btn');
-        if (!btn) return;
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
 
-        let isSubscribed = false;
-        let swRegistration = null;
+    if (subscription) {
+        btn.textContent = "Vypnout notifikace 🔕";
+        btn.style.backgroundColor = "#555";
+    } else {
+        btn.textContent = "Zapnout notifikace 🔔";
+        btn.style.backgroundColor = "#ff4500";
+    }
+    btn.style.display = 'inline-block';
+}
 
-        function updateBtn() {
-            if (isSubscribed) {
-                btn.textContent = "Vypnout notifikace 🔕";
-                btn.style.backgroundColor = "#555"; 
-            } else {
-                btn.textContent = "Zapnout notifikace 🔔";
-                btn.style.backgroundColor = "#ff4500"; 
-            }
-            btn.style.display = 'inline-block';
-        }
+// Spustíme kontrolu hned po načtení
+document.addEventListener('DOMContentLoaded', checkSubscriptionStatus);
 
-        // --- KONTROLA STAVU PO NAČTENÍ ---
-        try {
-            if ('serviceWorker' in navigator) {
-                // 1. Získáme registraci
-                swRegistration = await navigator.serviceWorker.getRegistration();
-                
-                if (swRegistration) {
-                    // 2. Získáme odběr z prohlížeče
-                    const subscription = await swRegistration.pushManager.getSubscription();
-                    
-                    if (subscription) {
-                        console.log("Odběr v prohlížeči nalezen, ptám se serveru...");
-                        
-                        // 3. Zeptáme se serveru, jestli tenhle odběr patří NÁM
-                        const response = await fetch('/api/check-subscription', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ endpoint: subscription.endpoint })
-                        });
-                        
-                        const data = await response.json();
-                        isSubscribed = data.belongsToMe;
-                        console.log("Odpověď serveru (belongsToMe):", isSubscribed);
-                    } else {
-                        console.log("V prohlížeči není žádný aktivní odběr.");
-                    }
-                }
-            }
-        } catch (err) {
-            console.error("Chyba při inicializaci tlačítka:", err);
-        }
-
-        updateBtn();
-
-        // --- KLIKNUTÍ ---
-        btn.addEventListener('click', async (e) => {
-            e.preventDefault();
-            btn.disabled = true;
-
-            try {
-                if (isSubscribed) {
-                    const sub = await swRegistration.pushManager.getSubscription();
-                    if (sub) {
-                        // Odhlásit v prohlížeči
-                        await sub.unsubscribe();
-                        // Odhlásit na serveru
-                        await fetch('/api/unsubscribe', { 
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ endpoint: sub.endpoint })
-                        });
-                        isSubscribed = false;
-                    }
-                } else {
-                    // Registrace SW pokud není
-                    if (!swRegistration) {
-                        swRegistration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
-                    }
-                    
-                    // Přihlášení k Push
-                    const subscription = await swRegistration.pushManager.subscribe({
-                        userVisibleOnly: true,
-                        applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
-                    });
-
-                    // Poslat na server
-                    await fetch('/api/subscribe', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(subscription)
-                    });
-
-                    isSubscribed = true;
-                }
-            } catch (err) {
-                console.error("Chyba při akci tlačítka:", err);
-                alert("Nepodařilo se změnit stav notifikací.");
-            }
-
-            updateBtn();
-            btn.disabled = false;
-        });
-    });
 </script>
 <body class="usersite">
 <header class="header">
@@ -161,8 +127,8 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <a class="history-btn changed" href="/?liga=${encodeURIComponent(selectedLiga)}">Tipovačka</a>
 <a class="history-btn changed" href="/prestupy?liga=${encodeURIComponent(selectedLiga)}">Přestupy TELH</a>
 <div style="text-align: center; margin: 20px;">
-    <button type="button" id="notify-toggle-btn" style="display: none; width: 200px; height: 30px; cursor: pointer; font-weight: bold; border: none;">
-        Načítám stav...
+    <button type="button" id="notify-toggle-btn" onclick="toggleNotifications()" style="display: none; width: 200px; height: 35px; cursor: pointer; font-weight: bold; border: none; color: white;">
+        Načítám...
     </button>
 </div>
 </form>
@@ -607,108 +573,88 @@ function showTable(which) {
     const p = document.getElementById('playoffTablePreview'); p.style.display = which === 'playoff' ? 'block' : 'none'; 
 }
 
-    const publicVapidKey = "${publicVapidKey}"; 
+    // Pomocná funkce pro převod klíče
+function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/\\-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+}
 
-    function urlBase64ToUint8Array(base64String) {
-        const padding = '='.repeat((4 - base64String.length % 4) % 4);
-        const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-        const rawData = window.atob(base64);
-        const outputArray = new Uint8Array(rawData.length);
-        for (let i = 0; i < rawData.length; ++i) {
-            outputArray[i] = rawData.charCodeAt(i);
+// HLAVNÍ FUNKCE PRO TLAČÍTKO
+async function toggleNotifications() {
+    const btn = document.getElementById('notify-toggle-btn');
+    btn.disabled = true;
+
+    try {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+
+        if (subscription) {
+            // --- ODHLÁŠENÍ ---
+            await subscription.unsubscribe();
+            await fetch('/api/unsubscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ endpoint: subscription.endpoint })
+            });
+            alert('Notifikace vypnuty.');
+        } else {
+            // --- PŘIHLÁŠENÍ ---
+            const vapidRes = await fetch('/api/vapid-public-key');
+            const vapidPublicKey = await vapidRes.text();
+
+            const newSub = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
+            });
+
+            await fetch('/api/subscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newSub)
+            });
+            alert('Notifikace zapnuty!');
         }
-        return outputArray;
+    } catch (e) {
+        console.error(e);
+        alert('Chyba: ' + e.message);
+    }
+    
+    checkSubscriptionStatus(); // Aktualizujeme vzhled tlačítka
+    btn.disabled = false;
+}
+
+// KONTROLA STAVU PŘI NAČTENÍ STRÁNKY
+async function checkSubscriptionStatus() {
+    const btn = document.getElementById('notify-toggle-btn');
+    if (!btn) return;
+
+    if (!('serviceWorker' in navigator)) {
+        btn.style.display = 'none';
+        return;
     }
 
-    document.addEventListener('DOMContentLoaded', async () => {
-        const btn = document.getElementById('notify-toggle-btn');
-        if (!btn) return;
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
 
-        let isSubscribed = false;
-        let swRegistration = null;
+    if (subscription) {
+        btn.textContent = "Vypnout notifikace 🔕";
+        btn.style.backgroundColor = "#555";
+    } else {
+        btn.textContent = "Zapnout notifikace 🔔";
+        btn.style.backgroundColor = "#ff4500";
+    }
+    btn.style.display = 'inline-block';
+}
 
-        async function checkStatus() {
-            if (!('serviceWorker' in navigator)) return;
-            swRegistration = await navigator.serviceWorker.getRegistration();
-            if (swRegistration) {
-                const sub = await swRegistration.pushManager.getSubscription();
-                if (sub) {
-                    console.log("🔍 Našel jsem odběr v prohlížeči, ověřuji u serveru...");
-                    const response = await fetch('/api/check-subscription', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ endpoint: sub.endpoint })
-                    });
-                    const data = await response.json();
-                    isSubscribed = data.belongsToMe;
-                    console.log("📡 Server říká o vlastnictví:", isSubscribed);
-                }
-            }
-            updateBtn();
-        }
+// Spustíme kontrolu hned po načtení
+document.addEventListener('DOMContentLoaded', checkSubscriptionStatus);
 
-        function updateBtn() {
-            btn.style.display = 'inline-block';
-            if (isSubscribed) {
-                btn.textContent = "Vypnout notifikace 🔕";
-                btn.style.backgroundColor = "#555"; 
-            } else {
-                btn.textContent = "Zapnout notifikace 🔔";
-                btn.style.backgroundColor = "#ff4500"; 
-            }
-        }
-
-        // Spustíme kontrolu hned po načtení
-        await checkStatus();
-
-        btn.addEventListener('click', async (e) => {
-            e.preventDefault();
-            btn.disabled = true;
-
-            try {
-                if (isSubscribed) {
-                    const sub = await swRegistration.pushManager.getSubscription();
-                    if (sub) {
-                        await sub.unsubscribe();
-                        await fetch('/api/unsubscribe', { 
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ endpoint: sub.endpoint })
-                        });
-                        isSubscribed = false;
-                        console.log("✅ Odběr zrušen uživatelem");
-                    }
-                } else {
-                    if (!swRegistration) {
-                        swRegistration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
-                    }
-                    const subscription = await swRegistration.pushManager.subscribe({
-                        userVisibleOnly: true,
-                        applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
-                    });
-
-                    console.log("🚀 Posílám nový odběr na server...");
-                    const res = await fetch('/api/subscribe', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(subscription)
-                    });
-                    
-                    if (res.ok) {
-                        isSubscribed = true;
-                        console.log("✅ Server potvrdil uložení");
-                    } else {
-                        console.error("❌ Server odmítl uložení odběru");
-                    }
-                }
-            } catch (err) {
-                console.error("❌ Chyba:", err);
-            }
-
-            updateBtn();
-            btn.disabled = false;
-        });
-    });
 </script>
 <body class="usersite">
 <header class="header">
@@ -724,8 +670,8 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <a class="history-btn changed" href="/table-tip?liga=${encodeURIComponent(selectedLiga)}">Základní část</a>
 <a class="history-btn changed" href="/prestupy?liga=${encodeURIComponent(selectedLiga)}">Přestupy TELH</a>
 <div style="text-align: center; margin: 20px;">
-    <button type="button" id="notify-toggle-btn" style="display: none; width: 200px; height: 30px; cursor: pointer; font-weight: bold; border: none;">
-        Načítám stav...
+    <button type="button" id="notify-toggle-btn" onclick="toggleNotifications()" style="display: none; width: 200px; height: 35px; cursor: pointer; font-weight: bold; border: none; color: white;">
+        Načítám...
     </button>
 </div>
 </form>
@@ -850,7 +796,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
                                 <div style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 5px 10px; border-bottom: 1px solid #222; font-size: 0.8em; background: #0c0c0c;">
                                     <span style="color: #555; width: 15px; font-weight: bold;">${idx + 1}.</span>
                                     <span style="flex: 1; text-align: right; ${hWinnerClass ? 'color: #00ff00; font-weight: bold;' : 'color: #888;'}">${displayHome}</span>
-                                    <span style="background: #222; padding: 2px 6px; border-radius: 4px; font-family: monospace; min-width: 35px; text-align: center; border: 1px solid #333;">
+                                    <span style="background: #222; padding: 2px 6px; font-family: monospace; min-width: 35px; text-align: center; border: 1px solid #333;">
                                         ${displayScoreH}:${displayScoreA}${pm.ot ? '<small style="font-size:0.7em">p</small>' : ''}
                                     </span>
                                     <span style="flex: 1; text-align: left; ${aWinnerClass ? 'color: #00ff00; font-weight: bold;' : 'color: #888;'}">${displayAway}</span>
@@ -1360,7 +1306,7 @@ function toggleSeriesDetails(btn) {
                         <div style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 4px 10px; border-bottom: 1px solid #222; font-size: 0.85em; background: #0c0c0c;">
                             <span style="color: #555; width: 15px; font-weight: bold;">${idx + 1}.</span>
                             <span style="flex: 1; text-align: right; ${hWinner ? 'color: #00ff00; font-weight: bold;' : 'color: #888;'}">${displayHome}</span>
-                            <span style="background: #222; padding: 1px 6px; border-radius: 4px; font-family: monospace; min-width: 35px; text-align: center; border: 1px solid #333;">
+                            <span style="background: #222; padding: 1px 6px; font-family: monospace; min-width: 35px; text-align: center; border: 1px solid #333;">
                                 ${displayScoreH}:${displayScoreA}${pm.ot ? '<small>p</small>' : ''}
                             </span>
                             <span style="flex: 1; text-align: left; ${aWinner ? 'color: #00ff00; font-weight: bold;' : 'color: #888;'}">${displayAway}</span>
@@ -1674,120 +1620,87 @@ function showTable(which) {
     const p = document.getElementById('playoffTablePreview'); p.style.display = which === 'playoff' ? 'block' : 'none'; 
 }
 
-const publicVapidKey = "${publicVapidKey}"; 
+    // Pomocná funkce pro převod klíče
+function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/\\-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+}
 
-    function urlBase64ToUint8Array(base64String) {
-        const padding = '='.repeat((4 - base64String.length % 4) % 4);
-        const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-        const rawData = window.atob(base64);
-        const outputArray = new Uint8Array(rawData.length);
-        for (let i = 0; i < rawData.length; ++i) {
-            outputArray[i] = rawData.charCodeAt(i);
+// HLAVNÍ FUNKCE PRO TLAČÍTKO
+async function toggleNotifications() {
+    const btn = document.getElementById('notify-toggle-btn');
+    btn.disabled = true;
+
+    try {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+
+        if (subscription) {
+            // --- ODHLÁŠENÍ ---
+            await subscription.unsubscribe();
+            await fetch('/api/unsubscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ endpoint: subscription.endpoint })
+            });
+            alert('Notifikace vypnuty.');
+        } else {
+            // --- PŘIHLÁŠENÍ ---
+            const vapidRes = await fetch('/api/vapid-public-key');
+            const vapidPublicKey = await vapidRes.text();
+
+            const newSub = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
+            });
+
+            await fetch('/api/subscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newSub)
+            });
+            alert('Notifikace zapnuty!');
         }
-        return outputArray;
+    } catch (e) {
+        console.error(e);
+        alert('Chyba: ' + e.message);
+    }
+    
+    checkSubscriptionStatus(); // Aktualizujeme vzhled tlačítka
+    btn.disabled = false;
+}
+
+// KONTROLA STAVU PŘI NAČTENÍ STRÁNKY
+async function checkSubscriptionStatus() {
+    const btn = document.getElementById('notify-toggle-btn');
+    if (!btn) return;
+
+    if (!('serviceWorker' in navigator)) {
+        btn.style.display = 'none';
+        return;
     }
 
-    document.addEventListener('DOMContentLoaded', async () => {
-        const btn = document.getElementById('notify-toggle-btn');
-        if (!btn) return;
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
 
-        let isSubscribed = false;
-        let swRegistration = null;
+    if (subscription) {
+        btn.textContent = "Vypnout notifikace 🔕";
+        btn.style.backgroundColor = "#555";
+    } else {
+        btn.textContent = "Zapnout notifikace 🔔";
+        btn.style.backgroundColor = "#ff4500";
+    }
+    btn.style.display = 'inline-block';
+}
 
-        function updateBtn() {
-            if (isSubscribed) {
-                btn.textContent = "Vypnout notifikace 🔕";
-                btn.style.backgroundColor = "#555"; 
-            } else {
-                btn.textContent = "Zapnout notifikace 🔔";
-                btn.style.backgroundColor = "#ff4500"; 
-            }
-            btn.style.display = 'inline-block';
-        }
-
-        // --- KONTROLA STAVU PO NAČTENÍ ---
-        try {
-            if ('serviceWorker' in navigator) {
-                // 1. Získáme registraci
-                swRegistration = await navigator.serviceWorker.getRegistration();
-                
-                if (swRegistration) {
-                    // 2. Získáme odběr z prohlížeče
-                    const subscription = await swRegistration.pushManager.getSubscription();
-                    
-                    if (subscription) {
-                        console.log("Odběr v prohlížeči nalezen, ptám se serveru...");
-                        
-                        // 3. Zeptáme se serveru, jestli tenhle odběr patří NÁM
-                        const response = await fetch('/api/check-subscription', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ endpoint: subscription.endpoint })
-                        });
-                        
-                        const data = await response.json();
-                        isSubscribed = data.belongsToMe;
-                        console.log("Odpověď serveru (belongsToMe):", isSubscribed);
-                    } else {
-                        console.log("V prohlížeči není žádný aktivní odběr.");
-                    }
-                }
-            }
-        } catch (err) {
-            console.error("Chyba při inicializaci tlačítka:", err);
-        }
-
-        updateBtn();
-
-        // --- KLIKNUTÍ ---
-        btn.addEventListener('click', async (e) => {
-            e.preventDefault();
-            btn.disabled = true;
-
-            try {
-                if (isSubscribed) {
-                    const sub = await swRegistration.pushManager.getSubscription();
-                    if (sub) {
-                        // Odhlásit v prohlížeči
-                        await sub.unsubscribe();
-                        // Odhlásit na serveru
-                        await fetch('/api/unsubscribe', { 
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ endpoint: sub.endpoint })
-                        });
-                        isSubscribed = false;
-                    }
-                } else {
-                    // Registrace SW pokud není
-                    if (!swRegistration) {
-                        swRegistration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
-                    }
-                    
-                    // Přihlášení k Push
-                    const subscription = await swRegistration.pushManager.subscribe({
-                        userVisibleOnly: true,
-                        applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
-                    });
-
-                    // Poslat na server
-                    await fetch('/api/subscribe', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(subscription)
-                    });
-
-                    isSubscribed = true;
-                }
-            } catch (err) {
-                console.error("Chyba při akci tlačítka:", err);
-                alert("Nepodařilo se změnit stav notifikací.");
-            }
-
-            updateBtn();
-            btn.disabled = false;
-        });
-    });
+// Spustíme kontrolu hned po načtení
+document.addEventListener('DOMContentLoaded', checkSubscriptionStatus);
 </script>
 <body class="usersite">
 <header class="header">
@@ -1803,8 +1716,8 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <a class="history-btn changed" href="/?liga=${encodeURIComponent(selectedLiga)}">Tipovačka</a>
 <a class="history-btn changed" href="/table-tip?liga=${encodeURIComponent(selectedLiga)}">Základní část</a>
 <div style="text-align: center; margin: 20px;">
-    <button type="button" id="notify-toggle-btn" style="display: none; width: 200px; height: 30px; cursor: pointer; font-weight: bold; border: none;">
-        Načítám stav...
+    <button type="button" id="notify-toggle-btn" onclick="toggleNotifications()" style="display: none; width: 200px; height: 35px; cursor: pointer; font-weight: bold; border: none; color: white;">
+        Načítám...
     </button>
 </div>
 </form>

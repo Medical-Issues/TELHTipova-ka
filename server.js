@@ -34,71 +34,63 @@ app.get('/wake', (req, res) => {
 app.use('/auth', authRoutes);
 app.use('/', userRoutes)
 app.use('/admin', adminRoutes);
-app.post('/api/subscribe', (req, res) => {
-    const subscription = req.body;
-    const username = req.session.user;
 
-    if (!username) return res.status(401).send('Nejste přihlášen');
-
-    const usersPath = path.join(__dirname, 'data', 'users.json');
-
-    try {
-        let users = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
-
-        // 1. Odstraníme tento endpoint od kohokoliv jiného
-        users.forEach(u => {
-            if (u.subscriptions) {
-                u.subscriptions = u.subscriptions.filter(sub => sub.endpoint !== subscription.endpoint);
-            }
-        });
-
-        // 2. Přidáme k aktuálnímu uživateli
-        const user = users.find(u => u.username === username);
-        if (user) {
-            if (!user.subscriptions) user.subscriptions = [];
-            user.subscriptions.push(subscription);
-
-            // ZÁPIS DO SOUBORU
-            fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
-            console.log(`✅ Odběr fyzicky zapsán do users.json pro: ${username}`);
-            console.log(`📊 Počet aktivních zařízení uživatele: ${user.subscriptions.length}`);
-        }
-
-        res.status(201).json({ message: "OK" });
-    } catch (e) {
-        console.error("❌ CHYBA PŘI ZÁPISU:", e);
-        res.status(500).send("Chyba databáze");
-    }
+app.get('/api/vapid-public-key', (req, res) => {
+    res.send(process.env.VAPID_PUBLIC_KEY);
 });
 
-app.post('/api/unsubscribe', (req, res) => {
-    const username = req.session.user;
-    const { endpoint } = req.body; // Frontend posílá konkrétní endpoint k smazání
+// 2. Uložení odběru k uživateli
+app.post('/api/subscribe', (req, res) => {
+    // 1. Kontrola přihlášení
+    if (!req.session.user) {
+        return res.status(401).json({ error: "Pro zapnutí notifikací musíš být přihlášen." });
+    }
 
-    if (!username) return res.status(401).send('Nejste přihlášen');
-    if (!endpoint) return res.status(400).send('Chybí endpoint zařízení');
+    const subscription = req.body;
+    // Základní validace dat z prohlížeče
+    if (!subscription || !subscription.endpoint) {
+        return res.status(400).json({ error: "Neplatná data odběru." });
+    }
 
     const usersPath = path.join(__dirname, 'data', 'users.json');
+    let users = [];
 
     try {
-        let users = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
-        const user = users.find(u => u.username === username);
+        users = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
+    } catch (e) {
+        console.error("Chyba při čtení users.json:", e);
+        return res.status(500).json({ error: "Chyba databáze." });
+    }
 
-        if (user && user.subscriptions) {
-            // Odebereme pouze to jedno konkrétní zařízení (např. jen PC, mobil zůstane)
-            const initialCount = user.subscriptions.length;
-            user.subscriptions = user.subscriptions.filter(s => s.endpoint !== endpoint);
-
-            if (user.subscriptions.length < initialCount) {
-                fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
-                console.log(`🔕 Zařízení (endpoint) odebráno pro: ${username}`);
-            }
+    // --- KLÍČOVÁ ČÁST: VYČIŠTĚNÍ STARÝCH VAZEB ---
+    // Projdeme všechny uživatele a pokud někdo jiný používá tento prohlížeč (endpoint), smažeme mu ho
+    users = users.map(u => {
+        if (u.subscriptions) {
+            u.subscriptions = u.subscriptions.filter(sub => sub.endpoint !== subscription.endpoint);
         }
-        res.status(200).json({ message: "Zařízení odhlášeno" });
+        return u;
+    });
 
-    } catch (error) {
-        console.error("Chyba při unsubscribe:", error);
-        res.status(500).send("Chyba serveru");
+    // --- PŘIŘAZENÍ AKTUÁLNÍMU UŽIVATELI ---
+    const userIndex = users.findIndex(u => u.username === req.session.user);
+    if (userIndex !== -1) {
+        if (!users[userIndex].subscriptions) {
+            users[userIndex].subscriptions = [];
+        }
+
+        // Přidáme nový odběr aktuálnímu uživateli
+        users[userIndex].subscriptions.push(subscription);
+
+        try {
+            fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+            console.log(`✅ Notifikace nastaveny pro uživatele: ${req.session.user}`);
+            res.status(201).json({ success: true });
+        } catch (err) {
+            console.error("Chyba při zápisu do users.json:", err);
+            res.status(500).json({ error: "Nepodařilo se uložit data na server." });
+        }
+    } else {
+        res.status(404).json({ error: "Uživatel nenalezen v databázi." });
     }
 });
 
@@ -126,6 +118,30 @@ app.post('/api/check-subscription', (req, res) => {
         console.error("Chyba check-subscription:", e);
         res.json({ belongsToMe: false });
     }
+});
+
+// Kontrola, jestli uživatel už má tento endpoint (používalo tvé staré user.js)
+app.post('/api/check-subscription', (req, res) => {
+    const { endpoint } = req.body;
+    const users = JSON.parse(fs.readFileSync('./data/users.json', 'utf8'));
+    const user = users.find(u => u.username === req.session.user);
+
+    const belongsToMe = user?.subscriptions?.some(sub => sub.endpoint === endpoint) || false;
+    res.json({ belongsToMe });
+});
+
+// Odhlášení z notifikací
+app.post('/api/unsubscribe', (req, res) => {
+    const { endpoint } = req.body;
+    const usersPath = './data/users.json';
+    let users = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
+
+    const userIndex = users.findIndex(u => u.username === req.session.user);
+    if (userIndex !== -1 && users[userIndex].subscriptions) {
+        users[userIndex].subscriptions = users[userIndex].subscriptions.filter(sub => sub.endpoint !== endpoint);
+        fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+    }
+    res.json({ success: true });
 });
 
 // 404 Handler - Zachytí vše, co nebylo vyřešeno výše
