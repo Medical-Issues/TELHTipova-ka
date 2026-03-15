@@ -34,61 +34,96 @@ const getTeams = () => {
 };
 
 // --- FUNKCE PRO VYTVOŘENÍ "VERSUS" OBRÁZKU ---
-async function createVersusImage(homeTeam, awayTeam, matchId) {
+async function createVersusImage(homeTeam, awayTeam, matchId, scoreHome = null, scoreAway = null) {
     if (!homeTeam || !awayTeam) return null;
 
-    // Připravíme si složku, kam se budou notifikační obrázky ukládat
     const outDir = path.join(__dirname, '../public/images/notifications');
     if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
 
     const outPath = path.join(outDir, `match-${matchId}.png`);
     const publicUrl = `/images/notifications/match-${matchId}.png`;
 
-    // Vytvoříme plátno o velikosti 800x400 (ideální 2:1 poměr pro notifikace)
-    const width = 800;
-    const height = 400;
+    const width = 800; const height = 400;
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext('2d');
 
-    // Vykreslíme tmavé pozadí
-    ctx.fillStyle = '#1a1a1a';
+    // 1. POZADÍ - Moderní tmavý gradient
+    const grad = ctx.createLinearGradient(0, 0, 0, height);
+    grad.addColorStop(0, '#1a1a1a');
+    grad.addColorStop(1, '#000000');
+    ctx.fillStyle = grad;
     ctx.fillRect(0, 0, width, height);
 
-    // Doprostřed napíšeme velkým písmem "VS"
-    ctx.fillStyle = '#ff4500'; // Oranžovo-červená (podle tvého webu)
-    ctx.font = 'bold 80px Arial';
+    // 2. DEKORACE - Oranžové dynamické linky
+    ctx.strokeStyle = 'rgba(255, 69, 0, 0.15)';
+    ctx.lineWidth = 3;
+    for (let i = -100; i < width; i += 40) {
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i + 200, height);
+        ctx.stroke();
+    }
+
+    // 3. FUNKCE PRO VYKRESLENÍ LOGA SE STÍNEM
+    const drawLogo = async (logoName, x) => {
+        try {
+            const imgPath = path.join(__dirname, '../data/images', logoName);
+            const img = await loadImage(imgPath);
+
+            // Stín pod logem
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+            ctx.shadowBlur = 20;
+            ctx.shadowOffsetX = 5;
+            ctx.shadowOffsetY = 10;
+
+            const size = 260;
+            const ratio = Math.min(size / img.width, size / img.height);
+            const nw = img.width * ratio;
+            const nh = img.height * ratio;
+
+            ctx.drawImage(img, x + (size - nw) / 2, 70 + (size - nh) / 2, nw, nh);
+            ctx.shadowBlur = 0; // Reset stínu
+        } catch (e) { console.error("Chyba loga:", e.message); }
+    };
+
+    await drawLogo(homeTeam.logo, 50);  // Domácí vlevo
+    await drawLogo(awayTeam.logo, 490); // Hosté vpravo
+
+    // 4. PROSTŘEDNÍ PANEL (Score nebo VS)
+    const isResult = scoreHome !== null && scoreAway !== null;
+
+    // Skleněný efekt pod textem
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+    ctx.beginPath();
+    ctx.roundRect(width/2 - 100, height/2 - 60, 200, 120, 20);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255, 69, 0, 0.5)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('VS', width / 2, height / 2);
+    ctx.shadowColor = 'rgba(255, 69, 0, 0.5)';
+    ctx.shadowBlur = 10;
 
-    // Načteme a vykreslíme logo domácích (vlevo)
-    if (homeTeam.logo) {
-        try {
-            const homeImgPath = path.join(__dirname, '../data/images', homeTeam.logo);
-            const homeImg = await loadImage(homeImgPath);
-            // Nakreslíme logo: x=50, y=50, šířka=300, výška=300
-            ctx.drawImage(homeImg, 50, 50, 300, 300);
-        } catch (e) {
-            console.error("Nepodařilo se načíst logo domácích:", e.message);
-        }
+    if (isResult) {
+        // Vykreslení SKÓRE
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 90px Arial';
+        ctx.fillText(`${scoreHome}:${scoreAway}`, width / 2, height / 2);
+
+        ctx.fillStyle = '#ff4500';
+        ctx.font = 'bold 20px Arial';
+        ctx.fillText('KONEČNÝ VÝSLEDEK', width / 2, height / 2 + 80);
+    } else {
+        // Vykreslení VS
+        ctx.fillStyle = '#ff4500';
+        ctx.font = 'bold 100px Arial';
+        ctx.fillText('VS', width / 2, height / 2);
     }
 
-    // Načteme a vykreslíme logo hostů (vpravo)
-    if (awayTeam.logo) {
-        try {
-            const awayImgPath = path.join(__dirname, '../data/images', awayTeam.logo);
-            const awayImg = await loadImage(awayImgPath);
-            // Nakreslíme logo: x=450, y=50, šířka=300, výška=300
-            ctx.drawImage(awayImg, 450, 50, 300, 300);
-        } catch (e) {
-            console.error("Nepodařilo se načíst logo hostů:", e.message);
-        }
-    }
-
-    // Uložíme plátno jako reálný obrázek do složky public
     const buffer = canvas.toBuffer('image/png');
     fs.writeFileSync(outPath, buffer);
-
     return publicUrl;
 }
 
@@ -97,49 +132,57 @@ async function createVersusImage(homeTeam, awayTeam, matchId) {
 // --- FUNKCE PRO VYTVOŘENÍ OBRÁZKU VÝMĚNY (TRADE) ---
 async function createTransferImage(team1, team2) {
     if (!team1 || !team2) return null;
-
     const outDir = path.join(__dirname, '../public/images/notifications');
     if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
 
-    // Vytvoříme název na základě ID týmů
     const outPath = path.join(outDir, `transfer-${team1.id}-${team2.id}.png`);
     const publicUrl = `/images/notifications/transfer-${team1.id}-${team2.id}.png`;
 
-    const width = 800;
-    const height = 400;
+    const width = 800; const height = 400;
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext('2d');
 
-    // Tmavé pozadí
-    ctx.fillStyle = '#1a1a1a';
+    // Tmavě modré grad pozadí
+    const grad = ctx.createLinearGradient(0, 0, 0, height);
+    grad.addColorStop(0, '#001a33');
+    grad.addColorStop(1, '#000000');
+    ctx.fillStyle = grad;
     ctx.fillRect(0, 0, width, height);
 
-    // Text uprostřed (modrý, hodí se k přestupům)
+    // Modré technické čáry
+    ctx.strokeStyle = 'rgba(0, 212, 255, 0.1)';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < width; i += 30) {
+        ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, height); ctx.stroke();
+    }
+
+    const drawLogo = async (logoName, x) => {
+        if (!logoName) return;
+        try {
+            const img = await loadImage(path.join(__dirname, '../data/images', logoName));
+            ctx.shadowColor = 'rgba(0, 212, 255, 0.3)';
+            ctx.shadowBlur = 15;
+            const size = 240;
+            const ratio = Math.min(size / img.width, size / img.height);
+            ctx.drawImage(img, x + (size - img.width*ratio)/2, 80 + (size - img.height*ratio)/2, img.width*ratio, img.height*ratio);
+            ctx.shadowBlur = 0;
+        } catch (e) {}
+    };
+
+    await drawLogo(team1.logo, 60);
+    await drawLogo(team2.logo, 500);
+
+    // Šipka přestupu uprostřed
     ctx.fillStyle = '#00d4ff';
-    ctx.font = 'bold 50px Arial';
+    ctx.font = 'bold 80px Arial';
     ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('PŘESTUP', width / 2, height / 2);
+    ctx.fillText('➡', width / 2, height / 2 + 20);
 
-    // Nakreslení levého loga
-    if (team1.logo) {
-        try {
-            const img1 = await loadImage(path.join(__dirname, '../data/images', team1.logo));
-            ctx.drawImage(img1, 50, 50, 300, 300);
-        } catch (e) { console.error("Chyba načtení loga 1:", e); }
-    }
-
-    // Nakreslení pravého loga
-    if (team2.logo) {
-        try {
-            const img2 = await loadImage(path.join(__dirname, '../data/images', team2.logo));
-            ctx.drawImage(img2, 450, 50, 300, 300);
-        } catch (e) { console.error("Chyba načtení loga 2:", e); }
-    }
+    ctx.font = 'bold 40px Arial';
+    ctx.fillText('PŘESTUP', width / 2, height / 2 - 60);
 
     const buffer = canvas.toBuffer('image/png');
     fs.writeFileSync(outPath, buffer);
-
     return publicUrl;
 }
 
@@ -236,7 +279,8 @@ const notifyResult = async (matchId, scoreHome, scoreAway) => {
     // VYGENEROVÁNÍ DYNAMICKÉHO OBRÁZKU
     let heroImageUrl = null;
     try {
-        heroImageUrl = await createVersusImage(homeTeam, awayTeam, match.id);
+        // PŘIDÁVÁME scoreHome a scoreAway do volání
+        heroImageUrl = await createVersusImage(homeTeam, awayTeam, match.id, scoreHome, scoreAway);
     } catch (err) {
         console.error("Chyba při generování Versus obrázku:", err);
     }
