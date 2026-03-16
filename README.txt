@@ -12,6 +12,10 @@ Domyslet baráž ✅
 
 lepší playoff systém ✅
 
+Správce oznámení v přestupech, importu zápasů,
+
+V playoff tabulce roletka na rozkliknutí zápasů série,
+
 Responzivita
 
 přechod na free databázi z json souborů
