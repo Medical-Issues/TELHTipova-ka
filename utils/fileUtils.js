@@ -547,7 +547,6 @@ async function evaluateRegularSeasonTable(season, liga, groupKey = null, isForLe
                 if (isTipsLocked.length === 0) {
                     return;
                 }
-                // TODO: Implementovat vyhodnocení jen zamčených skupin
                 // Pro teď vyhodnotíme jen pokud je něco zamčené
             }
         } else {
@@ -1873,7 +1872,6 @@ async function logAdminAction(username, action, details) {
 module.exports = {
     requireLogin,
     requireAdmin,
-    loadTeams,
     updateTeamsPoints,
     evaluateAndAssignPoints,
     generateSeasonRange,
