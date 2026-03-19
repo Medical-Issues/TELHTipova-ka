@@ -10,7 +10,6 @@ const notif = require('./notificationService');
 const bcrypt = require("bcrypt");
 const {
     requireAdmin,
-    loadTeams,
     updateTeamsPoints,
     evaluateAndAssignPoints,
     generateSeasonRange,
@@ -874,8 +873,7 @@ router.post('/new/match', requireAdmin, async (req, res) => {
 
 
 router.get('/new/team', requireAdmin, async (req, res) => {
-    const chosenSeason = await ChosenSeason.findAll();
-    const selectedSeason = chosenSeason;
+    const selectedSeason = await ChosenSeason.findAll();
     const allSeasonData = await Leagues.findAll();
     const leagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues)
         ? allSeasonData[selectedSeason].leagues
@@ -1410,8 +1408,7 @@ router.post('/season', express.urlencoded({ extended: true }), requireAdmin, asy
 });
 
 router.get('/playoff', requireAdmin, async (req, res) => {
-    const chosenSeason = await ChosenSeason.findAll();
-    const selectedSeason = chosenSeason;
+    const selectedSeason = await ChosenSeason.findAll();
     const allSeasonData = await Leagues.findAll();
     const leagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues) ? allSeasonData[selectedSeason].leagues : [];
     const allLeagues = leagues.map(l => l.name);
@@ -1616,8 +1613,7 @@ router.get('/togglePostponed/:id', requireAdmin, async (req, res) => {
 
 router.get('/leagues/manage', requireAdmin, async (req, res) => {
     const allSeasonData = await Leagues.findAll();
-    const chosenSeason = await ChosenSeason.findAll();
-    const selectedSeason = chosenSeason;
+    const selectedSeason = await ChosenSeason.findAll();
 
     // 1. Načtení statusů z MongoDB
     let statusData = await LeagueStatus.findAll();
@@ -1999,8 +1995,7 @@ router.post("/toggle-table-tips-lock", requireAdmin, express.urlencoded({ extend
 });
 
 router.get('/teams/points', requireAdmin, async (req, res) => {
-    const chosenSeason = await ChosenSeason.findAll();
-    const selectedSeason = chosenSeason;
+    const selectedSeason = await ChosenSeason.findAll();
     const allSeasonData = await Leagues.findAll();
     const teams = await Teams.findAll();
 
@@ -2263,8 +2258,7 @@ router.post('/settings/clinch', requireAdmin, async (req, res) => {
 
 router.get('/matches/import', requireAdmin, async (req, res) => {
     // 1. Načtení dat z MongoDB
-    const chosenSeason = await ChosenSeason.findAll();
-    const currentSeason = chosenSeason;
+    const currentSeason = await ChosenSeason.findAll();
 
     // Načítáme ligy z MongoDB
     let leaguesData = await Leagues.findAll();
@@ -2730,8 +2724,7 @@ router.get('/images/delete/:filename', requireAdmin, async (req, res) => {
 
 router.get('/transfers/manage', requireAdmin, async (req, res) => {
     const teams = await Teams.findAll();
-    const chosenSeason = await ChosenSeason.findAll();
-    const selectedSeason = chosenSeason;
+    const selectedSeason = await ChosenSeason.findAll();
     const allowedLeagues = await AllowedLeagues.findAll();
 
     const selectedLiga = req.query.liga || allowedLeagues[0];
