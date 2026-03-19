@@ -20,6 +20,8 @@ Správce oznámení v přestupech, importu zápasů,
 
 V playoff tabulce roletka na rozkliknutí zápasů série,
 
+Možnost zablokovat registrace
+
 Responzivita
 
 Novinkovač (Otvírání tweetů atd.)
