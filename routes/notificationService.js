@@ -443,6 +443,8 @@ const notifyLeagueEnd = async (liga) => {
 // Změna: přidali jsme 'async' před callback funkci
 cron.schedule('0 * * * *', async () => {
     const now = new Date();
+    // Použijeme českou časovou zónu pro konzistenci se zbytkem aplikace
+    const currentPragueTime = new Date(now.toLocaleString('sv-SE', {timeZone: 'Europe/Prague'}));
     const matches = await getMatches();
     const users = await getUsers();
 
@@ -454,7 +456,7 @@ cron.schedule('0 * * * *', async () => {
     ];
 
     for (const { diffMs, type } of targetTimes) {
-        const targetTime = new Date(now.getTime() + diffMs);
+        const targetTime = new Date(currentPragueTime.getTime() + diffMs);
 
         const upcomingMatches = matches.filter(m => {
             if (m.result || m.postponed || m.locked) return false;
