@@ -1197,12 +1197,10 @@ router.get('/history/a', requireLogin, async (req, res) => {
     const data = await prepareDashboardData(req, true);
 
     // 2. VYBALÍME SI PROMĚNNÉ
-    let isTipsLocked;
     const {
         username, selectedSeason, selectedLiga, teams,
         matches, allUsers, userStats,
     } = data;
-    isTipsLocked = data.isTipsLocked;
 
     // 3. DATA SPECIFICKÁ PRO HISTORII (Výběr uživatele z rolovacího menu vpravo)
     const usersWithTips = allUsers.filter(u => u.tips?.[selectedSeason]?.[selectedLiga]?.length > 0).sort((a, b) => a.username.localeCompare(b.username));
