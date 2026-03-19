@@ -1,13 +1,15 @@
-const fs = require("fs");
+require("fs");
 const express = require("express");
 const router = express.Router();
 require('path');
 const {
     requireLogin, prepareDashboardData, getGroupDisplayLabel, generateLeftPanel,
+    getLeagueStatusData, getTableTipsData
 } = require("../utils/fileUtils");
-router.get("/table-tip", requireLogin, (req, res) => {
+const { Users, Matches, Leagues, TableTips } = require('../utils/mongoDataAccess');
+router.get("/table-tip", requireLogin, async (req, res) => {
     // 1. ZAVOLÁME MOZEK, KTERÝ VŠE VYPOČÍTÁ BĚHEM MILISEKUNDY
-    const data = prepareDashboardData(req);
+    const data = await prepareDashboardData(req);
     const {
         username, selectedSeason, selectedLiga, uniqueLeagues, isTipsLocked, userTipData,
         sortedGroups, teamsByGroup, globalRealRankMap, sortedGroupKeys, groupedTeams,
@@ -174,10 +176,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 </header>
 <main class="main_page">`;
 
-html += generateLeftPanel(data);
-
-    // Potom tam zbylo jen uzavření levého panelu
-    html += `</div></section>`;
+html += await generateLeftPanel(data);
 
     // =========================================================
     // 1. ZÍSKÁNÍ SKUTEČNÉHO POŘADÍ Z LEVÉ TABULKY
@@ -257,13 +256,20 @@ html += generateLeftPanel(data);
             let diffColor = "gray";
 
             if (hasTipForGroup) {
-                if (isCorrect) {
-                    bgStyle = "background-color: rgba(40, 100, 40, 0.6); border-color: #00ff00;";
-                    diffText = "✔";
-                    diffColor = "#00ff00";
+                // PŘIDÁNA KONTROLA ZÁMKU: Zobrazí vyhodnocení jen pokud je skupina zamčená
+                if (isGroupLocked) {
+                    if (isCorrect) {
+                        bgStyle = "background-color: rgba(40, 100, 40, 0.6); border-color: #00ff00;";
+                        diffText = "✔";
+                        diffColor = "#00ff00";
+                    } else {
+                        diffText = `<span style="font-size: 0.8em">Akt.: ${realRank}. (${Math.abs(diff)})</span>`;
+                        diffColor = "orange";
+                    }
                 } else {
-                    diffText = `<span style="font-size: 0.8em">Akt.: ${realRank}. (${Math.abs(diff)})</span>`;
-                    diffColor = "orange";
+                    // Tip je uložený, ale tabulka ještě není zamčená z adminu
+                    diffText = `<span style="font-size: 0.7em; color: #aaa;">Uloženo (čeká na uzamčení)</span>` ;
+                    diffColor = "#aaa";
                 }
             } else {
                 diffText = `<span style="font-size: 0.7em; color: #666;">Neuloženo</span>`;
@@ -378,9 +384,15 @@ html += generateLeftPanel(data);
                     const payloadData = {};
                     document.querySelectorAll('.sortable-list').forEach(list => {
                         const gKey = list.getAttribute('data-group');
-
-                        payloadData[gKey] = Array.from(list.querySelectorAll('.sortable-item'))
-                                .map(i => parseInt(i.getAttribute('data-id')));
+                        
+                        // Kontrola zda je skupina zamčená - stejné logika jako v HTML generování
+                        const isGroupLocked = list.querySelector('.sortable-item[draggable="false"]') !== null;
+                        
+                        // Ukládáme jen odemčené skupiny
+                        if (!isGroupLocked) {
+                            payloadData[gKey] = Array.from(list.querySelectorAll('.sortable-item'))
+                                    .map(i => parseInt(i.getAttribute('data-id')));
+                        }
                     });
 
                     fetch('/table-tip', {
@@ -394,7 +406,7 @@ html += generateLeftPanel(data);
                     }).then(res => {
                         if (res.ok) {
                             alert('Uloženo!');
-                            location.reload();
+                            // location.reload(); // Zakomentováno - nechceme reload aby se nevyhodnocovalo
                         } else if (res.status === 403) alert('Některá ze skupin je zamčena!');
                         else alert('Chyba.');
                     });
@@ -450,40 +462,85 @@ html += generateLeftPanel(data);
     res.send(html);
 });
 
-router.post("/table-tip", requireLogin, express.json(), (req, res) => {
+router.post("/table-tip", requireLogin, express.json(), async (req, res) => {
     const username = req.session.user;
     if (username === "Admin") return res.status(403).send("Admin netipuje.");
 
-    const {liga, season, teamOrder} = req.body; // teamOrder je objekt
+    const {liga, season, teamOrder} = req.body; // teamOrder je objekt, např. {"1": [1,2,3]}
     if (!liga || !season || !teamOrder) return res.status(400).send("Chybí data.");
 
-    // Kontrola globálního zámku
+    // 1. KONTROLA ZÁMKŮ PŘED ULOŽENÍM
+    let lockedStatus = false;
     try {
-        const statusData = JSON.parse(fs.readFileSync('./data/leagueStatus.json', 'utf8'));
-        const lockedStatus = statusData?.[season]?.[liga]?.tableTipsLocked;
-        if (lockedStatus === true) return res.status(403).send("Tipování je uzamčeno.");
+        const statusData = await getLeagueStatusData();
+        lockedStatus = statusData?.[season]?.[liga]?.tableTipsLocked;
     } catch (e) {
+        console.error("Chyba při kontrole zámku:", e);
+    }
+
+    // Globální zámek
+    if (lockedStatus === true) return res.status(403).send("Tipování je uzamčeno.");
+
+    // Částečný zámek (Multigroup) - zkontrolujeme, jestli se uživatel nesnaží poslat data do zamčené skupiny
+    if (Array.isArray(lockedStatus)) {
+        for (const groupKey of Object.keys(teamOrder)) {
+            if (lockedStatus.includes(groupKey)) {
+                return res.status(403).send(`Skupina ${groupKey} je uzamčena, nelze do ní tipovat.`);
+            }
+        }
     }
 
     let tableTips = {};
     try {
-        if (fs.existsSync('./data/tableTips.json')) {
-            tableTips = JSON.parse(fs.readFileSync('./data/tableTips.json', 'utf8'));
-        }
+        tableTips = await getTableTipsData();
     } catch (e) {
-        console.error(e);
+        console.error("Chyba při čtení tableTips z MongoDB:", e);
     }
 
     if (!tableTips[season]) tableTips[season] = {};
     if (!tableTips[season][liga]) tableTips[season][liga] = {};
 
-    tableTips[season][liga][username] = teamOrder;
+    // 2. SLOUČENÍ DAT (Abychom nesmazali zamčené skupiny, když uživatel ukládá ty odemčené)
+    const existingUserTip = tableTips[season][liga][username] || {};
+    let mergedOrder = teamOrder;
 
-    fs.writeFileSync('./data/tableTips.json', JSON.stringify(tableTips, null, 2));
+    // Pokud je teamOrder objekt (multigroup) a ne pole, sloučíme stará data s novými
+    if (typeof teamOrder === 'object' && !Array.isArray(teamOrder)) {
+        mergedOrder = { ...existingUserTip, ...teamOrder };
+    }
+
+    tableTips[season][liga][username] = mergedOrder;
+
+    // 3. Uložení do MongoDB
+    try {
+        const existingData = await TableTips.findAll();
+        const updateObj = {};
+        updateObj[`${season}.${liga}.${username}`] = mergedOrder;
+        
+        if (Object.keys(existingData).length === 0) {
+            const newDoc = {};
+            newDoc[season] = {};
+            newDoc[season][liga] = {};
+            newDoc[season][liga][username] = mergedOrder;
+            await TableTips.updateOne({}, newDoc, { upsert: true });
+        } else {
+            const { getDatabase } = require('../config/database');
+            const db = await getDatabase();
+            const collection = db.collection('tableTips');
+            await collection.updateOne(
+                {},
+                { $set: updateObj }
+            );
+        }
+    } catch (err) {
+        console.error("Chyba při ukládání tableTips do MongoDB:", err);
+        return res.status(500).send("Chyba při ukládání tipu tabulky.");
+    }
+    
     res.sendStatus(200);
 });
 
-router.post("/tip", requireLogin, (req, res) => {
+router.post("/tip", requireLogin, async (req, res) => {
     const username = req.session.user;
     if (username === "Admin") {
         return res.status(403).send("Administrátor se nemůže účastnit tipování.");
@@ -496,7 +553,7 @@ router.post("/tip", requireLogin, (req, res) => {
 
     let matches;
     try {
-        matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'));
+        matches = await Matches.findAll();
     } catch (err) {
         console.error("Chyba při čtení matches.json:", err);
         return res.status(500).send("Nastala chyba při čtení dat zápasů.");
@@ -528,9 +585,9 @@ router.post("/tip", requireLogin, (req, res) => {
 
     let users;
     try {
-        users = JSON.parse(fs.readFileSync('./data/users.json', 'utf8'));
+        users = await Users.findAll();
     } catch (err) {
-        console.error("Chyba při čtení users.json:", err);
+        console.error("Chyba při čtení users z MongoDB:", err);
         return res.status(500).send("Nastala chyba při čtení dat uživatelů.");
     }
 
@@ -571,7 +628,16 @@ router.post("/tip", requireLogin, (req, res) => {
         user.tips[season][league].push(newTip);
     }
 
-    fs.writeFileSync('./data/users.json', JSON.stringify(users, null, 2));
+    // Uložení do MongoDB
+    try {
+        await Users.updateOne(
+            { username: username },
+            user
+        );
+    } catch (err) {
+        console.error("Chyba při ukládání do MongoDB:", err);
+        return res.status(500).send("Chyba při ukládání tipu.");
+    }
 
     req.session.save(err => {
         if (err) {
@@ -586,9 +652,9 @@ router.post("/tip", requireLogin, (req, res) => {
     });
 });
 
-router.get('/', requireLogin, (req, res) => {
+router.get('/', requireLogin, async (req, res) => {
     // 1. ZAVOLÁME MOZEK, KTERÝ VŠE VYPOČÍTÁ BĚHEM MILISEKUNDY
-    const data = prepareDashboardData(req);
+    const data = await prepareDashboardData(req);
 
     // 2. VYBALÍME SI PROMĚNNÉ, KTERÉ POTŘEBUJE HTML (Destructuring)
     const {
@@ -755,20 +821,22 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 </header>
 <main class="main_page">`;
 
-    html += generateLeftPanel(data);
+    html += await generateLeftPanel(data);
     // ZAČÁTEK PRAVÉHO PANELU SE ZÁPASY
     html += `
     <section class="matches-container">
     <h2>Aktuální zápasy k tipování</h2>
     `;
 
-    const matchesData = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'))
+    const matchesData = (await Matches.findAll())
             .filter(m => m.liga === selectedLiga && !m.result)
             .filter(m => m.season === selectedSeason)
             .sort((a, b) => new Date(a.datetime) - new Date(b.datetime));
 
-        const usersData = JSON.parse(fs.readFileSync('./data/users.json', 'utf8'));
+        const usersData = await Users.findAll();
+
         const currentUserData = usersData.find(u => u.username === username);
+
         const userTips = currentUserData?.tips?.[selectedSeason]?.[selectedLiga] || [];
 
         const groupedMatches = {};
@@ -1040,14 +1108,14 @@ document.addEventListener('DOMContentLoaded', () => {
         res.send(html);
 });
 
-router.get('/history', requireLogin, (req, res) => {
+router.get('/history', requireLogin, async (req, res) => {
     // Načtení definic lig (aby byly vidět i ty bez zápasů)
     let allSeasonData = {};
-    try { allSeasonData = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf8')); } catch (err) { console.error(err); }
+    try { allSeasonData = await Leagues.findAll(); } catch (err) { console.error(err); }
 
     // Načtení zápasů (pro zpětnou kompatibilitu)
     let matches = [];
-    try { matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8')); } catch (err) { console.error(err); }
+    try { matches = await Matches.findAll(); } catch (err) { console.error(err); }
 
     const historyMap = new Map();
 
@@ -1121,18 +1189,20 @@ router.get('/history', requireLogin, (req, res) => {
 
     res.send(html);
 });
-router.get('/history/a', requireLogin, (req, res) => {
+router.get('/history/a', requireLogin, async (req, res) => {
     // 0. Bezpečnostní kontrola adresy
     if (!req.query.liga || !req.query.season) return res.redirect('/history');
 
     // 1. ZAVOLÁME MOZEK (s parametrem true pro režim historie)
-    const data = prepareDashboardData(req, true);
+    const data = await prepareDashboardData(req, true);
 
     // 2. VYBALÍME SI PROMĚNNÉ
+    let isTipsLocked;
     const {
         username, selectedSeason, selectedLiga, teams,
         matches, allUsers, userStats,
     } = data;
+    isTipsLocked = data.isTipsLocked;
 
     // 3. DATA SPECIFICKÁ PRO HISTORII (Výběr uživatele z rolovacího menu vpravo)
     const usersWithTips = allUsers.filter(u => u.tips?.[selectedSeason]?.[selectedLiga]?.length > 0).sort((a, b) => a.username.localeCompare(b.username));
@@ -1168,7 +1238,7 @@ p.style.display = which === 'playoff' ? 'block' : 'none';
 <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
 <main class="main_page">`
-html += generateLeftPanel(data, true);
+html += await generateLeftPanel(data, true);
     html += `<script>
         const globalStatsData = ${JSON.stringify(userStats)};
 
@@ -1464,18 +1534,20 @@ function toggleSeriesDetails(btn) {
     </script></body></html>`;
     res.send(html);
 });
-router.get('/history/table', requireLogin, (req, res) => {
+router.get('/history/table', requireLogin, async (req, res) => {
     // 0. Bezpečnostní kontrola adresy
     if (!req.query.liga || !req.query.season) return res.redirect('/history');
 
     // 1. ZAVOLÁME MOZEK (s parametrem true pro režim historie)
-    const data = prepareDashboardData(req, true);
+    const data = await prepareDashboardData(req, true);
 
     // 2. VYBALÍME SI PROMĚNNÉ
+    let isTipsLocked;
     const {
         username, selectedSeason, selectedLiga, sortedGroupKeys, groupedTeams,
         globalRealRankMap, allUsers, tableTips,
     } = data;
+    isTipsLocked = data.isTipsLocked;
 
     const usersWithTableTips = allUsers.filter(u => tableTips?.[selectedSeason]?.[selectedLiga]?.[u.username]).sort((a, b) => a.username.localeCompare(b.username));
     const initialUser = usersWithTableTips.find(u => u.username === username) ? username : (usersWithTableTips[0]?.username || "");
@@ -1509,7 +1581,7 @@ function showTable(which) {
         <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
     </header>
 <main class="main_page">`
-html += generateLeftPanel(data, true);
+html += await generateLeftPanel(data, true);
     html += `
         <script>
         function showUserTableHistory(username) {
@@ -1547,6 +1619,9 @@ html += generateLeftPanel(data, true);
             html += `<div class="user-history-table-container user-table-${safeName}" style="display:${isVisible};">`;
             for (const gKey of sortedGroupKeys) {
                 const groupLabel = getGroupDisplayLabel(gKey);
+                
+                // Výpočet isGroupLocked pro tuto skupinu
+                const isGroupLocked = (isTipsLocked === true) || (Array.isArray(isTipsLocked) && isTipsLocked.includes(gKey));
 
                 // KOPIE SKUPINY ABYCHOM NEROZBILI LEVOU STRANU
                 const teamsForTip = [...groupedTeams[gKey]];
@@ -1584,13 +1659,20 @@ html += generateLeftPanel(data, true);
                     let diffColor = "gray";
 
                     if (hasTip) {
-                        if (diff === 0) {
-                            bgStyle = "background-color: rgba(40, 100, 40, 0.6); border-color: #00ff00;";
-                            diffText = "✔";
-                            diffColor = "#00ff00";
+                        // PŘIDÁNA KONTROLA ZÁMKU: Zobrazí vyhodnocení jen pokud je skupina zamčená
+                        if (isGroupLocked) {
+                            if (diff === 0) {
+                                bgStyle = "background-color: rgba(40, 100, 40, 0.6); border-color: #00ff00;";
+                                diffText = "✔";
+                                diffColor = "#00ff00";
+                            } else {
+                                diffText = `<span style="font-size: 0.8em">Akt.: ${realRank}. (${Math.abs(diff)})</span>`;
+                                diffColor = "orange";
+                            }
                         } else {
-                            diffText = `<span style="font-size: 0.8em">Akt.: ${realRank}. (${Math.abs(diff)})</span>`;
-                            diffColor = "orange";
+                            // Tip je uložený, ale tabulka ještě není zamčená z adminu
+                            diffText = `<span style="font-size: 0.7em; color: #aaa;">Uloženo (čeká na uzamčení)</span>` ;
+                            diffColor = "#aaa";
                         }
                     } else {
                         diffText = "Netipováno";
@@ -1670,9 +1752,9 @@ html += generateLeftPanel(data, true);
     res.send(html);
 });
 
-router.get("/prestupy", requireLogin, (req, res) => {
+router.get("/prestupy", requireLogin, async (req, res) => {
     // 1. ZAVOLÁME MOZEK, KTERÝ VŠE VYPOČÍTÁ BĚHEM MILISEKUNDY
-    const data = prepareDashboardData(req);
+    const data = await prepareDashboardData(req);
 
     // 2. VYBALÍME SI PROMĚNNÉ, KTERÉ POTŘEBUJE HTML (Destructuring)
     const {
@@ -1885,7 +1967,7 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 <main class="main_page">
 `
-html += generateLeftPanel(data);
+html += await generateLeftPanel(data);
 
     html += `<section class="matches-container" style="flex: 1; padding: 10px;">`;
         // KONTROLA: Má tato liga zapnuté přestupy?
@@ -2000,3 +2082,4 @@ html += generateLeftPanel(data);
 });
 
 module.exports = router;
+

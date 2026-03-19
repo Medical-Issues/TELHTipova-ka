@@ -12,10 +12,16 @@ Domyslet baráž ✅
 
 lepší playoff systém ✅
 
-Responzivita
-
 přechod na free databázi z json souborů
 ->
 na základě přechodu zrychlení provozu serveru a funkce převést na asynchronní všude kde to půjde
+
+Správce oznámení v přestupech, importu zápasů,
+
+V playoff tabulce roletka na rozkliknutí zápasů série,
+
+Responzivita
+
+Novinkovač (Otvírání tweetů atd.)
 
 podívat se zda je možnost kód ještě zjednodušit / zrušit duplicitní obsah

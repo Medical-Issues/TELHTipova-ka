@@ -1,13 +1,13 @@
-const {readFileSync} = require("node:fs");
-const path = require("path");
+require('fs');
+require("path");
 const fs = require("fs");
 
-function loadTeams() {
-    const data = readFileSync(path.join(__dirname, '../data/teams.json'), 'utf-8');
-    return JSON.parse(data);
+const { Teams, Users, Matches, Leagues, AllowedLeagues, ChosenSeason, Settings, TeamBonuses, LeagueStatus, TableTips, Playoff, PlayoffTemplates, Transfers, TransferLeagues} = require('./mongoDataAccess');
+async function loadTeams() {
+    return await Teams.findAll();
 }
 
-function requireLogin(req, res, next) {
+async function requireLogin(req, res, next) {
     if (!req.session.user) {
         // Buď přesměrovat:
         // return res.redirect('/login');
@@ -39,7 +39,7 @@ function requireLogin(req, res, next) {
     next();
 }
 
-function requireAdmin(req, res, next) {
+async function requireAdmin(req, res, next) {
     if (!req.session.user || req.session.role !== 'admin') {
         return res.status(403).send(`
             <!DOCTYPE html>
@@ -81,12 +81,11 @@ function requireAdmin(req, res, next) {
     next();
 }
 
-function updateTeamsPoints(currentMatches) {
+async function updateTeamsPoints(currentMatches) {
     let teams;
     try {
-        teams = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/teams.json'), 'utf-8'));
+        teams = await Teams.findAll();
     } catch (err) {
-        console.error('Chyba při čtení teams.json:', err);
         return;
     }
 
@@ -119,7 +118,6 @@ function updateTeamsPoints(currentMatches) {
             if (ot && (r.overtimeWinner === 'home' || r.overtimeWinner === 'away')) {
                 winner = r.overtimeWinner;
             } else {
-                console.log('Remíza bez overtime winner, nelze určit vítěze.');
                 return;
             }
         } else {
@@ -149,15 +147,15 @@ function updateTeamsPoints(currentMatches) {
     });
 
     try {
-        fs.writeFileSync(path.join(__dirname, '../data/teams.json'), JSON.stringify(teams, null, 2));
+        // Uložení do MongoDB
+        await Teams.replaceAll(teams);
     } catch (err) {
-        console.error('Chyba při zápisu do teams.json:', err);
     }
 }
 
-function evaluateAndAssignPoints(liga, season) {
-    const matches = JSON.parse(fs.readFileSync('./data/matches.json'));
-    const users = JSON.parse(fs.readFileSync('./data/users.json'));
+async function evaluateAndAssignPoints(liga, season) {
+    const matches = await Matches.findAll();
+    const users = await Users.findAll();
 
     for (const user of users) {
         const tipsInSeason = user.tips?.[season]?.[liga] || [];
@@ -261,11 +259,14 @@ function evaluateAndAssignPoints(liga, season) {
         user.stats[season][liga].totalPlayoff = totalPlayoff;
     }
 
-    // Zápis do souboru
-    fs.writeFileSync('./data/users.json', JSON.stringify(users, null, 2));
+    // Zápis do MongoDB
+    try {
+        await Users.replaceAll(users);
+    } catch (err) {
+    }
 }
 
-function generateSeasonRange(startYear, numberOfSeasons) {
+async function generateSeasonRange(startYear, numberOfSeasons) {
     const seasons = [];
     for (let i = 0; i < numberOfSeasons; i++) {
         const y1 = startYear + i;
@@ -279,20 +280,19 @@ function generateSeasonRange(startYear, numberOfSeasons) {
 }
 
 
-function removeTipsForDeletedMatch(matchId) {
+async function removeTipsForDeletedMatch(matchId) {
     let league = null;
     let season = null;
 
     try {
-        const matches = JSON.parse(fs.readFileSync('./data/matches.json'));
+        const matches = await Matches.findAll();
         const match = matches.find(m => m.id === matchId);
 
         if (match) {
-            console.log(`Zápas ID ${matchId} stále existuje. Tipy se nemazaly.`);
             return;
         }
 
-        const usersData = JSON.parse(fs.readFileSync('./data/users.json'));
+        const usersData = await Users.findAll();
 
         for (const user of usersData) {
             if (!user.tips) continue;
@@ -311,7 +311,6 @@ function removeTipsForDeletedMatch(matchId) {
         }
 
         if (!season || !league) {
-            console.log(`Nepodařilo se zjistit ligu/sezónu pro zápas ID ${matchId}.`);
             return;
         }
 
@@ -329,24 +328,20 @@ function removeTipsForDeletedMatch(matchId) {
                 if (filteredTips.length !== originalTips.length) {
                     user.tips[season][league] = filteredTips;
                     changesMade = true;
-                    console.log(`Smazán tip u uživatele ${user.username}`);
                 }
             }
         }
 
         if (changesMade) {
-            fs.writeFileSync('./data/users.json', JSON.stringify(usersData, null, 2));
-            console.log(`Tipy na zápas ID ${matchId} (liga: ${league}, sezóna: ${season}) byly smazány.`);
-        } else {
-            console.log(`Nebyly nalezeny žádné tipy na zápas ID ${matchId}.`);
+            // Uložení do MongoDB
+            await Users.replaceAll(usersData);
         }
 
     } catch (err) {
-        console.error("Chyba při mazání tipů:", err);
     }
 }
 
-function calculateTeamScores(matches, selectedSeason, selectedLiga) {
+async function calculateTeamScores(matches, selectedSeason, selectedLiga) {
     const scores = {};
 
     // 1. Spočítání gólů z reálných zápasů (matches.json)
@@ -379,8 +374,7 @@ function calculateTeamScores(matches, selectedSeason, selectedLiga) {
 
     // 2. PŘIDÁNO: Přičtení manuálních gólů z teamBonuses.json
     try {
-        const fs = require('fs');
-        const teamBonusData = JSON.parse(fs.readFileSync('./data/teamBonuses.json', 'utf8'));
+        const teamBonusData = await TeamBonuses.findAll();
         const leagueBonuses = teamBonusData[selectedSeason]?.[selectedLiga] || {};
 
         for (const teamId in leagueBonuses) {
@@ -399,7 +393,7 @@ function calculateTeamScores(matches, selectedSeason, selectedLiga) {
 
     return scores;
 }
-function getLeagueZones(leagueObj) {
+async function getLeagueZones(leagueObj) {
     if (!leagueObj) return { quarterfinal: 0, playin: 0, relegation: 0 };
     return {
         quarterfinal: Number(leagueObj.quarterfinal || 0),
@@ -408,53 +402,34 @@ function getLeagueZones(leagueObj) {
     };
 }
 
-function getTeamZone(index, totalTeams, cfg) {
+async function getTeamZone(index, totalTeams, cfg) {
     const pos = index + 1;
     if (pos <= cfg.quarterfinal) return "quarterfinal";
     if (pos <= cfg.playin) return "playin";
     if (pos > totalTeams - cfg.relegation) return "relegation";
     return "neutral";
 }
-const paths = {
-    allowedLeagues: path.join(__dirname, '../data/allowedLeagues.json'),
-    leagues: path.join(__dirname, '../data/leagues.json'),
-    teams: path.join(__dirname, '../data/teams.json'),
-    matches: path.join(__dirname, '../data/matches.json'),
-    users: path.join(__dirname, '../data/users.json'),
-    playoff: path.join(__dirname, '../data/playoff.json')
-};
 
-const loadJSON = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
-const saveJSON = (file, data) => fs.writeFileSync(file, JSON.stringify(data, null, 2));
-
-function renameLeagueGlobal(oldName, newName) {
-    console.log(`🚨 START: Přejmenovávám ligu "${oldName}" na "${newName}"`);
-
-    // 1. ALLOWEDLEAGUES.JSON (Pole stringů)
+async function renameLeagueGlobal(oldName, newName) {
+    // 1. ALLOWEDLEAGUES (MongoDB)
     try {
-        const allowed = loadJSON(paths.allowedLeagues);
+        const allowed = await AllowedLeagues.findAll();
         const index = allowed.indexOf(oldName);
         if (index !== -1) {
             allowed[index] = newName;
-            saveJSON(paths.allowedLeagues, allowed);
-            console.log('✅ allowedLeagues.json: Název v poli upraven.');
+            await AllowedLeagues.replaceAll(allowed);
         }
-    } catch (e) { console.error('Chyba allowedLeagues:', e.message); }
+    } catch (e) { }
 
-    // 2. LEAGUES.JSON (OPRAVENO: Iterace přes sezóny)
-    // -------------------------------------
+    // 2. LEAGUES (MongoDB)
     try {
-        const leaguesData = loadJSON(paths.leagues);
+        const leaguesData = await Leagues.findAll();
         let leaguesChanged = false;
 
-        // Projdeme všechny klíče (sezóny), např. "24/25", "25/26"
         Object.keys(leaguesData).forEach(seasonKey => {
             const seasonObj = leaguesData[seasonKey];
-
-            // Pokud má sezóna pole 'leagues'
             if (seasonObj && Array.isArray(seasonObj.leagues)) {
                 const leagueToUpdate = seasonObj.leagues.find(l => l.name === oldName);
-
                 if (leagueToUpdate) {
                     leagueToUpdate.name = newName;
                     leaguesChanged = true;
@@ -463,14 +438,13 @@ function renameLeagueGlobal(oldName, newName) {
         });
 
         if (leaguesChanged) {
-            saveJSON(paths.leagues, leaguesData);
-            console.log('✅ leagues.json: Název upraven napříč sezónami.');
+            await Leagues.replaceAll(leaguesData);
         }
-    } catch (e) { console.error('Chyba leagues:', e.message); }
+    } catch (e) { }
 
-    // 3. TEAMS.JSON
+    // 3. TEAMS (MongoDB)
     try {
-        const teams = loadJSON(paths.teams);
+        const teams = await Teams.findAll();
         let count = 0;
         teams.forEach(t => {
             if (t.liga === oldName) {
@@ -479,57 +453,47 @@ function renameLeagueGlobal(oldName, newName) {
             }
         });
         if (count > 0) {
-            saveJSON(paths.teams, teams);
-            console.log(`✅ teams.json: Upraveno u ${count} týmů.`);
+            await Teams.replaceAll(teams);
         }
-    } catch (e) { console.error('Chyba teams:', e.message); }
+    } catch (e) { }
 
-    // 4. MATCHES.JSON
+    // 4. MATCHES (MongoDB)
     try {
-        const matches = loadJSON(paths.matches);
+        const matches = await Matches.findAll();
         let count = 0;
-
-        // Pomocná funkce, protože matches může být pole nebo objekt
-        const updateMatchesList = (list) => {
-            let c = 0;
-            list.forEach(m => {
-                if (m.liga === oldName) { m.liga = newName; c++; }
-            });
-            return c;
-        };
-
-        if (Array.isArray(matches)) {
-            count = updateMatchesList(matches);
-        } else {
-            // Pokud je matches rozděleno po sezónách/ligách
-            Object.keys(matches).forEach(key => {
-                if (Array.isArray(matches[key])) {
-                    count += updateMatchesList(matches[key]);
-                }
-            });
-        }
-
+        matches.forEach(m => {
+            if (m.liga === oldName) { m.liga = newName; count++; }
+        });
         if (count > 0) {
-            saveJSON(paths.matches, matches);
-            console.log(`✅ matches.json: Upraveno u ${count} zápasů.`);
+            await Matches.replaceAll(matches);
         }
-    } catch (e) { console.error('Chyba matches:', e.message); }
+    } catch (e) { }
 
-    // 5. PLAYOFF.JSON (Textová náhrada)
+    // 5. PLAYOFF (MongoDB)
     try {
-        let rawPlayoff = fs.readFileSync(paths.playoff, 'utf8');
-        const regex = new RegExp(`"${oldName}"`, 'g');
-        const newPlayoff = rawPlayoff.replace(regex, `"${newName}"`);
-
-        if (rawPlayoff !== newPlayoff) {
-            fs.writeFileSync(paths.playoff, newPlayoff);
-            console.log('✅ playoff.json: Textově nahrazeny výskyty názvu.');
+        const playoffData = await Playoff.findAll();
+        if (playoffData && typeof playoffData === 'object') {
+            let changed = false;
+            const updatePlayoffData = (obj) => {
+                Object.keys(obj).forEach(key => {
+                    if (typeof obj[key] === 'object' && obj[key] !== null) {
+                        updatePlayoffData(obj[key]);
+                    } else if (typeof obj[key] === 'string' && obj[key] === oldName) {
+                        obj[key] = newName;
+                        changed = true;
+                    }
+                });
+            };
+            updatePlayoffData(playoffData);
+            if (changed) {
+                await Playoff.replaceAll(playoffData);
+            }
         }
-    } catch (e) { console.error('Chyba playoff:', e.message); }
+    } catch (e) { }
 
-    // 6. USERS.JSON (Statistiky - Klíče)
+    // 6. USERS (MongoDB) - Statistiky
     try {
-        const users = loadJSON(paths.users);
+        const users = await Users.findAll();
         let usersUpdated = 0;
 
         users.forEach(user => {
@@ -546,26 +510,66 @@ function renameLeagueGlobal(oldName, newName) {
         });
 
         if (usersUpdated > 0) {
-            saveJSON(paths.users, users);
-            console.log(`✅ users.json: Přejmenovány statistiky u ${usersUpdated} uživatelů.`);
+            await Users.replaceAll(users);
         }
-    } catch (e) { console.error('Chyba users:', e.message); }
-
-    console.log('🏁 HOTOVO. Všechny ligy přejmenovány.');
+    } catch (e) { }
 }
 
-function evaluateRegularSeasonTable(season, liga) {
-    const fs = require('fs');
-
+async function evaluateRegularSeasonTable(season, liga, groupKey = null, isForLeftPanel = false) {
+    // Pokud je specifická skupina a NENÍ pro levý panel, kontrolujeme její zamčení
+    if (groupKey && !isForLeftPanel) {
+        const statusData = await getLeagueStatusData();
+        const isTipsLocked = statusData?.[season]?.[liga]?.tableTipsLocked;
+        const isGroupLocked = (isTipsLocked === true) || (Array.isArray(isTipsLocked) && isTipsLocked.includes(groupKey));
+        
+        // Pokud je skupina ODEMCENÁ a není pro levý panel, nevyhodnocujeme (může se tipovat)
+        if (!isGroupLocked) {
+            return;
+        }
+        // Zamčené skupiny se vyhodnocují
+    } else if (!isForLeftPanel) {
+        // Pokud je voláno pro celou ligu a NENÍ pro levý panel, vyhodnocujeme pouze zamčené skupiny
+        const statusData = await getLeagueStatusData();
+        const isTipsLocked = statusData?.[season]?.[liga]?.tableTipsLocked;
+        
+        // Pokud je vše zamčené, vyhodnocujeme celou ligu
+        if (isTipsLocked === true) {
+            // Pokračujeme s vyhodnocováním celé ligy
+        } else if (Array.isArray(isTipsLocked)) {
+            // Pokud jsou zamčené jen některé skupiny, vyhodnocujeme jen tyto skupiny
+            // Musíme upravit logiku pro multiligy
+            const allSeasonData = await Leagues.findAll();
+            const isMultigroup = allSeasonData[season]?.leagues.find(l => l.name === liga)?.isMultigroup || false;
+            
+            if (isMultigroup) {
+                // Pro multiligy vyhodnocujeme jen zamčené skupiny
+                // Pokud nejsou žádné zamčené skupiny, nevyhodnocujeme
+                if (isTipsLocked.length === 0) {
+                    return;
+                }
+                // TODO: Implementovat vyhodnocení jen zamčených skupin
+                // Pro teď vyhodnotíme jen pokud je něco zamčené
+            }
+        } else {
+            // Nic není zamčené, nevyhodnocujeme
+            return;
+        }
+    }
+    
     // 1. Načtení dat
-    const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'));
-    const teams = JSON.parse(fs.readFileSync('./data/teams.json', 'utf8')).filter(t => t.active && t.liga === liga);
-    const users = JSON.parse(fs.readFileSync('./data/users.json', 'utf8'));
-    const allSeasonData = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf8'));
+    const matches = await Matches.findAll();
+    const teams = (await Teams.findAll()).filter(t => t.active && t.liga === liga);
+    const users = await Users.findAll();
+    const allSeasonData = await Leagues.findAll();
     const isMultigroup = allSeasonData[season]?.leagues.find(l => l.name === liga)?.isMultigroup || false;
 
     let tableTips = {};
-    try { tableTips = JSON.parse(fs.readFileSync('./data/tableTips.json', 'utf8')); } catch (e) {}
+    try { tableTips = await TableTips.findAll(); } catch (e) {}
+
+    // Načtení stavu zámků
+    let statusData = {};
+    try { statusData = await LeagueStatus.findAll(); } catch (e) {}
+    const isTipsLocked = statusData?.[season]?.[liga]?.tableTipsLocked || false;
 
     // 2. Výpočet skóre a reálných bodů
     const scores = {};
@@ -593,7 +597,7 @@ function evaluateRegularSeasonTable(season, liga) {
 
     // Započítání manuálních bodů/bonusů + tiebreakerů
     try {
-        const teamBonusData = JSON.parse(fs.readFileSync('./data/teamBonuses.json', 'utf8'));
+        const teamBonusData = await TeamBonuses.findAll();
         const leagueBonuses = teamBonusData[season]?.[liga] || {};
         for (const teamId in leagueBonuses) {
             const bonus = leagueBonuses[teamId];
@@ -723,52 +727,100 @@ function evaluateRegularSeasonTable(season, liga) {
     });
 
     // 4. VYHODNOCENÍ UŽIVATELŮ VŮČI IIHF POŘADÍ
+    // 4. VYHODNOCENÍ UŽIVATELŮ VŮČI IIHF POŘADÍ
     users.forEach(user => {
-        let userTipData = tableTips?.[season]?.[liga]?.[user.username];
-        if (!userTipData) return;
+        if (!user.stats) user.stats = {};
+        if (!user.stats[season]) user.stats[season] = {};
+        if (!user.stats[season][liga]) user.stats[season][liga] = {};
 
-        // Kvůli zpětné kompatibilitě (pole vs objekt)
+        // KONTROLA ZÁMKU: Pokud není zamčeno nic, vynulujeme body a jdeme dál
+        if (isTipsLocked === false || (Array.isArray(isTipsLocked) && isTipsLocked.length === 0)) {
+            user.stats[season][liga].tableCorrect = 0;
+            user.stats[season][liga].tableDeviation = 0;
+            return;
+        }
+
+        let userTipData = tableTips?.[season]?.[liga]?.[user.username];
+
+        // Pokud uživatel nemá vůbec žádné tipy
+        if (!userTipData) {
+            user.stats[season][liga].tableCorrect = 0;
+            user.stats[season][liga].tableDeviation = 0;
+            return;
+        }
+
+        // --- KONTROLA KOMPLETNOSTI TIPU ---
+        // Zjistíme, jestli natipoval VŠECHNY dostupné skupiny a všechny týmy v nich
+        const requiredGroups = Object.keys(groupedTeamsReal);
+        let hasAllTips = true;
+
         if (Array.isArray(userTipData)) {
-            userTipData = { "default": userTipData };
+            // Zpětná kompatibilita (starý formát s jednou skupinou)
+            if (requiredGroups.length > 1) {
+                hasAllTips = false;
+            } else {
+                userTipData = { "default": userTipData };
+            }
+        } else {
+            // Multigroup / Nový objektový formát
+            for (const gKey of requiredGroups) {
+                if (!userTipData[gKey] || userTipData[gKey].length === 0 || userTipData[gKey].length !== groupedTeamsReal[gKey].length) {
+                    hasAllTips = false;
+                    break;
+                }
+            }
+        }
+
+        // Pokud mu chybí byť jen jedna skupina z multiligy nebo nemá seřazené všechny týmy, NEHODNOTÍME HO.
+        if (!hasAllTips) {
+            user.stats[season][liga].tableCorrect = 0;
+            user.stats[season][liga].tableDeviation = 0;
+            return;
         }
 
         let totalCorrect = 0;
         let totalDeviation = 0;
 
         Object.keys(groupedTeamsReal).forEach(gKey => {
+            // Zkontrolujeme, jestli je zrovna TATO skupina zamčená (počítáme odchylku jen z uzamčených)
+            const isGroupLocked = isTipsLocked === true || (Array.isArray(isTipsLocked) && isTipsLocked.includes(gKey));
+
+            if (!isGroupLocked) return;
+
             const userGroupTip = userTipData[gKey] || [];
             const realTeamsInGroup = groupedTeamsReal[gKey];
 
             realTeamsInGroup.forEach((realTeam) => {
                 const realRank = globalRealRankMap[realTeam.id];
-
-                // Zabrání bugu, kdy JS hledá string "12" a nenajde int 12
                 const userIndexNum = userGroupTip.indexOf(Number(realTeam.id));
                 const userIndexStr = userGroupTip.indexOf(String(realTeam.id));
                 const finalUserIndex = userIndexNum !== -1 ? userIndexNum : userIndexStr;
 
                 if (finalUserIndex !== -1) {
                     const diff = Math.abs((finalUserIndex + 1) - realRank);
-                    totalDeviation += diff;
-                    if (diff === 0) totalCorrect++;
+                    if (diff === 0) {
+                        totalCorrect++;
+                    } else {
+                        totalDeviation += diff;
+                    }
                 } else {
-                    totalDeviation += realTeamsInGroup.length; // Penalizace, pokud tým v tipu úplně chybí
+                    totalDeviation += realTeamsInGroup.length; // Pro jistotu, i když to chytí hasAllTips
                 }
             });
         });
-
-        if (!user.stats) user.stats = {};
-        if (!user.stats[season]) user.stats[season] = {};
-        if (!user.stats[season][liga]) user.stats[season][liga] = {};
 
         user.stats[season][liga].tableCorrect = totalCorrect;
         user.stats[season][liga].tableDeviation = totalDeviation;
     });
 
-    fs.writeFileSync('./data/users.json', JSON.stringify(users, null, 2));
+    // Uložení do MongoDB
+    try {
+        await Users.replaceAll(users);
+    } catch (err) {
+    }
 }
 
-function renderErrorHtml(res, message, code = 500) {
+async function renderErrorHtml(res, message, code = 500) {
     res.status(code).send(`
         <!DOCTYPE html>
         <html lang="cs">
@@ -796,7 +848,7 @@ function renderErrorHtml(res, message, code = 500) {
     `);
 }
 
-function getTableMode(req, isRegularSeasonFinished) {
+async function getTableMode(req, isRegularSeasonFinished) {
     // 1. Priorita: Co je v URL (pokud uživatel klikne na tlačítko)
     if (req.query.tableMode === 'regular' || req.query.tableMode === 'playoff') {
         return req.query.tableMode;
@@ -806,41 +858,41 @@ function getTableMode(req, isRegularSeasonFinished) {
     return isRegularSeasonFinished ? 'playoff' : 'regular';
 }
 // --- POMOCNÉ ČTECÍ FUNKCE (Vlož nahoru do fileUtils.js) ---
-function getChosenSeason() {
-    try { return JSON.parse(fs.readFileSync(path.join(__dirname, '../data/chosenSeason.json'), 'utf8')); } catch (e) { return "Neurčeno"; }
+async function getChosenSeason() {
+    try { return await ChosenSeason.findAll(); } catch (e) { return "Neurčeno"; }
 }
-function getMatches() {
-    try { return JSON.parse(fs.readFileSync(path.join(__dirname, '../data/matches.json'), 'utf8')); } catch (e) { return []; }
+async function getMatches() {
+    try { return await Matches.findAll(); } catch (e) { return []; }
 }
-function getAllowedLeagues() {
-    try { return JSON.parse(fs.readFileSync(path.join(__dirname, '../data/allowedLeagues.json'), 'utf8')); } catch (e) { return []; }
+async function getAllowedLeagues() {
+    try { return await AllowedLeagues.findAll(); } catch (e) { return []; }
 }
-function getLeaguesData() {
-    try { return JSON.parse(fs.readFileSync(path.join(__dirname, '../data/leagues.json'), 'utf8')); } catch (e) { return {}; }
+async function getLeaguesData() {
+    try { return await Leagues.findAll(); } catch (e) { return {}; }
 }
-function getSettingsData() {
-    try { return JSON.parse(fs.readFileSync(path.join(__dirname, '../data/settings.json'), 'utf8')); } catch (e) { return {}; }
+async function getSettingsData() {
+    try { return await Settings.findAll(); } catch (e) { return {}; }
 }
-function getLeagueStatusData() {
-    try { return JSON.parse(fs.readFileSync(path.join(__dirname, '../data/leagueStatus.json'), 'utf8')); } catch (e) { return {}; }
+async function getLeagueStatusData() {
+    try { return await LeagueStatus.findAll(); } catch (e) { return {}; }
 }
-function getTeamBonusesData() {
-    try { return JSON.parse(fs.readFileSync(path.join(__dirname, '../data/teamBonuses.json'), 'utf8')); } catch (e) { return {}; }
+async function getTeamBonusesData() {
+    try { return await TeamBonuses.findAll(); } catch (e) { return {}; }
 }
-function getTableTipsData() {
-    try { return JSON.parse(fs.readFileSync(path.join(__dirname, '../data/tableTips.json'), 'utf8')); } catch (e) { return {}; }
+async function getTableTipsData() {
+    try { return await TableTips.findAll(); } catch (e) { return {}; }
 }
-function getUsersData() {
-    try { return JSON.parse(fs.readFileSync(path.join(__dirname, '../data/users.json'), 'utf8')); } catch (e) { return []; }
+async function getUsersData() {
+    try { return await Users.findAll(); } catch (e) { return []; }
 }
-function getPlayoffData() {
-    try { return JSON.parse(fs.readFileSync(path.join(__dirname, '../data/playoff.json'), 'utf8')); } catch (e) { return {}; }
+async function getPlayoffData() {
+    try { return await Playoff.findAll(); } catch (e) { return {}; }
 }
-function getTransfersData() {
-    try { return JSON.parse(fs.readFileSync(path.join(__dirname, '../data/transfers.json'), 'utf8')); } catch (e) { return {}; }
+async function getTransfersData() {
+    try { return await Transfers.findAll(); } catch (e) { return {}; }
 }
-function getActiveTransferLeagues() {
-    try { return JSON.parse(fs.readFileSync(path.join(__dirname, '../data/transferLeagues.json'), 'utf8')); } catch (e) { return []; }
+async function getActiveTransferLeagues() {
+    try { return await TransferLeagues.findAll(); } catch (e) { return []; }
 }
 const getGroupDisplayLabel = (gKey) => {
     if (gKey === 'default') return '';
@@ -848,20 +900,22 @@ const getGroupDisplayLabel = (gKey) => {
     return `Skupina ${String.fromCharCode(64 + num)}`;
 };
 
-function prepareDashboardData(req, isHistory = false) {
+async function prepareDashboardData(req, isHistory = false) {
     const username = req.session ? req.session.user : null;
 
     // 1. Zjištění sezóny (pokud jsme v historii, bereme z URL, jinak globální)
-    let selectedSeason = getChosenSeason();
+    let selectedSeason = await getChosenSeason();
     if (isHistory && req.query.season) {
         selectedSeason = req.query.season;
     }
 
     // 2. Načtení základních dat
-    const teams = loadTeams().filter(t => t.active);
-    const matches = getMatches();
-    const allowedLeagues = getAllowedLeagues();
-    const allSeasonData = getLeaguesData();
+    const teams = (await loadTeams()).filter(t => t.active);
+    
+    const matches = await getMatches();
+    
+    const allowedLeagues = await getAllowedLeagues();
+    const allSeasonData = await getLeaguesData();
     const leagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues) ? allSeasonData[selectedSeason].leagues : [];
 
     const leaguesFromTeams = [...new Set(teams.map(t => t.liga))];
@@ -876,7 +930,11 @@ function prepareDashboardData(req, isHistory = false) {
         ? req.query.liga
         : (uniqueLeagues[0] || "Neurčeno");
 
-    const teamsInSelectedLiga = teams.filter(t => t.liga === selectedLiga);
+    const teamsInSelectedLiga = teams.filter(t => 
+    t.liga === selectedLiga || 
+    t.liga === selectedLiga.trim() ||
+    t.liga.toLowerCase() === selectedLiga.toLowerCase()
+);
 
     const leagueObj = leagues.find(l => l.name === selectedLiga) || {
         name: selectedLiga || "Neznámá liga",
@@ -886,7 +944,7 @@ function prepareDashboardData(req, isHistory = false) {
     // 3. Stavy a Módy (Kaskáda / Striktní a Základní / Playoff)
     let clinchMode = 'strict';
     try {
-        const settingsData = getSettingsData();
+        const settingsData = await getSettingsData();
         if (settingsData.clinchMode) clinchMode = settingsData.clinchMode;
     } catch (e) {}
 
@@ -898,17 +956,31 @@ function prepareDashboardData(req, isHistory = false) {
     let isRegularSeasonFinished = false;
     let isTipsLocked = false;
     try {
-        const statusData = getLeagueStatusData();
+        const statusData = await getLeagueStatusData();
         isRegularSeasonFinished = statusData?.[selectedSeason]?.[selectedLiga]?.regularSeasonFinished || false;
         isTipsLocked = statusData?.[selectedSeason]?.[selectedLiga]?.tableTipsLocked || false;
     } catch (e) {}
 
-    const tableMode = getTableMode(req, isRegularSeasonFinished);
+    const tableMode = await getTableMode(req, isRegularSeasonFinished);
 
     // 4. Výpočet bodů a bonusů
-    const scores = calculateTeamScores(matches, selectedSeason, selectedLiga);
+    // Původní logika - výpočet jen pro plně zamčené ligy
+    
+    let scores = {};
+    
+    if (!isTipsLocked || (Array.isArray(isTipsLocked) && isTipsLocked.length === 0)) {
+        // Nic není zamčené - žádný výpočet
+    } else if (Array.isArray(isTipsLocked)) {
+        // Částečně zamčené skupiny - žádný výpočet
+        scores = {};
+    } else {
+        // Vše je zamčené - výpočet skóre
+        scores = await calculateTeamScores(matches, selectedSeason, selectedLiga);
+    }
     let teamBonusData = {};
-    try { teamBonusData = getTeamBonusesData(); } catch (e) {}
+    try { 
+        teamBonusData = await getTeamBonusesData(); 
+    } catch (e) {}
 
     teamsInSelectedLiga.forEach(t => {
         if (!t.stats) t.stats = {};
@@ -918,7 +990,12 @@ function prepareDashboardData(req, isHistory = false) {
         let bonusEntry = teamBonusData[selectedSeason]?.[selectedLiga]?.[t.id] || { points: 0, games: 0 };
         if (typeof bonusEntry === 'number') bonusEntry = { points: bonusEntry, games: 0 };
 
-        t.stats[selectedSeason].points = naturalPoints + (bonusEntry.points || 0);
+        // Původní logika - jen pro plně zamčené ligy
+        if (!Array.isArray(isTipsLocked)) {
+            t.stats[selectedSeason].points = naturalPoints + (bonusEntry.points || 0);
+        }
+        // Pro částečně zamčené - zachováme původní body (pro tipování)
+        
         t.stats[selectedSeason].manualGames = bonusEntry.games || 0;
         t.stats[selectedSeason].tiebreaker = bonusEntry.tiebreaker || 0;
     });
@@ -927,7 +1004,7 @@ function prepareDashboardData(req, isHistory = false) {
     const teamsByGroup = {};
     const groupedTeams = {};
 
-    teamsInSelectedLiga.forEach(team => {
+    teamsInSelectedLiga.forEach((team) => {
         const groupLetter = team.group ? String.fromCharCode(team.group + 64) : 'X';
         if (!teamsByGroup[groupLetter]) teamsByGroup[groupLetter] = [];
         teamsByGroup[groupLetter].push(team);
@@ -943,7 +1020,13 @@ function prepareDashboardData(req, isHistory = false) {
 
     // 6. IIHF Řazení (Záchrana stovek řádků!)
     const globalRealRankMap = {};
+    
+    // Kontrola zamčení - pro levý panel vždy seřadíme pro přehled
+    // Lockování se týká POUZE pravého panelu (tipování)
     for (const group of sortedGroups) {
+        // Levý panel vždy seřadí pro přehled reálného stavu
+        // ŽÁDNÁ PODMÍNKA - vždy seřadíme
+        
         teamsByGroup[group].sort((a, b) => {
             const aStats = a.stats?.[selectedSeason] || {};
             const bStats = b.stats?.[selectedSeason] || {};
@@ -1015,37 +1098,86 @@ function prepareDashboardData(req, isHistory = false) {
 
     // 7. Statistiky uživatelů a Playoff
     let tableTips = {};
-    try { tableTips = getTableTipsData(); } catch (e) {}
+    try { tableTips = await getTableTipsData(); } catch (e) {}
 
     let allUsers = [];
-    try { allUsers = getUsersData(); } catch (e) {}
+    try { allUsers = await getUsersData(); } catch (e) {}
 
     const matchesInLiga = matches.filter(m => m.season === selectedSeason && m.liga === selectedLiga);
 
     const userStats = allUsers.filter(u => {
-        const stats = u.stats?.[selectedSeason]?.[selectedLiga];
-        const tips = u.tips?.[selectedSeason]?.[selectedLiga] || [];
-        const hasRawTableTip = tableTips?.[selectedSeason]?.[selectedLiga]?.[u.username];
-        return (stats && (stats.totalRegular > 0 || stats.totalPlayoff > 0 || stats.tableCorrect !== undefined)) || tips.length > 0 || !!hasRawTableTip;
+        // 1. Skryjeme Admina (pro jistotu ošetříme i velká/malá písmena)
+        if (!u.username || u.username.toLowerCase() === "admin") return false;
+
+        const seasonStats = u.stats?.[selectedSeason]?.[selectedLiga] || {};
+        const seasonTips = u.tips?.[selectedSeason]?.[selectedLiga];
+        const tableTip = tableTips?.[selectedSeason]?.[selectedLiga]?.[u.username];
+
+        // 2. Kontrola, jestli má uložené tipy na zápasy (ověříme, že je to pole a není prázdné)
+        const hasMatchTips = Array.isArray(seasonTips) && seasonTips.length > 0;
+
+        // 3. Kontrola, jestli má uložený tip tabulky v databázi (stačí, že objekt existuje)
+        const hasTableTip = tableTip !== undefined && tableTip !== null;
+
+        // 4. Kontrola historie (pokud už mu v této lize backend někdy vyhodnotil zápas)
+        const hasPlayedMatches = (seasonStats.totalRegular || 0) > 0 || (seasonStats.totalPlayoff || 0) > 0;
+
+        // Pokud platí alespoň jedna podmínka, uživatel ligu prokazatelně hraje. Jinak ho vyškrtneme.
+        return hasMatchTips || hasTableTip || hasPlayedMatches;
     }).map(u => {
         const stats = u.stats?.[selectedSeason]?.[selectedLiga] || {};
         const userTips = u.tips?.[selectedSeason]?.[selectedLiga] || [];
-        let tCorrect = stats.tableCorrect || 0;
-        let tDeviation = stats.tableDeviation || 0;
+        
+        // KONTROLA ZÁMKU: Pokud liga není zamčená, ignorujeme data z databáze a ukážeme 0
+        let tCorrect = 0;
+        let tDeviation = 0;
+        
+        if (isTipsLocked === true || (Array.isArray(isTipsLocked) && isTipsLocked.length > 0)) {
+            // Jen pokud je něco zamčené, načteme data z databáze
+            tCorrect = stats.tableCorrect || 0;
+            tDeviation = stats.tableDeviation || 0;
+        }
+        // Pokud nic není zamčené, zůstává tCorrect = 0 a tDeviation = 0
 
         if (tCorrect === 0 && tDeviation === 0) {
-            const userTableTip = tableTips?.[selectedSeason]?.[selectedLiga]?.[u.username];
-            if (userTableTip) {
-                for (const gKey of sortedGroupKeys) {
-                    let tipIds = Array.isArray(userTableTip) ? userTableTip : (userTableTip[gKey] || []);
-                    tipIds.forEach((tid, idx) => {
-                        const realRank = globalRealRankMap[tid];
-                        if (realRank) {
-                            const diff = Math.abs((idx + 1) - realRank);
-                            tDeviation += diff;
-                            if (diff === 0) tCorrect++;
+            // Vyhodnocujeme "za letu" POUZE pokud je z adminu zamčeno
+            const isGloballyLocked = isTipsLocked === true;
+            const hasLockedGroups = Array.isArray(isTipsLocked) && isTipsLocked.length > 0;
+
+            if (isGloballyLocked || hasLockedGroups) {
+                const userTableTip = tableTips?.[selectedSeason]?.[selectedLiga]?.[u.username];
+                if (userTableTip) {
+                    // --- KONTROLA KOMPLETNOSTI TIPU PŘI "ON THE FLY" VÝPOČTU ---
+                    let hasAllTips = true;
+                    let normalizedTip = userTableTip;
+
+                    if (Array.isArray(userTableTip)) {
+                        if (sortedGroupKeys.length > 1) hasAllTips = false;
+                        else normalizedTip = { "default": userTableTip };
+                    } else {
+                        for (const gKey of sortedGroupKeys) {
+                            if (!normalizedTip[gKey] || normalizedTip[gKey].length === 0 || normalizedTip[gKey].length !== groupedTeams[gKey].length) {
+                                hasAllTips = false; break;
+                            }
                         }
-                    });
+                    }
+
+                    if (hasAllTips) {
+                        for (const gKey of sortedGroupKeys) {
+                            // Vyhodnocujeme jen zamčené skupiny
+                            if (isGloballyLocked || (Array.isArray(isTipsLocked) && isTipsLocked.includes(gKey))) {
+                                let tipIds = normalizedTip[gKey] || [];
+                                tipIds.forEach((tid, idx) => {
+                                    const realRank = globalRealRankMap[tid];
+                                    if (realRank) {
+                                        const diff = Math.abs((idx + 1) - realRank);
+                                        tDeviation += diff;
+                                        if (diff === 0) tCorrect++;
+                                    }
+                                });
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1075,16 +1207,16 @@ function prepareDashboardData(req, isHistory = false) {
 
     let playoffData = [];
     try {
-        const allPlayoffs = getPlayoffData();
+        const allPlayoffs = await getPlayoffData();
         if (allPlayoffs[selectedSeason] && allPlayoffs[selectedSeason][selectedLiga]) playoffData = allPlayoffs[selectedSeason][selectedLiga];
     } catch (e) {}
 
     // --- PŘIDÁNO: Načtení dat pro PŘESTUPY ---
     let activeTransferLeagues = [];
-    try { activeTransferLeagues = getActiveTransferLeagues(); } catch(e) {}
+    try { activeTransferLeagues = await getActiveTransferLeagues(); } catch(e) {}
 
     let transfersData = {};
-    try { transfersData = getTransfersData(); } catch(e) {}
+    try { transfersData = await getTransfersData(); } catch(e) {}
     const currentTransfers = transfersData[selectedSeason]?.[selectedLiga] || {};
 
     // Všechna "vysátá" data pošleme zpět
@@ -1098,7 +1230,7 @@ function prepareDashboardData(req, isHistory = false) {
     };
 }
 
-function generateStatsHtml(username, currentUserStats, userStats, isRegularSeasonFinished) {
+async function generateStatsHtml(username, currentUserStats, userStats, isRegularSeasonFinished) {
     if (!username) return ''; // Pokud není uživatel přihlášený, statistiky se neukazují
 
     const statusStyle = isRegularSeasonFinished ? "color: lightgrey; font-weight: bold;" : "color: white; opacity: 0.7; background-color: black";
@@ -1151,6 +1283,9 @@ function generateStatsHtml(username, currentUserStats, userStats, isRegularSeaso
         const successRate = user.total > 0 ? ((user.correct / user.total) * 100).toFixed(2) : '0.00';
         const successRateOverall = user.maxFromTips > 0 ? ((user.correct / user.maxFromTips) * 100).toFixed(2) : '0.00';
 
+        // Zjistíme, jestli byl vůbec uživatel z tabulky hodnocen
+        const isTableEvaluated = user.tableCorrect > 0 || user.tableDeviation > 0;
+
         html += `
             <tr>
                 <td>${index + 1}.</td>
@@ -1159,8 +1294,8 @@ function generateStatsHtml(username, currentUserStats, userStats, isRegularSeaso
                 <td>${user.correct}</td>
                 <td>${user.totalRegular}</td>
                 <td>${user.totalPlayoff}</td>
-                <td style="${statusStyle}">${user.tableCorrect > 0 ? user.tableCorrect : '-'}</td>
-                <td style="${statusStyle}">${user.tableDeviation > 0 ? user.tableDeviation : '-'}</td>
+                <td style="${statusStyle}">${isTableEvaluated ? user.tableCorrect : '-'}</td>
+                <td style="${statusStyle}">${isTableEvaluated ? user.tableDeviation : '-'}</td>
             </tr>`;
     });
 
@@ -1184,7 +1319,7 @@ function generateStatsHtml(username, currentUserStats, userStats, isRegularSeaso
     return html;
 }
 
-function generateLeftPanel(data, isHistory = false) {
+async function generateLeftPanel(data, isHistory = false) {
     const {
         username, selectedSeason, selectedLiga, teamsInSelectedLiga,
         matches, clinchMode, tableMode, isRegularSeasonFinished,
@@ -1231,6 +1366,14 @@ function generateLeftPanel(data, isHistory = false) {
     // ==========================================
     for (const group of sortedGroups) {
         const teamsInGroup = teamsByGroup[group];
+        
+        // Levý panel (tabulka základní části) VŽDY zobrazí tabulky
+        // Je to přehled reálného stavu, nezávisí na tipování
+        // Kontrola zamčení se týká POUZE pravého panelu (tipování)
+        // ŽÁDNÁ PODMÍNKA - levý panel vždy zobrazí
+        
+        // Pro levý panel vždy vyhodnotíme clinching pro přehled
+        await evaluateRegularSeasonTable(selectedSeason, selectedLiga, group, true);
 
         // ULOŽENÍ TÝMU DO CROSS-TABLE
         if (leagueObj.crossGroupTable && leagueObj.crossGroupPosition > 0) {
@@ -1551,7 +1694,7 @@ function generateLeftPanel(data, isHistory = false) {
     const format = leagueObj?.playoffFormat || 'none';
     const savedSlots = playoffData || {};
 
-    function getSeriesInfo(slotKey) {
+    async function getSeriesInfo(slotKey) {
         const seriesIdStr = savedSlots[slotKey];
 
         // Pokud admin nevybral hotovou sérii, zjistíme, jestli nenaklikal čekající týmy
@@ -1599,8 +1742,8 @@ function generateLeftPanel(data, isHistory = false) {
         };
     }
 
-    function renderBox(slotKey) {
-        const info = getSeriesInfo(slotKey);
+    async function renderBox(slotKey) {
+        const info = await getSeriesInfo(slotKey);
 
         // Zcela prázdný slot (TBD vs TBD)
         if (!info) {
@@ -1647,13 +1790,12 @@ function generateLeftPanel(data, isHistory = false) {
     html += `<div id="playoffTablePreview" style="display:${tableMode === 'playoff' ? 'block' : 'none'}; overflow-x:auto; padding: 20px 0; max-width:100%;">
              <div style="display: flex; gap: 40px; min-width: min-content; margin: 0 auto; justify-content: center;">`;
 
-    // Načtení šablony ze souboru
-    const tplPath = require('path').join(__dirname, '../data/playoffTemplates.json');
-    const allTemplates = fs.existsSync(tplPath) ? JSON.parse(fs.readFileSync(tplPath, 'utf8')) : {};
-    const currentTemplate = allTemplates[format];
+    // Načtení šablony z MongoDB
+    const allTemplates = await PlayoffTemplates.findAll();
+    const currentTemplate = allTemplates?.[format] || {};
 
     // TOTO JE NOVÝ KÓD:
-    if (currentTemplate) {
+    if (currentTemplate && currentTemplate.columns) {
         html += `<div id="playoffTablePreview" style="display:${tableMode === 'playoff' ? 'block' : 'none'}; overflow-x:auto; padding: 20px 0; max-width:100%;">
                  <h2 style="text-align:center; color:white; margin-bottom: 30px;">Playoff - ${selectedLiga} ${selectedSeason}</h2>`;
 
@@ -1666,13 +1808,14 @@ function generateLeftPanel(data, isHistory = false) {
 
         // 2. ŘÁDEK SE SLOUPCI ZÁPASŮ (align-items: stretch zajistí stejnou výšku všech sloupců)
         html += `<div style="display: flex; gap: 40px; min-width: min-content; margin: 0 auto; justify-content: center; align-items: stretch;">`;
-        currentTemplate.columns.forEach(col => {
+        for (const col of currentTemplate.columns) {
             // Přidán margin-top, který si bere hodnotu z col.gap (např. "60px")
+            const boxes = await Promise.all(col.slots.map(slotId => renderBox(slotId)));
             html += `
             <div style="display: flex; gap: 20px; flex-direction: column; justify-content: space-around; width: 170px; margin-top: ${col.gap || '0px'};">
-                ${col.slots.map(slotId => renderBox(slotId)).join('')}
+                ${boxes.join('')}
             </div>`;
-        });
+        }
         html += `</div></div>`;
     } else {
         html += `<div id="playoffTablePreview" style="display:${tableMode === 'playoff' ? 'block' : 'none'}; width: 100%; text-align: center; padding: 40px 20px; background: #1a1a1a; border-radius: 8px; border: 1px dashed #444;">
@@ -1705,7 +1848,7 @@ function generateLeftPanel(data, isHistory = false) {
     // ==========================================
     // 5. STATISTIKY UŽIVATELŮ
     // ==========================================
-    html += generateStatsHtml(username, currentUserStats, userStats, isRegularSeasonFinished);
+    html += await generateStatsHtml(username, currentUserStats, userStats, isRegularSeasonFinished);
 
     // ==========================================
     // DŮLEŽITÉ: UZAVŘENÍ LEVÉHO PANELU
@@ -1716,7 +1859,7 @@ function generateLeftPanel(data, isHistory = false) {
     return html;
 }
 
-function logAdminAction(username, action, details) {
+async function logAdminAction(username, action, details) {
     // Vytvoříme hezký časový údaj
     const time = new Date().toLocaleString('cs-CZ', { timeZone: 'Europe/Prague' });
 
@@ -1742,4 +1885,8 @@ module.exports = {
     getGroupDisplayLabel,
     generateLeftPanel,
     logAdminAction,
+    getLeagueStatusData,
+    getTableTipsData,
 }
+
+

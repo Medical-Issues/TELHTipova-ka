@@ -2,7 +2,8 @@ const webpush = require('web-push');
 const cron = require('node-cron');
 const fs = require('fs');
 const path = require('path');
-const { createCanvas, loadImage } = require('canvas'); // NOVÝ IMPORT
+const { createCanvas, loadImage } = require('canvas');
+const { Users, Matches, Teams } = require('../utils/mongoDataAccess');
 require('dotenv').config();
 
 // --- NASTAVENÍ KLÍČŮ ---
@@ -20,16 +21,16 @@ webpush.setVapidDetails(
 );
 
 // --- POMOCNÉ FUNKCE PRO ČTENÍ DAT ---
-const getUsers = () => {
-    try { return JSON.parse(fs.readFileSync(path.join(__dirname, '../data/users.json'), 'utf8')); }
+const getUsers = async () => {
+    try { return await Users.findAll(); }
     catch (e) { return []; }
 };
-const getMatches = () => {
-    try { return JSON.parse(fs.readFileSync(path.join(__dirname, '../data/matches.json'), 'utf8')); }
+const getMatches = async () => {
+    try { return await Matches.findAll(); }
     catch (e) { return []; }
 };
-const getTeams = () => {
-    try { return JSON.parse(fs.readFileSync(path.join(__dirname, '../data/teams.json'), 'utf8')); }
+const getTeams = async () => {
+    try { return await Teams.findAll(); }
     catch (e) { return []; }
 };
 
@@ -221,16 +222,16 @@ const sendToUserDevices = (user, payload) => {
     });
 
     // 3. Počkáme na odeslání na všechna zařízení a případně promažeme neplatné
-    Promise.all(promises).then(() => {
+    Promise.all(promises).then(async () => {
         if (hasChanges) {
             user.subscriptions = activeSubscriptions;
-            const users = getUsers();
+            const users = await getUsers();
             const userIndex = users.findIndex(u => u.username === user.username);
             if (userIndex !== -1) {
                 users[userIndex].subscriptions = activeSubscriptions;
                 // Úklid starého klíče, pokud existoval
                 delete users[userIndex].subscription;
-                fs.writeFileSync(path.join(__dirname, '../data/users.json'), JSON.stringify(users, null, 2));
+                await Users.replaceAll(users);
             }
         }
     });
@@ -238,7 +239,7 @@ const sendToUserDevices = (user, payload) => {
 
 // --- NOTIFIKAČNÍ FUNKCE PRO RŮZNÉ UDÁLOSTI ---
 
-const notifyNewMatches = () => {
+const notifyNewMatches = async () => {
     const payload = {
         title: "🏒 Nové zápasy k tipování!",
         body: "Byly vypsány nové zápasy nebo série. Nezapomeň si tipnout co nejdříve!",
@@ -251,15 +252,16 @@ const notifyNewMatches = () => {
             { action: 'close', title: 'Zavřít' }
         ]
     };
-    getUsers().forEach(u => sendToUserDevices(u, payload));
+    const users = await getUsers();
+    users.forEach(u => sendToUserDevices(u, payload));
 };
 
 const notifyResult = async (matchId, scoreHome, scoreAway) => {
-    const matches = getMatches();
+    const matches = await getMatches();
     const match = matches.find(m => m.id === parseInt(matchId));
     if (!match) return;
 
-    const teams = getTeams();
+    const teams = await getTeams();
     const homeTeam = teams.find(t => t.id === match.homeTeamId);
     const awayTeam = teams.find(t => t.id === match.awayTeamId);
     if (!homeTeam || !awayTeam) return;
@@ -300,16 +302,17 @@ const notifyResult = async (matchId, scoreHome, scoreAway) => {
         ]
     };
 
-    getUsers().forEach(u => sendToUserDevices(u, payload));
+    const users = await getUsers();
+    users.forEach(u => sendToUserDevices(u, payload));
 };
 
 // PRŮBĚŽNÝ STAV SÉRIE (Nová smysluplná funkce pro jednotlivé zápasy série)
 const notifySeriesProgress = async (matchId, matchIndex, scoreHome, scoreAway, ot, seriesScoreH, seriesScoreA) => {
-    const matches = getMatches();
+    const matches = await getMatches();
     const match = matches.find(m => m.id === parseInt(matchId));
     if (!match) return;
 
-    const teams = getTeams();
+    const teams = await getTeams();
     const homeTeam = teams.find(t => t.id === match.homeTeamId);
     const awayTeam = teams.find(t => t.id === match.awayTeamId);
     if (!homeTeam || !awayTeam) return;
@@ -337,15 +340,16 @@ const notifySeriesProgress = async (matchId, matchIndex, scoreHome, scoreAway, o
         ]
     };
 
-    getUsers().forEach(u => sendToUserDevices(u, payload));
+    const users = await getUsers();
+    users.forEach(u => sendToUserDevices(u, payload));
 };
 
 const notifyMatchUpdate = async (matchId, details) => {
-    const matches = getMatches();
+    const matches = await getMatches();
     const match = matches.find(m => m.id === parseInt(matchId));
     if (!match) return;
 
-    const teams = getTeams();
+    const teams = await getTeams();
     const homeTeam = teams.find(t => t.id === match.homeTeamId);
     const awayTeam = teams.find(t => t.id === match.awayTeamId);
 
@@ -371,7 +375,8 @@ const notifyMatchUpdate = async (matchId, details) => {
         tag: `update-${match.id}`
     };
 
-    getUsers().forEach(u => sendToUserDevices(u, payload));
+    const users = await getUsers();
+    users.forEach(u => sendToUserDevices(u, payload));
 };
 
 // ZMĚNA: Přidáno async a parametr involvedTeams
@@ -406,10 +411,11 @@ const notifyTransfer = async (message, involvedTeams = []) => {
             { action: 'close', title: 'Zavřít' }
         ]
     };
-    getUsers().forEach(u => sendToUserDevices(u, payload));
+    const users = await getUsers();
+    users.forEach(u => sendToUserDevices(u, payload));
 };
 
-const notifyLeagueEnd = (liga) => {
+const notifyLeagueEnd = async (liga) => {
     const payload = {
         title: `🏁 Základní část ${liga} skončila!`,
         body: `Základní část ligy ${liga} byla právě ukončena. Běž se podívat na konečné pořadí a zkontroluj, kolik bodů jsi získal za svůj tip tabulky! 🏆`,
@@ -429,15 +435,16 @@ const notifyLeagueEnd = (liga) => {
         ]
     };
 
-    getUsers().forEach(u => sendToUserDevices(u, payload));
+    const users = await getUsers();
+    users.forEach(u => sendToUserDevices(u, payload));
 };
 
 // --- AUTOMATICKÉ NOTIFIKACE (CRON) ---
 // Změna: přidali jsme 'async' před callback funkci
 cron.schedule('0 * * * *', async () => {
     const now = new Date();
-    const matches = getMatches();
-    const users = getUsers();
+    const matches = await getMatches();
+    const users = await getUsers();
 
     if (!users || users.length === 0) return;
 
@@ -462,7 +469,7 @@ cron.schedule('0 * * * *', async () => {
 
         if (upcomingMatches.length === 0) continue;
 
-        const teams = getTeams();
+        const teams = await getTeams();
 
         // Změna: Používáme for...of místo forEach, abychom mohli počkat na obrázek
         for (const match of upcomingMatches) {

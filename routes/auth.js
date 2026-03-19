@@ -1,33 +1,36 @@
 const path = require('path');
-const fs = require("fs");
 const bcrypt = require("bcrypt");
 const express = require("express");
 const router = express.Router();
 const { renderErrorHtml } = require("../utils/fileUtils");
 
+const { Users } = require('../utils/mongoDataAccess');
 router.get("/register", (req, res) => {
     res.sendFile(path.join(__dirname, "../views/register.html"));
 });
 router.post("/register", async (req, res) => {
     const {username, password} = req.body;
-    const users = JSON.parse(fs.readFileSync('./data/users.json', 'utf8'));
-
-    if (users.find(u => u.username === username)) {
+    
+    // Kontrola existence uživatele v MongoDB
+    const existingUser = await Users.findOne({ username });
+    
+    if (existingUser) {
         return res.redirect('/auth/register?error=1');
     }
 
     try {
         const hashedPassword = await bcrypt.hash(password, 10);
-        users.push(
-            {
-                username,
-                password: hashedPassword,
-                role: "user",
-                correct: 0,
-                total: 0
-            }
-        );
-        fs.writeFileSync('./data/users.json', JSON.stringify(users, null, 2));
+        const newUser = {
+            username,
+            password: hashedPassword,
+            role: "user",
+            correct: 0,
+            total: 0
+        };
+        
+        // Uložení do MongoDB
+        await Users.insertOne(newUser);
+        
         res.redirect('/auth/login');
     } catch (err) {
         console.error(err);
@@ -41,8 +44,9 @@ router.get("/login", (req, res) => {
 
 router.post('/login', async (req, res) => {
     const {username, password} = req.body;
-    const users = JSON.parse(fs.readFileSync('data/users.json', 'utf8'));
-    const user = users.find(u => u.username === username);
+    
+    // Načtení uživatele z MongoDB
+    const user = await Users.findOne({ username });
 
     if (!user) {
         return res.redirect('/auth/login?error=1');
@@ -75,3 +79,4 @@ router.get("/logout", (req, res) => {
 });
 
 module.exports = router;
+

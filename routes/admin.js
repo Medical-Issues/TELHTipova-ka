@@ -1,4 +1,5 @@
 const fs = require("fs");
+const { Users, Matches, Teams, Leagues, AllowedLeagues, ChosenSeason, Settings, TeamBonuses, LeagueStatus, TableTips, Playoff, PlayoffTemplates, TransferLeagues, Transfers, Tips } = require('../utils/mongoDataAccess');
 const express = require("express");
 const router = express.Router();
 const path = require('path');
@@ -32,6 +33,7 @@ router.post('/backup', async (req, res) => {
 const storage = multer.diskStorage({
     'destination': function (req, file, cb) {
         const uploadPath = path.resolve(__dirname, '..', 'data', 'images');
+        const fs = require('fs');
         if (!fs.existsSync(uploadPath)) {
             fs.mkdirSync(uploadPath, { recursive: true });
         }
@@ -44,25 +46,27 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({ storage: storage });
-router.get('/', requireAdmin, (req, res) => {
-    const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'));
-    const teams = loadTeams();
-    const transferLeagues = JSON.parse(fs.readFileSync('./data/transferLeagues.json', 'utf8'));
-    const allowedLeagues = JSON.parse(fs.readFileSync('./data/allowedLeagues.json', 'utf-8'));
-    const allSeasonData = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf-8'));
-    const selecteSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
-    const leagues = (allSeasonData[selecteSeason] && allSeasonData[selecteSeason].leagues)
-        ? allSeasonData[selecteSeason].leagues
+router.get('/', requireAdmin, async (req, res) => {
+    // Načtení všech dat z MongoDB
+    const [matches, teams, transferLeagues, allowedLeagues, allSeasonData, chosenSeason, settingsData] = await Promise.all([
+        Matches.findAll(),
+        Teams.findAll(),
+        TransferLeagues.findAll(),
+        AllowedLeagues.findAll(),
+        Leagues.findAll(),
+        ChosenSeason.findAll(),
+        Settings.findAll()
+    ]);
+    
+    const selectedSeason = chosenSeason;
+    const leagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues)
+        ? allSeasonData[selectedSeason].leagues
         : [];
-    const chosenSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
+    
+    const chosenSeasonValue = chosenSeason;
 
     let clinchMode = 'strict';
-    try {
-        const settingsData = JSON.parse(fs.readFileSync('./data/settings.json', 'utf8'));
-        if (settingsData.clinchMode) clinchMode = settingsData.clinchMode;
-    } catch (e) {
-        // Soubor neexistuje, použije se 'strict'
-    }
+    if (settingsData && settingsData.clinchMode) clinchMode = settingsData.clinchMode;
 
     const leaguesFromMatches = [...new Set(matches.map(m => m.liga))];
     const leaguesFromTeams = [...new Set(teams.map(t => t.liga))];
@@ -73,7 +77,7 @@ router.get('/', requireAdmin, (req, res) => {
     const seasonsFromMatches = matches.map(m => m.season).filter(Boolean);
 
     const knownSeasons = [...seasonsFromTeams, ...seasonsFromMatches];
-    const futureSeasons = generateSeasonRange(currentYear, 10);
+    const futureSeasons = await generateSeasonRange(currentYear, 10);
 
     const allSeasons = [...new Set([...futureSeasons, ...knownSeasons])];
     allSeasons.sort();
@@ -96,12 +100,12 @@ router.get('/', requireAdmin, (req, res) => {
         }
     });
 
-    const selectedSeason = req.query.season && allSeasons.includes(req.query.season)
+    const selectedSeasonQuery = req.query.season && allSeasons.includes(req.query.season)
         ? req.query.season
         : allSeasons[0] || 'Neurčeno';
 
     const filteredMatches = matches.filter(m =>
-        m.liga === selectedLiga && (m.season || 'Neurčeno') === selectedSeason
+        m.liga === selectedLiga && (m.season || 'Neurčeno') === selectedSeasonQuery
     );
 
     const pendingMatches = filteredMatches
@@ -273,7 +277,7 @@ router.get('/', requireAdmin, (req, res) => {
       <label for="season-select">Sezóna:</label>
       <div class="season-choose">
         <select id="season-select" class="league-select" style="width: 100%" name="season">
-           ${allSeasons.map(s => `<option value="${s}" ${s === chosenSeason ? 'selected' : ''}>${s}</option>`).join('')}
+           ${allSeasons.map(s => `<option value="${s}" ${s === chosenSeasonValue ? 'selected' : ''}>${s}</option>`).join('')}
         </select>
         <button type="submit" class="action-btn edit-btn" style="margin-top: 10px;">Vybrat sezónu</button>
       </div>
@@ -402,12 +406,17 @@ document.getElementById('backupBtn').addEventListener('click', async () => {
     res.send(html);
 });
 
-router.post('/leagues', express.urlencoded({ extended: true }), requireAdmin, (req, res) => {
+router.post('/leagues', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
     const ligaName = req.body.name?.trim();
     if (!ligaName) return renderErrorHtml(res, "Název ligy je povinný.", 400);
 
-    const selectedSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
-    const allSeasonData = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf-8'));
+    // Načtení z MongoDB
+    const [chosenSeason, allSeasonData] = await Promise.all([
+        ChosenSeason.findAll(),
+        Leagues.findAll()
+    ]);
+    
+    const selectedSeason = chosenSeason;
     const leagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues)
         ? allSeasonData[selectedSeason].leagues
         : [];
@@ -425,28 +434,37 @@ router.post('/leagues', express.urlencoded({ extended: true }), requireAdmin, (r
     };
 
     leagues.push(newLeague);
-    fs.writeFileSync('./data/leagues.json', JSON.stringify(leagues, null, 2), 'utf-8');
+    
+    // Uložení do MongoDB
+    allSeasonData[selectedSeason].leagues = leagues;
+    await Leagues.replaceAll(allSeasonData);
+    
+    res.redirect('/admin/leagues/manage');
 });
 
-router.post('/leagues/visibility', requireAdmin, (req, res) => {
+router.post('/leagues/visibility', requireAdmin, async (req, res) => {
     let ligaNames = req.body.allowedLeagues || [];
     if (!Array.isArray(ligaNames)) ligaNames = [ligaNames];
 
-    const allowedLeagues = JSON.parse(fs.readFileSync('./data/allowedLeagues.json', 'utf-8'));
-    allowedLeagues.push(ligaNames);
-    fs.writeFileSync('./data/allowedLeagues.json', JSON.stringify([...new Set(ligaNames)], null, 2), 'utf-8');
+    // Uložení POUZE zaškrtnutých lig (ne přidávání ke stávajícím)
+    await AllowedLeagues.replaceAll(ligaNames);
 
     res.redirect('/admin');
 })
 
-router.get('/teams/edit/:id', requireAdmin, (req, res) => {
+router.get('/teams/edit/:id', requireAdmin, async (req, res) => {
     const teamId = parseInt(req.params.id);
-    const teams = loadTeams();
+    const teams = await Teams.findAll();
 
     const team = teams.find(t => t.id === teamId);
     if (!team) return renderErrorHtml(res, "Tým s tímto ID nebyl nalezen.", 404);
-    const selectedSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
-    const allSeasonData = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf-8'));
+    
+    const [chosenSeason, allSeasonData] = await Promise.all([
+        ChosenSeason.findAll(),
+        Leagues.findAll()
+    ]);
+    
+    const selectedSeason = chosenSeason;
     const leagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues)
         ? allSeasonData[selectedSeason].leagues
         : [];
@@ -517,9 +535,9 @@ router.get('/teams/edit/:id', requireAdmin, (req, res) => {
     res.send(html);
 });
 
-router.post('/edit/:id', requireAdmin, (req, res) => {
+router.post('/edit/:id', requireAdmin, async (req, res) => {
     const matchId = parseInt(req.params.id);
-    const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'));
+    const matches = await Matches.findAll();
 
     const {homeTeamId, awayTeamId, datetime, season, scoreHome, scoreAway} = req.body;
 
@@ -612,7 +630,8 @@ router.post('/edit/:id', requireAdmin, (req, res) => {
         }
     }
 
-    fs.writeFileSync('./data/matches.json', JSON.stringify(matches, null, 2));
+    // Uložení do MongoDB
+    await Matches.replaceAll(matches);
 
     // 3. NOTIFIKAČNÍ DETEKTIV - Kontrola změn (Pokud NENÍ zadaný výsledek)
     if (!match.result) {
@@ -656,9 +675,9 @@ router.post('/edit/:id', requireAdmin, (req, res) => {
     res.redirect('/admin');
 });
 
-router.get('/new/match', requireAdmin, (req, res) => {
-    const teams = loadTeams(); // Předpokládám, že zde jsou všichni, včetně active: false, pokud je chceš filtrovat, přidej .filter(t => t.active)
-    const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'));
+router.get('/new/match', requireAdmin, async (req, res) => {
+    const teams = await Teams.findAll();
+    const matches = await Matches.findAll();
 
     const seasonsFromTeams = teams.map(t => t.season).filter(Boolean);
     const seasonsFromMatches = matches.map(m => m.season).filter(Boolean);
@@ -807,11 +826,11 @@ router.get('/new/match', requireAdmin, (req, res) => {
     res.send(html);
 });
 
-router.post('/new/match', requireAdmin, (req, res) => {
+router.post('/new/match', requireAdmin, async (req, res) => {
     const { homeTeamId, awayTeamId, datetime, season, isPlayoff, bo, locked, matchLiga, isBaraz } = req.body;
 
-    let matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'));
-    const teams = loadTeams().filter(t => t.active);
+    let matches = await Matches.findAll();
+    const teams = (await Teams.findAll()).filter(t => t.active);
     const homeTeam = teams.find(t => t.id === parseInt(homeTeamId));
     const awayTeam = teams.find(t => t.id === parseInt(awayTeamId));
 
@@ -845,15 +864,19 @@ router.post('/new/match', requireAdmin, (req, res) => {
 
     matches.push(newMatch);
     notif.notifyNewMatches();
-    fs.writeFileSync('./data/matches.json', JSON.stringify(matches, null, 2));
+    
+    // Uložení do MongoDB
+    await Matches.replaceAll(matches);
+    
     logAdminAction(req.session.user, "NOVÝ_ZÁPAS", `Vytvořen nový zápas: ${homeTeam.name} vs ${awayTeam.name} (${finalLiga})`);
     res.redirect('/admin');
 });
 
 
-router.get('/new/team', requireAdmin, (req, res) => {
-    const selectedSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
-    const allSeasonData = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf-8'));
+router.get('/new/team', requireAdmin, async (req, res) => {
+    const chosenSeason = await ChosenSeason.findAll();
+    const selectedSeason = chosenSeason;
+    const allSeasonData = await Leagues.findAll();
     const leagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues)
         ? allSeasonData[selectedSeason].leagues
         : [];
@@ -923,8 +946,8 @@ router.get('/new/team', requireAdmin, (req, res) => {
   `);
 });
 
-router.post('/new/team', requireAdmin, upload.single('logo'), express.urlencoded({extended: true}), (req, res) => {
-    const teams = loadTeams();
+router.post('/new/team', requireAdmin, upload.single('logo'), express.urlencoded({extended: true}), async (req, res) => {
+    const teams = await Teams.findAll();
     let {name, liga, active} = req.body;
     active = active === 'on';
 
@@ -953,15 +976,17 @@ router.post('/new/team', requireAdmin, upload.single('logo'), express.urlencoded
 
     teams.push(newTeam);
 
-    fs.writeFileSync('./data/teams.json', JSON.stringify(teams, null, 2), 'utf-8');
+    // Uložení do MongoDB
+    await Teams.replaceAll(teams);
+    
     logAdminAction(req.session.user, "NOVÝ_TÝM", `Vytvořen nový tým: ${name} (${liga})`);
     res.redirect('/admin');
 });
 
-router.get('/edit/:id', requireAdmin, (req, res) => {
+router.get('/edit/:id', requireAdmin, async (req, res) => {
     const matchId = parseInt(req.params.id);
-    let matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'));
-    const teams = loadTeams().filter(t => t.active);
+    let matches = await Matches.findAll();
+    const teams = (await Teams.findAll()).filter(t => t.active);
 
     const match = matches.find(m => m.id === matchId);
     if (!match) return renderErrorHtml(res, "Zápas nebyl nalezen.", 404);
@@ -1184,9 +1209,9 @@ router.get('/edit/:id', requireAdmin, (req, res) => {
     res.send(html);
 });
 
-router.post('/edit/:id', requireAdmin, (req, res) => {
+router.post('/edit/:id', requireAdmin, async (req, res) => {
     const matchId = parseInt(req.params.id);
-    const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'));
+    const matches = await Matches.findAll();
 
     const {homeTeamId, awayTeamId, datetime, season, scoreHome, scoreAway} = req.body;
 
@@ -1271,7 +1296,13 @@ router.post('/edit/:id', requireAdmin, (req, res) => {
         delete match.result;
     }
 
-    fs.writeFileSync('./data/matches.json', JSON.stringify(matches, null, 2));
+    try {
+        await Matches.replaceAll(matches);
+        console.log(`✅ Zápas ID ${matchId} upraven.`);
+    } catch (err) {
+        console.error("Chyba při zápisu do MongoDB:", err);
+        return renderErrorHtml(res, "Chyba při ukládání.", 500);
+    }
 
     // 3. NOTIFIKAČNÍ DETEKTIV - Kontrola změn (Pokud NENÍ zadaný výsledek)
     if (!match.result) {
@@ -1316,20 +1347,22 @@ router.post('/edit/:id', requireAdmin, (req, res) => {
     res.redirect('/admin');
 });
 
-router.post('/teams/delete/:id', requireAdmin, (req, res) => {
+router.post('/teams/delete/:id', requireAdmin, async (req, res) => {
     const teamsId = parseInt(req.params.id);
-    let teams = JSON.parse(fs.readFileSync('./data/teams.json', 'utf8'));
+    let teams = await Teams.findAll();
 
     teams = teams.filter(t => t.id !== teamsId);
 
-    fs.writeFileSync('./data/teams.json', JSON.stringify(teams, null, 2));
+    // Uložení do MongoDB
+    await Teams.replaceAll(teams);
+    
     logAdminAction(req.session.user, "SMAZÁNÍ_TÝMU", `Smazán tým s ID: ${teamsId}`);
     res.redirect('/admin');
 });
 
-router.post('/delete/:id', requireAdmin, (req, res) => {
+router.post('/delete/:id', requireAdmin, async (req, res) => {
     const matchId = parseInt(req.params.id);
-    let matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'));
+    let matches = await Matches.findAll();
 
     // 1. NAJÍT ZÁPAS PŘEDTÍM, NEŽ HO SMAŽEME
     const matchToDelete = matches.find(m => m.id === matchId);
@@ -1346,7 +1379,9 @@ router.post('/delete/:id', requireAdmin, (req, res) => {
     // 3. SMAZÁNÍ A ULOŽENÍ
     matches = matches.filter(m => m.id !== matchId);
     updateTeamsPoints(matches);
-    fs.writeFileSync('./data/matches.json', JSON.stringify(matches, null, 2));
+    
+    // Uložení do MongoDB
+    await Matches.replaceAll(matches);
 
     removeTipsForDeletedMatch(matchId);
 
@@ -1365,15 +1400,19 @@ router.get('/api/seasons', requireAdmin, (req, res) => {
     res.json(seasons);
 });
 
-router.post('/season', express.urlencoded({ extended: true }), requireAdmin, (req, res) => {
+router.post('/season', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
     const selectedSeason = req.body.season || 'Neurčeno';
-    fs.writeFileSync('./data/chosenSeason.json', JSON.stringify(selectedSeason, null, 2), 'utf-8');
+    
+    // Uložení do MongoDB
+    await ChosenSeason.replaceAll(selectedSeason);
+    
     res.redirect('/admin');
 });
 
-router.get('/playoff', requireAdmin, (req, res) => {
-    const selectedSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
-    const allSeasonData = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf-8'));
+router.get('/playoff', requireAdmin, async (req, res) => {
+    const chosenSeason = await ChosenSeason.findAll();
+    const selectedSeason = chosenSeason;
+    const allSeasonData = await Leagues.findAll();
     const leagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues) ? allSeasonData[selectedSeason].leagues : [];
     const allLeagues = leagues.map(l => l.name);
     const selectedLeague = req.query.league || allLeagues[0] || "Neurčeno";
@@ -1382,8 +1421,10 @@ router.get('/playoff', requireAdmin, (req, res) => {
     const leagueObj = leagues.find(l => l.name === selectedLeague);
     const playoffFormat = leagueObj?.playoffFormat || 'none';
 
-    const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'));
-    const teams = loadTeams();
+    const [matches, teams] = await Promise.all([
+        Matches.findAll(),
+        Teams.findAll()
+    ]);
 
     const playoffMatches = matches.filter(m => m.season === selectedSeason && m.liga === selectedLeague && m.isPlayoff);
 
@@ -1400,12 +1441,11 @@ router.get('/playoff', requireAdmin, (req, res) => {
     const teamsOptionsHTML = teamsInLeague.map(t => `<option value="${t.name}">${t.name}</option>`).join('');
 
     // --- CHYBĚJÍCÍ BLOK: Načteme už uložené přiřazení slotů ---
-    const filePath = path.join(__dirname, '../data/playoff.json');
+    const playoffData = await Playoff.findAll();
     let savedSlots = {};
     try {
-        const pd = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-        if (pd[selectedSeason] && pd[selectedSeason][selectedLeague]) {
-            savedSlots = pd[selectedSeason][selectedLeague];
+        if (playoffData[selectedSeason] && playoffData[selectedSeason][selectedLeague]) {
+            savedSlots = playoffData[selectedSeason][selectedLeague];
         }
     } catch (e) {}
 
@@ -1440,9 +1480,8 @@ router.get('/playoff', requireAdmin, (req, res) => {
     };
 
     let slotsHTML = '';
-    // 1. Načtení šablon
-    const tplPath = './data/playoffTemplates.json';
-    const allTemplates = fs.existsSync(tplPath) ? JSON.parse(fs.readFileSync(tplPath, 'utf8')) : {};
+    // 1. Načtení šablon z MongoDB
+    const allTemplates = await PlayoffTemplates.findAll() || {};
     const currentTemplate = allTemplates[playoffFormat];
     if (!currentTemplate) {
         slotsHTML = '<p style="color: gray;">Tato liga nemá nastavený platný formát. <a href="/admin/playoff/templates" style="color:orangered">Vytvoř ho zde</a> a pak ho přiřaď lize v nastavení.</p>';
@@ -1511,97 +1550,81 @@ router.get('/playoff', requireAdmin, (req, res) => {
     res.send(html);
 });
 
-router.post('/playoff/save', requireAdmin, (req, res) => {
-    const { league, season, ...slots } = req.body; // Všechny sloty (qf1, sf1...) se nacpou do objektu slots
+router.post('/playoff/save', requireAdmin, async (req, res) => {
+    const { league, season, ...slots } = req.body;
 
     if (!league || !season) return renderErrorHtml(res, "Chybí data k uložení.", 400);
 
-    const filePath = path.join(__dirname, '../data/playoff.json');
-    let playoffData = {};
-    try { if (fs.existsSync(filePath)) playoffData = JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch (e) {}
+    // Načtení z MongoDB
+    let playoffData = await Playoff.findAll();
+    if (!playoffData || Object.keys(playoffData).length === 0) playoffData = {};
 
     if (!playoffData[season]) playoffData[season] = {};
 
     // Uložíme jednoduše slovník: { "qf1": "series-468", "sf1": "series-500", ... }
     playoffData[season][league] = slots;
 
-    fs.writeFileSync(filePath, JSON.stringify(playoffData, null, 2));
+    // Uložení do MongoDB
+    await Playoff.replaceAll(playoffData);
+    
     logAdminAction(req.session.user, "PLAYOFF_ULOŽENÍ", `Aktualizovány sloty playoff pro ${league} (${season})`);
     res.redirect(`/admin/playoff?league=${encodeURIComponent(league)}`);
 });
 
-router.post('/playoff/delete', requireAdmin, (req, res) => {
+router.post('/playoff/delete', requireAdmin, async (req, res) => {
     const { season, league } = req.body;
 
     if (!season || !league) {
         return res.status(400).send('Chybí sezóna nebo liga k vymazání.');
     }
 
-    const filePath = path.join(__dirname, '../data/playoff.json');
-    fs.readFile(filePath, 'utf8', (err, jsonData) => {
-        let playoffData = {};
-
-        if (!err && jsonData) {
-            try {
-                playoffData = JSON.parse(jsonData);
-            } catch {
-                playoffData = {};
-            }
-        }
-
+    try {
+        let playoffData = await Playoff.findAll() || {};
+        
         if (playoffData[season] && playoffData[season][league]) {
             delete playoffData[season][league];
 
             if (Object.keys(playoffData[season]).length === 0) {
                 delete playoffData[season];
             }
-        }
 
-        fs.writeFile(filePath, JSON.stringify(playoffData, null, 2), err => {
-            if (err) {
-                console.error('Chyba při zápisu do souboru:', err);
-                return res.status(500).send('Nepodařilo se smazat data');
-            }
-            logAdminAction(req.session.user, "PLAYOFF_RESET", `KOMPLETNĚ SMAZÁNA playoff mřížka pro ${league} (${season})`);
-            res.redirect('/admin/playoff');
-        });
-    });
+            await Playoff.replaceAll(playoffData);
+        }
+        
+        logAdminAction(req.session.user, "PLAYOFF_RESET", `KOMPLETNĚ SMAZÁNA playoff mřížka pro ${league} (${season})`);
+        res.redirect('/admin/playoff');
+    } catch (error) {
+        console.error('Chyba při mazání playoff:', error);
+        return res.status(500).send('Nepodařilo se smazat data');
+    }
 });
 
-router.get('/togglePostponed/:id', requireAdmin, (req, res) => {
+router.get('/togglePostponed/:id', requireAdmin, async (req, res) => {
     const matchId = parseInt(req.params.id);
-    const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'));
+    const matches = await Matches.findAll();
     const match = matches.find(m => m.id === matchId);
     if (!match) return renderErrorHtml(res, "Zápas nebyl nalezen.", 404);
 
     match.postponed = !match.postponed;
 
-    fs.writeFileSync('./data/matches.json', JSON.stringify(matches, null, 2));
+    // Uložení do MongoDB
+    await Matches.replaceAll(matches);
+    
     logAdminAction(req.session.user, "ODLOŽENÍ_ZÁPASU", `Zápas ID ${matchId} byl ${match.postponed ? 'ODLOŽEN' : 'VRÁCEN DO BĚŽNÉHO STAVU'}`);
     res.redirect('/admin');
 });
 
-router.get('/leagues/manage', requireAdmin, (req, res) => {
-    const allSeasonData = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf8'));
-    const selectedSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
+router.get('/leagues/manage', requireAdmin, async (req, res) => {
+    const allSeasonData = await Leagues.findAll();
+    const chosenSeason = await ChosenSeason.findAll();
+    const selectedSeason = chosenSeason;
 
-    // 1. Načtení statusů
-    let statusData = {};
-    try {
-        statusData = JSON.parse(fs.readFileSync('./data/leagueStatus.json', 'utf8'));
-    } catch (e) {
-        statusData = {};
-    }
+    // 1. Načtení statusů z MongoDB
+    let statusData = await LeagueStatus.findAll();
+    if (!statusData || Object.keys(statusData).length === 0) statusData = {};
 
-    let allTemplates = {};
-    try {
-        const tplPath = './data/playoffTemplates.json';
-        if (fs.existsSync(tplPath)) {
-            allTemplates = JSON.parse(fs.readFileSync(tplPath, 'utf8'));
-        }
-    } catch (e) {
-        console.error("Chyba při načítání šablon:", e);
-    }
+    let allTemplates = await PlayoffTemplates.findAll();
+    if (!allTemplates || Object.keys(allTemplates).length === 0) allTemplates = {};
 
 
     const seasonLeagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues)
@@ -1792,10 +1815,10 @@ router.get('/leagues/manage', requireAdmin, (req, res) => {
     res.send(html);
 });
 
-router.post('/leagues/manage', requireAdmin, express.urlencoded({ extended: true }), (req, res) => {
+router.post('/leagues/manage', requireAdmin, express.urlencoded({ extended: true }), async (req, res) => {
     const { ligaName, multigroup, groupCount, maxMatches, quarterfinal, playin, relegation } = req.body.newLeague;
-    const allSeasonData = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf8'));
-    const selectedSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
+    const allSeasonData = await Leagues.findAll();
+    const selectedSeason = await ChosenSeason.findAll();
 
     if (!allSeasonData[selectedSeason]) {
         allSeasonData[selectedSeason] = { leagues: [] };
@@ -1816,20 +1839,20 @@ router.post('/leagues/manage', requireAdmin, express.urlencoded({ extended: true
             playin: Number(playin) || 0,
             relegation: Number(relegation) || 0
         });
-        fs.writeFileSync('./data/leagues.json', JSON.stringify(allSeasonData, null, 2));
+        await Leagues.replaceAll(allSeasonData);
     }
     res.redirect('/admin/leagues/manage');
 });
 
-router.post('/leagues/update', requireAdmin, express.urlencoded({ extended: true }), (req, res) => {
+router.post('/leagues/update', requireAdmin, express.urlencoded({ extended: true }), async (req, res) => {
     const {
         originalLeagueName, leagueName, maxMatches, quarterfinal, playin, relegation,
         // Nová pole z formuláře
         crossGroupEnabled, crossGroupPosition, crossQuarterfinal, crossPlayin, crossRelegation, playoffFormat
     } = req.body;
 
-    const allSeasonData = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf8'));
-    const selectedSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
+    const allSeasonData = await Leagues.findAll();
+    const selectedSeason = await ChosenSeason.findAll();
 
     if (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues) {
         const index = allSeasonData[selectedSeason].leagues.findIndex(l => l.name === originalLeagueName);
@@ -1860,37 +1883,36 @@ router.post('/leagues/update', requireAdmin, express.urlencoded({ extended: true
                 relegation: Number(crossRelegation) || 0
             };
 
-            fs.writeFileSync('./data/leagues.json', JSON.stringify(allSeasonData, null, 2));
+            await Leagues.replaceAll(allSeasonData);
         }
     }
     logAdminAction(req.session.user, "ÚPRAVA_LIGY", `Upraveno nastavení ligy: ${leagueName}`);
     res.redirect('/admin/leagues/manage');
 });
 
-router.post('/leagues/delete', requireAdmin, express.urlencoded({ extended: true }), (req, res) => {
+router.post('/leagues/delete', requireAdmin, express.urlencoded({ extended: true }), async (req, res) => {
     const { league } = req.body;
-    const allSeasonData = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf8'));
-    const selectedSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
+    const allSeasonData = await Leagues.findAll();
+    const selectedSeason = await ChosenSeason.findAll();
 
     if (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues) {
 
         allSeasonData[selectedSeason].leagues = allSeasonData[selectedSeason].leagues.filter(l => l.name !== league);
 
-        fs.writeFileSync('./data/leagues.json', JSON.stringify(allSeasonData, null, 2));
+        await Leagues.replaceAll(allSeasonData);
     }
     logAdminAction(req.session.user, "SMAZÁNÍ_LIGY", `Kompletně smazána liga: ${league}`);
     res.redirect('/admin/leagues/manage');
 });
-router.post("/toggle-regular-season", requireAdmin, (req, res) => {
+router.post("/toggle-regular-season", requireAdmin, async (req, res) => {
     if (req.session.role !== "admin") return renderErrorHtml(res, "Nemáte oprávnění k této akci.", 403);
 
     const { season, liga } = req.body;
     const isFinishedNow = req.body.finished === 'true'; // Pokud je checkbox zaškrtnutý
 
-    let statusData = {};
-    try {
-        statusData = JSON.parse(fs.readFileSync('./data/leagueStatus.json', 'utf8'));
-    } catch(e) {}
+    // Načtení z MongoDB
+    let statusData = await LeagueStatus.findAll();
+    if (!statusData || Object.keys(statusData).length === 0) statusData = {};
 
     if (!statusData[season]) statusData[season] = {};
 
@@ -1903,7 +1925,8 @@ router.post("/toggle-regular-season", requireAdmin, (req, res) => {
         regularSeasonFinished: isFinishedNow
     };
 
-    fs.writeFileSync('./data/leagueStatus.json', JSON.stringify(statusData, null, 2));
+    // Uložení do MongoDB
+    await LeagueStatus.replaceAll(statusData);
 
     // Přepočet tabulky
     evaluateRegularSeasonTable(season, liga);
@@ -1917,12 +1940,13 @@ router.post("/toggle-regular-season", requireAdmin, (req, res) => {
     res.redirect('/admin');
 });
 
-router.post("/toggle-table-tips-lock", requireAdmin, express.urlencoded({ extended: true }), (req, res) => {
+router.post("/toggle-table-tips-lock", requireAdmin, express.urlencoded({ extended: true }), async (req, res) => {
     const { season, liga, locked, group, totalGroups } = req.body;
     const shouldLock = (locked === 'true');
 
-    let statusData = {};
-    try { statusData = JSON.parse(fs.readFileSync('./data/leagueStatus.json', 'utf8')); } catch(e) {}
+    let statusData = await LeagueStatus.findAll();
+    if (!statusData || Object.keys(statusData).length === 0) statusData = {};
+    
     if (!statusData[season]) statusData[season] = {};
     if (!statusData[season][liga]) statusData[season][liga] = {};
     let currentStatus = statusData[season][liga].tableTipsLocked;
@@ -1962,18 +1986,25 @@ router.post("/toggle-table-tips-lock", requireAdmin, express.urlencoded({ extend
         else statusData[season][liga].tableTipsLocked = lockedGroups;
     }
 
-    fs.writeFileSync('./data/leagueStatus.json', JSON.stringify(statusData, null, 2));
+    // Uložení do MongoDB
+    await LeagueStatus.replaceAll(statusData);
+    
     logAdminAction(req.session.user, "ZÁMEK_TABULKY", `Změněn zámek tipů na tabulku pro ${liga} (Skupina: ${group || 'GLOBÁLNÍ'}) na: ${shouldLock ? 'ZAMČENO' : 'ODEMČENO'}`);
+    
+    // OKAMŽITÉ VYHODNOCENÍ PO ZAMČENÍ/ODEMČENÍ
+    const { evaluateRegularSeasonTable } = require('../utils/fileUtils');
+    evaluateRegularSeasonTable(season, liga);
+    
     res.redirect('/admin/leagues/manage');
 });
 
-router.get('/teams/points', requireAdmin, (req, res) => {
-    const fs = require('fs');
-    const selectedSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
-    const allSeasonData = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf8'));
-    const teams = JSON.parse(fs.readFileSync('./data/teams.json', 'utf8'));
+router.get('/teams/points', requireAdmin, async (req, res) => {
+    const chosenSeason = await ChosenSeason.findAll();
+    const selectedSeason = chosenSeason;
+    const allSeasonData = await Leagues.findAll();
+    const teams = await Teams.findAll();
 
-    const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'));
+    const matches = await Matches.findAll();
     const realScores = {};
 
     const seasonLeagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues)
@@ -2001,9 +2032,9 @@ router.get('/teams/points', requireAdmin, (req, res) => {
         }
     });
 
-    // Načteme existující bonusy
-    let bonusData = {};
-    try { bonusData = JSON.parse(fs.readFileSync('./data/teamBonuses.json', 'utf8')); } catch (e) { bonusData = {}; }
+    // Načteme existující bonusy z MongoDB
+    let bonusData = await TeamBonuses.findAll();
+    if (!bonusData || Object.keys(bonusData).length === 0) bonusData = {};
 
     // Filtrujeme týmy
     const leagueTeams = teams.filter(t => t.liga === selectedLiga && t.active);
@@ -2157,11 +2188,12 @@ router.get('/teams/points', requireAdmin, (req, res) => {
     res.send(html);
 });
 
-router.post('/teams/points', requireAdmin, express.urlencoded({ extended: true }), (req, res) => {
+router.post('/teams/points', requireAdmin, express.urlencoded({ extended: true }), async (req, res) => {
     const { season, liga } = req.body;
 
-    let bonusData = {};
-    try { bonusData = JSON.parse(fs.readFileSync('./data/teamBonuses.json', 'utf8')); } catch (e) { bonusData = {}; }
+    // Načtení z MongoDB
+    let bonusData = await TeamBonuses.findAll();
+    if (!bonusData || Object.keys(bonusData).length === 0) bonusData = {};
 
     if (!bonusData[season]) bonusData[season] = {};
     if (!bonusData[season][liga]) bonusData[season][liga] = {};
@@ -2192,30 +2224,23 @@ router.post('/teams/points', requireAdmin, express.urlencoded({ extended: true }
         }
     });
 
-    fs.writeFileSync('./data/teamBonuses.json', JSON.stringify(bonusData, null, 2));
+    // Uložení do MongoDB
+    await TeamBonuses.replaceAll(bonusData);
+    
     logAdminAction(req.session.user, "MANUÁLNÍ_BODY", `Upraveny extra body v lize: ${liga}, Sezóna: ${season}`);
     res.redirect(`/admin/teams/points?liga=${encodeURIComponent(liga)}`);
 });
 
-router.post('/settings/clinch', requireAdmin, (req, res) => {
+router.post('/settings/clinch', requireAdmin, async (req, res) => {
     // 1. Zkontrolujeme, co přesně přišlo z formuláře
     console.log("--- UKLÁDÁNÍ NASTAVENÍ ---");
     console.log("Přijatá data v req.body:", req.body);
 
     const mode = req.body.mode;
-    let settings = {};
-
-    // 2. Bezpečné načtení existujícího souboru
-    try {
-        if (fs.existsSync('./data/settings.json')) {
-            const rawData = fs.readFileSync('./data/settings.json', 'utf8');
-            if (rawData.trim() !== "") {
-                settings = JSON.parse(rawData);
-            }
-        }
-    } catch (e) {
-        console.error("Chyba při čtení settings.json:", e);
-    }
+    
+    // Načtení z MongoDB
+    let settings = await Settings.findAll();
+    if (!settings || Object.keys(settings).length === 0) settings = {};
 
     console.log("Aktuální stav před změnou:", settings);
 
@@ -2224,29 +2249,26 @@ router.post('/settings/clinch', requireAdmin, (req, res) => {
 
     console.log("Nový stav k uložení:", settings);
 
-    // 4. Uložení
+    // 4. Uložení do MongoDB
     try {
-        fs.writeFileSync('./data/settings.json', JSON.stringify(settings, null, 2));
-        console.log("Úspěšně uloženo do ./data/settings.json");
+        await Settings.replaceAll(settings);
+        console.log("Úspěšně uloženo do MongoDB (settings)");
     } catch (err) {
-        console.error("Kritická chyba při zápisu do souboru:", err);
+        console.error("Kritická chyba při zápisu do MongoDB:", err);
     }
     logAdminAction(req.session.user, "NASTAVENÍ_TABULKY", `Režim obarvování tabulky (clinch mode) změněn na: ${settings.clinchMode}`);
     // Návrat na předchozí stránku (odkud se formulář odeslal)
     res.redirect('/admin');
 });
 
-router.get('/matches/import', requireAdmin, (req, res) => {
-    // 1. Načtení dat
-    const currentSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
+router.get('/matches/import', requireAdmin, async (req, res) => {
+    // 1. Načtení dat z MongoDB
+    const chosenSeason = await ChosenSeason.findAll();
+    const currentSeason = chosenSeason;
 
-    // Načítáme ligy z leagues.json (nikoliv allowedLeagues.json)
-    let leaguesData = {};
-    try {
-        leaguesData = JSON.parse(fs.readFileSync('./data/leagues.json', 'utf8'));
-    } catch (e) {
-        console.error("Chyba leagues.json", e);
-    }
+    // Načítáme ligy z MongoDB
+    let leaguesData = await Leagues.findAll();
+    if (!leaguesData || Object.keys(leaguesData).length === 0) leaguesData = {};
 
     // Získáme unikátní seznam lig napříč všemi sezónami
     const uniqueLeagues = new Set();
@@ -2383,11 +2405,11 @@ router.post('/matches/import-run', requireAdmin, async (req, res) => {
         const $ = cheerio.load(html);
         const pageTitle = $('title').text().trim();
 
-        const allTeams = JSON.parse(fs.readFileSync('./data/teams.json', 'utf8'));
+        const allTeams = await Teams.findAll();
         const myTeams = allTeams.filter(t => t.liga === liga);
 
         // --- ID MATCHING (Zjištění posledního ID) ---
-        const matchesDB = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'));
+        const matchesDB = await Matches.findAll();
 
         // Najdeme nejvyšší ID (číslo)
         let maxId = matchesDB.reduce((max, m) => {
@@ -2517,7 +2539,10 @@ router.post('/matches/import-run', requireAdmin, async (req, res) => {
             }
         });
 
-        if (newMatchesCount > 0) fs.writeFileSync('./data/matches.json', JSON.stringify(matchesDB, null, 2));
+        if (newMatchesCount > 0) {
+            // Uložení do MongoDB
+            await Matches.replaceAll(matchesDB);
+        }
 
         const notFoundArray = Array.from(notFoundTeams);
 
@@ -2580,7 +2605,7 @@ router.post('/matches/import-run', requireAdmin, async (req, res) => {
         res.status(500).send(`Chyba: ${error.message}`);
     }
 });
-router.post('/leagues/transfers', requireAdmin, express.urlencoded({ extended: true }), (req, res) => {
+router.post('/leagues/transfers', requireAdmin, express.urlencoded({ extended: true }), async (req, res) => {
     let { transferLeagues } = req.body;
 
     // Ošetření, aby to bylo vždycky pole
@@ -2591,15 +2616,15 @@ router.post('/leagues/transfers', requireAdmin, express.urlencoded({ extended: t
         savedTransferLeagues = [transferLeagues];
     }
 
-    // Uložení do JSONu
-    fs.writeFileSync('./data/transferLeagues.json', JSON.stringify(savedTransferLeagues, null, 2));
+    // Uložení do MongoDB
+    await TransferLeagues.replaceAll(savedTransferLeagues);
 
     res.redirect('/admin');
 });
 
-router.get('/images/manage', requireAdmin, (req, res) => {
+router.get('/images/manage', requireAdmin, async (req, res) => {
     const imagesDir = path.join(__dirname, '..', 'data', 'images');
-    const teams = loadTeams();
+    const teams = await Teams.findAll();
     const usedLogos = new Set(teams.map(t => t.logo).filter(Boolean));
 
     // Pojistka, kdyby složka neexistovala
@@ -2703,19 +2728,16 @@ router.get('/images/delete/:filename', requireAdmin, async (req, res) => {
     res.redirect('/admin/images/manage');
 });
 
-router.get('/transfers/manage', requireAdmin, (req, res) => {
-    const teams = loadTeams();
-    const selectedSeason = JSON.parse(fs.readFileSync('./data/chosenSeason.json', 'utf8'));
-    const allowedLeagues = JSON.parse(fs.readFileSync('./data/allowedLeagues.json', 'utf-8'));
+router.get('/transfers/manage', requireAdmin, async (req, res) => {
+    const teams = await Teams.findAll();
+    const chosenSeason = await ChosenSeason.findAll();
+    const selectedSeason = chosenSeason;
+    const allowedLeagues = await AllowedLeagues.findAll();
 
     const selectedLiga = req.query.liga || allowedLeagues[0];
 
-    let transfersData = {};
-    try {
-        if (fs.existsSync('./data/transfers.json')) {
-            transfersData = JSON.parse(fs.readFileSync('./data/transfers.json', 'utf8'));
-        }
-    } catch (e) { transfersData = {}; }
+    let transfersData = await Transfers.findAll();
+    if (!transfersData || Object.keys(transfersData).length === 0) transfersData = {};
 
     const currentTransfers = transfersData[selectedSeason]?.[selectedLiga] || {};
     const teamsInLiga = teams.filter(t => t.liga === selectedLiga && t.active);
@@ -2799,8 +2821,6 @@ router.get('/transfers/manage', requireAdmin, (req, res) => {
 });
 
 router.post('/transfers/save', requireAdmin, express.urlencoded({ extended: true }), async (req, res) => {
-    const fs = require('fs');
-    const path = require('path');
     const notif = require('./notificationService');
 
     const { liga, season, t } = req.body;
@@ -2810,20 +2830,11 @@ router.post('/transfers/save', requireAdmin, express.urlencoded({ extended: true
         return res.redirect('back');
     }
 
-    const teamsPath = path.join(__dirname, '../data/teams.json');
-    const transfersPath = path.join(__dirname, '../data/transfers.json');
-
-    let teams = [];
-    try {
-        teams = JSON.parse(fs.readFileSync(teamsPath, 'utf8'));
-    } catch (e) { console.error("Chyba načítání teams.json", e); }
-
-    let transfersData = {};
-    try {
-        if (fs.existsSync(transfersPath)) {
-            transfersData = JSON.parse(fs.readFileSync(transfersPath, 'utf8'));
-        }
-    } catch (e) { transfersData = {}; }
+    // Načtení z MongoDB
+    let teams = await Teams.findAll();
+    let transfersData = await Transfers.findAll();
+    
+    if (!transfersData || Object.keys(transfersData).length === 0) transfersData = {};
 
     if (!transfersData[season]) transfersData[season] = {};
     if (!transfersData[season][liga]) transfersData[season][liga] = {};
@@ -2872,10 +2883,11 @@ router.post('/transfers/save', requireAdmin, express.urlencoded({ extended: true
         };
     }
 
+    // Uložení do MongoDB
     try {
-        fs.writeFileSync(transfersPath, JSON.stringify(transfersData, null, 2));
+        await Transfers.replaceAll(transfersData);
     } catch (err) {
-        console.error("Chyba při zápisu do souboru:", err);
+        console.error("Chyba při zápisu do MongoDB:", err);
     }
 
     if (newTransfersNotification.length > 0) {
@@ -2900,9 +2912,8 @@ router.post('/transfers/save', requireAdmin, express.urlencoded({ extended: true
 
 router.get('/broadcast-ping', requireAdmin, async (req, res) => {
     try {
-        // 1. Čteme soubor VŽDY uvnitř routy, aby tam byli i noví lidé
-        const usersPath = path.join(__dirname, '../data/users.json');
-        const users = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
+        // 1. Čteme z MongoDB
+        const users = await Users.findAll();
 
         // 2. OPRAVENÝ FILTR: Musíme vzít starý i nový formát
         const subscribers = users.filter(u =>
@@ -2949,9 +2960,9 @@ router.get('/broadcast-ping', requireAdmin, async (req, res) => {
         res.send(`Chyba serveru: ${e.message}`);
     }
 });
-router.get('/users', requireAdmin, (req, res) => {
-    const usersPath = path.join(__dirname, '../data/users.json');
-    const users = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
+router.get('/users', requireAdmin, async (req, res) => {
+    // Načtení z MongoDB
+    const users = await Users.findAll();
 
     let html = `
     <!DOCTYPE html>
@@ -3003,7 +3014,7 @@ router.get('/users', requireAdmin, (req, res) => {
     res.send(html);
 });
 
-router.post('/users/delete', requireAdmin, (req, res) => {
+router.post('/users/delete', requireAdmin, async (req, res) => {
     const { usernameToDelete } = req.body;
 
     if (usernameToDelete === req.session.user) {
@@ -3011,33 +3022,26 @@ router.post('/users/delete', requireAdmin, (req, res) => {
     }
 
     try {
-        // 1. Smazání z users.json (Přihlášení a odběry)
-        const usersPath = path.join(__dirname, '../data/users.json');
-        let users = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
+        // 1. Smazání z MongoDB (Users)
+        let users = await Users.findAll();
         users = users.filter(u => u.username !== usernameToDelete);
-        fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+        await Users.replaceAll(users);
 
-        // 2. Smazání z tips.json (Tipy na zápasy)
-        const tipsPath = path.join(__dirname, '../data/tips.json');
-        if (fs.existsSync(tipsPath)) {
-            let tips = JSON.parse(fs.readFileSync(tipsPath, 'utf8'));
-            if (tips[usernameToDelete]) {
-                delete tips[usernameToDelete];
-                fs.writeFileSync(tipsPath, JSON.stringify(tips, null, 2));
-            }
+        // 2. Smazání z Tips (Tipy na zápasy)
+        let tips = await Tips.findAll();
+        if (tips && tips[usernameToDelete]) {
+            delete tips[usernameToDelete];
+            await Tips.replaceAll(tips);
         }
 
-        // 3. Smazání z tableTips.json (Tipy na tabulky)
-        const tableTipsPath = path.join(__dirname, '../data/tableTips.json');
-        if (fs.existsSync(tableTipsPath)) {
-            let tableTips = JSON.parse(fs.readFileSync(tableTipsPath, 'utf8'));
-            if (tableTips[usernameToDelete]) {
-                delete tableTips[usernameToDelete];
-                fs.writeFileSync(tableTipsPath, JSON.stringify(tableTips, null, 2));
-            }
+        // 3. Smazání z TableTips (Tipy na tabulky)
+        let tableTips = await TableTips.findAll();
+        if (tableTips && tableTips[usernameToDelete]) {
+            delete tableTips[usernameToDelete];
+            await TableTips.replaceAll(tableTips);
         }
 
-        console.log(`🧹 Uživatel ${usernameToDelete} byl kompletně vymazán ze všech souborů.`);
+        console.log(`🧹 Uživatel ${usernameToDelete} byl kompletně vymazán z MongoDB.`);
         logAdminAction(req.session.user, "SMAZÁNÍ_UŽIVATELE", `Smazán účet: ${usernameToDelete}`);
         res.redirect('/admin/users');
     } catch (error) {
@@ -3048,10 +3052,9 @@ router.post('/users/delete', requireAdmin, (req, res) => {
 });
 
 // Formulář úpravy
-router.get('/users/edit/:username', requireAdmin, (req, res) => {
+router.get('/users/edit/:username', requireAdmin, async (req, res) => {
     const usernameToEdit = req.params.username;
-    const usersPath = path.join(__dirname, '../data/users.json');
-    const users = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
+    const users = await Users.findAll();
     const user = users.find(u => u.username === usernameToEdit);
 
     if (!user) return res.send("Uživatel nenalezen.");
@@ -3166,8 +3169,7 @@ router.get('/users/edit/:username', requireAdmin, (req, res) => {
 // Uložení úpravy (Přidáno slovo 'async')
 router.post('/users/update', requireAdmin, async (req, res) => {
     const { oldUsername, newUsername, newPassword, newRole } = req.body;
-    const usersPath = path.join(__dirname, '../data/users.json');
-    let users = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
+    let users = await Users.findAll();
 
     const idx = users.findIndex(u => u.username === oldUsername);
     if (idx === -1) return res.send("Uživatel nenalezen.");
@@ -3187,29 +3189,32 @@ router.post('/users/update', requireAdmin, async (req, res) => {
         users[idx].role = newRole;
     }
 
-    fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+    await Users.replaceAll(users);
 
     // Pokud se změnilo jméno, přepíšeme ho v tipech (Hloubková synchronizace)
     if (oldUsername !== newUsername) {
-        ['../data/tips.json', '../data/tableTips.json'].forEach(file => {
-            const filePath = path.join(__dirname, file);
-            if (fs.existsSync(filePath)) {
-                let data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-                if (data[oldUsername]) {
-                    data[newUsername] = data[oldUsername];
-                    delete data[oldUsername];
-                    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-                }
-            }
-        });
+        // Aktualizace Tips
+        let tips = await Tips.findAll();
+        if (tips && tips[oldUsername]) {
+            tips[newUsername] = tips[oldUsername];
+            delete tips[oldUsername];
+            await Tips.replaceAll(tips);
+        }
+        // Aktualizace TableTips
+        let tableTips = await TableTips.findAll();
+        if (tableTips && tableTips[oldUsername]) {
+            tableTips[newUsername] = tableTips[oldUsername];
+            delete tableTips[oldUsername];
+            await TableTips.replaceAll(tableTips);
+        }
     }
     logAdminAction(req.session.user, "ÚPRAVA_UŽIVATELE", `Úprava účtu: ${oldUsername} -> ${newUsername}, Nová role: ${newRole || 'beze změny'}`);
     res.redirect('/admin/users');
 });
 
-router.get('/toggleLocked/:id', requireAdmin, (req, res) => {
+router.get('/toggleLocked/:id', requireAdmin, async (req, res) => {
     const matchId = parseInt(req.params.id);
-    const matches = JSON.parse(fs.readFileSync('./data/matches.json', 'utf8'));
+    const matches = await Matches.findAll();
     const match = matches.find(m => m.id === matchId);
     if (!match) return renderErrorHtml(res, "Zápas nebyl nalezen.", 404);
 
@@ -3220,7 +3225,7 @@ router.get('/toggleLocked/:id', requireAdmin, (req, res) => {
         removeTipsForDeletedMatch(matchId);
     }
 
-    fs.writeFileSync('./data/matches.json', JSON.stringify(matches, null, 2));
+    await Matches.replaceAll(matches);
     logAdminAction(req.session.user, "ZÁMEK_ZÁPASU", `Zápas ID ${matchId} byl manuálně ${match.locked ? 'UZAMČEN' : 'ODEMČEN'}`);
     res.redirect('/admin');
 });
@@ -3228,9 +3233,8 @@ router.get('/toggleLocked/:id', requireAdmin, (req, res) => {
 // ==========================================
 // SPRÁVA TEMPLATŮ PRO PLAYOFF (VÝPIS A TVORBA)
 // ==========================================
-router.get('/playoff/templates', requireAdmin, (req, res) => {
-    const tplPath = './data/playoffTemplates.json';
-    const templates = fs.existsSync(tplPath) ? JSON.parse(fs.readFileSync(tplPath, 'utf8')) : {};
+router.get('/playoff/templates', requireAdmin, async (req, res) => {
+    const templates = await PlayoffTemplates.findAll() || {};
 
     let templatesListHTML;
     if (Object.keys(templates).length === 0) {
@@ -3286,14 +3290,13 @@ router.get('/playoff/templates', requireAdmin, (req, res) => {
     `);
 });
 
-router.post('/playoff/templates/save', requireAdmin, (req, res) => {
+router.post('/playoff/templates/save', requireAdmin, async (req, res) => {
     const { key, label, structure } = req.body;
-    const tplPath = './data/playoffTemplates.json';
-    let templates = fs.existsSync(tplPath) ? JSON.parse(fs.readFileSync(tplPath, 'utf8')) : {};
+    let templates = await PlayoffTemplates.findAll() || {};
 
     try {
         templates[key] = { label, columns: JSON.parse(structure) };
-        fs.writeFileSync(tplPath, JSON.stringify(templates, null, 2));
+        await PlayoffTemplates.replaceAll(templates);
         res.redirect('/admin/playoff/templates');
     } catch (e) {
         res.status(400).send("Chyba v JSON struktuře!");
@@ -3303,10 +3306,9 @@ router.post('/playoff/templates/save', requireAdmin, (req, res) => {
 // ==========================================
 // UPRAVIT EXISTUJÍCÍ FORMÁT
 // ==========================================
-router.get('/playoff/templates/edit/:key', requireAdmin, (req, res) => {
+router.get('/playoff/templates/edit/:key', requireAdmin, async (req, res) => {
     const key = req.params.key;
-    const tplPath = './data/playoffTemplates.json';
-    const templates = fs.existsSync(tplPath) ? JSON.parse(fs.readFileSync(tplPath, 'utf8')) : {};
+    const templates = await PlayoffTemplates.findAll() || {};
 
     const template = templates[key];
     if (!template) return res.status(404).send("Formát nenalezen.");
@@ -3338,18 +3340,17 @@ router.get('/playoff/templates/edit/:key', requireAdmin, (req, res) => {
     `);
 });
 
-router.post('/playoff/templates/edit/:key', requireAdmin, (req, res) => {
+router.post('/playoff/templates/edit/:key', requireAdmin, async (req, res) => {
     const key = req.params.key;
     const { label, structure } = req.body;
-    const tplPath = './data/playoffTemplates.json';
-    let templates = fs.existsSync(tplPath) ? JSON.parse(fs.readFileSync(tplPath, 'utf8')) : {};
+    let templates = await PlayoffTemplates.findAll() || {};
 
     if (!templates[key]) return res.status(404).send("Formát nenalezen.");
 
     try {
         templates[key].label = label;
         templates[key].columns = JSON.parse(structure);
-        fs.writeFileSync(tplPath, JSON.stringify(templates, null, 2));
+        await PlayoffTemplates.replaceAll(templates);
         res.redirect('/admin/playoff/templates');
     } catch (e) {
         res.status(400).send("Chyba v JSON struktuře!");
@@ -3359,14 +3360,13 @@ router.post('/playoff/templates/edit/:key', requireAdmin, (req, res) => {
 // ==========================================
 // SMAZAT FORMÁT
 // ==========================================
-router.post('/playoff/templates/delete/:key', requireAdmin, (req, res) => {
+router.post('/playoff/templates/delete/:key', requireAdmin, async (req, res) => {
     const key = req.params.key;
-    const tplPath = './data/playoffTemplates.json';
-    let templates = fs.existsSync(tplPath) ? JSON.parse(fs.readFileSync(tplPath, 'utf8')) : {};
+    let templates = await PlayoffTemplates.findAll() || {};
 
     if (templates[key]) {
         delete templates[key];
-        fs.writeFileSync(tplPath, JSON.stringify(templates, null, 2));
+        await PlayoffTemplates.replaceAll(templates);
     }
     res.redirect('/admin/playoff/templates');
 });

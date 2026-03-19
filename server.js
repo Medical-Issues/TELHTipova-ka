@@ -3,14 +3,17 @@ const path = require('path');
 const bodyParser = require("body-parser");
 const session = require("express-session");
 const FileStore = require('session-file-store')(session);
-const fs = require('fs');
+require('fs');
 const userRoutes = require('./routes/user');
 const adminRoutes = require('./routes/admin');
 const authRoutes = require('./routes/auth');
+const { Users } = require('./utils/mongoDataAccess');
 
 require('dotenv').config();
-const { backupJsonFilesToGitHub } = require('./utils/githubBackup');
-const { loadJsonFilesFromGitHub } = require('./utils/githubLoadBackup');
+
+// MongoDB připojení
+const { connectToDatabase } = require('./config/database');
+const {backupJsonFilesToGitHub} = require("./utils/githubBackup");
 
 const app = express();
 app.use(express.static(path.join(__dirname, 'public')));
@@ -43,7 +46,7 @@ app.get('/api/vapid-public-key', (req, res) => {
 });
 
 // 2. Uložení odběru k uživateli
-app.post('/api/subscribe', (req, res) => {
+app.post('/api/subscribe', async (req, res) => {
     // 1. Kontrola přihlášení
     if (!req.session.user) {
         return res.status(401).json({ error: "Pro zapnutí notifikací musíš být přihlášen." });
@@ -55,13 +58,12 @@ app.post('/api/subscribe', (req, res) => {
         return res.status(400).json({ error: "Neplatná data odběru." });
     }
 
-    const usersPath = path.join(__dirname, 'data', 'users.json');
     let users = [];
 
     try {
-        users = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
+        users = await Users.findAll();
     } catch (e) {
-        console.error("Chyba při čtení users.json:", e);
+        console.error("Chyba při čtení z MongoDB:", e);
         return res.status(500).json({ error: "Chyba databáze." });
     }
 
@@ -85,11 +87,11 @@ app.post('/api/subscribe', (req, res) => {
         users[userIndex].subscriptions.push(subscription);
 
         try {
-            fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+            await Users.replaceAll(users);
             console.log(`✅ Notifikace nastaveny pro uživatele: ${req.session.user}`);
             res.status(201).json({ success: true });
         } catch (err) {
-            console.error("Chyba při zápisu do users.json:", err);
+            console.error("Chyba při zápisu do MongoDB:", err);
             res.status(500).json({ error: "Nepodařilo se uložit data na server." });
         }
     } else {
@@ -97,7 +99,7 @@ app.post('/api/subscribe', (req, res) => {
     }
 });
 
-app.post('/api/check-subscription', (req, res) => {
+app.post('/api/check-subscription', async (req, res) => {
     const { endpoint } = req.body;
     const username = req.session.user;
 
@@ -106,8 +108,7 @@ app.post('/api/check-subscription', (req, res) => {
     }
 
     try {
-        const usersPath = path.join(__dirname, 'data', 'users.json');
-        const users = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
+        const users = await Users.findAll();
         const user = users.find(u => u.username === username);
 
         if (!user) return res.json({ belongsToMe: false });
@@ -124,9 +125,9 @@ app.post('/api/check-subscription', (req, res) => {
 });
 
 // Kontrola, jestli uživatel už má tento endpoint (používalo tvé staré user.js)
-app.post('/api/check-subscription', (req, res) => {
+app.post('/api/check-subscription-legacy', async (req, res) => {
     const { endpoint } = req.body;
-    const users = JSON.parse(fs.readFileSync('./data/users.json', 'utf8'));
+    const users = await Users.findAll();
     const user = users.find(u => u.username === req.session.user);
 
     const belongsToMe = user?.subscriptions?.some(sub => sub.endpoint === endpoint) || false;
@@ -134,15 +135,14 @@ app.post('/api/check-subscription', (req, res) => {
 });
 
 // Odhlášení z notifikací
-app.post('/api/unsubscribe', (req, res) => {
+app.post('/api/unsubscribe', async (req, res) => {
     const { endpoint } = req.body;
-    const usersPath = path.join(__dirname, 'data', 'users.json');
-    let users = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
+    let users = await Users.findAll();
 
     const userIndex = users.findIndex(u => u.username === req.session.user);
     if (userIndex !== -1 && users[userIndex].subscriptions) {
         users[userIndex].subscriptions = users[userIndex].subscriptions.filter(sub => sub.endpoint !== endpoint);
-        fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+        await Users.replaceAll(users);
     }
     res.json({ success: true });
 });
@@ -179,7 +179,8 @@ app.use((req, res) => {
 
 // app.listen(...)
 async function startServer() {
-    await loadJsonFilesFromGitHub();
+    // Připojení k MongoDB
+    await connectToDatabase();
 
     app.listen(3000, () => {
         console.log('Server běží.');
