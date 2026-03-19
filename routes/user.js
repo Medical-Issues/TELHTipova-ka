@@ -250,6 +250,7 @@ html += await generateLeftPanel(data);
             const diff = userRank - realRank;
             const isCorrect = (diff === 0);
             const logoUrl = team.logo ? `/logoteamu/${team.logo}` : '/images/logo.png';
+            console.log(`[DEBUG] Team: ${team.name}, Logo: ${team.logo}, LogoURL: ${logoUrl}`);
 
             let bgStyle = "background-color: #1a1a1a; border: 1px solid #444;";
             let diffText;
@@ -877,6 +878,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
                 // Definice log (Watermark)
                 const homeLogoUrl = homeTeamObj?.logo ? `/logoteamu/${homeTeamObj.logo}` : '/images/logo.png';
                 const awayLogoUrl = awayTeamObj?.logo ? `/logoteamu/${awayTeamObj.logo}` : '/images/logo.png';
+                console.log(`[DEBUG] Match ${match.id}: Home=${homeTeamName} -> ${homeLogoUrl}, Away=${awayTeamName} -> ${awayLogoUrl}`);
 
                 // HTML PRO WATERMARK (vložíme ho do tlačítek)
                 const watermarkHTML = (url) => `

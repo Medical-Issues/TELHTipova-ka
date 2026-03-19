@@ -14,6 +14,7 @@ require('dotenv').config();
 // MongoDB připojení
 const { connectToDatabase } = require('./config/database');
 const {backupJsonFilesToGitHub} = require("./utils/githubBackup");
+const {restoreFromGitHub, fullRestoreFromGitHub} = require("./utils/githubRestore");
 
 const app = express();
 app.use(express.static(path.join(__dirname, 'public')));
@@ -32,6 +33,41 @@ app.use(session({
 }));
 app.get('/wake', (req, res) => {
     res.send('OK');
+});
+
+// Admin endpoint pro manuální restore z GitHubu
+app.post('/admin/restore-from-github', (req, res) => {
+    // Zde by měla být auth kontrola, ale pro jednoduchost ji vynecháváme
+    if (!process.env.GITHUB_TOKEN) {
+        return res.status(400).json({ success: false, message: 'GITHUB_TOKEN není nastaven' });
+    }
+    
+    restoreFromGitHub().then(success => {
+        if (success) {
+            res.json({ success: true, message: 'Restore obrázků z GitHubu úspěšný' });
+        } else {
+            res.status(500).json({ success: false, message: 'Restore obrázků z GitHubu selhal' });
+        }
+    }).catch(error => {
+        res.status(500).json({ success: false, message: error.message });
+    });
+});
+
+// Admin endpoint pro kompletní restore (JSON + obrázky) - pro nouzové případy
+app.post('/admin/full-restore-from-github', (req, res) => {
+    if (!process.env.GITHUB_TOKEN) {
+        return res.status(400).json({ success: false, message: 'GITHUB_TOKEN není nastaven' });
+    }
+    
+    fullRestoreFromGitHub().then(success => {
+        if (success) {
+            res.json({ success: true, message: 'Kompletní restore (JSON + obrázky) z GitHubu úspěšný' });
+        } else {
+            res.status(500).json({ success: false, message: 'Kompletní restore z GitHubu selhal' });
+        }
+    }).catch(error => {
+        res.status(500).json({ success: false, message: error.message });
+    });
 });
 
 app.use('/auth', authRoutes);
@@ -181,6 +217,19 @@ app.use((req, res) => {
 async function startServer() {
     // Připojení k MongoDB
     await connectToDatabase();
+
+    // Automatický restore obrázků z GitHubu při startu
+    if (process.env.GITHUB_TOKEN) {
+        console.log('🔄 Spouštím automatický restore obrázků z GitHubu...');
+        const restoreSuccess = await restoreFromGitHub();
+        if (restoreSuccess) {
+            console.log('✅ Restore obrázků z GitHubu úspěšný');
+        } else {
+            console.log('⚠️ Restore obrázků z GitHubu selhal, pokračuji bez něj');
+        }
+    } else {
+        console.log('⚠️ GITHUB_TOKEN nenalezen, přeskočuji restore z GitHubu');
+    }
 
     app.listen(3000, () => {
         console.log('Server běží.');

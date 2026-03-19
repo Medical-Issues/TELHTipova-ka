@@ -1345,6 +1345,34 @@ router.post('/edit/:id', requireAdmin, async (req, res) => {
     res.redirect('/admin');
 });
 
+router.post('/teams/edit/:id', requireAdmin, upload.single('logo'), express.urlencoded({extended: true}), async (req, res) => {
+    const teamId = parseInt(req.params.id);
+    const teams = await Teams.findAll();
+    
+    const teamIndex = teams.findIndex(t => t.id === teamId);
+    if (teamIndex === -1) return renderErrorHtml(res, "Tým s tímto ID nebyl nalezen.", 404);
+    
+    const team = teams[teamIndex];
+    const { name, liga, active } = req.body;
+    
+    // Aktualizace dat týmu
+    team.name = name.trim();
+    team.liga = liga.trim();
+    team.active = active === 'on';
+    team.group = parseInt(req.body.group);
+    
+    // Pokud bylo nahráno nové logo, aktualizujeme ho
+    if (req.file) {
+        team.logo = req.file.filename;
+    }
+    
+    // Uložení do MongoDB
+    await Teams.replaceAll(teams);
+    
+    logAdminAction(req.session.user, "ÚPRAVA_TÝMU", `Upraven tým: ${team.name} (${team.liga})`);
+    res.redirect('/admin');
+});
+
 router.post('/teams/delete/:id', requireAdmin, async (req, res) => {
     const teamsId = parseInt(req.params.id);
     let teams = await Teams.findAll();
