@@ -261,7 +261,7 @@ async function evaluateAndAssignPoints(liga, season) {
 
     // Zápis do MongoDB
     try {
-        await Users.replaceAll(users);
+        await Users.updateAll(users);
     } catch (err) {
     }
 }
@@ -510,7 +510,7 @@ async function renameLeagueGlobal(oldName, newName) {
         });
 
         if (usersUpdated > 0) {
-            await Users.replaceAll(users);
+            await Users.updateAll(users);
         }
     } catch (e) { }
 }
@@ -814,7 +814,7 @@ async function evaluateRegularSeasonTable(season, liga, groupKey = null, isForLe
 
     // Uložení do MongoDB
     try {
-        await Users.replaceAll(users);
+        await Users.updateAll(users);
     } catch (err) {
     }
 }
@@ -1203,6 +1203,7 @@ async function prepareDashboardData(req, isHistory = false) {
 
     const currentUserStats = userStats.find(u => u.username === username);
     const userTipData = tableTips?.[selectedSeason]?.[selectedLiga]?.[username] || null;
+    const currentUserMatchTips = allUsers.find(u => u.username === username)?.tips?.[selectedSeason]?.[selectedLiga] || [];
 
     let playoffData = [];
     try {
@@ -1224,7 +1225,7 @@ async function prepareDashboardData(req, isHistory = false) {
         clinchMode, tableMode, isRegularSeasonFinished, isTipsLocked,
         leagueObj, sortedGroups, teamsByGroup, sortedGroupKeys, groupedTeams,
         globalRealRankMap, userStats, currentUserStats,
-        userTipData, playoffData, scores, allUsers, teams,
+        userTipData, currentUserMatchTips, playoffData, scores, allUsers, teams,
         activeTransferLeagues, currentTransfers, tableTips // <-- TOTO JSME PŘIDALI NA KONEC
     };
 }

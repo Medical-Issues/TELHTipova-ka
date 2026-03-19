@@ -3,7 +3,7 @@ const path = require('path');
 const bodyParser = require("body-parser");
 const session = require("express-session");
 const FileStore = require('session-file-store')(session);
-require('fs');
+const fs = require('fs');
 const userRoutes = require('./routes/user');
 const adminRoutes = require('./routes/admin');
 const authRoutes = require('./routes/auth');
@@ -17,13 +17,22 @@ const {backupJsonFilesToGitHub} = require("./utils/githubBackup");
 const {restoreFromGitHub, fullRestoreFromGitHub} = require("./utils/githubRestore");
 
 const app = express();
+
+// Vytvoření sessions adresáře pokud neexistuje
+const sessionsDir = path.join(__dirname, 'sessions');
+if (!fs.existsSync(sessionsDir)) {
+    fs.mkdirSync(sessionsDir, { recursive: true });
+}
+
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/logoteamu', express.static(path.join(__dirname, 'data', 'images')));
 app.use(bodyParser.urlencoded({extended: true}));
 app.use(bodyParser.json());
 
 app.use(session({
-    store: new FileStore({}),
+    store: new FileStore({
+        path: sessionsDir
+    }),
     secret: 'tajnyklic',
     resave: false,
     saveUninitialized: true,
@@ -123,7 +132,7 @@ app.post('/api/subscribe', async (req, res) => {
         users[userIndex].subscriptions.push(subscription);
 
         try {
-            await Users.replaceAll(users);
+            await Users.updateAll(users);
             console.log(`✅ Notifikace nastaveny pro uživatele: ${req.session.user}`);
             res.status(201).json({ success: true });
         } catch (err) {
@@ -178,7 +187,7 @@ app.post('/api/unsubscribe', async (req, res) => {
     const userIndex = users.findIndex(u => u.username === req.session.user);
     if (userIndex !== -1 && users[userIndex].subscriptions) {
         users[userIndex].subscriptions = users[userIndex].subscriptions.filter(sub => sub.endpoint !== endpoint);
-        await Users.replaceAll(users);
+        await Users.updateAll(users);
     }
     res.json({ success: true });
 });

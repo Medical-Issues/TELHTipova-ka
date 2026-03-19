@@ -659,7 +659,7 @@ router.get('/', requireLogin, async (req, res) => {
 
     // 2. VYBALÍME SI PROMĚNNÉ, KTERÉ POTŘEBUJE HTML (Destructuring)
     const {
-        username, selectedSeason, selectedLiga, uniqueLeagues, teams
+        username, selectedSeason, selectedLiga, uniqueLeagues, teams, currentUserMatchTips
     } = data;
 // --- HTML START ---
     let html = `
@@ -888,7 +888,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
                                 opacity: 0.50; filter: grayscale(50%); pointer-events: none; z-index: 5;">
                     </div>`;
 
-                const existingTip = userTips.find(t => t.matchId === match.id);
+                const existingTip = currentUserMatchTips.find(t => t.matchId === match.id);
                 const selectedWinner = existingTip?.winner;
 
                 // Zjištění, zda je zápas zamčen (buď manuálně, odložením, nebo časem)
@@ -1001,7 +1001,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 document.addEventListener('DOMContentLoaded', () => {
 function sendTip(formData, homeBtn, awayBtn, loserRow) {
 const winner = formData.get('winner');
-fetch('/tip', { method: 'POST', headers: { 'x-requested-with': 'fetch' }, body: formData })
+fetch('/tip', { method: 'POST', headers: { 'x-requested-with': 'fetch', 'Content-Type': 'application/x-www-form-urlencoded' }, body: formData })
 .then(res => { if (res.ok) { 
     if(homeBtn) { homeBtn.classList.toggle('selected', winner === 'home'); if(winner === 'home' && awayBtn) awayBtn.classList.remove('selected'); }
     if(awayBtn) { awayBtn.classList.toggle('selected', winner === 'away'); if(winner === 'away' && homeBtn) homeBtn.classList.remove('selected'); }

@@ -3046,7 +3046,7 @@ router.post('/users/delete', requireAdmin, async (req, res) => {
         // 1. Smazání z MongoDB (Users)
         let users = await Users.findAll();
         users = users.filter(u => u.username !== usernameToDelete);
-        await Users.replaceAll(users);
+        await Users.updateAll(users);
 
         // 2. Smazání z Tips (Tipy na zápasy)
         let tips = await Tips.findAll();
@@ -3210,7 +3210,7 @@ router.post('/users/update', requireAdmin, async (req, res) => {
         users[idx].role = newRole;
     }
 
-    await Users.replaceAll(users);
+    await Users.updateAll(users);
 
     // Pokud se změnilo jméno, přepíšeme ho v tipech (Hloubková synchronizace)
     if (oldUsername !== newUsername) {

@@ -184,7 +184,9 @@ class MongoDataAccess {
                 await collection.insertOne(data);
             } else {
                 if (Array.isArray(data)) {
-                    await collection.insertMany(data);
+                    if (data.length > 0) {
+                        await collection.insertMany(data);
+                    }
                 } else {
                     await collection.insertOne(data);
                 }
@@ -193,6 +195,27 @@ class MongoDataAccess {
             return true;
         } catch (error) {
             console.error(`Chyba v replaceAll ${this.collectionName}:`, error);
+            return false;
+        }
+    }
+
+    // Bezpečná metoda pro update všech uživatelů - nemaže data!
+    async updateAll(users) {
+        try {
+            const collection = await this.getCollection();
+            
+            // Pro každého uživatele provedeme update nebo insert
+            for (const user of users) {
+                await collection.replaceOne(
+                    { username: user.username },
+                    user,
+                    { upsert: true }
+                );
+            }
+            
+            return true;
+        } catch (error) {
+            console.error(`Chyba v updateAll ${this.collectionName}:`, error);
             return false;
         }
     }

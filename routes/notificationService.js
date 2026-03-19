@@ -231,7 +231,7 @@ const sendToUserDevices = (user, payload) => {
                 users[userIndex].subscriptions = activeSubscriptions;
                 // Úklid starého klíče, pokud existoval
                 delete users[userIndex].subscription;
-                await Users.replaceAll(users);
+                await Users.updateAll(users);
             }
         }
     });
