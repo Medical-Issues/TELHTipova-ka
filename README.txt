@@ -18,13 +18,13 @@ na základě přechodu zrychlení provozu serveru a funkce převést na asynchro
 
 Možnost zablokovat registrace ✅
 
-Responzivita
+Responzivita ✅
+
+V playoff tabulce roletka na rozkliknutí zápasů série, + obecně prostě hezčí playoff vyobrazení
+
+přechod na free picture API z ukládání do souborů
 
 Správce oznámení v přestupech, importu zápasů,
-
-V playoff tabulce roletka na rozkliknutí zápasů série,
-
-Responzivita
 
 Novinkovač (Otvírání tweetů atd.)
 

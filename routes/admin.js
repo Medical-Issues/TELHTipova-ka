@@ -120,7 +120,7 @@ router.get('/', requireAdmin, async (req, res) => {
 <html lang="cs">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Admin - Správa zápasů</title>
   <link rel="stylesheet" href="/css/styles.css" />
   <link rel="icon" href="/images/logo.png">
@@ -648,7 +648,7 @@ router.get('/teams/edit/:id', requireAdmin, async (req, res) => {
 <html lang="cs">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Upravit tým ID ${team.id} ${team.name}</title>
   <link rel="stylesheet" href="/css/styles.css" />
   <link rel="icon" href="/images/logo.png" />
@@ -862,7 +862,7 @@ router.get('/new/match', requireAdmin, async (req, res) => {
     <html lang="cs">
         <head>
         <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
         <title>Vytvořit nový zápas</title>
         <link rel="stylesheet" href="/css/styles.css" />
         <link rel="icon" href="/images/logo.png">
@@ -1053,7 +1053,7 @@ router.get('/new/team', requireAdmin, async (req, res) => {
     <html lang="cs">
     <head>
         <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
         <title>Vytvořit nový tým</title>
         <link rel="stylesheet" href="/css/styles.css" />
         <link rel="icon" href="/images/logo.png">
@@ -1205,7 +1205,7 @@ router.get('/edit/:id', requireAdmin, async (req, res) => {
 <html lang="cs">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Upravit zápas #${match.id}</title>
   <link rel="stylesheet" href="/css/styles.css" />
   <link rel="icon" href="/images/logo.png">
@@ -1693,6 +1693,7 @@ router.get('/playoff', requireAdmin, async (req, res) => {
 <html lang="cs">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Správa Playoff</title>
   <link rel="stylesheet" href="/css/styles.css" />
   <link rel="icon" href="/images/logo.png"/>
@@ -1826,6 +1827,7 @@ router.get('/leagues/manage', requireAdmin, async (req, res) => {
     <html lang="cs">
     <head>
         <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
         <title>Správa lig</title>
         <link rel="stylesheet" href="/css/styles.css">
         <link rel="icon" href="/images/logo.png">
@@ -2287,6 +2289,7 @@ router.get('/teams/points', requireAdmin, async (req, res) => {
     <html lang="cs">
     <head>
         <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
         <title>Body a Zápasy týmů</title>
         <link rel="stylesheet" href="/css/styles.css">
         <link rel="icon" href="/images/logo.png">
@@ -2495,6 +2498,7 @@ router.get('/matches/import', requireAdmin, async (req, res) => {
     <html lang="cs">
     <head>
         <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
         <title>Import z Hokej.cz</title>
         <link rel="stylesheet" href="/css/styles.css">
         <link rel="icon" href="/images/logo.png">
@@ -2737,6 +2741,7 @@ router.post('/matches/import-run', requireAdmin, async (req, res) => {
         <html lang="cs">
         <head>
             <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
             <title>Výsledek importu</title>
             <link rel="stylesheet" href="/css/styles.css">
             <link rel="icon" href="/images/logo.png">
@@ -2826,6 +2831,7 @@ router.get('/images/manage', requireAdmin, async (req, res) => {
     <html lang="cs">
     <head>
         <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
         <title>Správce log</title>
         <link rel="stylesheet" href="/css/styles.css">
         <link rel="icon" href="/images/logo.png">
@@ -2932,6 +2938,7 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
     <html lang="cs">
     <head>
         <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
         <title>Admin - Přestupy</title>
         <link rel="stylesheet" href="/css/styles.css">
         <link rel="icon" href="/images/logo.png">
@@ -3154,6 +3161,7 @@ router.get('/users', requireAdmin, async (req, res) => {
     <html lang="cs">
     <head>
         <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
         <link rel="stylesheet" href="/css/styles.css">
         <link rel="icon" href="/images/logo.png">
         <title>Správa uživatelů</title>
@@ -3249,6 +3257,7 @@ router.get('/users/edit/:username', requireAdmin, async (req, res) => {
     <html lang="cs">
     <head>
         <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
         <link rel="stylesheet" href="/css/styles.css">
         <link rel="icon" href="/public/images/logo.png">
         <title>Upravit uživatele - ${user.username}</title>
@@ -3444,6 +3453,7 @@ router.get('/playoff/templates', requireAdmin, async (req, res) => {
         <!DOCTYPE html>
         <html lang="cs">
         <head><meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
         <title>Editor formátů</title>
         <link rel="stylesheet" href="/css/styles.css">
         <link rel="icon" href="/images/logo.png"/>
@@ -3505,6 +3515,7 @@ router.get('/playoff/templates/edit/:key', requireAdmin, async (req, res) => {
         <!DOCTYPE html>
         <html lang="cs">
         <head><meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
         <title>Upravit formát</title>
         <link rel="stylesheet" href="/css/styles.css">
         <link rel="icon" href="/images/logo.png"/>

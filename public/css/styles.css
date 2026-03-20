@@ -1706,69 +1706,140 @@ textarea { width: 100%; height: 120px; background: rgba(0, 0, 0, 0.6); color: #f
 
 /* Mobilní telefony - základní breakpoint */
 @media (max-width: 768px) {
-    /* Hlavní layout */
-    body {
-        font-size: 14px;
+    /* Reset a základní nastavení */
+    html {
+        -webkit-text-size-adjust: 100%;
+        -ms-text-size-adjust: 100%;
     }
     
+    body {
+        font-size: 16px;
+        line-height: 1.4;
+        min-height: 100vh;
+        overflow-x: hidden;
+    }
+    
+    /* Header - oprava rozložení */
     .header {
         flex-direction: column;
-        padding: 5px;
-        gap: 5px;
+        padding: 15px 10px;
+        gap: 10px;
+        width: 100%;
+        box-sizing: border-box;
+    }
+    
+    .logo_title {
+        width: 100%;
+        justify-content: center;
+        padding-right: 0;
+    }
+    
+    .logo_title::before {
+        display: none;
     }
     
     .image_logo {
-        height: 40px;
+        height: 50px;
     }
     
     #title {
-        font-size: 1.2em;
+        font-size: 1.4em;
+        margin: 0;
+        text-align: center;
+    }
+    
+    /* Zpět odkaz */
+    .header a {
+        text-align: center;
+        width: 100%;
+        margin-top: 5px;
     }
     
     /* Uživatelská stránka */
     .main_page {
         flex-direction: column;
-        gap: 10px;
+        gap: 15px;
+        width: 100%;
+        padding: 0 10px;
     }
     
     .stats-container,
     .matches-container {
         width: 100%;
-        padding: 10px;
+        padding: 15px;
+        box-sizing: border-box;
     }
     
     /* Admin stránka */
     .admin_site {
-        padding: 10px !important;
+        padding: 15px 10px !important;
+        width: 100%;
+        box-sizing: border-box;
+    }
+    
+    .admin-title {
+        text-align: center;
+        margin-bottom: 20px;
     }
     
     .admin-title h1 {
         font-size: 1.8em;
+        margin-bottom: 8px;
     }
     
     .admin-subtitle {
         font-size: 1em;
+        margin: 0;
+    }
+    
+    .admin-header {
+        width: 100% !important;
+        margin-bottom: 20px;
     }
     
     .admin-nav {
         grid-template-columns: 1fr !important;
         gap: 15px !important;
+        width: 100% !important;
+    }
+    
+    .nav-section {
+        padding: 15px !important;
     }
     
     .nav-buttons {
         grid-template-columns: 1fr !important;
+        gap: 10px !important;
     }
     
     /* Settings grid - mobilní verze */
+    .settings-card {
+        width: 100%;
+        margin-bottom: 20px !important;
+    }
+    
     .settings-card .settings-grid {
         flex-direction: column !important;
         gap: 15px !important;
+        width: 100% !important;
     }
     
     .settings-card .setting-item {
         flex: 1 1 100% !important;
         min-width: 100% !important;
         padding: 15px !important;
+        width: 100%;
+        box-sizing: border-box;
+    }
+    
+    .settings-card .setting-label {
+        font-size: 1em !important;
+        margin-bottom: 8px !important;
+    }
+    
+    .settings-card .setting-description {
+        font-size: 0.9em !important;
+        margin-bottom: 12px !important;
     }
     
     /* Týmy - mobilní verze */
@@ -1777,57 +1848,85 @@ textarea { width: 100%; height: 120px; background: rgba(0, 0, 0, 0.6); color: #f
         gap: 15px !important;
     }
     
+    .league-column {
+        padding: 15px !important;
+    }
+    
     /* Tabulky - mobilní verze */
     .modern-table {
-        font-size: 0.8em;
+        font-size: 0.85em;
+        width: 100%;
+        table-layout: fixed;
     }
     
     .modern-table th,
     .modern-table td {
-        padding: 4px 6px !important;
+        padding: 6px 4px !important;
+        word-wrap: break-word;
     }
     
+    .modern-table th:nth-child(1),
+    .modern-table td:nth-child(1) { width: 50px !important; }
     .modern-table th:nth-child(2),
-    .modern-table th:nth-child(3) {
-        width: 120px !important;
-    }
+    .modern-table td:nth-child(2) { width: 100px !important; }
+    .modern-table th:nth-child(3),
+    .modern-table td:nth-child(3) { width: 100px !important; }
+    .modern-table th:nth-child(4),
+    .modern-table td:nth-child(4) { width: 80px !important; }
+    .modern-table th:nth-child(5),
+    .modern-table td:nth-child(5) { width: 60px !important; }
+    .modern-table th:nth-child(6),
+    .modern-table td:nth-child(6) { width: auto !important; }
     
     /* Tlačítka - mobilní verze */
     .btn-lg {
         width: 100% !important;
-        padding: 10px 16px !important;
+        padding: 12px 16px !important;
         font-size: 1em !important;
+        min-height: 44px;
+        box-sizing: border-box;
     }
     
     .btn-sm {
         padding: 8px 12px !important;
         font-size: 0.9em !important;
+        min-height: 36px;
     }
     
     .action-buttons {
         flex-direction: column !important;
         gap: 8px !important;
+        width: 100%;
     }
     
     /* Formuláře - mobilní verze */
     .form-group {
         flex-direction: column !important;
         gap: 10px !important;
+        width: 100%;
     }
     
     .modern-select {
         width: 100% !important;
+        padding: 10px !important;
+        font-size: 16px !important;
+        min-height: 44px;
+        box-sizing: border-box;
     }
     
     /* Login - mobilní verze */
     .login_input {
         width: 100% !important;
         max-width: 300px;
+        font-size: 16px !important;
+        padding: 12px !important;
     }
     
     .login_button {
         width: 100% !important;
         max-width: 320px;
+        font-size: 16px !important;
+        padding: 12px !important;
     }
     
     /* League dropdown - mobilní verze */
@@ -1835,15 +1934,34 @@ textarea { width: 100%; height: 120px; background: rgba(0, 0, 0, 0.6); color: #f
         flex-direction: column !important;
         gap: 15px !important;
         padding: 15px !important;
+        width: 100%;
+    }
+    
+    .filter-group {
+        width: 100%;
     }
     
     /* Card body - mobilní verze */
     .card-body {
         padding: 15px !important;
+        width: 100%;
+        box-sizing: border-box;
     }
     
     .card-body-teams {
         padding: 15px !important;
+        width: 100%;
+        box-sizing: border-box;
+    }
+    
+    /* Ostatní opravy */
+    .section-card {
+        margin-bottom: 20px;
+    }
+    
+    .table-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
     }
 }
 
