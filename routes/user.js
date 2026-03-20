@@ -168,7 +168,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <a class="history-btn changed" href="/prestupy?liga=${encodeURIComponent(selectedLiga)}">Přestupy TELH</a>
 <div style="text-align: center; margin: 20px;">
     <button type="button" id="notify-toggle-btn" onclick="toggleNotifications()" 
-        style="width: 220px; height: 40px; cursor: pointer; font-weight: bold; border: none; color: white; border-radius: 5px; background-color: #444;">
+        style="width: 220px; height: 38px; cursor: pointer; font-weight: bold; border: none; color: white; border-radius: 5px; background-color: #444;">
         Zjišťuji stav...
     </button>
 </div>
@@ -815,7 +815,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <a class="history-btn changed" href="/prestupy?liga=${encodeURIComponent(selectedLiga)}">Přestupy TELH</a>
 <div style="text-align: center; margin: 20px;">
     <button type="button" id="notify-toggle-btn" onclick="toggleNotifications()" 
-        style="width: 220px; height: 40px; cursor: pointer; font-weight: bold; border: none; color: white; border-radius: 5px; background-color: #444;">
+        style="width: 220px; height: 38px; cursor: pointer; font-weight: bold; border: none; color: white; border-radius: 5px; background-color: #444;">
         Zjišťuji stav...
     </button>
 </div>
@@ -861,7 +861,17 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
                 return `${day}. ${month}. ${year} ${tPart}`;
             })();
 
-            html += `<h3>${formattedDateTime}</h3><table class="matches-table"><thead class="matches-table-header"><tr><th colspan="3">Zápasy</th></tr></thead><tbody>`;
+            html += `<h3>${formattedDateTime}</h3>
+<table class="matches-table">
+    <colgroup>
+        <col style="width: calc(50% - 10px);">
+        <col style="width: 20px;">
+        <col style="width: calc(50% - 10px);">
+    </colgroup>
+    <thead class="matches-table-header">
+        <tr><th colspan="3">Zápasy</th></tr>
+    </thead>
+    <tbody>`;
 
             for (const match of matchesAtSameTime) {
                 // Najdeme objekty týmů, abychom měli přístup k logům
@@ -898,19 +908,20 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
                     // --- ZÁKLADNÍ ČÁST (Simple Match) ---
                     html += `
                     <tr class="match-row simple-match-row" data-match-id="${match.id}">
-                        <td style="position: relative; overflow: hidden;">${watermarkHTML(homeLogoUrl)}
-                            <button type="button" class="team-link home-btn ${selectedWinner === "home" ? "selected" : ""}" data-winner="home" ${matchStarted ? 'disabled' : ''} 
-                                    style="overflow: hidden;">
-                                <div style="z-index: 5;">${homeTeamName}</div>
-                            </button>
-                        </td>
-                        <td class="vs">${vsText}</td> <td style="position: relative; overflow: hidden;">${watermarkHTML(awayLogoUrl)}
-                            <button type="button" class="team-link away-btn ${selectedWinner === "away" ? "selected" : ""}" data-winner="away" ${matchStarted ? 'disabled' : ''}
-                                    style="overflow: hidden;">
-                                <div style="z-index: 5;">${awayTeamName}</div>
-                            </button>
-                        </td>
-                    </tr>`;
+    <td style="position: relative; overflow: hidden; width: 47%;">${watermarkHTML(homeLogoUrl)}
+        <button type="button" class="team-link home-btn ${selectedWinner === "home" ? "selected" : ""}" data-winner="home" ${matchStarted ? 'disabled' : ''} 
+                style="overflow: hidden;">
+            <div style="z-index: 5;">${homeTeamName}</div>
+        </button>
+    </td>
+    <td class="vs" style="width: 20px;">${vsText}</td> 
+    <td style="position: relative; overflow: hidden; width: 47%;">${watermarkHTML(awayLogoUrl)}
+        <button type="button" class="team-link away-btn ${selectedWinner === "away" ? "selected" : ""}" data-winner="away" ${matchStarted ? 'disabled' : ''}
+                style="overflow: hidden;">
+            <div style="z-index: 5;">${awayTeamName}</div>
+        </button>
+    </td>
+</tr>`;
                 } else {
                     // --- PLAYOFF ZÁPAS ---
                     const existingLoserWins = existingTip?.loserWins || 0;
@@ -962,18 +973,18 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 
                     html += `
         <tr class="match-row playoff-parent-row" data-match-id="${match.id}">
-            <td style="position: relative; overflow: hidden;">${watermarkHTML(homeLogoUrl)}
-                <button type="button" class="team-link home-btn ${selectedWinner === "home" ? "selected" : ""}" data-winner="home" ${matchStarted ? 'disabled' : ''} style="overflow: hidden;">
-                    <span style="z-index: 5;">${homeTeamName}</span>
-                </button>
-            </td>
-            <td class="vs">${vsText}</td>
-            <td style="position: relative; overflow: hidden;">${watermarkHTML(awayLogoUrl)}
-                <button type="button" class="team-link away-btn ${selectedWinner === "away" ? "selected" : ""}" data-winner="away" ${matchStarted ? 'disabled' : ''} style="overflow: hidden;">
-                    <span style="z-index: 5;">${awayTeamName}</span>
-                </button>
-            </td>
-        </tr>
+    <td style="position: relative; overflow: hidden; width: 47%;">${watermarkHTML(homeLogoUrl)}
+        <button type="button" class="team-link home-btn ${selectedWinner === "home" ? "selected" : ""}" data-winner="home" ${matchStarted ? 'disabled' : ''} style="overflow: hidden;">
+            <span style="z-index: 5;">${homeTeamName}</span>
+        </button>
+    </td>
+    <td class="vs" style="width: 20px;">${vsText}</td>
+    <td style="position: relative; overflow: hidden; width: 47%;">${watermarkHTML(awayLogoUrl)}
+        <button type="button" class="team-link away-btn ${selectedWinner === "away" ? "selected" : ""}" data-winner="away" ${matchStarted ? 'disabled' : ''} style="overflow: hidden;">
+            <span style="z-index: 5;">${awayTeamName}</span>
+        </button>
+    </td>
+</tr>
         ${playedMatchesHtml}
         <tr class="match-row loser-row" style="display:${existingTip ? 'table-row' : 'none'}">
             <td style="border-top: none" colspan="3">
@@ -1388,7 +1399,14 @@ function toggleSeriesDetails(btn) {
         const formattedDateTime = new Date(dateTime).toLocaleString('cs-CZ', {
             day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
         });
-        html += `<h3>${formattedDateTime}</h3><table class="matches-table"><thead class="matches-table-header"><tr><th colSpan="6">Zápasy</th></tr></thead><tbody>`;
+        html += `<h3>${formattedDateTime}</h3>
+<table class="matches-table">
+    <colgroup>
+        <col style="width: calc(50% - 50px);"> <col style="width: 30px;">             <col style="width: 40px;">             <col style="width: 30px;">             <col style="width: calc(50% - 50px);"> </colgroup>
+    <thead class="matches-table-header">
+        <tr><th colspan="5">Zápasy</th></tr>
+    </thead>
+    <tbody>`;
 
         for (const match of matchesAtSameTime) {
             const homeTeamObj = teams.find(t => t.id === match.homeTeamId);
@@ -1422,12 +1440,12 @@ function toggleSeriesDetails(btn) {
             // OPRAVENO: Odstraněna třída match-row u tagů <td>!
             if (!match.isPlayoff) {
                 html += `<tr class="match-row">
-                    <td class="${initHomeClass}" style="position: relative; overflow: hidden; width: 40%;">${watermarkHTML(homeLogoUrl)}${homeCellHTML}</td>
-                    <td class="vs" style="width: 3%;">${match.result.scoreHome}</td>
-                    <td class="vs" style="width: 6%;">${match.result.ot === true ? "pp/sn" : ":"}</td>
-                    <td class="vs" style="width: 3%;">${match.result.scoreAway}</td>
-                    <td class="${initAwayClass}" style="position: relative; overflow: hidden; width: 40%;">${watermarkHTML(awayLogoUrl)}${awayCellHTML}</td>
-                </tr>`;
+    <td class="${initHomeClass}" style="position: relative; overflow: hidden; width: 41%;">${watermarkHTML(homeLogoUrl)}${homeCellHTML}</td>
+    <td style="width: 4%;">${match.result.scoreHome}</td>
+    <td class="vs" style="width: 20px;">${match.result.ot === true ? "pp/sn" : ":"}</td>
+    <td style="width: 4%;">${match.result.scoreAway}</td>
+    <td class="${initAwayClass}" style="position: relative; overflow: hidden; width: 41%;">${watermarkHTML(awayLogoUrl)}${awayCellHTML}</td>
+</tr>`;
             } else {
                 // NOVÁ "DROPDOWN" VERZE PRO HISTORII
                 let playedMatchesHtml = '';
@@ -1472,12 +1490,12 @@ function toggleSeriesDetails(btn) {
 
                 // Samotné vykreslení (zůstává stejné jako minule)
                 html += `<tr style="border-top: none" class="match-row">
-                <td class="${initHomeClass}" style="position: relative; overflow: hidden; width: 40%;">${watermarkHTML(homeLogoUrl)}${homeCellHTML}</td>
-                <td class="vs" style="width: 3%;">${match.result.scoreHome}</td>
-                <td class="vs" style="width: 6%;">vs</td>
-                <td class="vs" style="width: 3%;">${match.result.scoreAway}</td>
-                <td class="${initAwayClass}" style="position: relative; overflow: hidden; width: 40%;">${watermarkHTML(awayLogoUrl)}${awayCellHTML}</td>
-            </tr>
+    <td class="${initHomeClass}" style="position: relative; overflow: hidden; width: 41%;">${watermarkHTML(homeLogoUrl)}${homeCellHTML}</td>
+    <td style="width: 4%;">${match.result.scoreHome}</td>
+    <td class="vs" style="width: 20px;">vs</td>
+    <td style="width: 4%;">${match.result.scoreAway}</td>
+    <td class="${initAwayClass}" style="position: relative; overflow: hidden; width: 41%;">${watermarkHTML(awayLogoUrl)}${awayCellHTML}</td>
+</tr>
             ${playedMatchesHtml}
             <tr class="match-row">
                 <td style="height: 25px; position: relative;" colspan="5" class="${initScoreClass}">${scoreCellHTML}</td>
@@ -1912,7 +1930,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <a class="history-btn changed" href="/table-tip?liga=${encodeURIComponent(selectedLiga)}">Základní část</a>
 <div style="text-align: center; margin: 20px;">
     <button type="button" id="notify-toggle-btn" onclick="toggleNotifications()" 
-        style="width: 220px; height: 40px; cursor: pointer; font-weight: bold; border: none; color: white; border-radius: 5px; background-color: #444;">
+        style="width: 220px; height: 38px; cursor: pointer; font-weight: bold; border: none; color: white; border-radius: 5px; background-color: #444;">
         Zjišťuji stav...
     </button>
 </div>

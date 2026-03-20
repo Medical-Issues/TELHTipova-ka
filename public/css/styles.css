@@ -15,7 +15,9 @@ html {
     background-color: #222222;
     font-family: "Segoe UI", serif;
     color: lightgrey;
-    width: 100%;
+    max-width: 100%;
+    scrollbar-width: thin;
+    scrollbar-color: orangered #1a1a1a;
 }
 
 #error-msg {
@@ -48,9 +50,11 @@ th, td {
 .points-table {
     width: 100%;
     border-collapse: collapse;
-    overflow: hidden;
+    overflow-x: auto;
     background-color: #333;
     font-size: 10px;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 .left-panel {
@@ -58,6 +62,7 @@ th, td {
     position: sticky;
     top: 20px;
     transition: top 0.1s ease-out;
+    box-sizing: border-box;
 }
 
 #points-table-header {
@@ -81,7 +86,6 @@ header {
     align-items: center;
     padding: 10px;
     width: 100%;
-    min-width: 500px;
     box-sizing: border-box;
     gap: 10px;
 }
@@ -109,7 +113,7 @@ header {
 
 body {
     margin: 0;
-    width: 100%;
+    max-width: 100%;
 }
 
 main {
@@ -186,6 +190,9 @@ main {
     text-align: center;
     gap: 10px;
     width: 50%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: hidden;
 }
 
 .user_stats {
@@ -207,6 +214,7 @@ main {
     width: 100%;
     border-collapse: collapse;
     overflow: hidden;
+    table-layout: fixed;
     background-color: #333;
     font-size: 16px;
 }
@@ -288,7 +296,13 @@ button:disabled {
 }
 
 .vs {
-    width: 3%;
+    width: 20px !important;
+    min-width: 20px !important;
+    max-width: 20px !important;
+    font-weight: bold;
+    padding: 0 2px;
+    text-align: center;
+    font-size: 12px;
 }
 
 .btn {
@@ -344,7 +358,7 @@ button:disabled {
     background-color: black;
     outline: 1px solid orangered;
     width: 100px;
-    height: 30px;
+    height: 36px;
     text-align: center;
     border: transparent;
 }
@@ -412,42 +426,51 @@ button:disabled {
     width: 100%;
     align-items: center;
 }.season-choose {
+     display: flex;
+     flex-direction: column;
+     gap: 10px
+ }
+.league-dropdown {
     display: flex;
-    flex-direction: column;
-    gap: 10px
- }
- .league-dropdown {
-     display: flex;
-     align-items: center;
-     justify-content: center;
-     gap: 10px;
- }
- .history-btn {
-     display: flex;
-     align-items: center;
-     justify-content: center;
-     width: 100px;
-     height: 30px;
-     outline: 1px solid orangered;
- }
- .history-btn:hover {
-     text-decoration: none;
- }
- .history-table-choose {
-     height: 30px;
-     font-size: 15px;
- }
- .changed {
-     width: 150px;
-     text-align: center;
- }
- .points-table-history {
-     height: 40px;
-     font-size: 10px;
- }
- .position {
-     width: 50px;
- }
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+.history-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 120px;
+    height: 38px;
+    color: orangered;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: bold;
+    border: 1px solid orangered;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-sizing: border-box;
+}
+.history-btn:hover {
+    background-color: orangered;
+    color: white;
+    text-decoration: none;
+}
+.history-table-choose {
+    height: 30px;
+    font-size: 15px;
+}
+.changed {
+    width: 150px;
+    text-align: center;
+}
+.points-table-history {
+    height: 40px;
+    font-size: 10px;
+}
+.position {
+    width: 50px;
+}
 .inactive {
     color: #888;
     text-decoration: line-through;
@@ -539,10 +562,13 @@ input[type="checkbox"]:checked::after {
         width: 60px;
     }
     .history-btn {
-        width: 60px;
+        width: 100px !important;
+        font-size: 12px !important;
+        height: 35px !important;
+        min-width: 80px !important;
     }
 }
-@media (max-width: 950px) {
+@media (max-width: 1100px) {
     .main_page {
         flex-direction: column;
     }
@@ -560,6 +586,66 @@ input[type="checkbox"]:checked::after {
         overflow-y: auto;
         scrollbar-width: thin;
         scrollbar-color: orangered #1a1a1a;
+    }
+}
+
+/* Tablet a malé obrazovky - 840px breakpoint */
+@media (max-width: 840px) {
+    .main_page {
+        flex-direction: column;
+        gap: 15px;
+        width: 100%;
+        padding: 0 10px;
+    }
+    
+    .left-panel {
+        width: 100%;
+        max-width: none;
+    }
+    
+    .stats-container,
+    .matches-container {
+        width: 100%;
+        padding: 15px;
+        box-sizing: border-box;
+    }
+    
+    header {
+        gap: 8px;
+        padding: 8px;
+        width: 100%;
+        box-sizing: border-box;
+        justify-content: center;
+        align-items: center;
+        flex-direction: column;
+    }
+    
+    .logo_title {
+        flex: 1 1 100%;
+        justify-content: center;
+        padding-right: 0;
+        margin-bottom: 5px;
+    }
+    
+    .league-dropdown {
+        flex: 1 1 100%;
+        justify-content: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    
+    #league-select {
+        width: 140px !important;
+        font-size: 14px !important;
+        height: 36px !important;
+    }
+    
+    .history-btn {
+        width: 100px !important;
+        font-size: 13px !important;
+        height: 36px !important;
+        min-width: 80px !important;
+        padding: 6px 8px !important;
     }
 }
 
@@ -805,7 +891,7 @@ tr.clinched-crosstable.locked td.points {
 #playoffTable td { border: 1px solid orangered; width: 60px; height: 20px; text-align: center; padding: 5px; cursor: pointer; background-color: #333; color: lightgrey; font-weight: 600; transition: background-color 0.3s ease, color 0.3s ease; }
 #playoffTable td.selected { outline: 3px solid #00ff00; outline-offset: -2px; }
 #playoffTable td[contenteditable="true"]:empty::before { content: attr(data-placeholder); color: #666; }
-
+#playoffTablePreview {scrollbar-width: thin; scrollbar-color: orangered #1a1a1a;}
 .assistant-panel { background: #111; border: 1px solid orangered; padding: 15px; margin-left: 20px; flex: 1; height: fit-content; position: sticky; top: 20px; }
 .series-card { background: #222; border: 1px solid #444; padding: 10px; margin-bottom: 10px; }
 .series-card button { background: #333; color: white; border: 1px solid #555; padding: 5px 10px; cursor: pointer; margin-top: 5px; width: 100%; text-align: left; }
@@ -967,13 +1053,13 @@ textarea { width: 100%; height: 120px; background: rgba(0, 0, 0, 0.6); color: #f
     z-index: 0;
 }
 
- .legend-box {
-     background: #1a1a1a;
-     border-left: 5px solid orangered;
-     padding: 15px;
-     margin: 20px 0;
-     box-shadow: 0 4px 10px rgba(0,0,0,0.5);
- }
+.legend-box {
+    background: #1a1a1a;
+    border-left: 5px solid orangered;
+    padding: 15px;
+    margin: 20px 0;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+}
 .legend-grid {
     display: flex;
     flex-wrap: wrap;
@@ -1076,14 +1162,14 @@ textarea { width: 100%; height: 120px; background: rgba(0, 0, 0, 0.6); color: #f
     justify-content: center;
     align-items: center;
     margin: 0;
-    font-family: 'Courier New', monospace;
+    font-family: 'Segoe UI', sans-serif;
     font-size: 1.4em;
     font-weight: bold;
     color: #FF4500;
-    text-shadow: 
-        0 0 10px #FF4500,
-        0 0 20px #FF4500,
-        0 0 30px #FF4500;
+    text-shadow:
+            0 0 10px #FF4500,
+            0 0 20px #FF4500,
+            0 0 30px #FF4500;
     background: #000;
     letter-spacing: 4px;
     position: relative;
@@ -1103,11 +1189,11 @@ textarea { width: 100%; height: 120px; background: rgba(0, 0, 0, 0.6); color: #f
 #current-time .digit {
     display: inline-block;
     position: relative;
-    text-shadow: 
-        0 0 10px #FF4500,
-        0 0 20px #FF4500,
-        0 0 30px #FF4500,
-        inset 0 0 10px rgba(255, 60, 0, 0.3);
+    text-shadow:
+            0 0 10px #FF4500,
+            0 0 20px #FF4500,
+            0 0 30px #FF4500,
+            inset 0 0 10px rgba(255, 60, 0, 0.3);
 }
 
 #current-time .colon {
@@ -1252,25 +1338,7 @@ textarea { width: 100%; height: 120px; background: rgba(0, 0, 0, 0.6); color: #f
     text-decoration: none;
 }
 
-@media (max-width: 768px) {
-    .admin-nav {
-        grid-template-columns: 1fr;
-    }
-    
-    .nav-buttons {
-        grid-template-columns: 1fr;
-    }
-    
-    /* ODSTRANĚNO - duplicitní responsive styl */
-    
-    .btn-lg {
-        width: 100%;
-    }
-    
-    .admin-title h1 {
-        font-size: 2em;
-    }
-}
+/* ODSTRANĚNO - duplicitní @media pravidlo pro 768px - přesunuto do hlavního @media bloku */
 
 .admin_site {
     display: block !important;
@@ -1523,41 +1591,7 @@ textarea { width: 100%; height: 120px; background: rgba(0, 0, 0, 0.6); color: #f
     display: block !important;
 }
 
-@media (max-width: 768px) {
-    .league-dropdown-modern {
-        flex-direction: column;
-        gap: 15px;
-    }
-    
-    .section-header { 
-    background: linear-gradient(135deg, #2a2a2a, #1a1a1a); 
-    padding: 15px 20px; 
-    border-bottom: 1px solid #333; 
-    display: flex; 
-    justify-content: space-between; 
-    align-items: center; 
-    vertical-align: middle;
-}
-    
-    .form-group {
-        flex-direction: column;
-        align-items: stretch;
-    }
-    
-    .action-buttons {
-        flex-direction: column;
-        gap: 8px;
-    }
-    
-    .modern-table {
-        font-size: 0.9em;
-    }
-    
-    .modern-table th,
-    .modern-table td {
-        padding: 6px 8px;
-    }
-}
+/* ODSTRANĚNO - duplicitní @media pravidlo pro 768px - přesunuto do hlavního @media bloku */
 
 * {
     border-radius: 0 !important;
@@ -1711,50 +1745,43 @@ textarea { width: 100%; height: 120px; background: rgba(0, 0, 0, 0.6); color: #f
         -webkit-text-size-adjust: 100%;
         -ms-text-size-adjust: 100%;
     }
-    
+
     body {
         font-size: 16px;
         line-height: 1.4;
         min-height: 100vh;
         overflow-x: hidden;
     }
-    
-    /* Header - oprava rozložení */
-    .header {
-        flex-direction: column;
-        padding: 15px 10px;
-        gap: 10px;
+
+    /* Header - mobilní verze */
+    header {
+        gap: 8px;
+        padding: 8px;
         width: 100%;
         box-sizing: border-box;
-    }
-    
-    .logo_title {
-        width: 100%;
         justify-content: center;
-        padding-right: 0;
-    }
-    
-    .logo_title::before {
-        display: none;
+        align-items: center;
     }
     
     .image_logo {
-        height: 50px;
+        height: 40px !important;
     }
     
     #title {
-        font-size: 1.4em;
-        margin: 0;
-        text-align: center;
+        font-size: 1.2em !important;
+        margin: 0 0 5px 0 !important;
+        text-align: center !important;
     }
     
-    /* Zpět odkaz */
-    .header a {
-        text-align: center;
-        width: 100%;
-        margin-top: 5px;
+    .vs {
+        width: 20px !important;
+        min-width: 20px !important;
+        max-width: 20px !important;
+        font-size: 12px !important;
+        padding: 0 2px !important;
+        text-align: center !important;
     }
-    
+
     /* Uživatelská stránka */
     .main_page {
         flex-direction: column;
@@ -1762,68 +1789,68 @@ textarea { width: 100%; height: 120px; background: rgba(0, 0, 0, 0.6); color: #f
         width: 100%;
         padding: 0 10px;
     }
-    
+
     .stats-container,
     .matches-container {
         width: 100%;
         padding: 15px;
         box-sizing: border-box;
     }
-    
+
     /* Admin stránka */
     .admin_site {
         padding: 15px 10px !important;
         width: 100%;
         box-sizing: border-box;
     }
-    
+
     .admin-title {
         text-align: center;
         margin-bottom: 20px;
     }
-    
+
     .admin-title h1 {
         font-size: 1.8em;
         margin-bottom: 8px;
     }
-    
+
     .admin-subtitle {
         font-size: 1em;
         margin: 0;
     }
-    
+
     .admin-header {
         width: 100% !important;
         margin-bottom: 20px;
     }
-    
+
     .admin-nav {
         grid-template-columns: 1fr !important;
         gap: 15px !important;
         width: 100% !important;
     }
-    
+
     .nav-section {
         padding: 15px !important;
     }
-    
+
     .nav-buttons {
         grid-template-columns: 1fr !important;
         gap: 10px !important;
     }
-    
+
     /* Settings grid - mobilní verze */
     .settings-card {
         width: 100%;
         margin-bottom: 20px !important;
     }
-    
+
     .settings-card .settings-grid {
         flex-direction: column !important;
         gap: 15px !important;
         width: 100% !important;
     }
-    
+
     .settings-card .setting-item {
         flex: 1 1 100% !important;
         min-width: 100% !important;
@@ -1831,40 +1858,40 @@ textarea { width: 100%; height: 120px; background: rgba(0, 0, 0, 0.6); color: #f
         width: 100%;
         box-sizing: border-box;
     }
-    
+
     .settings-card .setting-label {
         font-size: 1em !important;
         margin-bottom: 8px !important;
     }
-    
+
     .settings-card .setting-description {
         font-size: 0.9em !important;
         margin-bottom: 12px !important;
     }
-    
+
     /* Týmy - mobilní verze */
     .teams-grid {
         grid-template-columns: 1fr !important;
         gap: 15px !important;
     }
-    
+
     .league-column {
         padding: 15px !important;
     }
-    
+
     /* Tabulky - mobilní verze */
     .modern-table {
         font-size: 0.85em;
         width: 100%;
         table-layout: fixed;
     }
-    
+
     .modern-table th,
     .modern-table td {
         padding: 6px 4px !important;
         word-wrap: break-word;
     }
-    
+
     .modern-table th:nth-child(1),
     .modern-table td:nth-child(1) { width: 50px !important; }
     .modern-table th:nth-child(2),
@@ -1877,7 +1904,7 @@ textarea { width: 100%; height: 120px; background: rgba(0, 0, 0, 0.6); color: #f
     .modern-table td:nth-child(5) { width: 60px !important; }
     .modern-table th:nth-child(6),
     .modern-table td:nth-child(6) { width: auto !important; }
-    
+
     /* Tlačítka - mobilní verze */
     .btn-lg {
         width: 100% !important;
@@ -1886,26 +1913,26 @@ textarea { width: 100%; height: 120px; background: rgba(0, 0, 0, 0.6); color: #f
         min-height: 44px;
         box-sizing: border-box;
     }
-    
+
     .btn-sm {
         padding: 8px 12px !important;
         font-size: 0.9em !important;
         min-height: 36px;
     }
-    
+
     .action-buttons {
         flex-direction: column !important;
         gap: 8px !important;
         width: 100%;
     }
-    
+
     /* Formuláře - mobilní verze */
     .form-group {
         flex-direction: column !important;
         gap: 10px !important;
         width: 100%;
     }
-    
+
     .modern-select {
         width: 100% !important;
         padding: 10px !important;
@@ -1913,7 +1940,7 @@ textarea { width: 100%; height: 120px; background: rgba(0, 0, 0, 0.6); color: #f
         min-height: 44px;
         box-sizing: border-box;
     }
-    
+
     /* Login - mobilní verze */
     .login_input {
         width: 100% !important;
@@ -1921,14 +1948,14 @@ textarea { width: 100%; height: 120px; background: rgba(0, 0, 0, 0.6); color: #f
         font-size: 16px !important;
         padding: 12px !important;
     }
-    
+
     .login_button {
         width: 100% !important;
         max-width: 320px;
         font-size: 16px !important;
         padding: 12px !important;
     }
-    
+
     /* League dropdown - mobilní verze */
     .league-dropdown-modern {
         flex-direction: column !important;
@@ -1936,32 +1963,313 @@ textarea { width: 100%; height: 120px; background: rgba(0, 0, 0, 0.6); color: #f
         padding: 15px !important;
         width: 100%;
     }
-    
+
     .filter-group {
         width: 100%;
     }
-    
+
     /* Card body - mobilní verze */
     .card-body {
         padding: 15px !important;
         width: 100%;
         box-sizing: border-box;
     }
-    
+
     .card-body-teams {
         padding: 15px !important;
         width: 100%;
         box-sizing: border-box;
     }
-    
+
     /* Ostatní opravy */
     .section-card {
         margin-bottom: 20px;
     }
-    
+
     .table-container {
         overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Doplňující styly z odstraněných @media bloků */
+    .league-dropdown-modern {
+        flex-direction: column !important;
+        gap: 15px !important;
+    }
+
+    .section-header {
+        background: linear-gradient(135deg, #2a2a2a, #1a1a1a) !important;
+        padding: 15px 20px !important;
+        border-bottom: 1px solid #333 !important;
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        vertical-align: middle !important;
+    }
+
+    .form-group {
+        flex-direction: column !important;
+        align-items: stretch !important;
+    }
+
+    .modern-table {
+        font-size: 0.9em !important;
+    }
+
+    .modern-table th,
+    .modern-table td {
+        padding: 6px 8px !important;
+    }
+
+    .teams-grid {
+        grid-template-columns: 1fr !important;
+        gap: 15px !important;
+    }
+
+    .team-card {
+        margin-bottom: 15px !important;
+    }
+
+    .league-column {
+        padding: 15px !important;
+    }
+
+    /* Komplexní responzivita pro pevné šířky */
+    .login_input {
+        width: 100% !important;
+        max-width: 300px !important;
+    }
+
+    .login_button {
+        width: 100% !important;
+        max-width: 320px !important;
+    }
+
+    #league-select,
+    select.league-select {
+        width: 100% !important;
+        max-width: 200px !important;
+    }
+
+    .btn,
+    .action-btn,
+    .history-btn {
+        width: 100% !important;
+        max-width: 100px !important;
+        min-height: 38px !important;
+    }
+
+    .numbers {
+        width: auto !important;
+        min-width: 21px !important;
+    }
+
+    .points-table,
+    .matches-table,
+    .modern-table {
+        width: 100% !important;
+        overflow-x: auto !important;
+        table-layout: fixed !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    
+    .points-table th,
+    .points-table td {
+        padding: 3px 5px !important;
+        font-size: 0.7em !important;
+        word-wrap: break-word !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+    
+    .points-table th:nth-child(1),
+    .points-table td:nth-child(1) { 
+        width: 120px !important;
+        min-width: 120px !important;
+        max-width: 120px !important;
+    }
+    .points-table th:nth-child(2),
+    .points-table td:nth-child(2) { 
+        width: 40px !important;
+        min-width: 40px !important;
+        max-width: 40px !important;
+    }
+    .points-table th:nth-child(3),
+    .points-table td:nth-child(3) { 
+        width: 40px !important; 
+        min-width: 40px !important;
+        max-width: 40px !important;
+    }
+    .points-table th:nth-child(4),
+    .points-table td:nth-child(4) { 
+        width: 40px !important; 
+        min-width: 40px !important;
+        max-width: 40px !important;
+    }
+    .points-table th:nth-child(5),
+    .points-table td:nth-child(5) { 
+        width: 40px !important; 
+        min-width: 40px !important;
+        max-width: 40px !important;
+    }
+    .points-table th:nth-child(6),
+    .points-table td:nth-child(6) { 
+        width: 40px !important; 
+        min-width: 40px !important;
+        max-width: 40px !important;
+    }
+    .points-table th:nth-child(n+7),
+    .points-table td:nth-child(n+7) { 
+        width: 50px !important; 
+        min-width: 40px !important;
+        max-width: 60px !important;
+    }
+
+    .stats-container,
+    .matches-container,
+    .user_stats,
+    .global_stats {
+        width: 100% !important;
+        max-width: none !important;
+    }
+
+    .left-panel {
+        width: 100% !important;
+        max-width: none !important;
+        min-width: auto !important;
+        position: static !important;
+        margin-bottom: 20px;
+    }
+
+    .position {
+        width: auto !important;
+        min-width: 50px !important;
+    }
+
+    .playoff-cell {
+        width: auto !important;
+        min-width: 20px !important;
+        height: auto !important;
+        min-height: 20px !important;
+    }
+
+    .sortable-list {
+        width: 100% !important;
+        max-width: none !important;
+    }
+
+    .sortable-item {
+        width: 100% !important;
+    }
+
+    .team-number {
+        width: auto !important;
+        min-width: 30px !important;
+    }
+
+    .save-btn {
+        width: 100% !important;
+        max-width: 200px !important;
+    }
+
+    textarea {
+        width: 100% !important;
+        max-width: none !important;
+        height: auto !important;
+        min-height: 120px !important;
+    }
+
+    .progress-container {
+        width: 100% !important;
+        max-width: none !important;
+    }
+
+    .assistant-panel {
+        width: 100% !important;
+        max-width: none !important;
+        margin-left: 0 !important;
+    }
+
+    .series-card {
+        width: 100% !important;
+    }
+
+    .series-card button {
+        width: 100% !important;
+    }
+
+    /* Oprava specifických prvků */
+    .changed {
+        width: 100% !important;
+        max-width: 150px !important;
+    }
+
+    .season-choose {
+        width: 100% !important;
+        flex-wrap: wrap !important;
+    }
+
+    .season-choose select {
+        width: 100% !important;
+        max-width: 150px !important;
+    }
+
+    /* Formuláře a inputy */
+    input[type="text"],
+    input[type="number"],
+    input[type="password"],
+    input[type="email"],
+    input[type="date"] {
+        width: 100% !important;
+        max-width: none !important;
+        box-sizing: border-box !important;
+    }
+
+    /* Tabulky specifické */
+    #playoffTable {
+        width: 100% !important;
+        max-width: none !important;
+        overflow-x: auto !important;
+    }
+
+    #playoffTable td {
+        width: auto !important;
+        min-width: 60px !important;
+    }
+
+    /* Checkboxy */
+    input[type="checkbox"] {
+        width: auto !important;
+        min-width: 20px !important;
+        height: auto !important;
+        min-height: 20px !important;
+    }
+
+    /* Admin specifické */
+    .admin-header {
+        width: 100% !important;
+        max-width: none !important;
+    }
+
+    .admin-nav {
+        width: 100% !important;
+        max-width: none !important;
+    }
+
+    .nav-section {
+        width: 100% !important;
+    }
+
+    .nav-buttons {
+        width: 100% !important;
+        grid-template-columns: 1fr !important;
+    }
+
+    .vs {
+        width: 20px !important;
+        min-width: 20px !important;
+        max-width: 20px !important;
     }
 }
 
@@ -1969,40 +2277,44 @@ textarea { width: 100%; height: 120px; background: rgba(0, 0, 0, 0.6); color: #f
 @media (max-width: 480px) {
     .header {
         padding: 3px;
+        width: 100%;
+        max-width: 100%;
+        margin: 0;
+        position: relative;
     }
-    
+
     .image_logo {
         height: 30px;
     }
-    
+
     #title {
         font-size: 1em;
     }
-    
+
     .admin-title h1 {
         font-size: 1.5em;
     }
-    
+
     .admin_site {
         padding: 5px !important;
     }
-    
+
     .card-header {
         padding: 10px 15px !important;
     }
-    
+
     .card-header h3 {
         font-size: 1.1em !important;
     }
-    
+
     .settings-card .setting-item {
         padding: 10px !important;
     }
-    
+
     .modern-table {
         font-size: 0.7em;
     }
-    
+
     .modern-table th,
     .modern-table td {
         padding: 2px 4px !important;
@@ -2014,13 +2326,60 @@ textarea { width: 100%; height: 120px; background: rgba(0, 0, 0, 0.6); color: #f
     .admin-nav {
         grid-template-columns: repeat(2, 1fr) !important;
     }
-    
+
     .teams-grid {
         grid-template-columns: repeat(2, 1fr) !important;
     }
-    
+
     .settings-card .setting-item {
-        flex: 1 1 calc(50% - 12.5px) !important;
+        flex: 1 1 calc(50% - 13px) !important;
+    }
+
+    .main_page {
+        flex-direction: column;
+    }
+
+    .stats-container,
+    .matches-container {
+        width: 100% !important;
+        max-width: none !important;
+    }
+
+    .login_input {
+        width: 100% !important;
+        max-width: 400px !important;
+    }
+
+    .login_button {
+        width: 100% !important;
+        max-width: 450px !important;
+    }
+
+    #league-select,
+    select.league-select {
+        max-width: 250px !important;
+    }
+
+    .btn,
+    .action-btn,
+    .history-btn {
+        max-width: 250px !important;
+    }
+
+    .modern-table {
+        font-size: 0.9em !important;
+    }
+
+    .header {
+        padding: 10px 15px !important;
+    }
+
+    .image_logo {
+        height: 45px !important;
+    }
+
+    #title {
+        font-size: 1.3em !important;
     }
 }
 
@@ -2028,12 +2387,14 @@ textarea { width: 100%; height: 120px; background: rgba(0, 0, 0, 0.6); color: #f
 @media (min-width: 768px) and (max-width: 1024px) and (orientation: landscape) {
     .header {
         padding: 8px;
+        width: 100%;
+        max-width: 100%;
     }
-    
+
     .image_logo {
         height: 50px;
     }
-    
+
     .admin_site {
         padding: 15px !important;
     }
@@ -2043,4 +2404,344 @@ textarea { width: 100%; height: 120px; background: rgba(0, 0, 0, 0.6); color: #f
 .setting-item {
     /* Žádné konfliktní styly */
 }
+
+/* ==========================================
+   MODERNÍ INTERAKTIVNÍ PLAYOFF PAVOUK
+   ========================================== */
+
+.playoff-bracket {
+    padding: 15px;
+    margin: 10px 0;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.playoff-column {
+    display: flex;
+    flex-direction: column;
+    max-width: 250px;
+    background: rgba(255, 69, 0, 0.05);
+    border-radius: 8px;
+    padding: 10px;
+    border: 1px solid rgba(255, 69, 0, 0.2);
+    flex-shrink: 0;
+    gap: 20px;
+}
+
+.playoff-column-title {
+    color: #ff4500;
+    font-weight: bold;
+    text-align: center;
+    margin: 10px 0;
+    font-size: 0.9em;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.playoff-series {
+    background: linear-gradient(135deg, #2a2a2a 0%, #1f1f1f 100%);
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid #444;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+    position: relative;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.playoff-series:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(255, 69, 0, 0.3);
+    border-color: #ff4500;
+}
+
+.playoff-series.active {
+    border-color: #ff4500;
+    box-shadow: 0 0 0 2px rgba(255, 69, 0, 0.3);
+}
+
+.playoff-series.completed {
+    background: linear-gradient(135deg, #1a2a1a 0%, #1f2f1f 100%);
+    border-color: #00ff00;
+}
+
+.playoff-series.in-progress {
+    background: linear-gradient(135deg, #2a2a1a 0%, #2f2f1f 100%);
+    border-color: #ffa500;
+}
+
+.playoff-series.waiting {
+    background: linear-gradient(135deg, #2a1a1a 0%, #2f1f1f 100%);
+    border-color: #ff6b6b;
+}
+
+.playoff-series-header {
+    padding: 12px 15px;
+    gap: 5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    position: relative;
+}
+
+.playoff-series-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.playoff-status-icon {
+    font-size: 1.2em;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.playoff-status-icon.completed {
+    background: rgba(0, 255, 0, 0.2);
+    color: #00ff00;
+}
+
+.playoff-status-icon.in-progress {
+    background: rgba(255, 165, 0, 0.2);
+    color: #ffa500;
+}
+
+.playoff-status-icon.waiting {
+    background: rgba(255, 107, 107, 0.2);
+    color: #ff6b6b;
+}
+
+.playoff-series-score {
+    background: #000;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-family: 'Segoe UI', sans-serif;
+    font-weight: bold;
+    font-size: 0.9em;
+    color: #fff;
+}
+
+.playoff-series-teams {
+    padding: 10px 15px;
+}
+
+.playoff-team {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    padding: 8px 0;
+    color: #ccc;
+    font-size: 0.9em;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.playoff-team:last-child {
+    border-bottom: none;
+}
+
+.playoff-team-name {
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.playoff-team.winner {
+    color: #00ff00;
+    font-weight: bold;
+}
+
+.playoff-team.loser {
+    color: #666;
+}
+
+.playoff-seed {
+    color: #ff4500;
+    font-size: 0.75em;
+    font-weight: bold;
+    margin-right: 5px;
+    opacity: 0.8;
+    min-width: 25px;
+    text-align: left;
+    display: inline-block;
+}
+
+.playoff-progress-bar {
+    height: 3px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    margin: 8px 15px;
+    overflow: hidden;
+}
+
+.playoff-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #ff4500 0%, #ff6b6b 100%);
+    border-radius: 2px;
+    transition: width 0.5s ease;
+}
+
+.playoff-dropdown {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 0 0 8px 8px;
+}
+
+.playoff-dropdown.open {
+    max-height: 500px;
+    border-top: 1px solid rgba(255, 69, 0, 0.3);
+}
+
+.playoff-match {
+    padding: 6px 7px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.85em;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.playoff-match:last-child {
+    border-bottom: none;
+}
+
+.playoff-match-teams {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex: 1;
+    width: 100%;
+}
+
+.playoff-match-team {
+    color: #ccc;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    max-width: 110px;
+    word-wrap: break-word;
+    flex: 1;
+}
+
+.playoff-match-score {
+    display: flex;
+    background: rgba(255, 255, 255, 0.1);
+    flex-direction: row;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Segoe UI', sans-serif;
+    font-weight: bold;
+    color: #fff;
+    min-width: 35px;
+    text-align: center;
+    justify-content: center;
+    align-items: center;
+    flex: 0 0 auto;
+    margin: 0 10px;
+}
+
+.playoff-match-date {
+    color: #888;
+    font-size: 0.75em;
+    margin-left: 10px;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 80px;
+    text-align: right;
+}
+
+.playoff-bo1-special {
+    background: linear-gradient(135deg, #ff4500 0%, #cc3700 100%);
+    color: white;
+    font-weight: bold;
+    padding: 8px 12px;
+    border-radius: 6px;
+    text-align: center;
+    font-size: 0.85em;
+    margin: 5px 0;
+    box-shadow: 0 2px 8px rgba(255, 69, 0, 0.3);
+}
+
+/* Responzivní styly */
+@media (max-width: 768px) {
+    .playoff-bracket {
+        padding: 15px;
+        margin: 10px 0;
+    }
+    
+    .playoff-column {
+        min-width: 140px;
+        padding: 10px;
+    }
+    
+    .playoff-series {
+        margin-bottom: 15px;
+    }
+    
+    .playoff-series-header {
+        padding: 10px 12px;
+    }
+    
+    .playoff-team-name {
+        max-width: 80px;
+        font-size: 0.8em;
+    }
+    
+    .playoff-match-team {
+        max-width: 60px;
+        font-size: 0.75em;
+    }
+    
+    .playoff-match-date {
+        display: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .playoff-bracket {
+        padding: 10px;
+    }
+    
+    .playoff-column {
+        min-width: 100%;
+        padding: 8px;
+    }
+    
+    .playoff-series-header {
+        padding: 8px 10px;
+        flex-direction: column;
+        gap: 8px;
+        align-items: flex-start;
+    }
+    
+    .playoff-series-info {
+        width: 100%;
+        justify-content: space-between;
+    }
+    
+    .playoff-team-name {
+        max-width: 60px;
+        font-size: 0.75em;
+    }
+    
+    .playoff-match-team {
+        max-width: 50px;
+        font-size: 0.7em;
+    }
+}
+
+/* ==========================================
+   KONEC PLAYOFF STYLŮ
+   ========================================== */
 

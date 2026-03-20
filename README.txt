@@ -20,7 +20,7 @@ Možnost zablokovat registrace ✅
 
 Responzivita ✅
 
-V playoff tabulce roletka na rozkliknutí zápasů série, + obecně prostě hezčí playoff vyobrazení
+V playoff tabulce roletka na rozkliknutí zápasů série, + obecně prostě hezčí playoff vyobrazení ✅
 
 přechod na free picture API z ukládání do souborů
 

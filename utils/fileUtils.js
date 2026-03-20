@@ -1735,95 +1735,231 @@ async function generateLeftPanel(data, isHistory = false) {
         const hWinner = scoreH >= winsNeeded;
         const aWinner = scoreA >= winsNeeded;
 
+        // Výpočet seedingu (pořadí z tabulky základní části)
+        const getTeamSeed = (teamId) => {
+            const allTeamsInLiga = teams.filter(t => t.liga === selectedLiga);
+            const sortedTeams = allTeamsInLiga.sort((a, b) => {
+                const aStats = a.stats?.[selectedSeason] || {};
+                const bStats = b.stats?.[selectedSeason] || {};
+                return (bStats.points || 0) - (aStats.points || 0);
+            });
+            const index = sortedTeams.findIndex(t => t.id === teamId);
+            return index >= 0 ? index + 1 : null;
+        };
+
+        const homeSeed = getTeamSeed(match.homeTeamId);
+        const awaySeed = getTeamSeed(match.awayTeamId);
+
         return {
             isWaiting: false,
             home: homeTeam.name, away: awayTeam.name,
-            scoreH, scoreA, hWinner, aWinner
+            scoreH, scoreA, hWinner, aWinner,
+            bo: match.bo || 1,
+            winsNeeded,
+            homeSeed, awaySeed
         };
     }
 
     async function renderBox(slotKey) {
         const info = await getSeriesInfo(slotKey);
+        const seriesId = `series-${slotKey}`;
 
         // Zcela prázdný slot (TBD vs TBD)
         if (!info) {
             return `
-            <div style="background: #111; border: 1px solid #333; border-radius: 6px; overflow: hidden; opacity: 0.5; min-width: 170px;">
-                <div style="padding: 8px 10px; border-bottom: 1px solid #222; color: #666; font-size: 0.85em; display:flex; justify-content: space-between;"><span>TBD</span><span style="background: #000; padding: 2px 6px; border-radius: 3px;">-</span></div>
-                <div style="padding: 8px 10px; color: #666; font-size: 0.85em; display:flex; justify-content: space-between;"><span>TBD</span><span style="background: #000; padding: 2px 6px; border-radius: 3px;">-</span></div>
+            <div class="playoff-series waiting">
+                <div class="playoff-series-header">
+                    <div class="playoff-series-info">
+                        <div class="playoff-status-icon waiting">⏸️</div>
+                        <span>Čekání na týmy</span>
+                    </div>
+                    <div class="playoff-series-score">-</div>
+                </div>
+                <div class="playoff-series-teams">
+                    <div class="playoff-team">
+                        <span class="playoff-team-name">TBD</span>
+                    </div>
+                    <div class="playoff-team">
+                        <span class="playoff-team-name">TBD</span>
+                    </div>
+                </div>
+                <div class="playoff-dropdown" id="${seriesId}-dropdown">
+                    <div class="playoff-match">
+                        <span style="color: #888;">Žádné zápasy</span>
+                    </div>
+                </div>
             </div>`;
         }
 
         // Čekající mezistav (např. Sparta vs TBD)
         if (info.isWaiting) {
-            const renderTeam = (name, isTop) => {
-                const isTbd = name === 'TBD';
-                const border = isTop ? 'border-bottom: 1px solid #222;' : '';
-                return `
-                <div style="padding: 8px 10px; ${border} font-size: 0.85em; display:flex; justify-content: space-between; align-items: center; color: ${isTbd ? '#666' : 'lightgrey'}; font-weight: ${!isTbd ? 'bold' : 'normal'};">
-                    <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px;">${name}</span>
-                    <span style="background: #000; padding: 2px 6px; border-radius: 3px; margin-left: 5px; font-family: monospace; opacity: 0.5;">-</span>
-                </div>`;
-            };
-
             return `
-            <div style="background: #111; border: 1px solid #444; border-radius: 6px; overflow: hidden; min-width: 170px; opacity: 0.8;">
-                ${renderTeam(info.home, true)}
-                ${renderTeam(info.away, false)}
+            <div class="playoff-series waiting" onclick="togglePlayoffDropdown('${seriesId}')">
+                <div class="playoff-series-header">
+                    <div class="playoff-series-info">
+                        <div class="playoff-status-icon waiting">⏸️</div>
+                        <span>Čeká se</span>
+                    </div>
+                    <div class="playoff-series-score">-</div>
+                </div>
+                <div class="playoff-series-teams">
+                    <div class="playoff-team">
+                        <span class="playoff-team-name">${info.home}</span>
+                    </div>
+                    <div class="playoff-team">
+                        <span class="playoff-team-name">${info.away}</span>
+                    </div>
+                </div>
+                <div class="playoff-progress-bar">
+                    <div class="playoff-progress-fill" style="width: 0"></div>
+                </div>
+                <div class="playoff-dropdown" id="${seriesId}-dropdown">
+                    <div class="playoff-match">
+                        <div class="playoff-match-teams">
+                            <span class="playoff-match-team">${info.home}</span>
+                            <span>vs</span>
+                            <span class="playoff-match-team">${info.away}</span>
+                        </div>
+                    </div>
+                </div>
             </div>`;
         }
 
         // Klasický vyhodnocovaný zápas (Série)
+        const isCompleted = info.hWinner || info.aWinner;
+        const isInProgress = !isCompleted && (info.scoreH > 0 || info.scoreA > 0);
+        const statusClass = isCompleted ? 'completed' : (isInProgress ? 'in-progress' : 'waiting');
+        const statusIcon = isCompleted ? '🔥' : (isInProgress ? '⏳' : '⏸️');
+        
+        // Progress bar - zapnuto pro BO3 a výše
+        const showProgressBar = info.bo > 1;
+        const currentWins = Math.max(info.scoreH, info.scoreA);
+        const progressPercent = info.winsNeeded > 0 ? (currentWins / info.winsNeeded) * 100 : 0;
+
         return `
-        <div style="background: #111; border: 1px solid #444; border-radius: 6px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.5); min-width: 170px; position: relative;">
-            <div style="padding: 8px 10px; border-bottom: 1px solid #222; font-size: 0.85em; display:flex; justify-content: space-between; align-items: center; ${info.hWinner ? 'background: rgba(0,100,0,0.25); font-weight:bold; color:white;' : (info.aWinner ? 'color:#555;' : 'color:lightgrey;')}">
-                <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px;">${info.home}</span>
-                <span style="background: #000; padding: 2px 6px; border-radius: 3px; margin-left: 5px; font-family: monospace;">${info.scoreH}</span>
+        <div class="playoff-series ${statusClass}" onclick="togglePlayoffDropdown('${seriesId}')">
+            <div class="playoff-series-header">
+                <div class="playoff-series-info">
+                    <div class="playoff-status-icon ${statusClass}">${statusIcon}</div>
+                    <span>${isCompleted ? 'Hotovo' : (isInProgress ? 'Probíhá' : 'Čeká')}</span>
+                </div>
+                <div class="playoff-series-score">${info.scoreH}:${info.scoreA}</div>
             </div>
-            <div style="padding: 8px 10px; font-size: 0.85em; display:flex; justify-content: space-between; align-items: center; ${info.aWinner ? 'background: rgba(0,100,0,0.25); font-weight:bold; color:white;' : (info.hWinner ? 'color:#555;' : 'color:lightgrey;')}">
-                <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px;">${info.away}</span>
-                <span style="background: #000; padding: 2px 6px; border-radius: 3px; margin-left: 5px; font-family: monospace;">${info.scoreA}</span>
+            <div class="playoff-series-teams">
+                <div class="playoff-team ${info.hWinner ? 'winner' : 'loser'}">
+                    <span class="playoff-seed">${info.homeSeed ? '#' + info.homeSeed : ''}</span>
+                    <span class="playoff-team-name">${info.home}</span>
+                </div>
+                <div class="playoff-team ${info.aWinner ? 'winner' : 'loser'}">
+                    <span class="playoff-seed">${info.awaySeed ? '#' + info.awaySeed : ''}</span>
+                    <span class="playoff-team-name">${info.away}</span>
+                </div>
+            </div>
+            ${showProgressBar ? `
+            <div class="playoff-progress-bar">
+                <div class="playoff-progress-fill" style="width: ${progressPercent}%"></div>
+            </div>` : ''}
+            <div class="playoff-dropdown" id="${seriesId}-dropdown">
+                ${await renderPlayoffMatches(slotKey)}
             </div>
         </div>`;
     }
 
-    html += `<div id="playoffTablePreview" style="display:${tableMode === 'playoff' ? 'block' : 'none'}; overflow-x:auto; padding: 20px 0; max-width:100%;">
-             <div style="display: flex; gap: 40px; min-width: min-content; margin: 0 auto; justify-content: center;">`;
+    // Nová funkce pro vykreslení jednotlivých zápasů v dropdownu
+    async function renderPlayoffMatches(slotKey) {
+        const seriesIdStr = savedSlots[slotKey];
+        if (!seriesIdStr) return '<div class="playoff-match"><span style="color: #888;">Žádné zápasy</span></div>';
+
+        const mId = parseInt(seriesIdStr.replace('series-', ''));
+        const match = matches.find(m => m.id === mId);
+        if (!match) return '<div class="playoff-match"><span style="color: #888;">Zápas nenalezen</span></div>';
+
+        const homeTeam = teams.find(t => t.id === match.homeTeamId) || { name: 'Neznámý' };
+        const awayTeam = teams.find(t => t.id === match.awayTeamId) || { name: 'Neznámý' };
+
+        let matchesHtml;
+
+        // BO1 speciální případ
+        if (match.bo === 1) {
+            const result = match.result;
+            const winner = result ? (result.scoreHome > result.scoreAway ? 'home' : 'away') : null;
+            
+            matchesHtml = `
+            <div class="playoff-bo1-special">
+                ${homeTeam.name} vs ${awayTeam.name}
+                ${result ? `${result.scoreHome}:${result.scoreAway}` : 'Čeká se'}
+                ${winner ? `(${winner === 'home' ? homeTeam.name : awayTeam.name} vyhrál)` : ''}
+            </div>`;
+        } 
+        // BO3+ případ s playedMatches
+        else if (match.playedMatches && match.playedMatches.length > 0) {
+            matchesHtml = match.playedMatches.map((pm, idx) => {
+                const displayHome = pm.sideSwap ? awayTeam.name : homeTeam.name;
+                const displayAway = pm.sideSwap ? homeTeam.name : awayTeam.name;
+                const displayScoreH = pm.sideSwap ? pm.scoreAway : pm.scoreHome;
+                const displayScoreA = pm.sideSwap ? pm.scoreHome : pm.scoreAway;
+                const hWinner = (pm.scoreHome > pm.scoreAway && !pm.sideSwap) || (pm.scoreAway > pm.scoreHome && pm.sideSwap);
+                const aWinner = (pm.scoreAway > pm.scoreHome && !pm.sideSwap) || (pm.scoreHome > pm.scoreAway && pm.sideSwap);
+                
+                // PP/SN indikace
+                let otIndicator = '';
+                if (pm.ot) {
+                    otIndicator = ' <span style="color: #ff9800; font-size: 0.65em;">p</span>';
+                }
+
+                return `
+                <div class="playoff-match">
+                    <div class="playoff-match-teams">
+                        <span class="playoff-match-team ${hWinner ? 'winner' : ''}">${displayHome}</span>
+                        <span class="playoff-match-score">${displayScoreH}:${displayScoreA}${otIndicator}</span>
+                        <span class="playoff-match-team ${aWinner ? 'winner' : ''}">${displayAway}</span>
+                    </div>
+                </div>`;
+            }).join('');
+        } 
+        // Jiný případ (čekající zápas)
+        else {
+            matchesHtml = `
+            <div class="playoff-match">
+                <div class="playoff-match-teams">
+                    <span class="playoff-match-team">${homeTeam.name}</span>
+                    <span>vs</span>
+                    <span class="playoff-match-team">${awayTeam.name}</span>
+                </div>
+            </div>`;
+        }
+
+        return matchesHtml;
+    }
+
+    html += `<div class="playoff-bracket" id="playoffTablePreview" style="display:${tableMode === 'playoff' ? 'block' : 'none'};">`;
 
     // Načtení šablony z MongoDB
     const allTemplates = await PlayoffTemplates.findAll();
     const currentTemplate = allTemplates?.[format] || {};
 
-    // TOTO JE NOVÝ KÓD:
     if (currentTemplate && currentTemplate.columns) {
-        html += `<div id="playoffTablePreview" style="display:${tableMode === 'playoff' ? 'block' : 'none'}; overflow-x:auto; padding: 20px 0; max-width:100%;">
-                 <h2 style="text-align:center; color:white; margin-bottom: 30px;">Playoff - ${selectedLiga} ${selectedSeason}</h2>`;
+        html += `<h2 style="text-align:center; color:white; margin-bottom: 30px;">Playoff - ${selectedLiga} ${selectedSeason}</h2>`;
 
-        // 1. ŘÁDEK S NADPISY (Odděleno od samotných zápasů)
-        html += `<div style="display: flex; gap: 40px; min-width: min-content; margin: 0 auto 15px auto; justify-content: center;">`;
-        currentTemplate.columns.forEach(col => {
-            html += `<div style="width: 170px; text-align:center; color:orangered; font-size:0.8em; font-weight:bold; text-transform:uppercase;">${col.title}</div>`;
-        });
-        html += `</div>`;
-
-        // 2. ŘÁDEK SE SLOUPCI ZÁPASŮ (align-items: stretch zajistí stejnou výšku všech sloupců)
-        html += `<div style="display: flex; gap: 40px; min-width: min-content; margin: 0 auto; justify-content: center; align-items: stretch;">`;
+        // Flex container pro všechny sloupce - horizontální scroll, vertikálně na střed
+        html += `<div style="display: flex; gap: 15px; justify-content: flex-start; align-items: center; overflow-x: auto; padding-bottom: 10px; scrollbar-width: thin; scrollbar-color: orangered #1a1a1a;">`;
+        
         for (const col of currentTemplate.columns) {
-            // Přidán margin-top, který si bere hodnotu z col.gap (např. "60px")
             const boxes = await Promise.all(col.slots.map(slotId => renderBox(slotId)));
             html += `
-            <div style="display: flex; gap: 20px; flex-direction: column; justify-content: space-around; width: 170px; margin-top: ${col.gap || '0px'};">
+            <div class="playoff-column">
+                <div class="playoff-column-title">${col.title}</div>
                 ${boxes.join('')}
+                <div class="playoff-column-title">${col.title}</div>
             </div>`;
         }
-        html += `</div></div>`;
+        
+        html += `</div>`; // Zavření flex kontejneru
     } else {
-        html += `<div id="playoffTablePreview" style="display:${tableMode === 'playoff' ? 'block' : 'none'}; width: 100%; text-align: center; padding: 40px 20px; background: #1a1a1a; border-radius: 8px; border: 1px dashed #444;">
-            <p style="color: gray; margin: 0;">Pro ligu ${selectedLiga} není nastaven formát pavouka.</p>
-        </div>`;
+        html += `<h2 style="text-align:center; color:gray; margin-bottom: 30px;">Pro ligu ${selectedLiga} není nastaven formát pavouka.</h2>`;
     }
 
-    html += `</div></div>`;
+    html += `</div>`; // Zavření playoff-bracket
 
     // ==========================================
     // 4. PROGRESS BAR (Zobrazí se jen když NENÍ isHistory)
@@ -1855,6 +1991,8 @@ async function generateLeftPanel(data, isHistory = false) {
     // ==========================================
     html += `
     </div> </section> `;
+
+    html += addPlayoffScript();
 
     return html;
 }
@@ -1918,6 +2056,34 @@ module.exports = {
     getLeagueStatusData,
     getTableTipsData,
     generateTimeWidget,
+}
+
+function addPlayoffScript() {
+    return `
+    <script>
+    function togglePlayoffDropdown(seriesId) {
+        const dropdown = document.getElementById(seriesId + '-dropdown');
+        if (dropdown) {
+            dropdown.classList.toggle('open');
+            
+            // Zavřeme ostatní dropdowny
+            const allDropdowns = document.querySelectorAll('.playoff-dropdown');
+            allDropdowns.forEach(d => {
+                if (d.id !== seriesId + '-dropdown') {
+                    d.classList.remove('open');
+                }
+            });
+        }
+    }
+
+    // Kliknutí mimo dropdown ho zavře
+    document.addEventListener('click', function(event) {
+        if (!event.target.closest('.playoff-series')) {
+            const allDropdowns = document.querySelectorAll('.playoff-dropdown.open');
+            allDropdowns.forEach(d => d.classList.remove('open'));
+        }
+    });
+    </script>`;
 }
 
 
