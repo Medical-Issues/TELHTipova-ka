@@ -1893,7 +1893,7 @@ async function generateLeftPanel(data, isHistory = false) {
         } 
         // BO3+ případ s playedMatches
         else if (match.playedMatches && match.playedMatches.length > 0) {
-            matchesHtml = match.playedMatches.map((pm, idx) => {
+            matchesHtml = match.playedMatches.map((pm) => {
                 const displayHome = pm.sideSwap ? awayTeam.name : homeTeam.name;
                 const displayAway = pm.sideSwap ? homeTeam.name : awayTeam.name;
                 const displayScoreH = pm.sideSwap ? pm.scoreAway : pm.scoreHome;
