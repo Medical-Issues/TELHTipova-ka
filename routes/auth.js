@@ -3,13 +3,18 @@ const bcrypt = require("bcrypt");
 const express = require("express");
 const router = express.Router();
 const { renderErrorHtml } = require("../utils/fileUtils");
-
-const { Users } = require('../utils/mongoDataAccess');
+const { Settings, Users } = require('../utils/mongoDataAccess');
 router.get("/register", (req, res) => {
     res.sendFile(path.join(__dirname, "../views/register.html"));
 });
 router.post("/register", async (req, res) => {
     const {username, password} = req.body;
+    
+    // Kontrola, zda jsou registrace blokovány
+    const settings = await Settings.findAll();
+    if (settings && settings.registrationsBlocked) {
+        return renderErrorHtml(res, "Registrace jsou aktuálně blokovány administrátorem. Zkuste to prosím později.", 403);
+    }
     
     // Kontrola existence uživatele v MongoDB
     const existingUser = await Users.findOne({ username });

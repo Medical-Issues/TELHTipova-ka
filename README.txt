@@ -12,15 +12,17 @@ Domyslet baráž ✅
 
 lepší playoff systém ✅
 
-přechod na free databázi z json souborů
+přechod na free databázi z json souborů ✅
 ->
-na základě přechodu zrychlení provozu serveru a funkce převést na asynchronní všude kde to půjde
+na základě přechodu zrychlení provozu serveru a funkce převést na asynchronní všude kde to půjde ✅
+
+Možnost zablokovat registrace ✅
+
+Responzivita
 
 Správce oznámení v přestupech, importu zápasů,
 
 V playoff tabulce roletka na rozkliknutí zápasů série,
-
-Možnost zablokovat registrace
 
 Responzivita
 

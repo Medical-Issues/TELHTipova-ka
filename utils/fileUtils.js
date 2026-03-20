@@ -1870,6 +1870,37 @@ async function logAdminAction(username, action, details) {
     fs.appendFileSync('./data/admin_log.txt', logMessage);
 }
 
+async function generateTimeWidget() {
+    return `
+    <p id="current-time"></p>
+    <script>
+        function updateTime() {
+            const now = new Date();
+            const timeString = now.toLocaleString('cs-CZ', { 
+                timeZone: 'Europe/Prague',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            const timeElement = document.getElementById('current-time');
+            if (timeElement) {
+                const [hours, minutes, seconds] = timeString.split(':');
+                timeElement.innerHTML = 
+                    '<span class="digit">' + hours + '</span>' +
+                    '<span class="colon">:</span>' +
+                    '<span class="digit">' + minutes + '</span>' +
+                    '<span class="colon">:</span>' +
+                    '<span class="digit">' + seconds + '</span>';
+            }
+        }
+        document.addEventListener('DOMContentLoaded', () => {
+            updateTime();
+            setInterval(updateTime, 1000);
+        });
+    </script>
+    `;
+}
+
 module.exports = {
     requireLogin,
     requireAdmin,
@@ -1886,6 +1917,7 @@ module.exports = {
     logAdminAction,
     getLeagueStatusData,
     getTableTipsData,
+    generateTimeWidget,
 }
 
 

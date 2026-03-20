@@ -4,7 +4,7 @@ const router = express.Router();
 require('path');
 const {
     requireLogin, prepareDashboardData, getGroupDisplayLabel, generateLeftPanel,
-    getLeagueStatusData, getTableTipsData
+    getLeagueStatusData, getTableTipsData, generateTimeWidget
 } = require("../utils/fileUtils");
 const { Users, Matches, Leagues, TableTips } = require('../utils/mongoDataAccess');
 router.get("/table-tip", requireLogin, async (req, res) => {
@@ -84,6 +84,7 @@ async function toggleNotifications() {
             if (res.ok) {
                 await subscription.unsubscribe();
                 alert('Notifikace vypnuty.');
+                await checkSubscriptionStatus();
             }
         } else {
             // PŘIHLÁŠENÍ
@@ -109,6 +110,7 @@ async function toggleNotifications() {
             
             if (saveRes.ok) {
                 alert('Notifikace zapnuty!');
+                await checkSubscriptionStatus();
             } else {
                 alert('Nepodařilo se uložit odběr na server.');
             }
@@ -150,7 +152,6 @@ async function checkSubscriptionStatus() {
 }
 
 document.addEventListener('DOMContentLoaded', checkSubscriptionStatus);
-
 </script>
 <body class="usersite">
 <header class="header">
@@ -174,6 +175,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 </form>
 <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
+<header class="time-header">${await generateTimeWidget()}</header>
 <main class="main_page">`;
 
 html += await generateLeftPanel(data);
@@ -250,7 +252,6 @@ html += await generateLeftPanel(data);
             const diff = userRank - realRank;
             const isCorrect = (diff === 0);
             const logoUrl = team.logo ? `/logoteamu/${team.logo}` : '/images/logo.png';
-            console.log(`[DEBUG] Team: ${team.name}, Logo: ${team.logo}, LogoURL: ${logoUrl}`);
 
             let bgStyle = "background-color: #1a1a1a; border: 1px solid #444;";
             let diffText;
@@ -517,7 +518,7 @@ router.post("/table-tip", requireLogin, express.json(), async (req, res) => {
         const existingData = await TableTips.findAll();
         const updateObj = {};
         updateObj[`${season}.${liga}.${username}`] = mergedOrder;
-        
+
         if (Object.keys(existingData).length === 0) {
             const newDoc = {};
             newDoc[season] = {};
@@ -537,7 +538,7 @@ router.post("/table-tip", requireLogin, express.json(), async (req, res) => {
         console.error("Chyba při ukládání tableTips do MongoDB:", err);
         return res.status(500).send("Chyba při ukládání tipu tabulky.");
     }
-    
+
     res.sendStatus(200);
 });
 
@@ -730,6 +731,7 @@ async function toggleNotifications() {
             if (res.ok) {
                 await subscription.unsubscribe();
                 alert('Notifikace vypnuty.');
+                await checkSubscriptionStatus();
             }
         } else {
             // PŘIHLÁŠENÍ
@@ -755,6 +757,7 @@ async function toggleNotifications() {
             
             if (saveRes.ok) {
                 alert('Notifikace zapnuty!');
+                await checkSubscriptionStatus();
             } else {
                 alert('Nepodařilo se uložit odběr na server.');
             }
@@ -796,7 +799,6 @@ async function checkSubscriptionStatus() {
 }
 
 document.addEventListener('DOMContentLoaded', checkSubscriptionStatus);
-
 </script>
 <body class="usersite">
 <header class="header">
@@ -820,6 +822,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 </form>
 <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
+<header class="time-header">${await generateTimeWidget()}</header>
 <main class="main_page">`;
 
     html += await generateLeftPanel(data);
@@ -833,13 +836,6 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
             .filter(m => m.liga === selectedLiga && !m.result)
             .filter(m => m.season === selectedSeason)
             .sort((a, b) => new Date(a.datetime) - new Date(b.datetime));
-
-        const usersData = await Users.findAll();
-
-        const currentUserData = usersData.find(u => u.username === username);
-
-        const userTips = currentUserData?.tips?.[selectedSeason]?.[selectedLiga] || [];
-
         const groupedMatches = {};
         const postponedMatches = matchesData.filter(m => m.postponed);
         const normalMatches = matchesData.filter(m => !m.postponed).sort((a, b) => new Date(a.datetime) - new Date(b.datetime));
@@ -878,7 +874,6 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
                 // Definice log (Watermark)
                 const homeLogoUrl = homeTeamObj?.logo ? `/logoteamu/${homeTeamObj.logo}` : '/images/logo.png';
                 const awayLogoUrl = awayTeamObj?.logo ? `/logoteamu/${awayTeamObj.logo}` : '/images/logo.png';
-                console.log(`[DEBUG] Match ${match.id}: Home=${homeTeamName} -> ${homeLogoUrl}, Away=${awayTeamName} -> ${awayLogoUrl}`);
 
                 // HTML PRO WATERMARK (vložíme ho do tlačítek)
                 const watermarkHTML = (url) => `
@@ -1157,6 +1152,7 @@ router.get('/history', requireLogin, async (req, res) => {
             <div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1>Historie sezón a lig</h1></div>
             <a href="/">Zpět na hlavní stránku</a>
         </header>
+        <header class="time-header">${await generateTimeWidget()}</header>
         <main class="main_page">
             <table class="points-table">
                 <thead class="points-table-history">
@@ -1237,6 +1233,7 @@ p.style.display = which === 'playoff' ? 'block' : 'none';
 </div>
 <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
+<header class="time-header">${await generateTimeWidget()}</header>
 <main class="main_page">`
 html += await generateLeftPanel(data, true);
     html += `<script>
@@ -1580,6 +1577,7 @@ function showTable(which) {
         </div>
         <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
     </header>
+    <header class="time-header">${await generateTimeWidget()}</header>
 <main class="main_page">`
 html += await generateLeftPanel(data, true);
     html += `
@@ -1619,7 +1617,7 @@ html += await generateLeftPanel(data, true);
             html += `<div class="user-history-table-container user-table-${safeName}" style="display:${isVisible};">`;
             for (const gKey of sortedGroupKeys) {
                 const groupLabel = getGroupDisplayLabel(gKey);
-                
+
                 // Výpočet isGroupLocked pro tuto skupinu
                 const isGroupLocked = (isTipsLocked === true) || (Array.isArray(isTipsLocked) && isTipsLocked.includes(gKey));
 
@@ -1830,6 +1828,7 @@ async function toggleNotifications() {
             if (res.ok) {
                 await subscription.unsubscribe();
                 alert('Notifikace vypnuty.');
+                await checkSubscriptionStatus();
             }
         } else {
             // PŘIHLÁŠENÍ
@@ -1855,6 +1854,7 @@ async function toggleNotifications() {
             
             if (saveRes.ok) {
                 alert('Notifikace zapnuty!');
+                await checkSubscriptionStatus();
             } else {
                 alert('Nepodařilo se uložit odběr na server.');
             }
@@ -1896,7 +1896,6 @@ async function checkSubscriptionStatus() {
 }
 
 document.addEventListener('DOMContentLoaded', checkSubscriptionStatus);
-
 </script>
 <body class="usersite">
 <header class="header">
@@ -1920,6 +1919,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 </form>
 <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
+<header class="time-header">${await generateTimeWidget()}</header>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     const sidebar = document.querySelector('.left-panel');
@@ -2082,4 +2082,3 @@ html += await generateLeftPanel(data);
 });
 
 module.exports = router;
-

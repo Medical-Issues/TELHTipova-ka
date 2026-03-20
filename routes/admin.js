@@ -127,52 +127,191 @@ router.get('/', requireAdmin, async (req, res) => {
 </head>
 <header class="header">
   <div class="logo_title"><img class="image_logo" src="/images/logo.png" alt="Logo"><h1 id="title">Tipovačka</h1></div>
+  <a href="/">← Zpět na hlavní stránku</a>
 </header>
 <body class="usersite">
 <main class="admin_site">
   <div class="admin-header">
-    <h1>Admin: Správa zápasů</h1>
-    <div>
-        <a href="/admin/new/match" class="btn new-btn-admin">Vytvořit nový zápas</a>
-        <a href="/admin/new/team" class="btn new-btn-admin">Vytvořit nový tým</a>
-        <a href="/admin/playoff" class="btn new-btn-admin">Playoff tabulky</a>
-        <a href="/admin/playoff/templates" class="btn new-btn-admin">Templaty playoff tabulek</a>
-        <a href="/admin/leagues/manage" class="btn new-btn-admin">Správa lig</a>
-        <a href="/admin/teams/points" class="btn new-btn-admin">Manuální body</a>
-        <a href="/admin/matches/import" class="btn new-btn-admin">Import zápasů</a>
-        <a href="/admin/images/manage" class="btn new-btn-admin">Správce obrázků</a>
-        <a href="/admin/transfers/manage" class="btn new-btn-admin">Správa přestupů</a>
-        <a href="/admin/broadcast-ping" class="btn new-btn-admin">Test notifikace</a>
-        <a href="/admin/users" class="btn new-btn-admin">Správa uživatelů</a>
-        <a id="backupBtn" class="btn new-btn-admin">Uložit data uživatelům (pouze pro administrativní účely)</a>
+    <div class="admin-title">
+      <h1>🛠️ Admin Panel</h1>
+      <p class="admin-subtitle">Správa aplikace TELH Tipovačka</p>
+    </div>
+    
+    <!-- Nastavení aplikace - integrované všechny funkce v grid layoutu -->
+    <div class="settings-card">
+      <div class="card-header">
+        <h3>⚙️ Nastavení aplikace</h3>
+      </div>
+      <div class="card-body">
+        <div class="settings-grid">
+          <!-- Registrace -->
+          <div class="setting-item">
+            <div class="setting-info">
+              <label id="registrationLabel" class="setting-label">Registrace nových uživatelů</label>
+              <span id="registrationStatus" class="setting-description">
+                ${settingsData && settingsData.registrationsBlocked ? 'Noví uživatelé se nemohou registrovat' : 'Noví uživatelé se mohou registrovat'}
+              </span>
+            </div>
+            <button id="toggleRegistrations" class="btn ${settingsData && settingsData.registrationsBlocked ? 'btn-danger' : 'btn-success'} btn-lg">
+              ${settingsData && settingsData.registrationsBlocked ? '🔒 BLOKOVÁNY' : '🔓 POVOLENY'}
+            </button>
+          </div>
+          
+          <!-- Vybraná sezóna -->
+          <div class="setting-item">
+            <div class="setting-info">
+              <label id="seasonLabel" class="setting-label">📅 Vybraná sezóna</label>
+              <span class="setting-description">Aktuální sezóna pro celou aplikaci</span>
+            </div>
+            <form method="POST" action="/admin/season" style="display: flex; align-items: center; gap: 10px;">
+              <select id="season-select" class="modern-select" name="season" style="width: 150px;">
+                ${allSeasons.map(s => `<option value="${s}" ${s === chosenSeasonValue ? 'selected' : ''}>${s}</option>`).join('')}
+              </select>
+              <button type="submit" class="btn btn-primary">💾 Uložit</button>
+            </form>
+          </div>
+          
+          <!-- Veřejné ligy -->
+          <div class="setting-item">
+            <div class="setting-info">
+              <label id="publicLeaguesLabel" class="setting-label">🏆 Veřejné ligy</label>
+              <span class="setting-description">Ligy viditelné pro uživatele</span>
+            </div>
+            <form method="POST" action="/admin/leagues/visibility" style="display: flex; flex-direction: column; gap: 10px;">
+              <div class="leagues-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px;">
+                ${allLeagues.map(l => `
+                  <label style="display: flex; align-items: center; gap: 6px; font-size: 0.9em;">
+                    <input type="checkbox" name="allowedLeagues" value="${l}" ${allowedLeagues.includes(l) ? 'checked' : ''}/>
+                    <span>${l}</span>
+                  </label>
+                `).join('')}
+              </div>
+              <button type="submit" class="btn btn-primary">🔓 Uložit viditelnost</button>
+            </form>
+          </div>
+          
+          <!-- Ligy s přestupy -->
+          <div class="setting-item">
+            <div class="setting-info">
+              <label id="transfersLeaguesLabel" class="setting-label">💰 Ligy s přestupy</label>
+              <span class="setting-description">Ligy s aktivním přestupovým oknem</span>
+            </div>
+            <form method="POST" action="/admin/leagues/transfers" style="display: flex; flex-direction: column; gap: 10px;">
+              <div class="leagues-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px;">
+                ${allLeagues.map(l => `
+                  <label style="display: flex; align-items: center; gap: 6px; font-size: 0.9em;">
+                    <input type="checkbox" name="transferLeagues" value="${l}" ${transferLeagues.includes(l) ? 'checked' : ''}/>
+                    <span>${l}</span>
+                  </label>
+                `).join('')}
+              </div>
+              <button type="submit" class="btn btn-primary">💸 Uložit přestupy</button>
+            </form>
+          </div>
+          
+          <!-- Logika zamykání tabulky -->
+          <div class="setting-item">
+            <div class="setting-info">
+              <label id="clinchLogicLabel" class="setting-label">🔒 Logika zamykání tabulky</label>
+              <span class="setting-description">Jak se týmy obarvují při zamykání pozic</span>
+            </div>
+            <form method="POST" action="/admin/settings/clinch" style="display: flex; flex-direction: column; gap: 10px;">
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                <label style="display: flex; align-items: center; gap: 8px;">
+                  <input type="radio" name="mode" value="strict" ${clinchMode === 'strict' ? 'checked' : ''} />
+                  <div>
+                    <strong>Striktní (Doporučeno)</strong>
+                    <span style="display:block; font-size: 0.8em; color: gray;">Tým se obarví až když je pevně uzamčen ve svém patře.</span>
+                  </div>
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px;">
+                  <input type="radio" name="mode" value="cascade" ${clinchMode === 'cascade' ? 'checked' : ''} />
+                  <div>
+                    <strong>Kaskádové (Nejvyšší meta)</strong>
+                    <span style="display:block; font-size: 0.8em; color: gray;">Tým se obarví barvou nejvyššího patra, pod který už nemůže slézt.</span>
+                  </div>
+                </label>
+              </div>
+              <button type="submit" class="btn btn-primary">🔐 Uložit logiku</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Navigační karty - nové pořadí -->
+    <div class="admin-nav">
+      <div class="nav-section">
+        <h3>⚽ Zápasy a týmy</h3>
+        <div class="nav-buttons">
+          <a href="/admin/new/match" class="btn btn-primary">🆕 Nový zápas</a>
+          <a href="/admin/new/team" class="btn btn-primary">👥 Nový tým</a>
+          <a href="/admin/matches/import" class="btn btn-secondary">📥 Import zápasů</a>
+          <a href="/admin/teams/points" class="btn btn-secondary">📊 Manuální body</a>
+        </div>
+      </div>
+      
+      <div class="nav-section">
+        <h3>🏆 Playoff a ligy</h3>
+        <div class="nav-buttons">
+          <a href="/admin/playoff" class="btn btn-primary">🏆 Playoff tabulky</a>
+          <a href="/admin/playoff/templates" class="btn btn-secondary">📋 Playoff Templaty</a>
+          <a href="/admin/leagues/manage" class="btn btn-secondary">⚙️ Správa lig</a>
+        </div>
+      </div>
+      
+      <div class="nav-section">
+        <h3>👤 Uživatelé a obsah</h3>
+        <div class="nav-buttons">
+          <a href="/admin/users" class="btn btn-primary">👥 Správa uživatelů</a>
+          <a href="/admin/images/manage" class="btn btn-secondary">🖼️ Správce obrázků</a>
+          <a href="/admin/transfers/manage" class="btn btn-secondary">💰 Správa přestupů</a>
+        </div>
+      </div>
+      
+      <div class="nav-section">
+        <h3>🔔 Systém a notifikace</h3>
+        <div class="nav-buttons">
+          <a href="/admin/broadcast-ping" class="btn btn-secondary">📢 Test notifikace</a>
+          <a id="backupBtn" class="btn btn-warning">💾 Záloha dat do JSONů</a>
+        </div>
+      </div>
     </div>
   </div>
-  <form class="league-dropdown" method="GET" action="/admin/">
-    Liga:
-    <select id="league-select" name="liga" required onchange="this.form.submit()">
+  
+  <form class="league-dropdown-modern" method="GET" action="/admin/">
+    <div class="filter-group">
+      <label class="filter-label">Liga:</label>
+      <select class="league-select" name="liga" required onchange="this.form.submit()">
         ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected' : ''}>${l}</option>`).join('')}
-    </select>
-    Sezóna:
-    <select class="league-select" name="season" onchange="this.form.submit()">
+      </select>
+    </div>
+    <div class="filter-group">
+      <label class="filter-label">Sezóna:</label>
+      <select class="league-select" name="season" onchange="this.form.submit()">
         ${allSeasons.map(s => `<option value="${s}" ${s === selectedSeason ? 'selected' : ''}>${s}</option>`).join('')}
-    </select>
+      </select>
+    </div>
   </form>
-  <br>
-  <section class="all-match-table-and-leagues">
-  <div style="display: flex; flex-direction: column; border: 1px solid orangered; padding: 10px; flex: 5;">
-  <table>
-    <thead>
-    <h2>Nevyhodnocené zápasy (${pendingMatches.length})</h2>
-      <tr>
-        <th>ID</th>
-        <th>Domácí</th>
-        <th>Hosté</th>
-        <th>Datum a čas</th>
-        <th>Výsledek</th>
-        <th>Akce</th>
-      </tr>
-    </thead>
-    <tbody>
+  
+  <section class="matches-section">
+    <div class="section-card">
+      <div class="section-header">
+        <h2>⚽ Nevyhodnocené zápasy <span class="badge">${pendingMatches.length}</span></h2>
+      </div>
+      <div class="table-container">
+        <table class="modern-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Domácí</th>
+              <th>Hosté</th>
+              <th>Datum a čas</th>
+              <th>Výsledek</th>
+              <th>Akce</th>
+            </tr>
+          </thead>
+          <tbody>
 `;
 
     for (const m of pendingMatches) {
@@ -198,41 +337,54 @@ router.get('/', requireAdmin, async (req, res) => {
 
         html += `
       <tr class="${m.isPlayoff ? 'playoff-row' : ''}">
-        <td>${m.id}</td>
-        <td>${homeTeam}</td>
-        <td>${awayTeam}</td>
-        <td>${formattedDate}</td>
-        <td>${result}</td>
+        <td><span class="id-badge">${m.id}</span></td>
+         <td><span class="team-name">${homeTeam}</span></td>
+         <td><span class="team-name">${awayTeam}</span></td>
+         <td><span class="date-time">${formattedDate}</span></td>
+         <td><span class="result finished">${result}</span></td>
         <td>
-          <a href="/admin/edit/${m.id}" class="action-btn edit-btn">Upravit</a>
-          <form action="/admin/delete/${m.id}" method="POST" style="display:inline;" onsubmit="return confirm('Opravdu smazat zápas?');">
-            <button type="submit" style="font-family: Segoe UI,serif" class="action-btn delete-btn">Smazat</button>
-          </form>
+          <div class="action-buttons">
+            <a href="/admin/edit/${m.id}" class="btn btn-sm btn-primary">✏️</a>
+            <form action="/admin/delete/${m.id}" method="POST" style="display:inline;" onsubmit="return confirm('Opravdu smazat zápas?');">
+              <button type="submit" class="btn btn-sm btn-danger">🗑️</button>
+            </form>
             <a href="/admin/togglePostponed/${m.id}" 
-                class="action-btn ${m.postponed ? 'postponed' : 'delete-btn'}">
-                ${m.postponed ? 'Odložený' : 'Odložit'}
+                class="btn btn-sm ${m.postponed ? 'btn-warning' : 'btn-secondary'}">
+                ${m.postponed ? '⏰' : '⏸️'}
             </a>
+          </div>
         </td>
       </tr>
     `;
     }
 
     html += `
-    </table>
-    <details style="margin-top:20px;">
-      <summary><h2 style="display: inline">Vyhodnocené zápasy (${finishedMatches.length})</h2></summary>
-      <table style="margin-top:10px; width: 100%">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Domácí</th>
-            <th>Hosté</th>
-            <th>Datum a čas</th>
-            <th>Výsledek</th>
-            <th>Akce</th>
-          </tr>
-        </thead>
-        <tbody>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    
+    <!-- Hotové zápasy -->
+    <div class="section-card"">
+      <div class="section-header">
+        <h2>✅ Vyhodnocené zápasy <span class="badge">${finishedMatches.length}</span></h2>
+        <button type="button" class="btn btn-sm btn-secondary toggle-details" onclick="this.closest('.section-card').classList.toggle('expanded')">
+          📊 Zobrazit/Skrýt
+        </button>
+      </div>
+      <div class="table-container" style="display: none;">
+        <table class="modern-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Domácí</th>
+              <th>Hosté</th>
+              <th>Datum a čas</th>
+              <th>Výsledek</th>
+              <th>Akce</th>
+            </tr>
+          </thead>
+          <tbody>
     `;
 
     for (const m of finishedMatches) {
@@ -250,16 +402,18 @@ router.get('/', requireAdmin, async (req, res) => {
 
         html += `
         <tr class="${m.isPlayoff ? 'playoff-row' : ''}">
-          <td>${m.id}</td>
-          <td>${homeTeam}</td>
-          <td>${awayTeam}</td>
-          <td>${formattedDate}</td>
-          <td>${result}</td>
+          <td><span class="id-badge">${m.id}</span></td>
+          <td><span class="team-name">${homeTeam}</span></td>
+          <td><span class="team-name">${awayTeam}</span></td>
+          <td><span class="date-time">${formattedDate}</span></td>
+          <td><span class="result finished">${result}</span></td>
           <td>
-            <a href="/admin/edit/${m.id}" class="action-btn edit-btn">Upravit</a>
-            <form action="/admin/delete/${m.id}" method="POST" style="display:inline;" onsubmit="return confirm('Opravdu smazat zápas?');">
-              <button type="submit" class="action-btn delete-btn">Smazat</button>
-            </form>
+            <div class="action-buttons">
+              <a href="/admin/edit/${m.id}" class="btn btn-sm btn-primary">✏️</a>
+              <form action="/admin/delete/${m.id}" method="POST" style="display:inline;" onsubmit="return confirm('Opravdu smazat zápas?');">
+                <button type="submit" class="btn btn-sm btn-danger">🗑️</button>
+              </form>
+            </div>
           </td>
         </tr>
       `;
@@ -270,126 +424,57 @@ router.get('/', requireAdmin, async (req, res) => {
       </table>
     </details>
     </div>
-  <div class="select-leagues">
-    <h2>Vybraná sezóna</h2>
-    <form method="POST" action="/admin/season">
-      <label for="season-select">Sezóna:</label>
-      <div class="season-choose">
-        <select id="season-select" class="league-select" style="width: 100%" name="season">
-           ${allSeasons.map(s => `<option value="${s}" ${s === chosenSeasonValue ? 'selected' : ''}>${s}</option>`).join('')}
-        </select>
-        <button type="submit" class="action-btn edit-btn" style="margin-top: 10px;">Vybrat sezónu</button>
-      </div>
-    </form>
-    <h2>Veřejné ligy</h2>
-    <form method="POST" action="/admin/leagues/visibility">
-      <div class="leagues-allow">
-`;
-
-    for (const l of allLeagues) {
-        const checked = allowedLeagues.includes(l) ? 'checked' : '';
-        html += `
-        <label style="display: flex; align-items: center">
-          <input type="checkbox" name="allowedLeagues" value="${l}" ${checked}/>
-          ${l}
-        </label>
-      `;
-    }
-
-    html += `
-      </div>
-      <button type="submit" class="action-btn edit-btn" style="margin-top: 10px;">Uložit viditelnost lig</button>
-      </form>
-      <h2 style="margin-top: 20px;">Ligy s aktivními přestupy</h2>
-    <form method="POST" action="/admin/leagues/transfers">
-      <div class="leagues-allow">
-`;
-
-    for (const l of allLeagues) {
-        const checked = transferLeagues.includes(l) ? 'checked' : '';
-        html += `
-        <label style="display: flex; align-items: center">
-          <input type="checkbox" name="transferLeagues" value="${l}" ${checked}/>
-          ${l}
-        </label>
-      `;
-    }
-
-    html += `
-      </div>
-      <button type="submit" class="action-btn edit-btn" style="margin-top: 10px;">Uložit přestupy</button>
-    </form>
-    <h2 style="margin-top: 20px;">Logika zamykání tabulky</h2>
-    <form method="POST" action="/admin/settings/clinch">
-      <div class="season-choose" style="margin-bottom: 10px;">
-        <label>
-          <input type="radio" name="mode" value="strict" ${clinchMode === 'strict' ? 'checked' : ''} />
-          <strong>Striktní (Doporučeno)</strong>
-          <span style="display:block; font-size: 0.8em; color: gray;">Tým se obarví až když je pevně uzamčen ve svém patře.</span>
-        </label>
-      </div>
-      <div class="season-choose" style="margin-bottom: 10px;">
-        <label>
-          <input type="radio" name="mode" value="cascade" ${clinchMode === 'cascade' ? 'checked' : ''} />
-          <strong>Kaskádové (Nejvyšší meta)</strong>
-          <span style="display:block; font-size: 0.8em; color: gray;">Tým se obarví barvou nejvyššího patra, pod který už nemůže slézt.</span>
-        </label>
-      </div>
-      <button type="submit" class="action-btn edit-btn" style="width: 100%;">Uložit logiku</button>
-    </form>
   </div>
-  </section>
-  <section class="all-match-table-and-leagues">
-  <div class="select-teams">
-    <h2>Veřejné ligy</h2>
-    <div class="teams-allow">
-`;
+    <div class="section-card">
+      <div class="card-header">
+        <h3>👥 Správa týmů</h3>
+      </div>
+      <div class="card-body-teams">
+        <div class="teams-grid">
+          ${leaguesFromLeagues.map(liga => {
+            const leagueTeams = teamsByLeague[liga] || [];
+            const activeTeams = leagueTeams.filter(team => team.active);
+            const inactiveTeams = leagueTeams.filter(team => !team.active);
+            const leagueObj = leagues.find(l => l.name === liga);
 
-    leaguesFromLeagues.forEach(liga => {
-        const leagueTeams = teamsByLeague[liga] || [];
-        const activeTeams = leagueTeams.filter(team => team.active);
-        const inactiveTeams = leagueTeams.filter(team => !team.active);
-        const leagueObj = leagues.find(l => l.name === liga);
-
-        const sortTeams = arr => arr.sort((a, b) => {
-            if (a.group !== b.group) return a.group - b.group;
-            return a.name.localeCompare(b.name, 'cs', { sensitivity: 'base' });
-        });
-
-        sortTeams(activeTeams);
-        sortTeams(inactiveTeams);
-
-        html += `<div class="league-column"><h3>${liga}</h3>`;
-        if (activeTeams.length > 0) {
-            html += `<strong>Aktivní</strong>`;
-            activeTeams.forEach(team => {
-                if (leagueObj?.isMultigroup === true){
-                    html += `<a href="/admin/teams/edit/${team.id}">${String.fromCharCode(team.group+64)} - ${team.name}</a>`;
-                } else {
-                    html += `<a href="/admin/teams/edit/${team.id}">${team.name}</a>`;
-                }
+            const sortTeams = arr => arr.sort((a, b) => {
+                if (a.group !== b.group) return a.group - b.group;
+                return a.name.localeCompare(b.name, 'cs', { sensitivity: 'base' });
             });
-            html += `<br>`;
-        }
-        if (inactiveTeams.length > 0) {
-            html += `<strong>Neaktivní</strong>`;
-            inactiveTeams.forEach(team => {
-                if (leagueObj?.isMultigroup === true){
-                    html += `<a href="/admin/teams/edit/${team.id}" class="inactive">${String.fromCharCode(team.group+64)} - ${team.name}</a>`;
-                } else {
-                    html += `<a href="/admin/teams/edit/${team.id}" class="inactive">${team.name}</a>`;
-                }
-            });
-        }
 
-        html += `</div>`;
-    })
+            sortTeams(activeTeams);
+            sortTeams(inactiveTeams);
 
-    html += `
+            return `
+                <div class="league-column">
+                    <h4>${liga}</h4>
+                    <div class="teams-list">
+                        ${activeTeams.length > 0 ? `
+                            <strong style="color: #28a745;">Aktivní</strong>
+                            ${activeTeams.map(team => `
+                                <a href="/admin/teams/edit/${team.id}" class="team-link">
+                                    ${leagueObj?.isMultigroup === true ? `${String.fromCharCode(team.group+64)} - ${team.name}` : team.name}
+                                </a>
+                            `).join('')}
+                        ` : ''}
+                        ${inactiveTeams.length > 0 ? `
+                            <strong style="color: #dc3545;">Neaktivní</strong>
+                            ${inactiveTeams.map(team => `
+                                <a href="/admin/teams/edit/${team.id}" class="team-link inactive">
+                                    ${leagueObj?.isMultigroup === true ? `${String.fromCharCode(team.group+64)} - ${team.name}` : team.name}
+                                </a>
+                            `).join('')}
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
     </div>
   </div>
-  </section>
-  <p><a href="/" style="margin-top: 20px; display: inline-block;">Zpět na hlavní stránku</a></p>
+  
+  <p><a href="/" style="margin-top: 20px; display: inline-block;" class="btn btn-secondary">← Zpět na hlavní stránku</a></p>
 </main>
 </body>
 <script>
@@ -398,11 +483,92 @@ document.getElementById('backupBtn').addEventListener('click', async () => {
   const data = await res.json();
   alert(data.message);
 });
+
+// Funkce pro přepínání registrací
+async function toggleRegistrations() {
+    const btn = document.getElementById('toggleRegistrations');
+    const status = document.getElementById('registrationStatus');
+    
+    btn.disabled = true;
+    btn.textContent = 'Pracuji...';
+    
+    try {
+        const response = await fetch('/admin/toggle-registrations', { method: 'POST' });
+        const result = await response.json();
+        
+        if (result.success) {
+            if (result.blocked) {
+                btn.className = 'btn btn-danger btn-lg';
+                btn.textContent = '🔒 BLOKOVÁNY';
+                status.textContent = 'Noví uživatelé se nemohou registrovat';
+            } else {
+                btn.className = 'btn btn-success btn-lg';
+                btn.textContent = '🔓 POVOLENY';
+                status.textContent = 'Noví uživatelé se mohou registrovat';
+            }
+            alert(result.message);
+        } else {
+            alert('Chyba: ' + result.message);
+        }
+    } catch (error) {
+        alert('Chyba při komunikaci se serverem: ' + error.message);
+    }
+    
+    btn.disabled = false;
+}
+
+// Přidání event listeneru
+document.addEventListener('DOMContentLoaded', () => {
+    const toggleBtn = document.getElementById('toggleRegistrations');
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', toggleRegistrations);
+    }
+    
+    // Přidání animací pro tlačítka
+    document.querySelectorAll('.btn').forEach(btn => {
+        btn.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateY(-2px)';
+        });
+        btn.addEventListener('mouseleave', function() {
+            this.style.transform = 'translateY(0)';
+        });
+    });
+});
 </script>
 </html>
 `;
 
     res.send(html);
+});
+
+// Endpoint pro přepínání registrací
+router.post('/toggle-registrations', requireAdmin, async (req, res) => {
+    try {
+        // Načtení aktuálních nastavení
+        let settings = await Settings.findAll();
+        
+        // Přepnutí stavu
+        const newBlockedState = !settings.registrationsBlocked;
+        
+        // Aktualizace v MongoDB
+        await Settings.updateOne({}, { registrationsBlocked: newBlockedState });
+        
+        // Logování akce
+        logAdminAction(req.session.user, "TOGGLE_REGISTRATIONS", 
+            `Registrace ${newBlockedState ? 'BLOKOVÁNY' : 'POVOLENY'}`);
+        
+        res.json({ 
+            success: true, 
+            blocked: newBlockedState,
+            message: `Registrace byly úspěšně ${newBlockedState ? 'blokovány' : 'povoleny'}!`
+        });
+    } catch (error) {
+        console.error('Chyba při přepínání registrací:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Chyba serveru při změně nastavení' 
+        });
+    }
 });
 
 router.post('/leagues', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
@@ -2413,8 +2579,6 @@ router.post('/matches/import-run', requireAdmin, async (req, res) => {
     const shouldLock = lockImported === 'on';
 
     try {
-        console.log(`🔍 DEBUG: Začínám import pro ligu '${liga}'...`);
-
         // 1. Stahování
         const response = await axios.get(url, {
             headers: {
@@ -3393,3 +3557,5 @@ router.post('/playoff/templates/delete/:key', requireAdmin, async (req, res) => 
 });
 
 module.exports = router;
+
+
