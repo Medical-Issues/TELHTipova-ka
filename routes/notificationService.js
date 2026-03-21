@@ -323,7 +323,7 @@ async function createTransferImage(team1, team2) {
 
     let buffer;
     try {
-        buffer = canvas.toBuffer('image/webp', { quality: 0.85 });
+        buffer = canvas.toBuffer('image/png');
     } catch (err) {
         console.error('[createTransferImage] ERROR při vytváření bufferu:', err);
         return null;
@@ -464,7 +464,7 @@ async function createLeagueWinnerImage(winnerTeam, liga) {
 
     let buffer;
     try {
-        buffer = canvas.toBuffer('image/webp', { quality: 0.9 });
+        buffer = canvas.toBuffer('image/png');
     } catch (err) {
         console.error('[createLeagueWinnerImage] ERROR při vytváření bufferu:', err);
         return null;
