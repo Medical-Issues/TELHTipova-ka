@@ -2997,7 +2997,7 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
                 </select>
             </form>
 
-            <form method="POST" action="/admin/transfers/save">
+            <form method="POST" action="/admin/transfers/save" enctype="multipart/form-data">
                 <input type="hidden" name="liga" value="${selectedLiga}">
                 <input type="hidden" name="season" value="${selectedSeason}">
                 
