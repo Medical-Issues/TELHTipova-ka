@@ -24,7 +24,7 @@ V playoff tabulce roletka na rozkliknutí zápasů série, + obecně prostě hez
 
 přechod na free picture API z ukládání do souborů ❎
 
-Správce oznámení v přestupech, importu zápasů,
+Správce oznámení v přestupech, importu zápasů, ✅
 
 Novinkovač (Otvírání tweetů atd.)
 
