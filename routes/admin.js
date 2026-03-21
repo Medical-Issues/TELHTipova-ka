@@ -779,7 +779,7 @@ router.post('/edit/:id', requireAdmin, async (req, res) => {
             // --- ODESLÁNÍ PRŮBĚŽNÉHO STAVU SÉRIE ---
             if (match.playedMatches.length > oldPlayedCount) {
                 const lastM = match.playedMatches[match.playedMatches.length - 1];
-                notif.notifySeriesProgress(matchId, match.playedMatches.length, lastM.scoreHome, lastM.scoreAway, lastM.ot, seriesHomeWins, seriesAwayWins);
+                notif.notifySeriesProgress(match, match.playedMatches.length, lastM.scoreHome, lastM.scoreAway, lastM.ot, seriesHomeWins, seriesAwayWins, match.playedMatches);
             }
         }
     } else {
@@ -1453,7 +1453,7 @@ router.post('/edit/:id', requireAdmin, async (req, res) => {
             // --- ODESLÁNÍ PRŮBĚŽNÉHO STAVU SÉRIE ---
             if (match.playedMatches.length > oldPlayedCount) {
                 const lastM = match.playedMatches[match.playedMatches.length - 1];
-                notif.notifySeriesProgress(matchId, match.playedMatches.length, lastM.scoreHome, lastM.scoreAway, lastM.ot, seriesHomeWins, seriesAwayWins);
+                notif.notifySeriesProgress(match, match.playedMatches.length, lastM.scoreHome, lastM.scoreAway, lastM.ot, seriesHomeWins, seriesAwayWins, match.playedMatches);
             }
         }
     } else {
@@ -2126,7 +2126,27 @@ router.post("/toggle-regular-season", requireAdmin, async (req, res) => {
     // NOTIFIKACE: Pokud byla liga právě teď označena jako dokončená (a předtím nebyla)
     if (isFinishedNow && !wasFinishedBefore) {
         console.log(`Posílám notifikaci o ukončení ligy: ${liga}`);
-        notif.notifyLeagueEnd(liga);
+        
+        // Získání vítězného týmu z tabulky
+        let winnerTeam = null;
+        try {
+            const tableTips = await TableTips.findAll();
+            const tableTipsArray = Object.values(tableTips || {});
+            const leagueTips = tableTipsArray.filter(t => t.season === season && t.liga === liga);
+            if (leagueTips.length > 0) {
+                // Seřazení podle bodů (nejvyšší první)
+                const sortedTips = leagueTips.sort((a, b) => (b.points || 0) - (a.points || 0));
+                const winnerTip = sortedTips[0];
+                if (winnerTip) {
+                    const teams = await Teams.findAll();
+                    winnerTeam = teams.find(t => t.id === winnerTip.teamId);
+                }
+            }
+        } catch (err) {
+            console.error("Chyba při získávání vítěze:", err);
+        }
+        
+        notif.notifyLeagueEnd(liga, winnerTeam);
     }
     logAdminAction(req.session.user, "ZÁKLADNÍ_ČÁST", `Změněn stav základní části pro ${liga} (${season}) na: ${req.body.isFinished === 'on' ? 'DOKONČENO' : 'PROBÍHÁ'}`);
     res.redirect('/admin');
@@ -3001,6 +3021,59 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
                     </div>`;
     }).join('')}
 
+                <!-- NOTIFIKAČNÍ NASTAVENÍ -->
+                <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 2px solid #00d4ff; border-radius: 12px; padding: 20px; margin: 20px 0;">
+                    <h3 style="margin: 0 0 15px 0; color: #00d4ff; display: flex; align-items: center; gap: 10px;">
+                        🔔 Notifikační nastavení
+                    </h3>
+                    
+                    <!-- Zapnout/vypnout notifikace -->
+                    <label style="display: flex; align-items: center; gap: 10px; color: white; cursor: pointer; margin-bottom: 15px;">
+                        <input type="checkbox" name="sendNotification" id="sendNotification" style="transform: scale(1.3);" checked>
+                        <strong>Poslat push notifikaci o změnách</strong>
+                    </label>
+                    
+                    <!-- Typ obrázku -->
+                    <div style="margin-bottom: 15px;">
+                        <label style="color: #aaa; display: block; margin-bottom: 8px;">Typ obrázku v notifikaci:</label>
+                        <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                            <label style="display: flex; align-items: center; gap: 8px; color: white; cursor: pointer;">
+                                <input type="radio" name="imageType" value="auto" checked onchange="toggleImageUpload()">
+                                <span>🤖 Auto (z týmů)</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; color: white; cursor: pointer;">
+                                <input type="radio" name="imageType" value="custom" onchange="toggleImageUpload()">
+                                <span>🖼️ Vlastní obrázek</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; color: white; cursor: pointer;">
+                                <input type="radio" name="imageType" value="none" onchange="toggleImageUpload()">
+                                <span>❌ Bez obrázku</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- Upload vlastního obrázku (skrytý默认) -->
+                    <div id="customImageUpload" style="display: none; margin-bottom: 15px; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 8px;">
+                        <label style="color: #00d4ff; display: block; margin-bottom: 10px;">Nahrát obrázek hráče/týmu:</label>
+                        <input type="file" name="customImage" accept="image/*" style="color: white; padding: 10px; background: #111; border: 1px solid #00d4ff; border-radius: 5px; width: 100%; max-width: 400px;">
+                        <p style="color: #888; font-size: 0.85em; margin: 5px 0 0 0;">Doporučené rozměry: 800x400px, max 5MB</p>
+                    </div>
+                    
+                    <!-- Vlastní zpráva -->
+                    <div style="margin-bottom: 10px;">
+                        <label style="color: #aaa; display: block; margin-bottom: 8px;">Vlastní text zprávy (volitelné):</label>
+                        <input type="text" name="customMessage" placeholder="Např: Bomba! Nový hvězdný hráč v lize..." style="width: 100%; max-width: 500px; padding: 10px; background: #111; border: 1px solid #444; color: white; border-radius: 5px;">
+                    </div>
+                </div>
+
+                <script>
+                    function toggleImageUpload() {
+                        const customUpload = document.getElementById('customImageUpload');
+                        const isCustom = document.querySelector('input[name="imageType"]:checked').value === 'custom';
+                        customUpload.style.display = isCustom ? 'block' : 'none';
+                    }
+                </script>
+
                 <div class="save-bar">
                     <button type="submit" class="btn new-btn-admin" style="width: 300px; padding: 10px;">ULOŽIT VŠECHNY PŘESTUPY</button>
                     <p><a href="/admin" style="color: #aaa;">Zrušit a zpět</a></p>
@@ -3012,15 +3085,19 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
     res.send(html);
 });
 
-router.post('/transfers/save', requireAdmin, express.urlencoded({ extended: true }), async (req, res) => {
+router.post('/transfers/save', requireAdmin, upload.single('customImage'), express.urlencoded({ extended: true }), async (req, res) => {
     const notif = require('./notificationService');
 
-    const { liga, season, t } = req.body;
+    const { liga, season, t, sendNotification, imageType, customMessage } = req.body;
 
+    // Kontrola, zda máme data týmů
     if (!t) {
         console.error("CHYBA: Objekt 't' s daty týmů chybí v req.body!");
         return res.redirect('back');
     }
+
+    // Zpracování checkboxu - přijde jako string 'on' když je zaškrtnuto
+    const shouldSendNotification = sendNotification === 'on';
 
     // Načtení z MongoDB
     let teams = await Teams.findAll();
@@ -3082,9 +3159,14 @@ router.post('/transfers/save', requireAdmin, express.urlencoded({ extended: true
         console.error("Chyba při zápisu do MongoDB:", err);
     }
 
-    if (newTransfersNotification.length > 0) {
+    // NOTIFIKACE - pouze pokud je zaškrtnuto "Poslat push notifikaci"
+    if (shouldSendNotification && newTransfersNotification.length > 0) {
         let message;
-        if (newTransfersNotification.length <= 4) {
+        
+        // Použití vlastní zprávy pokud je zadána, jinak automatická
+        if (customMessage && customMessage.trim()) {
+            message = customMessage.trim();
+        } else if (newTransfersNotification.length <= 4) {
             message = `Změny v kádrech: ${newTransfersNotification.join(', ')}`;
         } else {
             const firstFew = newTransfersNotification.slice(0, 3).join(', ');
@@ -3092,11 +3174,44 @@ router.post('/transfers/save', requireAdmin, express.urlencoded({ extended: true
         }
 
         try {
-            // ZDE POSÍLÁME I TÝMY PRO GENEROVÁNÍ OBRÁZKU
-            await notif.notifyTransfer(message, involvedTeams);
+            // Určení typu obrázku pro notifikaci
+            let heroImageUrl = null;
+            
+            if (imageType === 'custom' && req.file) {
+                // Vlastní nahraný obrázek
+                const fs = require('fs');
+                const path = require('path');
+                const notifDir = path.join(__dirname, '../public/images/notifications');
+                
+                if (!fs.existsSync(notifDir)) {
+                    fs.mkdirSync(notifDir, { recursive: true });
+                }
+                
+                // Přesunutí uploadnutého souboru do notifikační složky
+                const timestamp = Date.now();
+                const ext = path.extname(req.file.originalname) || '.jpg';
+                const newFilename = `transfer-custom-${timestamp}${ext}`;
+                const destPath = path.join(notifDir, newFilename);
+                
+                fs.renameSync(req.file.path, destPath);
+                heroImageUrl = `/images/notifications/${newFilename}`;
+                console.log(`[Transfer] Vlastní obrázek uložen: ${heroImageUrl}`);
+                
+            } else if (imageType === 'auto') {
+                // Auto-generovaný obrázek z týmů - ponecháme na notifyTransfer
+                heroImageUrl = null; // bude vygenerováno v notifyTransfer
+            }
+            // imageType === 'none' => heroImageUrl zůstává null, bez obrázku
+            
+            // ZDE POSÍLÁME S VOLITELNÝM OBRÁZKEM
+            await notif.notifyTransfer(message, involvedTeams, heroImageUrl);
+            console.log(`[Transfer] Notifikace odeslána: ${message.substring(0, 50)}...`);
+            
         } catch (err) {
             console.error("Selhalo volání notif.notifyTransfer:", err);
         }
+    } else {
+        console.log(`[Transfer] Notifikace přeskočena: send=${shouldSendNotification}, changes=${newTransfersNotification.length}`);
     }
     logAdminAction(req.session.user, "PŘESTUPY", `Uloženy přestupy pro ligu ${liga}`);
     res.redirect(`/admin/transfers/manage?liga=${encodeURIComponent(liga)}`);
