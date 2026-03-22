@@ -485,19 +485,10 @@ async function createLeagueWinnerImage(winnerTeam, liga) {
     }
 }
 
-// --- ODESÍLACÍ FUNKCE PRO JEDNOHO UŽIVATELE (ZVLÁDNE VÍCE ZAŘÍZENÍ) ---
 const sendToUserDevices = (user, payload) => {
-    // KONTROLA: Na localhostu NEODESÍLAT žádné notifikace (prevence před spamem na produkci)
-    const hostname = require('os').hostname();
-    const isLocalhost = hostname === 'localhost' || 
-                        hostname.includes('local') || 
-                        process.env.NODE_ENV === 'development' ||
-                        process.env.DISABLE_NOTIFICATIONS === 'true';
-    
-    if (isLocalhost) {
-        console.log(`[Push] BLOCKED on localhost - would send: "${payload.title}" to ${user.username}`);
-        return;
-    }
+    // Přidáme server origin do payloadu pro identifikaci zdroje
+    payload.serverOrigin = process.env.SERVER_ORIGIN || 'unknown';
+
     let hasChanges = false;
     let activeSubscriptions = [];
 

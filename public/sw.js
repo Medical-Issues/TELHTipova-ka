@@ -12,6 +12,12 @@ self.addEventListener('push', e => {
     const payload = e.data.json();
     console.log("Push Received...", payload);
 
+    // BLOKACE: Ignorovat notifikace z JINÉHO serveru
+    if (payload.serverOrigin && payload.serverOrigin !== self.location.origin) {
+        console.log(`[SW] BLOCKED: Notification from ${payload.serverOrigin} ignored on ${self.location.origin}`);
+        return;
+    }
+
     e.waitUntil(
         self.registration.showNotification(payload.title, {
             body: payload.body,
