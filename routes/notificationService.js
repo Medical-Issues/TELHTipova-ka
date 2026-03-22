@@ -505,8 +505,8 @@ async function createLeagueWinnerImage(winnerTeam, liga) {
 }
 
 const sendToUserDevices = (user, payload) => {
-    // Přidáme server origin do payloadu pro identifikaci zdroje
-    payload.serverOrigin = process.env.SERVER_ORIGIN || 'unknown';
+    // Přidáme server origin do payloadu pro identifikaci zdroje (bez trailing slash)
+    payload.serverOrigin = (process.env.SERVER_ORIGIN || 'unknown').replace(/\/$/, '');
 
     let hasChanges = false;
     let activeSubscriptions = [];
