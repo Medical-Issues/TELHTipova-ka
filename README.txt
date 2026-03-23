@@ -28,7 +28,7 @@ Správce oznámení v přestupech, importu zápasů, ✅
 
 Správce exportu obrázků ✅
 
-Při exportu vyřešit nějak možnost pro ligy neveřejné
+Při exportu vyřešit nějak možnost pro ligy neveřejné ✅
 
 Novinkovač (Otvírání tweetů atd.)
 
