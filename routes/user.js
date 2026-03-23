@@ -2452,11 +2452,7 @@ router.get("/image-exporter", requireLogin, async (req, res) => {
     const matches = await getMatches();
     const teams = (await loadTeams()).filter(t => t.active);
     const allowedLeagues = await getAllowedLeagues();
-    const allSeasonData = await getLeaguesData();
-    
-    const selectedSeason = req.query.season || '2024/25';
-    const leagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues) ? allSeasonData[selectedSeason].leagues : [];
-    
+    await getLeaguesData();
     const leaguesFromTeams = [...new Set(teams.map(t => t.liga))];
     const leaguesFromMatches = [...new Set(matches.map(m => m.liga))];
     // Všechny ligy v sezóně (pro image-exporter zobrazíme všechny)
