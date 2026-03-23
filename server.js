@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const express = require('express');
 const path = require('path');
 const bodyParser = require("body-parser");
@@ -8,8 +10,6 @@ const userRoutes = require('./routes/user');
 const adminRoutes = require('./routes/admin');
 const authRoutes = require('./routes/auth');
 const { Users } = require('./utils/mongoDataAccess');
-
-require('dotenv').config();
 
 // MongoDB připojení
 const { connectToDatabase } = require('./config/database');

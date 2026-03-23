@@ -1,7 +1,7 @@
-require("fs");
+const fs = require("fs");
 const express = require("express");
 const router = express.Router();
-require('path');
+const path = require('path');
 const {
     requireLogin, prepareDashboardData, getGroupDisplayLabel, generateLeftPanel,
     getLeagueStatusData, getTableTipsData, generateTimeWidget
@@ -165,7 +165,8 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 </label>
 <a class="history-btn" href="/history">Historie</a>
 <a class="history-btn changed" href="/?liga=${encodeURIComponent(selectedLiga)}">Tipovačka</a>
-<a class="history-btn changed" href="/prestupy?liga=${encodeURIComponent(selectedLiga)}">Přestupy TELH</a>
+<a class="history-btn changed" href="/prestupy?liga=${encodeURIComponent(selectedLiga)}">Přestupy</a>
+<a class="history-btn changed" href="/image-exporter?liga=${encodeURIComponent(selectedLiga)}">Exportér</a>
 <div style="text-align: center; margin: 20px;">
     <button type="button" id="notify-toggle-btn" onclick="toggleNotifications()" 
         style="width: 220px; height: 38px; cursor: pointer; font-weight: bold; border: none; color: white; border-radius: 5px; background-color: #444;">
@@ -812,7 +813,8 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 </label>
 <a class="history-btn" href="/history">Historie</a>
 <a class="history-btn changed" href="/table-tip?liga=${encodeURIComponent(selectedLiga)}">Základní část</a>
-<a class="history-btn changed" href="/prestupy?liga=${encodeURIComponent(selectedLiga)}">Přestupy TELH</a>
+<a class="history-btn changed" href="/prestupy?liga=${encodeURIComponent(selectedLiga)}">Přestupy</a>
+<a class="history-btn changed" href="/image-exporter?liga=${encodeURIComponent(selectedLiga)}">Exportér</a>
 <div style="text-align: center; margin: 20px;">
     <button type="button" id="notify-toggle-btn" onclick="toggleNotifications()" 
         style="width: 220px; height: 38px; cursor: pointer; font-weight: bold; border: none; color: white; border-radius: 5px; background-color: #444;">
@@ -1928,6 +1930,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <a class="history-btn" href="/history">Historie</a>
 <a class="history-btn changed" href="/?liga=${encodeURIComponent(selectedLiga)}">Tipovačka</a>
 <a class="history-btn changed" href="/table-tip?liga=${encodeURIComponent(selectedLiga)}">Základní část</a>
+<a class="history-btn changed" href="/image-exporter?liga=${encodeURIComponent(selectedLiga)}">Exportér</a>
 <div style="text-align: center; margin: 20px;">
     <button type="button" id="notify-toggle-btn" onclick="toggleNotifications()" 
         style="width: 220px; height: 38px; cursor: pointer; font-weight: bold; border: none; color: white; border-radius: 5px; background-color: #444;">
@@ -2099,4 +2102,649 @@ html += await generateLeftPanel(data);
     res.send(html)
 });
 
+
+
+// POST routa pro generování obrázků
+router.post("/image-exporter/generate", requireLogin, express.json(), async (req, res) => {
+    const { createMatchImage, createTransferImage, createWinnerImage, createStandingsImage, createStatisticsImage, createPlayoffBracketImage } = require("../utils/fileUtils");
+
+    try {
+        const { type, homeTeamId, awayTeamId, fromTeamId, toTeamId, winnerTeamId, scoreHome, scoreAway, title, winnerTitle, playerName, playerPhoto, watermark, isPlayoff, seriesHomeWins, seriesAwayWins } = req.body;
+
+        const { Teams } = require('../utils/mongoDataAccess');
+        const allTeams = await Teams.findAll();
+
+        const outDir = path.join(__dirname, '../public/images/exports');
+        if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+
+        let buffer;
+        let filename;
+        const timestamp = Date.now();
+
+        switch (type) {
+            case 'match': {
+                const homeTeam = allTeams.find(t => t.id === parseInt(homeTeamId));
+                const awayTeam = allTeams.find(t => t.id === parseInt(awayTeamId));
+                if (!homeTeam || !awayTeam) return res.status(400).json({ error: 'Týmy nenalezeny' });
+
+                buffer = await createMatchImage(homeTeam, awayTeam, null, null, watermark !== 'false');
+                filename = `match-${homeTeam.id}-vs-${awayTeam.id}-${timestamp}.png`;
+                break;
+            }
+            case 'result': {
+                const homeTeam = allTeams.find(t => t.id === parseInt(homeTeamId));
+                const awayTeam = allTeams.find(t => t.id === parseInt(awayTeamId));
+                if (!homeTeam || !awayTeam) return res.status(400).json({ error: 'Týmy nenalezeny' });
+
+                const seriesData = (isPlayoff && seriesHomeWins !== undefined && seriesAwayWins !== undefined) 
+                    ? { homeWins: parseInt(seriesHomeWins), awayWins: parseInt(seriesAwayWins) }
+                    : null;
+
+                buffer = await createMatchImage(homeTeam, awayTeam, parseInt(scoreHome), parseInt(scoreAway), title || null, watermark !== 'false', seriesData);
+                filename = `result-${homeTeam.id}-${scoreHome}-${awayTeam.id}-${scoreAway}-${timestamp}.png`;
+                break;
+            }
+            case 'transfer': {
+                const fromTeam = allTeams.find(t => t.id === parseInt(fromTeamId));
+                const toTeam = allTeams.find(t => t.id === parseInt(toTeamId));
+                if (!fromTeam || !toTeam) return res.status(400).json({ error: 'Týmy nenalezeny' });
+
+                let playerPhotoPath = null;
+                if (playerPhoto && playerPhoto.startsWith('data:image')) {
+                    const base64Data = playerPhoto.replace(/^data:image\/\w+;base64,/, '');
+                    const tempDir = path.join(__dirname, '../temp');
+                    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+                    playerPhotoPath = path.join(tempDir, `player-${timestamp}.png`);
+                    fs.writeFileSync(playerPhotoPath, Buffer.from(base64Data, 'base64'));
+                }
+
+                buffer = await createTransferImage(fromTeam, toTeam, playerName || null, watermark !== 'false', playerPhotoPath);
+
+                if (playerPhotoPath && fs.existsSync(playerPhotoPath)) {
+                    try { fs.unlinkSync(playerPhotoPath); } catch (e) {}
+                }
+                const playerSuffix = playerName ? `-${playerName.replace(/\\s+/g, '-')}` : '';
+                filename = `transfer-${fromTeam.id}-to-${toTeam.id}${playerSuffix}-${timestamp}.png`;
+                break;
+            }
+            case 'winner': {
+                const { winnerColor, showTrophy } = req.body;
+                const winnerTeam = allTeams.find(t => t.id === parseInt(winnerTeamId));
+                if (!winnerTeam) return res.status(400).json({ error: 'Tým nenalezen' });
+
+                const titleText = winnerTitle || `VÍTĚZ`;
+                const winnerOptions = {
+                    accentColor: winnerColor || '#ffd700',
+                    showTrophy: showTrophy === 'true' || showTrophy === true
+                };
+                buffer = await createWinnerImage(winnerTeam, titleText, watermark !== 'false', winnerOptions);
+                filename = `winner-${winnerTeam.id}-${timestamp}.png`;
+                break;
+            }
+            case 'standings': {
+                const { selectedLiga, standingsType, standingsTitle, clinchMode } = req.body;
+                if (!selectedLiga) return res.status(400).json({ error: 'Chybí vybraná liga' });
+
+                // Použijeme prepareDashboardData pro získání stejných dat jako left panel
+                const dashboardData = await prepareDashboardData({
+                    user: req.user,
+                    query: { liga: selectedLiga },
+                    session: req.session
+                });
+                
+                const {
+                    selectedSeason, sortedGroups, leagueObj,
+                    playoffData, matches, teams, scores, clinchMode: defaultClinchMode
+                } = dashboardData;
+                
+                const mode = clinchMode || defaultClinchMode || 'cascade';
+                const isPlayoff = standingsType === 'playoff';
+                
+                // Zóny z konfigurace ligy
+                const qf = leagueObj?.quarterfinal || 0;
+                const pi = leagueObj?.playin || 0;
+                const rel = leagueObj?.relegation || 0;
+
+                if (isPlayoff) {
+                    // PLAYOFF - vygenerujeme pavouka
+                    // Vytvoříme standings data pro playoff
+                    const playoffStandings = [];
+                    for (const group of sortedGroups) {
+                        const teamsInGroup = dashboardData.teamsByGroup[group] || [];
+                        if (!teamsInGroup.length) continue;
+                        
+                        // Seřadíme stejně jako pro základní část
+                        teamsInGroup.sort((a, b) => {
+                            const aStats = a.stats?.[selectedSeason] || {};
+                            const bStats = b.stats?.[selectedSeason] || {};
+                            const aPoints = aStats.points || 0;
+                            const bPoints = bStats.points || 0;
+                            if (bPoints !== aPoints) return bPoints - aPoints;
+                            
+                            const aTiebreaker = aStats.tiebreaker || 0;
+                            const bTiebreaker = bStats.tiebreaker || 0;
+                            if (aTiebreaker !== bTiebreaker) {
+                                if (aTiebreaker === 0) return 1;
+                                if (bTiebreaker === 0) return -1;
+                                return aTiebreaker - bTiebreaker;
+                            }
+                            
+                            const aScores = scores[a.id] || { gf: 0, ga: 0 };
+                            const bScores = scores[b.id] || { gf: 0, ga: 0 };
+                            const aTotalGF = aStats.gf || aScores.gf || 0;
+                            const bTotalGF = bStats.gf || bScores.gf || 0;
+                            const aTotalGA = aStats.ga || aScores.ga || 0;
+                            const bTotalGA = bStats.ga || bScores.ga || 0;
+                            const aDiff = aTotalGF - aTotalGA;
+                            const bDiff = bTotalGF - bTotalGA;
+                            if (bDiff !== aDiff) return bDiff - aDiff;
+                            return bTotalGF - aTotalGF;
+                        });
+                        
+                        teamsInGroup.forEach((team, index) => {
+                            playoffStandings.push({
+                                teamId: team.id,
+                                teamName: team.name,
+                                position: index + 1,
+                                points: team.stats?.[selectedSeason]?.points || 0
+                            });
+                        });
+                    }
+                    
+                    buffer = await createPlayoffBracketImage({
+                        playoffData,
+                        matches,
+                        teams,
+                        leagueObj,
+                        selectedSeason,
+                        selectedLiga,
+                        title: standingsTitle || `Playoff - ${selectedLiga}`,
+                        standings: playoffStandings
+                    }, watermark !== 'false');
+                    filename = `playoff-bracket-${selectedLiga}-${timestamp}.png`;
+                } else {
+                    // ZÁKLADNÍ ČÁST - použijeme stejné výpočty jako left panel
+                    // Zavoláme evaluateRegularSeasonTable pro každou skupinu (stejně jako left panel)
+                    const { evaluateRegularSeasonTable, calculateClinchStatusesForGroup } = require("../utils/fileUtils");
+                    for (const group of sortedGroups) {
+                        await evaluateRegularSeasonTable(selectedSeason, selectedLiga, group, true);
+                    }
+                    
+                    const standingsData = [];
+                    
+                    for (const group of sortedGroups) {
+                        // Použijeme teamsByGroup z dashboardData - zajišťuje konzistenci s left panelem
+                        const teamsInGroup = dashboardData.teamsByGroup[group] || [];
+                        if (!teamsInGroup.length) continue;
+                        
+                        // Seřadíme týmy podle bodů, tiebreakerů, skóre atd.
+                        teamsInGroup.sort((a, b) => {
+                            const aStats = a.stats?.[selectedSeason] || {};
+                            const bStats = b.stats?.[selectedSeason] || {};
+                            
+                            // POZOR: prepareDashboardData už přičetla manuální body k stats.points
+                            // Nepřičítáme znovu - používáme body přímo z stats
+                            const aPoints = aStats.points || 0;
+                            const bPoints = bStats.points || 0;
+                            if (bPoints !== aPoints) return bPoints - aPoints;
+                            
+                            // Tiebreaker (decider) - menší číslo = lepší pozice
+                            const aTiebreaker = aStats.tiebreaker || 0;
+                            const bTiebreaker = bStats.tiebreaker || 0;
+                            if (aTiebreaker !== bTiebreaker) {
+                                if (aTiebreaker === 0) return 1;  // A bez tiebreakeru padá dolů
+                                if (bTiebreaker === 0) return -1; // B bez tiebreakeru padá dolů
+                                return aTiebreaker - bTiebreaker; // Menší číslo vyhrává
+                            }
+                            
+                            // Skóre z bonusů + zápasové - manuální skóre už je v stats.gf/ga díky prepareDashboardData
+                            const aScores = scores[a.id] || { gf: 0, ga: 0 };
+                            const bScores = scores[b.id] || { gf: 0, ga: 0 };
+                            
+                            const aTotalGF = aStats.gf || aScores.gf || 0;
+                            const bTotalGF = bStats.gf || bScores.gf || 0;
+                            const aTotalGA = aStats.ga || aScores.ga || 0;
+                            const bTotalGA = bStats.ga || bScores.ga || 0;
+                            
+                            const aDiff = aTotalGF - aTotalGA;
+                            const bDiff = bTotalGF - bTotalGA;
+                            if (bDiff !== aDiff) return bDiff - aDiff;
+                            return bTotalGF - aTotalGF;
+                        });
+                        
+                        // Použijeme calculateClinchStatusesForGroup pro výpočet jistot (stejné jako left panel)
+                        const teamsWithClinch = calculateClinchStatusesForGroup(
+                            teamsInGroup,
+                            leagueObj,
+                            selectedSeason,
+                            mode,
+                            scores
+                        );
+                        
+                        // Pro každý tým vytvoříme záznam s daty - manuální body už jsou v stats.points
+                        teamsWithClinch.forEach((team, index) => {
+                            const stats = team.stats?.[selectedSeason] || {};
+                            const clinchStatus = team._clinchStatus || {};
+                            
+                            standingsData.push({
+                                id: team.id,
+                                name: team.name + (sortedGroups.length > 1 ? ` (${group})` : ''),
+                                points: stats.points || 0, // Body už obsahují manuální body z prepareDashboardData
+                                wins: stats.wins || 0,
+                                otWins: stats.otWins || 0,
+                                otLosses: stats.otLosses || 0,
+                                losses: stats.losses || 0,
+                                gf: clinchStatus.gf || 0,
+                                ga: clinchStatus.ga || 0,
+                                group: group,
+                                position: index + 1,
+                                tiebreaker: stats.tiebreaker || 0, // Tiebreaker je také už v stats
+                                // Přidáme jistoty pro createStandingsImage
+                                _clinchStatus: clinchStatus
+                            });
+                        });
+                    }
+                    
+                    // Seřadíme podle skupin a pozic
+                    standingsData.sort((a, b) => {
+                        if (a.group !== b.group) return a.group.localeCompare(b.group);
+                        return a.position - b.position;
+                    });
+
+                    const title = standingsTitle || `Tabulka ${selectedLiga} - Základní část`;
+                    const options = {
+                        isPlayoff: false,
+                        quarterfinal: qf,
+                        playin: pi,
+                        relegation: rel,
+                        clinchMode: mode,
+                        multiGroup: sortedGroups.length > 1
+                    };
+                    buffer = await createStandingsImage(standingsData, title, watermark !== 'false', options);
+                    filename = `standings-${selectedLiga}-${timestamp}.png`;
+                }
+                break;
+            }
+            case 'statistics': {
+                const { selectedLiga, statisticsTitle } = req.body;
+                if (!selectedLiga) return res.status(400).json({ error: 'Chybí vybraná liga' });
+
+                // Použijeme prepareDashboardData pro získání stejných dat jako left panel
+                const dashboardData = await prepareDashboardData({
+                    user: req.user,
+                    query: { liga: selectedLiga },
+                    session: req.session
+                });
+                
+                const { userStats } = dashboardData;
+                
+                // Použijeme přímo userStats z prepareDashboardData - má všechny správné výpočty
+                const usersStats = userStats.map(u => ({
+                    username: u.username,
+                    correct: u.correct || 0,
+                    total: u.total || 0,
+                    totalRegular: u.totalRegular || 0,
+                    totalPlayoff: u.totalPlayoff || 0,
+                    tableCorrect: u.tableCorrect || 0,
+                    tableDeviation: u.tableDeviation || 0
+                })).sort((a, b) => {
+                    // Seřazení podle správných tipů, pak trefených pozic, pak odchylky
+                    if (b.correct !== a.correct) return b.correct - a.correct;
+                    if (b.tableCorrect !== a.tableCorrect) return b.tableCorrect - a.tableCorrect;
+                    return a.tableDeviation - b.tableDeviation;
+                });
+
+                const title = statisticsTitle || `Statistiky tipujících - ${selectedLiga}`;
+                buffer = await createStatisticsImage(usersStats, title, watermark !== 'false');
+                filename = `statistics-${selectedLiga}-${timestamp}.png`;
+                break;
+            }
+
+            default:
+                return res.status(400).json({ error: 'Neznámý typ obrázku' });
+        }
+
+        const outPath = path.join(outDir, filename);
+        fs.writeFileSync(outPath, buffer);
+
+        res.json({
+            url: `/images/exports/${filename}`,
+            filename: filename
+        });
+
+    } catch (err) {
+        console.error('Chyba při generování obrázku:', err);
+        res.status(500).json({ error: 'Chyba při generování obrázku' });
+    }
+});
+
+router.get("/image-exporter", requireLogin, async (req, res) => {
+    const data = await prepareDashboardData(req);
+    const { username, selectedLiga, uniqueLeagues, teams} = data;
+
+    const teamsList = teams || [];
+    const leagueTeams = teamsList.filter(t => t.liga === selectedLiga);
+    
+    let html = `<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Image Exporter - Tipovačka</title>
+<link rel="stylesheet" href="/css/styles.css" />
+<link rel="icon" href="/images/logo.png">
+</head>
+<script>
+function showImageType(type) {
+    document.querySelectorAll('.image-type-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.form-section').forEach(section => section.classList.remove('active'));
+    document.getElementById(type + '-section').classList.add('active');
+    event.target.classList.add('active');
+    document.getElementById('preview-container').classList.remove('active');
+}
+
+function handlePlayerPhoto(input) { 
+    const file = input.files[0]; 
+    if (!file) return; 
+    if (file.size > 2 * 1024 * 1024) {  
+        alert("Fotka je příliš velká. Maximum je 2MB."); 
+        input.value = ""; 
+        return; 
+    } 
+    const reader = new FileReader(); 
+    reader.onload = function(e) { 
+        document.getElementById("playerPhotoBase64").value = e.target.result; 
+    };
+    reader.readAsDataURL(file);
+}
+
+async function generateImage(type) {
+    const btn = document.getElementById('generate-btn-' + type);
+    btn.disabled = true;
+    btn.textContent = 'Generuji...';
+    
+    const formData = new FormData(document.getElementById(type + '-form'));
+    const data = Object.fromEntries(formData);
+    data.type = type;
+    
+    try {
+        const res = await fetch('/image-exporter/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        
+        if (res.ok) {
+            const result = await res.json();
+            const preview = document.getElementById('preview-container');
+            const img = document.getElementById('preview-img');
+            const downloadBtn = document.getElementById('download-btn');
+            
+            img.src = result.url + '?t=' + Date.now();
+            downloadBtn.href = result.url;
+            downloadBtn.download = result.filename;
+            preview.classList.add('active');
+            preview.scrollIntoView({ behavior: 'smooth' });
+        } else {
+            alert('Chyba při generování obrázku');
+        }
+    } catch (e) {
+        console.error('Chyba:', e);
+        alert('Chyba při generování obrázku');
+    }
+    
+    btn.disabled = false;
+    btn.textContent = 'Vygenerovat obrázek';
+}
+</script>
+<body class="usersite">
+<header class="header">
+<form class="league-dropdown" method="GET">
+<div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
+<label class="league-select-name">
+Liga:
+<select id="league-select" name="liga" required onchange="this.form.submit()">
+${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected' : ''}>${l}</option>`).join('')}
+</select>
+</label>
+<a class="history-btn" href="/history">Historie</a>
+<a class="history-btn changed" href="/?liga=${encodeURIComponent(selectedLiga)}">Tipovačka</a>
+<a class="history-btn changed" href="/table-tip?liga=${encodeURIComponent(selectedLiga)}">Základní část</a>
+<a class="history-btn changed" href="/prestupy?liga=${encodeURIComponent(selectedLiga)}">Přestupy</a>
+</form>
+<p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
+</header>
+<header class="time-header">${await generateTimeWidget()}</header>
+<main class="main_page">`;
+
+html += await generateLeftPanel(data);
+
+html += `<section class="matches-container" style="flex: 1; padding: 20px;">
+    <div class="info-box">
+        <h3>🎨 Image Exporter</h3>
+        <p>Vygeneruj si vlastní obrázky se zápasy, přestupy nebo vítězi ligy.</p>
+    </div>
+    
+    <div class="image-exporter-container">
+        <div class="image-type-selector">
+            <button type="button" class="image-type-btn active" onclick="showImageType('match')">🏒 Zápas VS</button>
+            <button type="button" class="image-type-btn" onclick="showImageType('result')">📊 Výsledek zápasu</button>
+            <button type="button" class="image-type-btn" onclick="showImageType('transfer')">🔄 Přestup</button>
+            <button type="button" class="image-type-btn" onclick="showImageType('winner')">🏆 Vítěz ligy</button>
+            <button type="button" class="image-type-btn" onclick="showImageType('standings')">📋 Tabulka</button>
+            <button type="button" class="image-type-btn" onclick="showImageType('statistics')">📈 Statistiky</button>
+        </div>
+        
+        <div id="match-section" class="form-section active">
+            <h3 style="color: #ff4500; margin-top: 0;">Obrázek zápasu (VS)</h3>
+            <form id="match-form" onsubmit="event.preventDefault(); generateImage('match');">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Domácí tým</label>
+                        <select name="homeTeamId" required>
+                            <option value="">Vyber tým</option>
+                            ${leagueTeams.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Hostující tým</label>
+                        <select name="awayTeamId" required>
+                            <option value="">Vyber tým</option>
+                            ${leagueTeams.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group watermark-option">
+                    <input type="checkbox" name="watermark" id="match-watermark" checked>
+                    <label for="match-watermark" style="margin: 0;">Přidat watermark</label>
+                </div>
+                <button type="submit" id="generate-btn-match" class="generate-btn">Vygenerovat obrázek</button>
+            </form>
+        </div>
+        
+        <div id="result-section" class="form-section">
+            <h3 style="color: #ff4500; margin-top: 0;">Obrázek výsledku zápasu</h3>
+            <form id="result-form" onsubmit="event.preventDefault(); generateImage('result');">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Domácí tým</label>
+                        <select name="homeTeamId" required>
+                            <option value="">Vyber tým</option>
+                            ${leagueTeams.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Hostující tým</label>
+                        <select name="awayTeamId" required>
+                            <option value="">Vyber tým</option>
+                            ${leagueTeams.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Skóre domácí</label>
+                        <input type="number" name="scoreHome" min="0" value="0" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Skóre hosté</label>
+                        <input type="number" name="scoreAway" min="0" value="0" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Nadpis (nepovinné)</label>
+                    <input type="text" name="title" placeholder="např. Finále série, 3. zápas...">
+                </div>
+                <div class="form-group watermark-option">
+                    <input type="checkbox" name="isPlayoff" id="is-playoff" onchange="document.getElementById('series-row').style.display = this.checked ? 'flex' : 'none'">
+                    <label for="is-playoff" style="margin: 0;">Playoff zápas (zobrazit stav série)</label>
+                </div>
+                <div class="form-row" id="series-row" style="display: none;">
+                    <div class="form-group">
+                        <label>Výhry domácí v sérii</label>
+                        <input type="number" name="seriesHomeWins" min="0" max="4" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Výhry hosté v sérii</label>
+                        <input type="number" name="seriesAwayWins" min="0" max="4" value="0">
+                    </div>
+                </div>
+                <div class="form-group watermark-option">
+                    <input type="checkbox" name="watermark" id="result-watermark" checked>
+                    <label for="result-watermark" style="margin: 0;">Přidat watermark</label>
+                </div>
+                <button type="submit" id="generate-btn-result" class="generate-btn">Vygenerovat obrázek</button>
+            </form>
+        </div>
+        
+        <div id="transfer-section" class="form-section">
+            <h3 style="color: #ff4500; margin-top: 0;">Obrázek přestupu</h3>
+            <form id="transfer-form" onsubmit="event.preventDefault(); generateImage('transfer');">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Z týmu</label>
+                        <select name="fromTeamId" required>
+                            <option value="">Vyber tým</option>
+                            ${leagueTeams.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Do týmu</label>
+                        <select name="toTeamId" required>
+                            <option value="">Vyber tým</option>
+                            ${leagueTeams.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Jméno hráče (nepovinné)</label>
+                    <input type="text" name="playerName" placeholder="např. Jan Novák">
+                </div>
+                <div class="form-group">
+                    <label>Fotka hráče (nepovinné)</label>
+                    <input type="file" id="playerPhotoInput" accept="image/*" onchange="handlePlayerPhoto(this)">
+                    <input type="hidden" name="playerPhoto" id="playerPhotoBase64">
+                    <small style="color: #888; display: block; margin-top: 5px;">Max 2MB, zobrazí se mezi týmy</small>
+                </div>
+                <div class="form-group watermark-option">
+                    <input type="checkbox" name="watermark" id="transfer-watermark" checked>
+                    <label for="transfer-watermark" style="margin: 0;">Přidat watermark</label>
+                </div>
+                <button type="submit" id="generate-btn-transfer" class="generate-btn">Vygenerovat obrázek</button>
+            </form>
+        </div>
+        
+        <div id="winner-section" class="form-section">
+            <h3 style="color: #ff4500; margin-top: 0;">Obrázek vítěze ligy</h3>
+            <form id="winner-form" onsubmit="event.preventDefault(); generateImage('winner');">
+                <div class="form-group">
+                    <label>Vítězný tým</label>
+                    <select name="winnerTeamId" required>
+                        <option value="">Vyber tým</option>
+                        ${leagueTeams.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Text nadpisu</label>
+                    <input type="text" name="winnerTitle" value="VÍTĚZ ${selectedLiga}" placeholder="např. VÍTĚZ TELH 2024/25">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Barva akcentu</label>
+                        <input type="color" name="winnerColor" value="#ffd700" style="width: 60px; height: 40px; padding: 0; border: none; cursor: pointer;">
+                        <small style="color: #888; display: block; margin-top: 5px;">Zlatá, stříbrná, bronzová nebo jiná...</small>
+                    </div>
+                    <div class="form-group watermark-option" style="align-items: flex-start; margin-top: 20px;">
+                        <input type="checkbox" name="showTrophy" id="show-trophy" checked value="true">
+                        <label for="show-trophy" style="margin: 0;">Zobrazit pohár 🏆</label>
+                    </div>
+                </div>
+                <div class="form-group watermark-option">
+                    <input type="checkbox" name="watermark" id="winner-watermark" checked>
+                    <label for="winner-watermark" style="margin: 0;">Přidat watermark</label>
+                </div>
+                <button type="submit" id="generate-btn-winner" class="generate-btn">Vygenerovat obrázek</button>
+            </form>
+        </div>
+        
+        <div id="standings-section" class="form-section">
+            <h3 style="color: #ff4500; margin-top: 0;">Export tabulky</h3>
+            <form id="standings-form" onsubmit="event.preventDefault(); generateImage('standings');">
+                <div class="form-group">
+                    <label>Typ tabulky</label>
+                    <select name="standingsType" id="standings-type" onchange="document.getElementById('clinch-mode-row').style.display = this.value === 'regular' ? 'block' : 'none'">
+                        <option value="regular">Základní část</option>
+                        <option value="playoff">Playoff</option>
+                    </select>
+                </div>
+                <div class="form-group" id="clinch-mode-row">
+                    <label>Mód zobrazení zóny</label>
+                    <select name="clinchMode">
+                        <option value="cascade">Kaskádový (výchozí)</option>
+                        <option value="strict">Přísný</option>
+                    </select>
+                    <small style="color: #888; display: block; margin-top: 5px;">Kaskádový = kumulativní zóny, Přísný = striktní dělení</small>
+                </div>
+                <div class="form-group">
+                    <label>Nadpis tabulky</label>
+                    <input type="text" name="standingsTitle" placeholder="např. Tabulka TELH 2024/25">
+                </div>
+                <input type="hidden" name="selectedLiga" value="${selectedLiga}">
+                <div class="form-group watermark-option">
+                    <input type="checkbox" name="watermark" id="standings-watermark" checked>
+                    <label for="standings-watermark" style="margin: 0;">Přidat watermark</label>
+                </div>
+                <button type="submit" id="generate-btn-standings" class="generate-btn">Vygenerovat obrázek</button>
+            </form>
+        </div>
+        
+        <div id="statistics-section" class="form-section">
+            <h3 style="color: #ff4500; margin-top: 0;">Export statistik tipujících</h3>
+            <form id="statistics-form" onsubmit="event.preventDefault(); generateImage('statistics');">
+                <div class="form-group">
+                    <label>Nadpis statistik</label>
+                    <input type="text" name="statisticsTitle" value="Statistiky tipujících" placeholder="např. Statistiky TELH 2024/25">
+                </div>
+                <input type="hidden" name="selectedLiga" value="${selectedLiga}">
+                <div class="form-group watermark-option">
+                    <input type="checkbox" name="watermark" id="statistics-watermark" checked>
+                    <label for="statistics-watermark" style="margin: 0;">Přidat watermark</label>
+                </div>
+                <button type="submit" id="generate-btn-statistics" class="generate-btn">Vygenerovat obrázek</button>
+            </form>
+        </div>
+        
+        <div id="preview-container" class="preview-container">
+            <h3 style="color: #00d4ff; margin-top: 0;">Náhled vygenerovaného obrázku</h3>
+            <img id="preview-img" src="" alt="Generated image preview">
+            <br>
+            <a id="download-btn" href="" download class="download-btn">📥 Stáhnout obrázek</a>
+        </div>
+    </div>
+</section>
+</main>
+</body>
+</html>`;
+    res.send(html);
+});
 module.exports = router;
