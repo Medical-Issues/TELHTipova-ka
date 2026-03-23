@@ -198,13 +198,12 @@ async function createVersusImage(homeTeam, awayTeam, matchId, scoreHome = null, 
         
         seriesMatches.forEach((match, idx) => {
             const x = startX + idx * (boxWidth + gap);
-            // KONTROLA: Pokud je sideSwap, pak scoreHome patří hostům série (ne domácím)
-            const isHomeWinner = match.sideSwap 
-                ? match.scoreAway > match.scoreHome  // Otočeno: domácí série jsou "hosté" v tomto zápase
-                : match.scoreHome > match.scoreAway; // Normálně: domácí série jsou "domácí"
             
-            // Pozadí boxu - barva podle výherního týmu v sérii
-            const winnerColor = isHomeWinner ? homeColor : awayColor;
+            // Barva podle vítěze v TOMTO zápase (ne v sérii)
+            // Domácí vyhraje → oranžová, Hosté vyhráli → modrá
+            const homeWonThisMatch = match.scoreHome > match.scoreAway;
+            const winnerColor = homeWonThisMatch ? homeColor : awayColor;
+            
             ctx.fillStyle = winnerColor + '40'; // 40 = 25% průhlednost
             ctx.beginPath();
             ctx.roundRect(x, startY, boxWidth, boxHeight, 8);
@@ -213,7 +212,7 @@ async function createVersusImage(homeTeam, awayTeam, matchId, scoreHome = null, 
             ctx.lineWidth = 2;
             ctx.stroke();
             
-            // Skóre - vycentrováno v boxu
+            // Skóre se zobrazuje tak jak je v databázi - z pohledu domácího týmu v daném zápase
             ctx.fillStyle = '#ffffff';
             ctx.font = 'bold 18px Arial';
             ctx.textAlign = 'center';
@@ -600,7 +599,12 @@ const notifyResult = async (matchId, scoreHome, scoreAway) => {
     // VYGENEROVÁNÍ DYNAMICKÉHO OBRÁZKU
     let heroImageUrl = null;
     try {
-        heroImageUrl = await createVersusImage(homeTeam, awayTeam, match.id, scoreHome, scoreAway);
+        // Pro série načteme všechny zápasy série pro zobrazení v obrázku
+        let seriesMatches = null;
+        if (isSeries && match.playedMatches) {
+            seriesMatches = match.playedMatches;
+        }
+        heroImageUrl = await createVersusImage(homeTeam, awayTeam, match.id, scoreHome, scoreAway, seriesMatches);
         console.log(`[notifyResult] Generated heroImageUrl: ${heroImageUrl}`);
     } catch (err) {
         console.error("Chyba při generování Versus obrázku:", err);

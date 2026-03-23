@@ -3,9 +3,6 @@ require("path");
 const fs = require("fs");
 
 const { Teams, Users, Matches, Leagues, AllowedLeagues, ChosenSeason, Settings, TeamBonuses, LeagueStatus, TableTips, Playoff, PlayoffTemplates, Transfers, TransferLeagues} = require('./mongoDataAccess');
-async function loadTeams() {
-    return await Teams.findAll();
-}
 
 async function requireLogin(req, res, next) {
     if (!req.session.user) {
@@ -1019,6 +1016,9 @@ async function getTableMode(req, isRegularSeasonFinished) {
 async function getChosenSeason() {
     try { return await ChosenSeason.findAll(); } catch (e) { return "Neurčeno"; }
 }
+async function loadTeams() {
+    try { return await Teams.findAll(); } catch (e) { return []; }
+}
 async function getMatches() {
     try { return await Matches.findAll(); } catch (e) { return []; }
 }
@@ -1058,7 +1058,7 @@ const getGroupDisplayLabel = (gKey) => {
     return `Skupina ${String.fromCharCode(64 + num)}`;
 };
 
-async function prepareDashboardData(req, isHistory = false) {
+async function prepareDashboardData(req, isHistory = false, isImageExporter = false) {
     const username = req.session ? req.session.user : null;
 
     // 1. Zjištění sezóny (pokud jsme v historii, bereme z URL, jinak globální)
@@ -1080,7 +1080,7 @@ async function prepareDashboardData(req, isHistory = false) {
     const leaguesFromMatches = [...new Set(matches.map(m => m.liga))];
     const allLeagues = [...new Set([...leaguesFromTeams, ...leaguesFromMatches])];
 
-    const uniqueLeagues = isHistory
+    const uniqueLeagues = isHistory || isImageExporter
         ? allLeagues
         : allLeagues.filter(l => allowedLeagues.includes(l));
 
@@ -3494,4 +3494,8 @@ module.exports = {
     createTransferImage,
     createWinnerImage,
     calculateClinchStatusesForGroup,
+    getAllowedLeagues,
+    getMatches,
+    getLeaguesData,
+    loadTeams,
 }

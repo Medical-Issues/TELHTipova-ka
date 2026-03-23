@@ -4,10 +4,19 @@ const router = express.Router();
 const path = require('path');
 const {
     requireLogin, prepareDashboardData, getGroupDisplayLabel, generateLeftPanel,
-    getLeagueStatusData, getTableTipsData, generateTimeWidget
+    getLeagueStatusData, getTableTipsData, generateTimeWidget, getAllowedLeagues
 } = require("../utils/fileUtils");
 const { Users, Matches, Leagues, TableTips } = require('../utils/mongoDataAccess');
 router.get("/table-tip", requireLogin, async (req, res) => {
+    // Kontrola jest je liga veřejná
+    const allowedLeagues = await getAllowedLeagues();
+    const requestedLiga = req.query.liga;
+    if (requestedLiga && !allowedLeagues.includes(requestedLiga)) {
+        // Přesměruj na první veřejnou ligu
+        const firstPublic = allowedLeagues[0] || 'Neurčeno';
+        return res.redirect(`/table-tip?liga=${encodeURIComponent(firstPublic)}`);
+    }
+    
     // 1. ZAVOLÁME MOZEK, KTERÝ VŠE VYPOČÍTÁ BĚHEM MILISEKUNDY
     const data = await prepareDashboardData(req);
     const {
@@ -169,7 +178,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <a class="history-btn changed" href="/image-exporter?liga=${encodeURIComponent(selectedLiga)}">Exportér</a>
 <div style="text-align: center; margin: 20px;">
     <button type="button" id="notify-toggle-btn" onclick="toggleNotifications()" 
-        style="width: 220px; height: 38px; cursor: pointer; font-weight: bold; border: none; color: white; border-radius: 5px; background-color: #444;">
+        style="width: 220px; height: 38px; cursor: pointer; font-weight: bold; border: none; color: white; background-color: #444;">
         Zjišťuji stav...
     </button>
 </div>
@@ -656,6 +665,15 @@ router.post("/tip", requireLogin, async (req, res) => {
 });
 
 router.get('/', requireLogin, async (req, res) => {
+    // Kontrola jest je liga veřejná
+    const allowedLeagues = await getAllowedLeagues();
+    const requestedLiga = req.query.liga;
+    if (requestedLiga && !allowedLeagues.includes(requestedLiga)) {
+        // Přesměruj na první veřejnou ligu
+        const firstPublic = allowedLeagues[0] || 'Neurčeno';
+        return res.redirect(`/?liga=${encodeURIComponent(firstPublic)}`);
+    }
+    
     // 1. ZAVOLÁME MOZEK, KTERÝ VŠE VYPOČÍTÁ BĚHEM MILISEKUNDY
     const data = await prepareDashboardData(req);
 
@@ -817,7 +835,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <a class="history-btn changed" href="/image-exporter?liga=${encodeURIComponent(selectedLiga)}">Exportér</a>
 <div style="text-align: center; margin: 20px;">
     <button type="button" id="notify-toggle-btn" onclick="toggleNotifications()" 
-        style="width: 220px; height: 38px; cursor: pointer; font-weight: bold; border: none; color: white; border-radius: 5px; background-color: #444;">
+        style="width: 220px; height: 38px; cursor: pointer; font-weight: bold; border: none; color: white; background-color: #444;">
         Zjišťuji stav...
     </button>
 </div>
@@ -1771,6 +1789,15 @@ html += await generateLeftPanel(data, true);
 });
 
 router.get("/prestupy", requireLogin, async (req, res) => {
+    // Kontrola jest je liga veřejná
+    const allowedLeagues = await getAllowedLeagues();
+    const requestedLiga = req.query.liga;
+    if (requestedLiga && !allowedLeagues.includes(requestedLiga)) {
+        // Přesměruj na první veřejnou ligu
+        const firstPublic = allowedLeagues[0] || 'Neurčeno';
+        return res.redirect(`/prestupy?liga=${encodeURIComponent(firstPublic)}`);
+    }
+    
     // 1. ZAVOLÁME MOZEK, KTERÝ VŠE VYPOČÍTÁ BĚHEM MILISEKUNDY
     const data = await prepareDashboardData(req);
 
@@ -1933,7 +1960,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <a class="history-btn changed" href="/image-exporter?liga=${encodeURIComponent(selectedLiga)}">Exportér</a>
 <div style="text-align: center; margin: 20px;">
     <button type="button" id="notify-toggle-btn" onclick="toggleNotifications()" 
-        style="width: 220px; height: 38px; cursor: pointer; font-weight: bold; border: none; color: white; border-radius: 5px; background-color: #444;">
+        style="width: 220px; height: 38px; cursor: pointer; font-weight: bold; border: none; color: white; background-color: #444;">
         Zjišťuji stav...
     </button>
 </div>
@@ -2190,7 +2217,7 @@ router.post("/image-exporter/generate", requireLogin, express.json(), async (req
                     user: req.user,
                     query: { liga: selectedLiga },
                     session: req.session
-                });
+                }, false, true);
                 
                 const {
                     selectedSeason, sortedGroups, leagueObj,
@@ -2374,7 +2401,7 @@ router.post("/image-exporter/generate", requireLogin, express.json(), async (req
                     user: req.user,
                     query: { liga: selectedLiga },
                     session: req.session
-                });
+                }, false, true);
                 
                 const { userStats } = dashboardData;
                 
@@ -2419,12 +2446,37 @@ router.post("/image-exporter/generate", requireLogin, express.json(), async (req
 });
 
 router.get("/image-exporter", requireLogin, async (req, res) => {
-    const data = await prepareDashboardData(req);
-    const { username, selectedLiga, uniqueLeagues, teams} = data;
-
+    const { getMatches, loadTeams, getAllowedLeagues, getLeaguesData } = require('../utils/fileUtils');
+    
+    // Načteme všechny ligy v sezóně (ne jen veřejné)
+    const matches = await getMatches();
+    const teams = (await loadTeams()).filter(t => t.active);
+    const allowedLeagues = await getAllowedLeagues();
+    const allSeasonData = await getLeaguesData();
+    
+    const selectedSeason = req.query.season || '2024/25';
+    const leagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues) ? allSeasonData[selectedSeason].leagues : [];
+    
+    const leaguesFromTeams = [...new Set(teams.map(t => t.liga))];
+    const leaguesFromMatches = [...new Set(matches.map(m => m.liga))];
+    // Všechny ligy v sezóně (pro image-exporter zobrazíme všechny)
+    const uniqueLeagues = [...new Set([...leaguesFromTeams, ...leaguesFromMatches])];
+    
+    // Zjistíme jest je vybraná liga veřejná
+    const selectedLiga = req.query.liga && uniqueLeagues.includes(req.query.liga)
+        ? req.query.liga
+        : (allowedLeagues.find(l => uniqueLeagues.includes(l)) || uniqueLeagues[0] || "Neurčeno");
+    
+    const isPublicLeague = allowedLeagues.includes(selectedLiga);
+    
+    const data = await prepareDashboardData(req, false, true);
+    const { username } = data;
+    
     const teamsList = teams || [];
     const leagueTeams = teamsList.filter(t => t.liga === selectedLiga);
     
+    // CSS pro disabled tlačítka
+    const disabledStyle = "background-color: #555; color: #888; cursor: not-allowed; pointer-events: none;";
     let html = `<!DOCTYPE html>
 <html lang="cs">
 <head>
@@ -2508,9 +2560,9 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 </select>
 </label>
 <a class="history-btn" href="/history">Historie</a>
-<a class="history-btn changed" href="/?liga=${encodeURIComponent(selectedLiga)}">Tipovačka</a>
-<a class="history-btn changed" href="/table-tip?liga=${encodeURIComponent(selectedLiga)}">Základní část</a>
-<a class="history-btn changed" href="/prestupy?liga=${encodeURIComponent(selectedLiga)}">Přestupy</a>
+<a class="history-btn changed" ${!isPublicLeague ? `style="${disabledStyle}" onclick="return false;"` : `href="/?liga=${encodeURIComponent(selectedLiga)}"`}>Tipovačka</a>
+<a class="history-btn changed" ${!isPublicLeague ? `style="${disabledStyle}" onclick="return false;"` : `href="/table-tip?liga=${encodeURIComponent(selectedLiga)}"`}>Základní část</a>
+<a class="history-btn changed" ${!isPublicLeague ? `style="${disabledStyle}" onclick="return false;"` : `href="/prestupy?liga=${encodeURIComponent(selectedLiga)}"`}>Přestupy</a>
 </form>
 <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>

@@ -3022,7 +3022,7 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
     }).join('')}
 
                 <!-- NOTIFIKAČNÍ NASTAVENÍ -->
-                <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 2px solid #00d4ff; border-radius: 12px; padding: 20px; margin: 20px 0;">
+                <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 2px solid #00d4ff; padding: 20px; margin: 20px 0;">
                     <h3 style="margin: 0 0 15px 0; color: #00d4ff; display: flex; align-items: center; gap: 10px;">
                         🔔 Notifikační nastavení
                     </h3>
@@ -3053,16 +3053,16 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
                     </div>
                     
                     <!-- Upload vlastního obrázku (skrytý默认) -->
-                    <div id="customImageUpload" style="display: none; margin-bottom: 15px; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 8px;">
+                    <div id="customImageUpload" style="display: none; margin-bottom: 15px; padding: 15px; background: rgba(0,0,0,0.3);">
                         <label style="color: #00d4ff; display: block; margin-bottom: 10px;">Nahrát obrázek hráče/týmu:</label>
-                        <input type="file" name="customImage" accept="image/*" style="color: white; padding: 10px; background: #111; border: 1px solid #00d4ff; border-radius: 5px; width: 100%; max-width: 400px;">
+                        <input type="file" name="customImage" accept="image/*" style="color: white; padding: 10px; background: #111; border: 1px solid #00d4ff; width: 100%; max-width: 400px;">
                         <p style="color: #888; font-size: 0.85em; margin: 5px 0 0 0;">Doporučené rozměry: 800x400px, max 5MB</p>
                     </div>
                     
                     <!-- Vlastní zpráva -->
                     <div style="margin-bottom: 10px;">
                         <label style="color: #aaa; display: block; margin-bottom: 8px;">Vlastní text zprávy (volitelné):</label>
-                        <input type="text" name="customMessage" placeholder="Např: Bomba! Nový hvězdný hráč v lize..." style="width: 100%; max-width: 500px; padding: 10px; background: #111; border: 1px solid #444; color: white; border-radius: 5px;">
+                        <input type="text" name="customMessage" placeholder="Např: Bomba! Nový hvězdný hráč v lize..." style="width: 100%; max-width: 500px; padding: 10px; background: #111; border: 1px solid #444; color: white;">
                     </div>
                 </div>
 
