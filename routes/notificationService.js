@@ -257,111 +257,6 @@ async function createVersusImage(homeTeam, awayTeam, matchId, scoreHome = null, 
 
 // ... TVOJE ODESÍLACÍ FUNKCE A NOTIFY FUNKCE TADY ZŮSTÁVAJÍ (nechal jsem je beze změny) ...
 
-// --- FUNKCE PRO VYTVOŘENÍ OBRÁZKU VÝMĚNY (TRADE) ---
-async function createTransferImage(team1, team2) {
-    if (!team1 || !team2) return null;
-    const outDir = path.join(__dirname, '../public/images/notifications');
-    if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
-
-    const outPath = path.join(outDir, `transfer-${team1.id}-${team2.id}.webp`);
-    const publicUrl = `/images/notifications/transfer-${team1.id}-${team2.id}.webp`;
-
-    const width = 800; const height = 400;
-    const canvas = createCanvas(width, height);
-    const ctx = canvas.getContext('2d');
-
-    // Tmavě modré grad pozadí
-    const grad = ctx.createLinearGradient(0, 0, 0, height);
-    grad.addColorStop(0, '#001a33');
-    grad.addColorStop(1, '#000000');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, width, height);
-
-    // Modré technické čáry
-    ctx.strokeStyle = 'rgba(0, 212, 255, 0.1)';
-    ctx.lineWidth = 2;
-    for (let i = 0; i < width; i += 30) {
-        ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, height); ctx.stroke();
-    }
-
-    const drawLogo = async (team, x) => {
-        const logoName = team?.logo;
-        const teamName = team?.name || '???';
-        
-        if (logoName) {
-            try {
-                const img = await loadImage(path.join(__dirname, '../data/images', logoName));
-                ctx.shadowColor = 'rgba(0, 212, 255, 0.3)';
-                ctx.shadowBlur = 15;
-                const size = 240;
-                const ratio = Math.min(size / img.width, size / img.height);
-                ctx.drawImage(img, x + (size - img.width*ratio)/2, 80 + (size - img.height*ratio)/2, img.width*ratio, img.height*ratio);
-                ctx.shadowBlur = 0;
-            } catch (e) {
-                drawFallbackLogo(teamName, x);
-            }
-        } else {
-            drawFallbackLogo(teamName, x);
-        }
-    };
-    
-    // Fallback pro transfer - modrý kruh
-    const drawFallbackLogo = (teamName, x) => {
-        const initials = teamName.split(' ').map(w => w[0]).join('').slice(0, 3).toUpperCase();
-        const size = 240;
-        const centerX = x + size / 2;
-        const centerY = 80 + size / 2;
-        
-        ctx.fillStyle = '#00d4ff';
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, 90, 0, Math.PI * 2);
-        ctx.fill();
-        
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 70px Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(initials, centerX, centerY);
-    };
-
-    await drawLogo(team1, 60);
-    await drawLogo(team2, 500);
-
-    // Šipka přestupu uprostřed - lepší centrování
-    ctx.fillStyle = '#00d4ff';
-    ctx.font = 'bold 80px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('➡', width / 2, height / 2 + 10);
-
-    ctx.font = 'bold 40px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('PŘESTUP', width / 2, height / 2 - 55);
-
-    let buffer;
-    try {
-        buffer = canvas.toBuffer('image/png');
-    } catch (err) {
-        console.error('[createTransferImage] ERROR při vytváření bufferu:', err);
-        return null;
-    }
-    
-    if (!buffer) {
-        console.error('[createTransferImage] ERROR: canvas.toBuffer vrátil undefined!');
-        return null;
-    }
-    
-    try {
-        fs.writeFileSync(outPath, buffer);
-        console.log(`[createTransferImage] Obrázek uložen: ${outPath}`);
-        return publicUrl;
-    } catch (err) {
-        console.error('[createTransferImage] ERROR při ukládání souboru:', err);
-        return null;
-    }
-}
-
 // --- FUNKCE PRO VYTVOŘENÍ OBRÁZKU VÍTĚZE LIGY ---
 async function createLeagueWinnerImage(winnerTeam, liga) {
     if (!winnerTeam) return null;
@@ -727,12 +622,11 @@ const notifyTransfer = async (message, involvedTeams = [], customImageUrl = null
     else if (involvedTeams.length === 1 && involvedTeams[0].logo) {
         heroImageUrl = `/logoteamu/${encodeURIComponent(involvedTeams[0].logo)}`;
     }
-    // Pokud se měnily přesně 2 týmy, vygenerujeme koláž z plátna
+    // Pokud se měnily přesně 2 týmy, zobrazíme jen logo prvního týmu (stejně jako pro 1 tým)
     else if (involvedTeams.length === 2) {
-        try {
-            heroImageUrl = await createTransferImage(involvedTeams[0], involvedTeams[1]);
-        } catch (err) {
-            console.error("Chyba při tvorbě obrázku přestupu:", err);
+        // Pro přestup mezi dvěma týmy zobrazíme jen logo prvního ovlivněného týmu
+        if (involvedTeams[0].logo) {
+            heroImageUrl = `/logoteamu/${encodeURIComponent(involvedTeams[0].logo)}`;
         }
     }
     // Pokud je týmů více (např. jsi uložil změny u 5 týmů najednou), obrázek necháme null

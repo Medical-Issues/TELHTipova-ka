@@ -3038,17 +3038,62 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
                         <label style="color: #aaa; display: block; margin-bottom: 8px;">Typ obrázku v notifikaci:</label>
                         <div style="display: flex; gap: 15px; flex-wrap: wrap;">
                             <label style="display: flex; align-items: center; gap: 8px; color: white; cursor: pointer;">
-                                <input type="radio" name="imageType" value="auto" checked onchange="toggleImageUpload()">
+                                <input type="radio" name="imageType" value="auto" checked onchange="toggleImageSections()">
                                 <span>🤖 Auto (z týmů)</span>
                             </label>
                             <label style="display: flex; align-items: center; gap: 8px; color: white; cursor: pointer;">
-                                <input type="radio" name="imageType" value="custom" onchange="toggleImageUpload()">
+                                <input type="radio" name="imageType" value="generate" onchange="toggleImageSections()">
+                                <span>🎨 Generovat obrázek</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; color: white; cursor: pointer;">
+                                <input type="radio" name="imageType" value="custom" onchange="toggleImageSections()">
                                 <span>🖼️ Vlastní obrázek</span>
                             </label>
                             <label style="display: flex; align-items: center; gap: 8px; color: white; cursor: pointer;">
-                                <input type="radio" name="imageType" value="none" onchange="toggleImageUpload()">
+                                <input type="radio" name="imageType" value="none" onchange="toggleImageSections()">
                                 <span>❌ Bez obrázku</span>
                             </label>
+                        </div>
+                    </div>
+                    
+                    <!-- Semi-auto generování obrázku (skryté默认) -->
+                    <div id="generateImageSection" style="display: none; margin-bottom: 15px; padding: 15px; background: rgba(0,0,0,0.3); border: 1px solid #00d4ff;">
+                        <h4 style="color: #00d4ff; margin: 0 0 15px 0;">🎨 Nastavení obrázku</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                            <div>
+                                <label style="color: #aaa; display: block; margin-bottom: 5px;">Z týmu:</label>
+                                <select name="genFromTeam" style="width: 100%; padding: 8px; background: #111; border: 1px solid #444; color: white;">
+                                    <option value="">Vyber tým</option>
+                                    ${teamsInLiga.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div>
+                                <label style="color: #aaa; display: block; margin-bottom: 5px;">Do týmu:</label>
+                                <select name="genToTeam" style="width: 100%; padding: 8px; background: #111; border: 1px solid #444; color: white;">
+                                    <option value="">Vyber tým</option>
+                                    ${teamsInLiga.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+                                </select>
+                            </div>
+                        </div>
+                        <div style="margin-bottom: 15px;">
+                            <label style="color: #aaa; display: block; margin-bottom: 5px;">Jméno hráče (nepovinné):</label>
+                            <input type="text" name="genPlayerName" placeholder="např. Jan Novák" style="width: 100%; padding: 8px; background: #111; border: 1px solid #444; color: white;">
+                        </div>
+                        <div style="margin-bottom: 15px;">
+                            <label style="color: #aaa; display: block; margin-bottom: 5px;">Fotka hráče (nepovinné):</label>
+                            <input type="file" name="genPlayerPhoto" accept="image/*" style="color: white; width: 100%;">
+                            <p style="color: #888; font-size: 0.85em; margin: 5px 0 0 0;">Max 2MB, zobrazí se mezi týmy</p>
+                        </div>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <button type="button" onclick="previewTransferImage()" class="btn" style="background: #00d4ff; color: #000; border: none; padding: 10px 20px; cursor: pointer;">
+                                👁️ Náhled obrázku
+                            </button>
+                            <span id="previewStatus" style="color: #888; font-size: 0.9em;"></span>
+                        </div>
+                        <!-- Náhled obrázku -->
+                        <div id="imagePreview" style="display: none; margin-top: 15px; text-align: center;">
+                            <img id="previewImg" src="" alt="Náhled" style="max-width: 100%; max-height: 300px; border: 2px solid #00d4ff;">
+                            <input type="hidden" name="generatedImageUrl" id="generatedImageUrl">
                         </div>
                     </div>
                     
@@ -3067,10 +3112,65 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
                 </div>
 
                 <script>
-                    function toggleImageUpload() {
+                    function toggleImageSections() {
+                        const imageType = document.querySelector('input[name="imageType"]:checked').value;
                         const customUpload = document.getElementById('customImageUpload');
-                        const isCustom = document.querySelector('input[name="imageType"]:checked').value === 'custom';
-                        customUpload.style.display = isCustom ? 'block' : 'none';
+                        const generateSection = document.getElementById('generateImageSection');
+                        
+                        customUpload.style.display = imageType === 'custom' ? 'block' : 'none';
+                        generateSection.style.display = imageType === 'generate' ? 'block' : 'none';
+                    }
+                    
+                    async function previewTransferImage() {
+                        const fromTeam = document.querySelector('select[name="genFromTeam"]').value;
+                        const toTeam = document.querySelector('select[name="genToTeam"]').value;
+                        const playerName = document.querySelector('input[name="genPlayerName"]').value;
+                        const playerPhotoInput = document.querySelector('input[name="genPlayerPhoto"]');
+                        const previewStatus = document.getElementById('previewStatus');
+                        const imagePreview = document.getElementById('imagePreview');
+                        const previewImg = document.getElementById('previewImg');
+                        const generatedImageUrl = document.getElementById('generatedImageUrl');
+                        
+                        if (!fromTeam || !toTeam) {
+                            previewStatus.textContent = '❌ Vyber oba týmy!';
+                            previewStatus.style.color = '#ff6666';
+                            return;
+                        }
+                        
+                        previewStatus.textContent = '⏳ Generuji náhled...';
+                        previewStatus.style.color = '#00d4ff';
+                        
+                        try {
+                            const formData = new FormData();
+                            formData.append('fromTeamId', fromTeam);
+                            formData.append('toTeamId', toTeam);
+                            formData.append('playerName', playerName);
+                            formData.append('watermark', 'true');
+                            if (playerPhotoInput.files[0]) {
+                                formData.append('playerPhoto', playerPhotoInput.files[0]);
+                            }
+                            
+                            const res = await fetch('/admin/transfers/generate-preview', {
+                                method: 'POST',
+                                body: formData
+                            });
+                            
+                            if (res.ok) {
+                                const result = await res.json();
+                                previewImg.src = result.url + '?t=' + Date.now();
+                                generatedImageUrl.value = result.url;
+                                imagePreview.style.display = 'block';
+                                previewStatus.textContent = '✅ Obrázek vygenerován!';
+                                previewStatus.style.color = '#00ff00';
+                            } else {
+                                previewStatus.textContent = '❌ Chyba při generování';
+                                previewStatus.style.color = '#ff6666';
+                            }
+                        } catch (err) {
+                            console.error(err);
+                            previewStatus.textContent = '❌ Chyba při generování';
+                            previewStatus.style.color = '#ff6666';
+                        }
                     }
                 </script>
 
@@ -3085,7 +3185,65 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
     res.send(html);
 });
 
-router.post('/transfers/save', requireAdmin, upload.single('customImage'), express.urlencoded({ extended: true }), async (req, res) => {
+// Endpoint pro generování náhledu obrázku přestupu
+router.post('/transfers/generate-preview', requireAdmin, upload.single('playerPhoto'), async (req, res) => {
+    try {
+        const { fromTeamId, toTeamId, playerName, watermark } = req.body;
+        
+        const teams = await Teams.findAll();
+        const fromTeam = teams.find(t => t.id === parseInt(fromTeamId));
+        const toTeam = teams.find(t => t.id === parseInt(toTeamId));
+        
+        if (!fromTeam || !toTeam) {
+            return res.status(400).json({ error: 'Týmy nenalezeny' });
+        }
+        
+        // Import createTransferImage z fileUtils (správná verze s podporou playerName a fotky)
+        const { createTransferImage } = require('../utils/fileUtils');
+        
+        let playerPhotoPath = null;
+        if (req.file) {
+            playerPhotoPath = req.file.path;
+        }
+        
+        const buffer = await createTransferImage(
+            fromTeam, 
+            toTeam, 
+            playerName || null, 
+            watermark !== 'false',
+            playerPhotoPath
+        );
+        
+        // Uložit obrázek do public/images/notifications
+        const fs = require('fs');
+        const path = require('path');
+        const notifDir = path.join(__dirname, '../public/images/notifications');
+        
+        if (!fs.existsSync(notifDir)) {
+            fs.mkdirSync(notifDir, { recursive: true });
+        }
+        
+        const timestamp = Date.now();
+        const filename = `transfer-generated-${timestamp}.png`;
+        const outPath = path.join(notifDir, filename);
+        
+        fs.writeFileSync(outPath, buffer);
+        
+        // Vyčistit temporary file pokud existuje
+        if (playerPhotoPath && fs.existsSync(playerPhotoPath)) {
+            try { fs.unlinkSync(playerPhotoPath); } catch (e) {}
+        }
+        
+        const publicUrl = `/images/notifications/${filename}`;
+        res.json({ url: publicUrl, filename });
+        
+    } catch (err) {
+        console.error('Chyba při generování náhledu:', err);
+        res.status(500).json({ error: 'Chyba při generování náhledu' });
+    }
+});
+
+router.post('/transfers/save', requireAdmin, upload.any(), express.urlencoded({ extended: true }), async (req, res) => {
     const notif = require('./notificationService');
 
     const { liga, season, t, sendNotification, imageType, customMessage } = req.body;
@@ -3177,25 +3335,35 @@ router.post('/transfers/save', requireAdmin, upload.single('customImage'), expre
             // Určení typu obrázku pro notifikaci
             let heroImageUrl = null;
             
-            if (imageType === 'custom' && req.file) {
-                // Vlastní nahraný obrázek
-                const fs = require('fs');
-                const path = require('path');
-                const notifDir = path.join(__dirname, '../public/images/notifications');
-                
-                if (!fs.existsSync(notifDir)) {
-                    fs.mkdirSync(notifDir, { recursive: true });
+            if (imageType === 'custom') {
+                // Vlastní nahraný obrázek - najdeme ho v req.files poli
+                const customImageFile = req.files && req.files.find(f => f.fieldname === 'customImage');
+                if (customImageFile) {
+                    const fs = require('fs');
+                    const path = require('path');
+                    const notifDir = path.join(__dirname, '../public/images/notifications');
+                    
+                    if (!fs.existsSync(notifDir)) {
+                        fs.mkdirSync(notifDir, { recursive: true });
+                    }
+                    
+                    // Přesunutí uploadnutého souboru do notifikační složky
+                    const timestamp = Date.now();
+                    const ext = path.extname(customImageFile.originalname) || '.jpg';
+                    const newFilename = `transfer-custom-${timestamp}${ext}`;
+                    const destPath = path.join(notifDir, newFilename);
+                    
+                    fs.renameSync(customImageFile.path, destPath);
+                    heroImageUrl = `/images/notifications/${newFilename}`;
+                    console.log(`[Transfer] Vlastní obrázek uložen: ${heroImageUrl}`);
                 }
-                
-                // Přesunutí uploadnutého souboru do notifikační složky
-                const timestamp = Date.now();
-                const ext = path.extname(req.file.originalname) || '.jpg';
-                const newFilename = `transfer-custom-${timestamp}${ext}`;
-                const destPath = path.join(notifDir, newFilename);
-                
-                fs.renameSync(req.file.path, destPath);
-                heroImageUrl = `/images/notifications/${newFilename}`;
-                console.log(`[Transfer] Vlastní obrázek uložen: ${heroImageUrl}`);
+            } else if (imageType === 'generate') {
+                // Semi-auto vygenerovaný obrázek - URL je uložena v hidden inputu
+                const { generatedImageUrl } = req.body;
+                if (generatedImageUrl) {
+                    heroImageUrl = generatedImageUrl;
+                    console.log(`[Transfer] Vygenerovaný obrázek použit: ${heroImageUrl}`);
+                }
                 
             } else if (imageType === 'auto') {
                 // Auto-generovaný obrázek z týmů - ponecháme na notifyTransfer
