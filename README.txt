@@ -30,6 +30,4 @@ Správce exportu obrázků ✅
 
 Při exportu vyřešit nějak možnost pro ligy neveřejné ✅
 
-Novinkovač (Otvírání tweetů atd.)
-
-podívat se zda je možnost kód ještě zjednodušit / zrušit duplicitní obsah
+Novinkovač (Otvírání tweetů atd.) ?
