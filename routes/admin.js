@@ -274,6 +274,7 @@ router.get('/', requireAdmin, async (req, res) => {
         <div class="nav-buttons">
           <a href="/admin/broadcast-ping" class="btn btn-secondary">📢 Test notifikace</a>
           <a id="backupBtn" class="btn btn-warning">💾 Záloha dat do JSONů</a>
+          <a id="verifyStatsBtn" class="btn btn-danger">🔍 Kontrola statistik</a>
         </div>
       </div>
     </div>
@@ -517,11 +518,74 @@ async function toggleRegistrations() {
     btn.disabled = false;
 }
 
+// Funkce pro kontrolu a opravu statistik
+async function verifyStats() {
+    const btn = document.getElementById('verifyStatsBtn');
+    const selectedLiga = document.querySelector('select[name="liga"]').value;
+    const selectedSeason = document.querySelector('select[name="season"]').value;
+    
+    if (!selectedLiga || !selectedSeason) {
+        alert('Prosím vyberte ligu a sezónu pro kontrolu statistik.');
+        return;
+    }
+    
+    if (!confirm(\`Opravdu chcete spustit kontrolu a opravu statistik pro \${selectedLiga} - \${selectedSeason}?\\n\\nTato akce přepočítá všechny statistiky uživatelů pro vybranou ligu a sezónu.\`)) {
+        return;
+    }
+    
+    btn.disabled = true;
+    btn.textContent = '🔄 Kontroluji...';
+    
+    try {
+        const response = await fetch('/admin/verify-stats', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: \`season=\${encodeURIComponent(selectedSeason)}&liga=\${encodeURIComponent(selectedLiga)}\`
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            btn.className = 'btn btn-success';
+            btn.textContent = '✅ Hotovo';
+            alert(result.message);
+            
+            // Obnovit stránku po 2 sekundách
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        } else {
+            btn.className = 'btn btn-danger';
+            btn.textContent = '❌ Chyba';
+            alert('Chyba: ' + result.message);
+        }
+    } catch (error) {
+        btn.className = 'btn btn-danger';
+        btn.textContent = '❌ Chyba';
+        alert('Chyba při komunikaci se serverem: ' + error.message);
+    }
+    
+    // Obnovit původní stav tlačítka po 5 sekundách
+    setTimeout(() => {
+        btn.disabled = false;
+        btn.className = 'btn btn-danger';
+        btn.textContent = '🔍 Kontrola statistik';
+    }, 5000);
+}
+
 // Přidání event listeneru
 document.addEventListener('DOMContentLoaded', () => {
     const toggleBtn = document.getElementById('toggleRegistrations');
     if (toggleBtn) {
         toggleBtn.addEventListener('click', toggleRegistrations);
+    }
+    
+    // Přidání event listeneru pro kontrolu statistik
+    const verifyStatsBtn = document.getElementById('verifyStatsBtn');
+    if (verifyStatsBtn) {
+        verifyStatsBtn.addEventListener('click', verifyStats);
     }
     
     // Přidání animací pro tlačítka
@@ -3848,6 +3912,38 @@ router.post('/playoff/templates/delete/:key', requireAdmin, async (req, res) => 
         await PlayoffTemplates.replaceAll(templates);
     }
     res.redirect('/admin/playoff/templates');
+});
+
+// ==========================================
+// KONTROLA A OPRAVA STATISTIK
+// ==========================================
+router.post('/verify-stats', requireAdmin, async (req, res) => {
+    try {
+        const { season, liga } = req.body;
+        
+        if (!season || !liga) {
+            return res.json({ success: false, message: 'Chybí sezóna nebo liga.' });
+        }
+        
+        console.log(`Kontroluji statistiky pro ${liga} - ${season}...`);
+        
+        // Spustit přepočet statistik
+        await evaluateAndAssignPoints(liga, season);
+        
+        logAdminAction(req.session.user, "KONTROLA_STATISTIK", `Kontrola a oprava statistik pro ${liga} - ${season}`);
+        
+        res.json({ 
+            success: true, 
+            message: `✅ Statistiky pro ${liga} - ${season} byly zkontrolovány a případně opraveny.` 
+        });
+        
+    } catch (error) {
+        console.error('Chyba při kontrole statistik:', error);
+        res.json({ 
+            success: false, 
+            message: `❌ Chyba při kontrole statistik: ${error.message}` 
+        });
+    }
 });
 
 module.exports = router;
