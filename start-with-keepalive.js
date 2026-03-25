@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 
 const { spawn } = require('child_process');
-const path = require('path');
-
+require('path');
 console.log('🚀 Starting TELH Tipovačka with keep-alive service...');
 
 // Spustit hlavní server

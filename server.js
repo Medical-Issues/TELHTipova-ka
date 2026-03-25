@@ -42,7 +42,7 @@ app.use(session({
 }));
 // Health check endpoint pro monitoring služby (bez autentizace) - MUSÍ BÝT PŘED ROUTES!
 app.get('/health', (req, res) => {
-    const now = Date.now();
+    Date.now();
     const uptime = process.uptime();
     const memoryUsage = process.memoryUsage();
     
