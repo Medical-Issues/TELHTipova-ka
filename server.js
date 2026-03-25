@@ -42,10 +42,90 @@ app.use(session({
 }));
 // Health check endpoint pro monitoring služby (bez autentizace) - MUSÍ BÝT PŘED ROUTES!
 app.get('/health', (req, res) => {
+    const now = Date.now();
+    const uptime = process.uptime();
+    const memoryUsage = process.memoryUsage();
+    
     res.status(200).json({
         status: 'OK',
         timestamp: new Date().toISOString(),
         service: 'TELH Tipovačka',
+        uptime: uptime,
+        uptimeHours: Math.floor(uptime / 3600),
+        memory: {
+            rss: Math.round(memoryUsage.rss / 1024 / 1024) + ' MB',
+            heapUsed: Math.round(memoryUsage.heapUsed / 1024 / 1024) + ' MB',
+            heapTotal: Math.round(memoryUsage.heapTotal / 1024 / 1024) + ' MB',
+            external: Math.round(memoryUsage.external / 1024 / 1024) + ' MB'
+        },
+        requestInfo: {
+            ip: req.ip || req.connection.remoteAddress,
+            userAgent: req.get('User-Agent') || 'Unknown',
+            method: req.method,
+            url: req.url
+        }
+    });
+});
+
+// Middleware pro sledování útoků a DDOS
+const requestCounts = new Map();
+const suspiciousIPs = new Set();
+
+app.use((req, res, next) => {
+    const ip = req.ip || req.connection.remoteAddress;
+    const now = Date.now();
+    
+    // Sledování požadavků za poslední minutu
+    if (!requestCounts.has(ip)) {
+        requestCounts.set(ip, []);
+    }
+    
+    const requests = requestCounts.get(ip);
+    requests.push(now);
+    
+    // Vyčistit staré požadavky (> 1 minuta)
+    const recent = requests.filter(time => now - time < 60000);
+    requestCounts.set(ip, recent);
+    
+    // Detekce podezřelé aktivity
+    if (recent.length > 100) { // více než 100 požadavků za minutu
+        suspiciousIPs.add(ip);
+        console.warn(`🚨 SUSPICIOUS ACTIVITY: ${recent.length} requests from ${ip} in last minute`);
+        
+        // Zablokovat IP pokud je to extrémní
+        if (recent.length > 500) {
+            console.error(`🔒 BLOCKING IP: ${ip} - ${recent.length} requests in minute`);
+            return res.status(429).json({ 
+                error: 'Too Many Requests', 
+                message: 'IP temporarily blocked due to suspicious activity' 
+            });
+        }
+    }
+    
+    // Logování každého požadavku (pro analýzu)
+    console.log(`${req.method} ${req.url} - IP: ${ip} - Time: ${new Date().toISOString()}`);
+    
+    next();
+});
+
+// Endpoint pro monitoring bezpečnosti (jen pro admina)
+app.get('/security-monitor', (req, res) => {
+    const suspiciousList = Array.from(suspiciousIPs);
+    const activeRequests = {};
+    
+    requestCounts.forEach((requests, ip) => {
+        activeRequests[ip] = {
+            count: requests.length,
+            lastRequest: requests[requests.length - 1] || 0
+        };
+    });
+    
+    res.json({
+        timestamp: new Date().toISOString(),
+        suspiciousIPs: suspiciousList,
+        activeRequests: activeRequests,
+        totalActiveIPs: requestCounts.size,
+        memoryUsage: process.memoryUsage(),
         uptime: process.uptime()
     });
 });
@@ -53,38 +133,74 @@ app.get('/wake', async (req, res) => {
     try {
         const startTime = Date.now();
         
-        // 1. Připojení k databázi
+        // 1. Připojení k databáze
         const { connectToDatabase } = require('./config/database');
         const db = await connectToDatabase();
         
         // 2. Provést skutečnou operaci v databázi
         const collections = await db.listCollections().toArray();
         
-        // 3. Zápis do log kolekce (pokud existuje)
+        // 3. Více databázových operací pro meaningful activity
+        const operations = [];
+        
+        // Ping
+        operations.push(db.admin().ping());
+        
+        // List collections
+        operations.push(db.listCollections().toArray());
+        
+        // Zkusit číst z různých kolekcí
+        try {
+            operations.push(db.collection('users').findOne({}));
+            operations.push(db.collection('matches').findOne({}));
+            operations.push(db.collection('ligy').findOne({}));
+        } catch (e) {
+            // Ignorovat pokud kolekce neexistuje
+        }
+        
+        // Zápis do log kolekce (pokud existuje)
         try {
             const logsCollection = db.collection('wake_logs');
             await logsCollection.insertOne({
                 timestamp: new Date(),
                 ip: req.ip || req.connection.remoteAddress,
                 userAgent: req.get('User-Agent') || 'cron-job',
-                responseTime: Date.now() - startTime
+                responseTime: Date.now() - startTime,
+                collectionsCount: collections.length
             });
         } catch (logError) {
             // Pokud kolekce neexistuje, ignorujeme chybu
         }
         
-        // 4. Jednoduchý ping
-        await db.admin().ping();
+        // Čekat na všechny operace
+        await Promise.all(operations);
         
-        // 5. Log do konzole
-        console.log(`✅ Wake endpoint called at: ${new Date().toISOString()}, Response time: ${Date.now() - startTime}ms`);
+        // 4. CPU aktivita - intenzivnější výpočet
+        let result = 0;
+        for (let i = 0; i < 500000; i++) {
+            result += Math.sin(i) * Math.cos(i);
+        }
+        
+        // 5. Memory operace
+        const testArray = [];
+        for (let i = 0; i < 10000; i++) {
+            testArray.push(Math.random() * i);
+        }
+        testArray.sort();
+        
+        const responseTime = Date.now() - startTime;
+        
+        // 6. Log do konzole
+        console.log(`✅ Wake endpoint called at: ${new Date().toISOString()}, Response time: ${responseTime}ms, Collections: ${collections.length}`);
         
         res.json({ 
             status: 'OK', 
             message: 'Application is awake and active',
             timestamp: new Date().toISOString(),
-            responseTime: Date.now() - startTime,
-            collectionsCount: collections.length
+            responseTime: responseTime,
+            collectionsCount: collections.length,
+            computationResult: Math.round(result),
+            memoryTest: testArray.length
         });
         
     } catch (error) {
@@ -360,6 +476,19 @@ async function startServer() {
         console.log('Server běží.');
     });
 
+    // Interní keep-alive mechanismus - každých 5 minut
+    setInterval(async () => {
+        try {
+            const { connectToDatabase } = require('./config/database');
+            const db = await connectToDatabase();
+            await db.admin().ping();
+            console.log(`💓 Interní keep-alive: ${new Date().toISOString()}`);
+        } catch (error) {
+            console.error('❌ Keep-alive error:', error.message);
+        }
+    }, 5 * 60 * 1000); // 5 minut
+
+    // Záloha každých 24 hodin
     setInterval(() => {
         console.log('⏰ Spouštím automatickou zálohu...');
         backupJsonFilesToGitHub();

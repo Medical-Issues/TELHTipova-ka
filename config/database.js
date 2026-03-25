@@ -7,7 +7,12 @@ if (!uri) {
 }
 const client = new MongoClient(uri, {
     serverSelectionTimeoutMS: 5000,
-    connectTimeoutMS: 10000
+    connectTimeoutMS: 10000,
+    socketTimeoutMS: 45000,
+    maxIdleTimeMS: 300000, // 5 minut
+    heartbeatFrequencyMS: 10000, // 10 sekund
+    retryWrites: true,
+    w: 'majority'
 });
 
 let db;

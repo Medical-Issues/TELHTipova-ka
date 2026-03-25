@@ -12,7 +12,9 @@
     "test:safe": "mocha tests/safe-tests.test.js --timeout 30000 --reporter spec",
     "migrate": "node migrate-all-to-mongodb.js",
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "start:keepalive": "node start-with-keepalive.js",
+    "dev": "nodemon server.js",
+    "self-ping": "node scripts/selfPing.js"
   },
   "private": true,
   "dependencies": {
