@@ -1,6 +1,5 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
-const { MongoClient } = require('mongodb');
 const fs = require('fs');
 const path = require('path');
 
@@ -86,7 +85,6 @@ const authLimiter = rateLimit({
 
 // Middleware pro security monitoring
 const securityMonitor = (req, res, next) => {
-    const timestamp = Date.now();
     const clientIP = req.ip || req.connection.remoteAddress;
     const userAgent = req.get('User-Agent') || 'Unknown';
     const endpoint = req.path;
@@ -114,7 +112,7 @@ const securityMonitor = (req, res, next) => {
     // SQL Injection detection
     const sqlPatterns = [
         /(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|UNION|SCRIPT)\b)/i,
-        /(--|\#|\/\*|\*\/|;|'|")/,
+        /(--|#|\/\*|\*\/|;|'|")/,
         /(\b(OR|AND)\s+\d+\s*=\s*\d+)/i,
         /(\b(OR|AND)\s+['"]?\w+['"]?\s*=\s*['"]?\w+['"]?)/i
     ];
@@ -207,10 +205,8 @@ const securityMonitor = (req, res, next) => {
 };
 
 // Pomocné funkce
-function getIPRequestCount(ip) {
+function getIPRequestCount() {
     // Zjednodušené počítání - v produkci by bylo v Redis/DB
-    const now = Date.now();
-    const oneMinuteAgo = now - 60000;
     return Math.floor(Math.random() * 100); // Simulace
 }
 

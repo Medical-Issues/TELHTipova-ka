@@ -1,10 +1,6 @@
 const express = require('express');
-const { MongoClient } = require('mongodb');
 const fs = require('fs');
 const path = require('path');
-const extremeKeepAlive = require('../utils/extremeKeepAlive');
-const { getSecurityStats } = require('../utils/securityMonitoring');
-const { keepAliveStats } = require('../utils/aggressiveKeepAlive');
 
 const router = express.Router();
 
@@ -394,6 +390,7 @@ router.get('/aggressive-keepalive-stats', async (req, res) => {
 // Endpoint pro extrémní keep-alive statistiky
 router.get('/extreme-keepalive-stats', async (req, res) => {
     try {
+        const extremeKeepAlive = require('../utils/extremeKeepAlive');
         const stats = extremeKeepAlive.getStats();
         res.json({
             status: 'OK',

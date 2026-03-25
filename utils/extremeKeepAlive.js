@@ -23,7 +23,7 @@ class ExtremeKeepAlive {
 
     // Extrémně rychlé pingování
     async ultraFastPing() {
-        const promises = this.endpoints.map(async (endpoint, index) => {
+        const promises = this.endpoints.map(async (endpoint) => {
             try {
                 const startTime = Date.now();
                 const response = await axios.get(endpoint, {
