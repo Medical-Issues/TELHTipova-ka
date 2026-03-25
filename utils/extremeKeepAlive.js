@@ -1,4 +1,3 @@
-const { spawn } = require('child_process');
 const axios = require('axios');
 
 // EXTRÉMNÍ AGRESIVNÍ KEEP-ALIVE - NIKDY NEUSNE
