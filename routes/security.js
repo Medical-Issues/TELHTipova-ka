@@ -32,13 +32,22 @@ const securityStats = {
     lastReset: Date.now()
 };
 
-// Rate limiting pro DDOS ochranu
+// Rate limiting pro DDOS ochranu - Level 2
 const ddosLimiter = rateLimit({
     windowMs: 60 * 1000, // 1 minuta
-    max: 100, // max 100 requestů za minutu
+    max: 50, // Level 2: max 50 requestů za minutu (místo 100)
     message: { error: 'Too many requests', blocked: true },
     standardHeaders: true,
     legacyHeaders: false,
+    skip: (req) => {
+        // Skip pro bezpečné endpointy
+        const safeEndpoints = [
+            '/css/', '/js/', '/images/', '/favicon.ico', '/robots.txt',
+            '/sitemap.xml', '/health/ping', '/health/status', '/health',
+            '/wake', '/warm', '/'
+        ];
+        return safeEndpoints.some(ep => req.path.startsWith(ep));
+    },
     handler: (req, res) => {
         securityStats.attacks.ddos.detected++;
         securityStats.attacks.ddos.blocked++;
@@ -61,7 +70,7 @@ const ddosLimiter = rateLimit({
 // Rate limiting pro auth endpointy
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minut
-    max: 10, // max 10 pokusů o přihlášení za 15 minut
+    max: 5, // Level 2: max 5 pokusů o přihlášení za 15 minut (místo 10)
     message: { error: 'Too many auth attempts', blocked: true },
     keyGenerator: (req) => req.ip || req.connection.remoteAddress,
     handler: (req, res) => {
@@ -83,30 +92,68 @@ const authLimiter = rateLimit({
     }
 });
 
-// Middleware pro security monitoring
+// Middleware pro security monitoring - Level 2 (Jen podezřelé)
 const securityMonitor = (req, res, next) => {
     const clientIP = req.ip || req.connection.remoteAddress;
     const userAgent = req.get('User-Agent') || 'Unknown';
     const endpoint = req.path;
     
-    // Aktualizace statistik
+    // Level 2: Ignorovat bezpečné boty
+    const safeUserAgents = [
+        'googlebot', 'bingbot', 'facebookexternalhit', 'twitterbot',
+        'slackbot', 'discordbot', 'telegrambot', 'whatsapp',
+        'yandexbot', 'duckduckbot', 'baiduspider'
+    ];
+    
+    const isSafeBot = safeUserAgents.some(ua => userAgent.toLowerCase().includes(ua));
+    
+    // Level 2: Ignorovat bezpečné endpointy
+    const safeEndpoints = [
+        '/css/', '/js/', '/images/', '/favicon.ico', '/robots.txt',
+        '/sitemap.xml', '/health/ping', '/health/status', '/health',
+        '/wake', '/warm', '/'
+    ];
+    
+    const isSafeEndpoint = safeEndpoints.some(ep => endpoint.startsWith(ep));
+    
+    // Level 2: Detekovat POUZE podezřelé patterny
+    const suspiciousPatterns = [
+        'sqlmap', 'nikto', 'dirb', 'nmap', 'masscan',
+        'hydra', 'medusa', 'patator', 'burp', 'owasp'
+    ];
+    
+    const isSuspiciousUA = suspiciousPatterns.some(pattern => userAgent.toLowerCase().includes(pattern));
+    
+    // Level 2: Podezřelé endpointy
+    const suspiciousEndpoints = [
+        '/admin', '/administrator', '/wp-admin', '/phpmyadmin',
+        '/api/admin', '/config', '/backup', '/database'
+    ];
+    
+    const isSuspiciousEndpoint = suspiciousEndpoints.some(ep => endpoint.toLowerCase().includes(ep));
+    
+    // Základní statistiky (bez logování)
     securityStats.requests.total++;
     securityStats.ips.unique.add(clientIP);
     
-    // Track endpoint access
+    // Track endpoint access (bez logování)
     if (!securityStats.endpoints.mostAccessed[endpoint]) {
         securityStats.endpoints.mostAccessed[endpoint] = 0;
     }
     securityStats.endpoints.mostAccessed[endpoint]++;
     
-    // DDOS detection - příliš mnoho requestů z jedné IP
-    const ipRequests = getIPRequestCount(clientIP);
-    if (ipRequests > 50) { // více než 50 requestů za minutu
-        securityStats.attacks.ddos.detected++;
-        securityStats.attacks.ddos.lastDetection = new Date().toISOString();
+    // Logovat POUZE pokud je to skutečně podezřelé
+    const isReallySuspicious = !isSafeBot && !isSafeEndpoint && (
+        isSuspiciousUA || 
+        isSuspiciousEndpoint || 
+        (userAgent.includes('curl') && endpoint.includes('/api'))
+    );
+    
+    if (isReallySuspicious) {
+        securityStats.requests.lastMinute++;
         securityStats.ips.suspicious.add(clientIP);
         
-        console.log(`⚠️ Suspicious activity detected from ${clientIP}: ${ipRequests} requests/min`);
+        console.log(`⚠️ Suspicious activity detected: ${clientIP} - ${endpoint} - ${userAgent}`);
     }
     
     // SQL Injection detection
@@ -120,7 +167,7 @@ const securityMonitor = (req, res, next) => {
     const queryString = JSON.stringify(req.query) + JSON.stringify(req.body);
     const isSQLInjection = sqlPatterns.some(pattern => pattern.test(queryString));
     
-    if (isSQLInjection) {
+    if (isSQLInjection && isReallySuspicious) {
         securityStats.attacks.sqlInjection.detected++;
         securityStats.attacks.sqlInjection.blocked++;
         securityStats.attacks.sqlInjection.lastDetection = new Date().toISOString();
@@ -149,7 +196,7 @@ const securityMonitor = (req, res, next) => {
     
     const isXSS = xssPatterns.some(pattern => pattern.test(queryString));
     
-    if (isXSS) {
+    if (isXSS && isReallySuspicious) {
         securityStats.attacks.xss.detected++;
         securityStats.attacks.xss.blocked++;
         securityStats.attacks.xss.lastDetection = new Date().toISOString();
@@ -166,40 +213,23 @@ const securityMonitor = (req, res, next) => {
         });
     }
     
-    // Suspicious User Agent detection
-    const suspiciousUserAgents = [
-        /bot/i,
-        /crawler/i,
-        /scanner/i,
-        /wget/i,
-        /curl/i,
-        /python/i,
-        /java/i,
-        /go-http/i,
-        /postman/i,
-        /insomnia/i
-    ];
-    
-    const isSuspiciousUA = suspiciousUserAgents.some(pattern => pattern.test(userAgent));
-    
-    if (isSuspiciousUA && !endpoint.includes('/health') && !endpoint.includes('/ping')) {
-        securityStats.attacks.suspicious.detected++;
-        securityStats.attacks.suspicious.lastDetection = new Date().toISOString();
-        securityStats.ips.suspicious.add(clientIP);
-        
-        console.log(`⚠️ Suspicious User Agent detected: ${userAgent} from ${clientIP}`);
+    // Level 2: Logování POUZE podezřelých událostí
+    if (isReallySuspicious) {
+        logSecurityEvent({
+            type: 'SUSPICIOUS_ACTIVITY',
+            ip: clientIP,
+            userAgent,
+            endpoint,
+            method: req.method,
+            timestamp: new Date(),
+            suspicious: true,
+            reasons: {
+                suspiciousUA: isSuspiciousUA,
+                suspiciousEndpoint: isSuspiciousEndpoint,
+                automatedTool: userAgent.includes('curl') && endpoint.includes('/api')
+            }
+        });
     }
-    
-    // Logování requestů
-    logSecurityEvent({
-        type: 'REQUEST',
-        ip: clientIP,
-        userAgent,
-        endpoint,
-        method: req.method,
-        timestamp: new Date(),
-        suspicious: isSuspiciousUA
-    });
     
     next();
 };
