@@ -40,22 +40,123 @@ app.use(session({
         maxAge: 1000 * 60 * 60 * 24 * 30,
     }
 }));
+// Health check endpoint pro monitoring služby (bez autentizace) - MUSÍ BÝT PŘED ROUTES!
+app.get('/health', (req, res) => {
+    res.status(200).json({
+        status: 'OK',
+        timestamp: new Date().toISOString(),
+        service: 'TELH Tipovačka',
+        uptime: process.uptime()
+    });
+});
 app.get('/wake', async (req, res) => {
     try {
-        // Provést jednoduchou databázovou operaci pro meaningful activity
+        const startTime = Date.now();
+        
+        // 1. Připojení k databázi
         const { connectToDatabase } = require('./config/database');
         const db = await connectToDatabase();
         
-        // Jednoduchý ping na databázi
+        // 2. Provést skutečnou operaci v databázi
+        const collections = await db.listCollections().toArray();
+        
+        // 3. Zápis do log kolekce (pokud existuje)
+        try {
+            const logsCollection = db.collection('wake_logs');
+            await logsCollection.insertOne({
+                timestamp: new Date(),
+                ip: req.ip || req.connection.remoteAddress,
+                userAgent: req.get('User-Agent') || 'cron-job',
+                responseTime: Date.now() - startTime
+            });
+        } catch (logError) {
+            // Pokud kolekce neexistuje, ignorujeme chybu
+        }
+        
+        // 4. Jednoduchý ping
         await db.admin().ping();
         
-        // Log pro sledování aktivity
-        console.log('Wake endpoint called at:', new Date().toISOString());
+        // 5. Log do konzole
+        console.log(`✅ Wake endpoint called at: ${new Date().toISOString()}, Response time: ${Date.now() - startTime}ms`);
         
-        res.send('OK - Application is awake');
+        res.json({ 
+            status: 'OK', 
+            message: 'Application is awake and active',
+            timestamp: new Date().toISOString(),
+            responseTime: Date.now() - startTime,
+            collectionsCount: collections.length
+        });
+        
     } catch (error) {
-        console.error('Wake endpoint error:', error);
-        res.status(500).send('Error keeping app awake');
+        console.error('❌ Wake endpoint error:', error);
+        res.status(500).json({ 
+            status: 'ERROR', 
+            message: 'Error keeping app awake',
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
+// Další endpoint pro intenzivnější warm-up
+app.get('/warm', async (req, res) => {
+    try {
+        const startTime = Date.now();
+        
+        // 1. Připojení k databáze
+        const { connectToDatabase } = require('./config/database');
+        const db = await connectToDatabase();
+        
+        // 2. Různé databázové operace
+        const operations = [];
+        
+        // Ping
+        operations.push(db.admin().ping());
+        
+        // List collections
+        operations.push(db.listCollections().toArray());
+        
+        // Zkusit číst z users kolekce
+        try {
+            operations.push(db.collection('users').findOne({}));
+        } catch (e) {
+            operations.push(Promise.resolve(null));
+        }
+        
+        // Zkusit číst z ligy kolekce
+        try {
+            operations.push(db.collection('ligy').findOne({}));
+        } catch (e) {
+            operations.push(Promise.resolve(null));
+        }
+        
+        // Čekat na všechny operace
+        await Promise.all(operations);
+        
+        // 3. CPU aktivita - jednoduchý výpočet
+        let result = 0;
+        for (let i = 0; i < 100000; i++) {
+            result += Math.random();
+        }
+        
+        console.log(`🔥 Warm endpoint called at: ${new Date().toISOString()}, Response time: ${Date.now() - startTime}ms`);
+        
+        res.json({ 
+            status: 'WARM', 
+            message: 'Application is fully warmed up',
+            timestamp: new Date().toISOString(),
+            responseTime: Date.now() - startTime,
+            computationResult: result
+        });
+        
+    } catch (error) {
+        console.error('❌ Warm endpoint error:', error);
+        res.status(500).json({ 
+            status: 'ERROR', 
+            message: 'Error warming up app',
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
     }
 });
 
