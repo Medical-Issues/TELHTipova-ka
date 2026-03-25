@@ -40,8 +40,23 @@ app.use(session({
         maxAge: 1000 * 60 * 60 * 24 * 30,
     }
 }));
-app.get('/wake', (req, res) => {
-    res.send('OK');
+app.get('/wake', async (req, res) => {
+    try {
+        // Provést jednoduchou databázovou operaci pro meaningful activity
+        const { connectToDatabase } = require('./config/database');
+        const db = await connectToDatabase();
+        
+        // Jednoduchý ping na databázi
+        await db.admin().ping();
+        
+        // Log pro sledování aktivity
+        console.log('Wake endpoint called at:', new Date().toISOString());
+        
+        res.send('OK - Application is awake');
+    } catch (error) {
+        console.error('Wake endpoint error:', error);
+        res.status(500).send('Error keeping app awake');
+    }
 });
 
 // Admin endpoint pro manuální restore z GitHubu
