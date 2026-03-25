@@ -235,11 +235,6 @@ const securityMonitor = (req, res, next) => {
 };
 
 // Pomocné funkce
-function getIPRequestCount() {
-    // Zjednodušené počítání - v produkci by bylo v Redis/DB
-    return Math.floor(Math.random() * 100); // Simulace
-}
-
 function logSecurityEvent(event) {
     try {
         const logEntry = {
