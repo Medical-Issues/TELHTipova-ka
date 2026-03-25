@@ -9,12 +9,18 @@ const fs = require('fs');
 const userRoutes = require('./routes/user');
 const adminRoutes = require('./routes/admin');
 const authRoutes = require('./routes/auth');
+const healthRoutes = require('./routes/health');
+const { router: securityRoutes, authLimiter } = require('./routes/security');
 const { Users } = require('./utils/mongoDataAccess');
 
 // MongoDB připojení
 const { connectToDatabase } = require('./config/database');
 const {backupJsonFilesToGitHub} = require("./utils/githubBackup");
 const {restoreFromGitHub, fullRestoreFromGitHub} = require("./utils/githubRestore");
+const {startMonitoring} = require("./utils/monitoring");
+const {startSecurityMonitoring} = require("./utils/securityMonitoring");
+const {startAggressiveKeepAlive} = require("./utils/aggressiveKeepAlive");
+const extremeKeepAlive = require("./utils/extremeKeepAlive");
 
 const app = express();
 
@@ -311,7 +317,9 @@ app.post('/admin/full-restore-from-github', (req, res) => {
     });
 });
 
-app.use('/auth', authRoutes);
+app.use('/auth', authLimiter, authRoutes);
+app.use('/health', healthRoutes);
+app.use('/security', securityRoutes);
 app.use('/', userRoutes)
 app.use('/admin', adminRoutes);
 
@@ -474,6 +482,30 @@ async function startServer() {
 
     app.listen(3000, () => {
         console.log('Server běží.');
+        
+        // Spustit monitoring service po 10 sekundách
+        setTimeout(() => {
+            console.log('🔄 Starting comprehensive monitoring service...');
+            startMonitoring();
+            
+            // Spustit security monitoring po dalších 5 sekundách
+            setTimeout(() => {
+                console.log('🔒 Starting comprehensive security monitoring service...');
+                startSecurityMonitoring();
+                
+                // Spustit agresivní keep-alive po dalších 5 sekundách
+                setTimeout(() => {
+                    console.log('🔥🔥🔥 Starting AGGRESSIVE keep-alive system...');
+                    startAggressiveKeepAlive();
+                    
+                    // Spustit EXTREME keep-alive po dalších 5 sekundách
+                    setTimeout(() => {
+                        console.log('💀💀💀 Starting EXTREME keep-alive system... SERVER WILL NEVER SLEEP!');
+                        extremeKeepAlive.start();
+                    }, 5000);
+                }, 5000);
+            }, 5000);
+        }, 10000);
     });
 
     // Interní keep-alive mechanismus - každých 5 minut
