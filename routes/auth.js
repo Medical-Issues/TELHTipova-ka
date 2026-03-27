@@ -39,7 +39,7 @@ router.post("/register", async (req, res) => {
         res.redirect('/auth/login');
     } catch (err) {
         console.error(err);
-        renderErrorHtml(res, "Při registraci nastala chyba. Zkuste to prosím později.");
+        await renderErrorHtml(res, "Při registraci nastala chyba. Zkuste to prosím později.");
     }
 });
 
