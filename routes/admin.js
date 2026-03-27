@@ -23,7 +23,7 @@ router.post('/backup', async (req, res) => {
     try {
         await backupJsonFilesToGitHub();
         res.json({ success: true, message: '✅ Záloha provedena' });
-        logAdminAction(req.session.user, "ZÁLOHA_DAT", `Spuštěna manuální záloha na GitHub`);
+        await logAdminAction(req.session.user, "ZÁLOHA_DAT", `Spuštěna manuální záloha na GitHub`);
     } catch (err) {
         console.error(err);
         res.status(500).json({ success: false, message: '❌ Chyba při záloze' });
@@ -618,7 +618,7 @@ router.post('/toggle-registrations', requireAdmin, async (req, res) => {
         await Settings.updateOne({}, { registrationsBlocked: newBlockedState });
         
         // Logování akce
-        logAdminAction(req.session.user, "TOGGLE_REGISTRATIONS", 
+        await logAdminAction(req.session.user, "TOGGLE_REGISTRATIONS",
             `Registrace ${newBlockedState ? 'BLOKOVÁNY' : 'POVOLENY'}`);
         
         res.json({ 
@@ -794,7 +794,7 @@ router.post('/edit/:id', requireAdmin, async (req, res) => {
     match.locked = req.body.locked === 'on';
 
     if (match.locked) {
-        removeTipsForDeletedMatch(matchId);
+        await removeTipsForDeletedMatch(matchId);
     }
 
     if (match.isPlayoff && req.body.bo && !isNaN(parseInt(req.body.bo))) {
@@ -843,7 +843,7 @@ router.post('/edit/:id', requireAdmin, async (req, res) => {
             // --- ODESLÁNÍ PRŮBĚŽNÉHO STAVU SÉRIE ---
             if (match.playedMatches.length > oldPlayedCount) {
                 const lastM = match.playedMatches[match.playedMatches.length - 1];
-                notif.notifySeriesProgress(match, match.playedMatches.length, lastM.scoreHome, lastM.scoreAway, lastM.ot, seriesHomeWins, seriesAwayWins, match.playedMatches);
+                await notif.notifySeriesProgress(match, match.playedMatches.length, lastM.scoreHome, lastM.scoreAway, lastM.ot, seriesHomeWins, seriesAwayWins, match.playedMatches);
             }
         }
     } else {
@@ -852,7 +852,7 @@ router.post('/edit/:id', requireAdmin, async (req, res) => {
             match.result = {
                 scoreHome: parseInt(scoreHome),
                 scoreAway: parseInt(scoreAway),
-                ot: req.body.overtime === 'on'
+                ot: req.body.ot === 'on'
             };
         } else {
             delete match.result;
@@ -880,27 +880,27 @@ router.post('/edit/:id', requireAdmin, async (req, res) => {
         }
 
         if (changes.length > 0) {
-            notif.notifyMatchUpdate(match.id, changes.join(' | '));
+            await notif.notifyMatchUpdate(match.id, changes.join(' | '));
         }
     }
 
     try {
         if (season && liga) {
-            updateTeamsPoints(matches);
-            evaluateAndAssignPoints(liga, matches[matchIndex].season);
-            evaluateRegularSeasonTable(season, liga);
+            await updateTeamsPoints(matches);
+            await evaluateAndAssignPoints(liga, matches[matchIndex].season);
+            await evaluateRegularSeasonTable(season, liga);
 
             // 4. Odeslání výsledku (POUZE pokud má zápas výsledek)
             if (match.result) {
                 // --- OPRAVA: POSÍLÁME ULOŽENÝ VÝSLEDEK, NIKOLIV SUROVÁ DATA Z FORMULÁŘE ---
-                notif.notifyResult(matchId, match.result.scoreHome, match.result.scoreAway);
+                await notif.notifyResult(matchId, match.result.scoreHome, match.result.scoreAway);
             }
         }
     } catch (err) {
         console.error("Chyba při přepočtech, nebyla odeslána sezóna nebo liga", err);
     }
 
-    logAdminAction(req.session.user, "ÚPRAVA_ZÁPASU", `Upraven zápas ID: ${matchId} (Liga: ${match.liga})`);
+    await logAdminAction(req.session.user, "ÚPRAVA_ZÁPASU", `Upraven zápas ID: ${matchId} (Liga: ${match.liga})`);
     res.redirect('/admin');
 });
 
@@ -1092,12 +1092,12 @@ router.post('/new/match', requireAdmin, async (req, res) => {
     }
 
     matches.push(newMatch);
-    notif.notifyNewMatches();
+    await notif.notifyNewMatches();
     
     // Uložení do MongoDB
     await Matches.replaceAll(matches);
     
-    logAdminAction(req.session.user, "NOVÝ_ZÁPAS", `Vytvořen nový zápas: ${homeTeam.name} vs ${awayTeam.name} (${finalLiga})`);
+    await logAdminAction(req.session.user, "NOVÝ_ZÁPAS", `Vytvořen nový zápas: ${homeTeam.name} vs ${awayTeam.name} (${finalLiga})`);
     res.redirect('/admin');
 });
 
@@ -1207,7 +1207,7 @@ router.post('/new/team', requireAdmin, upload.single('logo'), express.urlencoded
     // Uložení do MongoDB
     await Teams.replaceAll(teams);
     
-    logAdminAction(req.session.user, "NOVÝ_TÝM", `Vytvořen nový tým: ${name} (${liga})`);
+    await logAdminAction(req.session.user, "NOVÝ_TÝM", `Vytvořen nový tým: ${name} (${liga})`);
     res.redirect('/admin');
 });
 
@@ -1239,6 +1239,24 @@ router.get('/edit/:id', requireAdmin, async (req, res) => {
         const isSwapped = mResult.sideSwap === true; // Načtení stavu z DB
 
         matchInputs += `
+            <script>
+            function swapSides(idx) {
+        const swapInput = document.getElementById('match_' + idx + '_swap');
+        const labelHome = document.getElementById('label_home_' + idx);
+        const labelAway = document.getElementById('label_away_' + idx);
+
+        const isSwapped = swapInput.value === 'true';
+        if (isSwapped) {
+            swapInput.value = 'false';
+            labelHome.innerText = 'Domácí (doma):'; labelHome.style.color = '#00ff00';
+            labelAway.innerText = 'Hosté (venku):'; labelAway.style.color = '#888';
+        } else {
+            swapInput.value = 'true';
+            labelHome.innerText = 'Hosté (venku):'; labelHome.style.color = '#888';
+            labelAway.innerText = 'Domácí (doma):'; labelAway.style.color = '#00ff00';
+        }
+    }
+            </script>
             <div id="match_row_${i}" style="margin-bottom: 15px; border: 1px solid #444; padding: 10px; background: #1a1a1a; display: ${isMatchVisible ? 'block' : 'none'};">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                     <strong style="color: orangered;">Zápas ${i + 1}</strong>
@@ -1467,7 +1485,7 @@ router.post('/edit/:id', requireAdmin, async (req, res) => {
     match.locked = req.body.locked === 'on';
 
     if (match.locked) {
-        removeTipsForDeletedMatch(matchId);
+        await removeTipsForDeletedMatch(matchId);
     }
 
     if (match.isPlayoff && req.body.bo && !isNaN(parseInt(req.body.bo))) {
@@ -1517,7 +1535,7 @@ router.post('/edit/:id', requireAdmin, async (req, res) => {
             // --- ODESLÁNÍ PRŮBĚŽNÉHO STAVU SÉRIE ---
             if (match.playedMatches.length > oldPlayedCount) {
                 const lastM = match.playedMatches[match.playedMatches.length - 1];
-                notif.notifySeriesProgress(match, match.playedMatches.length, lastM.scoreHome, lastM.scoreAway, lastM.ot, seriesHomeWins, seriesAwayWins, match.playedMatches);
+                await notif.notifySeriesProgress(match, match.playedMatches.length, lastM.scoreHome, lastM.scoreAway, lastM.ot, seriesHomeWins, seriesAwayWins, match.playedMatches);
             }
         }
     } else {
@@ -1553,25 +1571,25 @@ router.post('/edit/:id', requireAdmin, async (req, res) => {
 
         // Pokud se něco změnilo, odešleme naši novou notifikaci
         if (changes.length > 0) {
-            notif.notifyMatchUpdate(match.id, changes.join(' | '));
+            await notif.notifyMatchUpdate(match.id, changes.join(' | '));
         }
     }
 
     try {
         if (season && liga) {
-            updateTeamsPoints(matches);
-            evaluateAndAssignPoints(liga, matches[matchIndex].season);
-            evaluateRegularSeasonTable(season, liga);
+            await updateTeamsPoints(matches);
+            await evaluateAndAssignPoints(liga, matches[matchIndex].season);
+            await evaluateRegularSeasonTable(season, liga);
 
             // 4. Odeslání výsledku (POUZE pokud má zápas výsledek, dřív to tu posílalo pořád)
             if (match.result) {
-                notif.notifyResult(matchId, match.result.scoreHome, match.result.scoreAway);
+                await notif.notifyResult(matchId, match.result.scoreHome, match.result.scoreAway);
             }
         }
     } catch (err) {
         console.error("Chyba při přepočtech, nebyla odeslána sezóna nebo liga", err);
     }
-    logAdminAction(req.session.user, "ÚPRAVA_ZÁPASU", `Upraven zápas ID: ${matchId} (Liga: ${match.liga})`);
+    await logAdminAction(req.session.user, "ÚPRAVA_ZÁPASU", `Upraven zápas ID: ${matchId} (Liga: ${match.liga})`);
     res.redirect('/admin');
 });
 
@@ -1599,7 +1617,7 @@ router.post('/teams/edit/:id', requireAdmin, upload.single('logo'), express.urle
     // Uložení do MongoDB
     await Teams.replaceAll(teams);
     
-    logAdminAction(req.session.user, "ÚPRAVA_TÝMU", `Upraven tým: ${team.name} (${team.liga})`);
+    await logAdminAction(req.session.user, "ÚPRAVA_TÝMU", `Upraven tým: ${team.name} (${team.liga})`);
     res.redirect('/admin');
 });
 
@@ -1612,7 +1630,7 @@ router.post('/teams/delete/:id', requireAdmin, async (req, res) => {
     // Uložení do MongoDB
     await Teams.replaceAll(teams);
     
-    logAdminAction(req.session.user, "SMAZÁNÍ_TÝMU", `Smazán tým s ID: ${teamsId}`);
+    await logAdminAction(req.session.user, "SMAZÁNÍ_TÝMU", `Smazán tým s ID: ${teamsId}`);
     res.redirect('/admin');
 });
 
@@ -1634,17 +1652,17 @@ router.post('/delete/:id', requireAdmin, async (req, res) => {
 
     // 3. SMAZÁNÍ A ULOŽENÍ
     matches = matches.filter(m => m.id !== matchId);
-    updateTeamsPoints(matches);
+    await updateTeamsPoints(matches);
     
     // Uložení do MongoDB
     await Matches.replaceAll(matches);
 
-    removeTipsForDeletedMatch(matchId);
+    await removeTipsForDeletedMatch(matchId);
 
-    evaluateAndAssignPoints(matchLiga, matchSeason);
+    await evaluateAndAssignPoints(matchLiga, matchSeason);
 
-    evaluateAndAssignPoints(matchLiga, matchSeason);
-    logAdminAction(req.session.user, "SMAZÁNÍ_ZÁPASU", `Smazán zápas ID: ${matchId} (Liga: ${matchLiga})`);
+    await evaluateAndAssignPoints(matchLiga, matchSeason);
+    await logAdminAction(req.session.user, "SMAZÁNÍ_ZÁPASU", `Smazán zápas ID: ${matchId} (Liga: ${matchLiga})`);
     res.redirect('/admin');
 });
 
@@ -1823,7 +1841,7 @@ router.post('/playoff/save', requireAdmin, async (req, res) => {
     // Uložení do MongoDB
     await Playoff.replaceAll(playoffData);
     
-    logAdminAction(req.session.user, "PLAYOFF_ULOŽENÍ", `Aktualizovány sloty playoff pro ${league} (${season})`);
+    await logAdminAction(req.session.user, "PLAYOFF_ULOŽENÍ", `Aktualizovány sloty playoff pro ${league} (${season})`);
     res.redirect(`/admin/playoff?league=${encodeURIComponent(league)}`);
 });
 
@@ -1847,7 +1865,7 @@ router.post('/playoff/delete', requireAdmin, async (req, res) => {
             await Playoff.replaceAll(playoffData);
         }
         
-        logAdminAction(req.session.user, "PLAYOFF_RESET", `KOMPLETNĚ SMAZÁNA playoff mřížka pro ${league} (${season})`);
+        await logAdminAction(req.session.user, "PLAYOFF_RESET", `KOMPLETNĚ SMAZÁNA playoff mřížka pro ${league} (${season})`);
         res.redirect('/admin/playoff');
     } catch (error) {
         console.error('Chyba při mazání playoff:', error);
@@ -1866,7 +1884,7 @@ router.get('/togglePostponed/:id', requireAdmin, async (req, res) => {
     // Uložení do MongoDB
     await Matches.replaceAll(matches);
     
-    logAdminAction(req.session.user, "ODLOŽENÍ_ZÁPASU", `Zápas ID ${matchId} byl ${match.postponed ? 'ODLOŽEN' : 'VRÁCEN DO BĚŽNÉHO STAVU'}`);
+    await logAdminAction(req.session.user, "ODLOŽENÍ_ZÁPASU", `Zápas ID ${matchId} byl ${match.postponed ? 'ODLOŽEN' : 'VRÁCEN DO BĚŽNÉHO STAVU'}`);
     res.redirect('/admin');
 });
 
@@ -2117,7 +2135,7 @@ router.post('/leagues/update', requireAdmin, express.urlencoded({ extended: true
             // 1. Změna názvu
             if (originalLeagueName !== leagueName) {
                 console.log(`Změna názvu ligy z ${originalLeagueName} na ${leagueName}`);
-                renameLeagueGlobal(originalLeagueName, leagueName);
+                await renameLeagueGlobal(originalLeagueName, leagueName);
                 allSeasonData[selectedSeason].leagues[index].name = leagueName;
             }
 
@@ -2142,7 +2160,7 @@ router.post('/leagues/update', requireAdmin, express.urlencoded({ extended: true
             await Leagues.replaceAll(allSeasonData);
         }
     }
-    logAdminAction(req.session.user, "ÚPRAVA_LIGY", `Upraveno nastavení ligy: ${leagueName}`);
+    await logAdminAction(req.session.user, "ÚPRAVA_LIGY", `Upraveno nastavení ligy: ${leagueName}`);
     res.redirect('/admin/leagues/manage');
 });
 
@@ -2157,7 +2175,7 @@ router.post('/leagues/delete', requireAdmin, express.urlencoded({ extended: true
 
         await Leagues.replaceAll(allSeasonData);
     }
-    logAdminAction(req.session.user, "SMAZÁNÍ_LIGY", `Kompletně smazána liga: ${league}`);
+    await logAdminAction(req.session.user, "SMAZÁNÍ_LIGY", `Kompletně smazána liga: ${league}`);
     res.redirect('/admin/leagues/manage');
 });
 router.post("/toggle-regular-season", requireAdmin, async (req, res) => {
@@ -2185,7 +2203,7 @@ router.post("/toggle-regular-season", requireAdmin, async (req, res) => {
     await LeagueStatus.replaceAll(statusData);
 
     // Přepočet tabulky
-    evaluateRegularSeasonTable(season, liga);
+    await evaluateRegularSeasonTable(season, liga);
 
     // NOTIFIKACE: Pokud byla liga právě teď označena jako dokončená (a předtím nebyla)
     if (isFinishedNow && !wasFinishedBefore) {
@@ -2210,9 +2228,9 @@ router.post("/toggle-regular-season", requireAdmin, async (req, res) => {
             console.error("Chyba při získávání vítěze:", err);
         }
         
-        notif.notifyLeagueEnd(liga, winnerTeam);
+        await notif.notifyLeagueEnd(liga, winnerTeam);
     }
-    logAdminAction(req.session.user, "ZÁKLADNÍ_ČÁST", `Změněn stav základní části pro ${liga} (${season}) na: ${req.body.isFinished === 'on' ? 'DOKONČENO' : 'PROBÍHÁ'}`);
+    await logAdminAction(req.session.user, "ZÁKLADNÍ_ČÁST", `Změněn stav základní části pro ${liga} (${season}) na: ${req.body.isFinished === 'on' ? 'DOKONČENO' : 'PROBÍHÁ'}`);
     res.redirect('/admin');
 });
 
@@ -2265,11 +2283,11 @@ router.post("/toggle-table-tips-lock", requireAdmin, express.urlencoded({ extend
     // Uložení do MongoDB
     await LeagueStatus.replaceAll(statusData);
     
-    logAdminAction(req.session.user, "ZÁMEK_TABULKY", `Změněn zámek tipů na tabulku pro ${liga} (Skupina: ${group || 'GLOBÁLNÍ'}) na: ${shouldLock ? 'ZAMČENO' : 'ODEMČENO'}`);
+    await logAdminAction(req.session.user, "ZÁMEK_TABULKY", `Změněn zámek tipů na tabulku pro ${liga} (Skupina: ${group || 'GLOBÁLNÍ'}) na: ${shouldLock ? 'ZAMČENO' : 'ODEMČENO'}`);
     
     // OKAMŽITÉ VYHODNOCENÍ PO ZAMČENÍ/ODEMČENÍ
     const { evaluateRegularSeasonTable } = require('../utils/fileUtils');
-    evaluateRegularSeasonTable(season, liga);
+    await evaluateRegularSeasonTable(season, liga);
     
     res.redirect('/admin/leagues/manage');
 });
@@ -2503,7 +2521,7 @@ router.post('/teams/points', requireAdmin, express.urlencoded({ extended: true }
     // Uložení do MongoDB
     await TeamBonuses.replaceAll(bonusData);
     
-    logAdminAction(req.session.user, "MANUÁLNÍ_BODY", `Upraveny extra body v lize: ${liga}, Sezóna: ${season}`);
+    await logAdminAction(req.session.user, "MANUÁLNÍ_BODY", `Upraveny extra body v lize: ${liga}, Sezóna: ${season}`);
     res.redirect(`/admin/teams/points?liga=${encodeURIComponent(liga)}`);
 });
 
@@ -2532,7 +2550,7 @@ router.post('/settings/clinch', requireAdmin, async (req, res) => {
     } catch (err) {
         console.error("Kritická chyba při zápisu do MongoDB:", err);
     }
-    logAdminAction(req.session.user, "NASTAVENÍ_TABULKY", `Režim obarvování tabulky (clinch mode) změněn na: ${settings.clinchMode}`);
+    await logAdminAction(req.session.user, "NASTAVENÍ_TABULKY", `Režim obarvování tabulky (clinch mode) změněn na: ${settings.clinchMode}`);
     // Návrat na předchozí stránku (odkud se formulář odeslal)
     res.redirect('/admin');
 });
@@ -2872,7 +2890,7 @@ router.post('/matches/import-run', requireAdmin, async (req, res) => {
         </body>
         </html>
         `;
-        logAdminAction(req.session.user, "IMPORT_ZÁPASŮ", `Hromadně importováno ${newMatchesCount} zápasů pro ligu ${liga} (${season})`);
+        await logAdminAction(req.session.user, "IMPORT_ZÁPASŮ", `Hromadně importováno ${newMatchesCount} zápasů pro ligu ${liga} (${season})`);
         res.send(htmlRes);
 
     } catch (error) {
@@ -3000,7 +3018,7 @@ router.get('/images/delete/:filename', requireAdmin, async (req, res) => {
             console.error(`⚠️ Chyba při mazání ${filename} z GitHubu:`, err.message);
         }
     }
-    logAdminAction(req.session.user, "SMAZÁNÍ_OBRÁZKU", `Permanentně smazán obrázek z webu i zálohy: ${filename}`);
+    await logAdminAction(req.session.user, "SMAZÁNÍ_OBRÁZKU", `Permanentně smazán obrázek z webu i zálohy: ${filename}`);
     res.redirect('/admin/images/manage');
 });
 
@@ -3445,7 +3463,7 @@ router.post('/transfers/save', requireAdmin, upload.any(), express.urlencoded({ 
     } else {
         console.log(`[Transfer] Notifikace přeskočena: send=${shouldSendNotification}, changes=${newTransfersNotification.length}`);
     }
-    logAdminAction(req.session.user, "PŘESTUPY", `Uloženy přestupy pro ligu ${liga}`);
+    await logAdminAction(req.session.user, "PŘESTUPY", `Uloženy přestupy pro ligu ${liga}`);
     res.redirect(`/admin/transfers/manage?liga=${encodeURIComponent(liga)}`);
 });
 
@@ -3582,11 +3600,11 @@ router.post('/users/delete', requireAdmin, async (req, res) => {
         }
 
         console.log(`🧹 Uživatel ${usernameToDelete} byl kompletně vymazán z MongoDB.`);
-        logAdminAction(req.session.user, "SMAZÁNÍ_UŽIVATELE", `Smazán účet: ${usernameToDelete}`);
+        await logAdminAction(req.session.user, "SMAZÁNÍ_UŽIVATELE", `Smazán účet: ${usernameToDelete}`);
         res.redirect('/admin/users');
     } catch (error) {
         console.error("Kritická chyba při mazání:", error);
-        logAdminAction(req.session.user, "POKUS_SMAZÁNÍ_UŽIVATELE", `Účet: ${usernameToDelete}`);
+        await logAdminAction(req.session.user, "POKUS_SMAZÁNÍ_UŽIVATELE", `Účet: ${usernameToDelete}`);
         res.status(500).send("Chyba při hloubkovém mazání uživatele.");
     }
 });
@@ -3749,7 +3767,7 @@ router.post('/users/update', requireAdmin, async (req, res) => {
             await TableTips.replaceAll(tableTips);
         }
     }
-    logAdminAction(req.session.user, "ÚPRAVA_UŽIVATELE", `Úprava účtu: ${oldUsername} -> ${newUsername}, Nová role: ${newRole || 'beze změny'}`);
+    await logAdminAction(req.session.user, "ÚPRAVA_UŽIVATELE", `Úprava účtu: ${oldUsername} -> ${newUsername}, Nová role: ${newRole || 'beze změny'}`);
     res.redirect('/admin/users');
 });
 
@@ -3763,11 +3781,11 @@ router.get('/toggleLocked/:id', requireAdmin, async (req, res) => {
     match.locked = !match.locked;
 
     if (match.locked) {
-        removeTipsForDeletedMatch(matchId);
+        await removeTipsForDeletedMatch(matchId);
     }
 
     await Matches.replaceAll(matches);
-    logAdminAction(req.session.user, "ZÁMEK_ZÁPASU", `Zápas ID ${matchId} byl manuálně ${match.locked ? 'UZAMČEN' : 'ODEMČEN'}`);
+    await logAdminAction(req.session.user, "ZÁMEK_ZÁPASU", `Zápas ID ${matchId} byl manuálně ${match.locked ? 'UZAMČEN' : 'ODEMČEN'}`);
     res.redirect('/admin');
 });
 
@@ -3930,7 +3948,7 @@ router.post('/verify-stats', requireAdmin, async (req, res) => {
         // Spustit přepočet statistik
         await evaluateAndAssignPoints(liga, season);
         
-        logAdminAction(req.session.user, "KONTROLA_STATISTIK", `Kontrola a oprava statistik pro ${liga} - ${season}`);
+        await logAdminAction(req.session.user, "KONTROLA_STATISTIK", `Kontrola a oprava statistik pro ${liga} - ${season}`);
         
         res.json({ 
             success: true, 
