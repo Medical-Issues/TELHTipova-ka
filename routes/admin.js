@@ -887,7 +887,7 @@ router.post('/edit/:id', requireAdmin, async (req, res) => {
     try {
         if (season && liga) {
             updateTeamsPoints(matches);
-            evaluateAndAssignPoints(matches[matchIndex].liga, matches[matchIndex].season);
+            evaluateAndAssignPoints(liga, matches[matchIndex].season);
             evaluateRegularSeasonTable(season, liga);
 
             // 4. Odeslání výsledku (POUZE pokud má zápas výsledek)
@@ -1441,7 +1441,7 @@ router.post('/edit/:id', requireAdmin, async (req, res) => {
     const matchId = parseInt(req.params.id);
     const matches = await Matches.findAll();
 
-    const {homeTeamId, awayTeamId, datetime, season, scoreHome, scoreAway} = req.body;
+    const {homeTeamId, awayTeamId, datetime, season} = req.body;
 
     const matchIndex = matches.findIndex(m => m.id === matchId);
     if (matchIndex === -1) return renderErrorHtml(res, "Zápas nebyl nalezen.", 404);
@@ -1560,12 +1560,12 @@ router.post('/edit/:id', requireAdmin, async (req, res) => {
     try {
         if (season && liga) {
             updateTeamsPoints(matches);
-            evaluateAndAssignPoints(matches[matchIndex].liga, matches[matchIndex].season);
+            evaluateAndAssignPoints(liga, matches[matchIndex].season);
             evaluateRegularSeasonTable(season, liga);
 
             // 4. Odeslání výsledku (POUZE pokud má zápas výsledek, dřív to tu posílalo pořád)
             if (match.result) {
-                notif.notifyResult(matchId, scoreHome, scoreAway);
+                notif.notifyResult(matchId, match.result.scoreHome, match.result.scoreAway);
             }
         }
     } catch (err) {
