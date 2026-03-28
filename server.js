@@ -24,6 +24,9 @@ const extremeKeepAlive = require("./utils/extremeKeepAlive");
 
 const app = express();
 
+// Důvěřovat proxy hlavičkám (X-Forwarded-For) pro získání reálné IP klienta
+app.set('trust proxy', true);
+
 // Vytvoření sessions adresáře pokud neexistuje
 const sessionsDir = path.join(__dirname, 'sessions');
 if (!fs.existsSync(sessionsDir)) {
