@@ -3019,6 +3019,22 @@ router.get('/images/delete/:filename', requireAdmin, async (req, res) => {
         }
     }
     await logAdminAction(req.session.user, "SMAZÁNÍ_OBRÁZKU", `Permanentně smazán obrázek z webu i zálohy: ${filename}`);
+    
+    // 3. Záznam do MongoDB o smazaném obrázku (aby se nepři restore znovu nestáhl)
+    try {
+        const { connectToDatabase } = require('../config/database');
+        const db = await connectToDatabase();
+        const deletedImagesCollection = db.collection('deleted_images');
+        await deletedImagesCollection.insertOne({
+            filename: filename,
+            deletedAt: new Date(),
+            deletedBy: req.session.user
+        });
+        console.log(`📝 Záznam o smazaném obrázku ${filename} uložen do MongoDB`);
+    } catch (err) {
+        console.error(`⚠️ Chyba při záznamu smazaného obrázku:`, err.message);
+    }
+    
     res.redirect('/admin/images/manage');
 });
 
@@ -3580,10 +3596,8 @@ router.post('/users/delete', requireAdmin, async (req, res) => {
     }
 
     try {
-        // 1. Smazání z MongoDB (Users)
-        let users = await Users.findAll();
-        users = users.filter(u => u.username !== usernameToDelete);
-        await Users.updateAll(users);
+        // 1. Smazání z MongoDB (Users) - použít deleteOne místo updateAll
+        await Users.deleteOne({ username: usernameToDelete });
 
         // 2. Smazání z Tips (Tipy na zápasy)
         let tips = await Tips.findAll();

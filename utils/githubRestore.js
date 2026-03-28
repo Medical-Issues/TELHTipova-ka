@@ -8,12 +8,31 @@ const BRANCH = 'main';
 const DATA_FOLDER = path.join(__dirname, '..', 'data');
 const IMAGES_FOLDER = path.resolve(DATA_FOLDER, 'images');
 
+async function getDeletedImagesList() {
+    try {
+        const { connectToDatabase } = require('../config/database');
+        const db = await connectToDatabase();
+        const deletedImagesCollection = db.collection('deleted_images');
+        const deletedDocs = await deletedImagesCollection.find({}).toArray();
+        return new Set(deletedDocs.map(doc => doc.filename));
+    } catch (error) {
+        console.log('⚠️ Nepodařilo se načíst seznam smazaných obrázků:', error.message);
+        return new Set();
+    }
+}
+
 async function restoreFromGitHub() {
     console.log('🔄 Začínám stahování obrázků z GitHubu...');
     
     const octokit = new Octokit({
         auth: process.env.GITHUB_TOKEN,
     });
+
+    // Načíst seznam smazaných obrázků
+    const deletedImages = await getDeletedImagesList();
+    if (deletedImages.size > 0) {
+        console.log(`🗑️ Nalezeno ${deletedImages.size} smazaných obrázků - ty budou přeskočeny`);
+    }
 
     try {
         // Stáhni POUZE obrázky (JSON data jsou v MongoDB)
@@ -35,6 +54,12 @@ async function restoreFromGitHub() {
 
                 for (const file of imageFiles) {
                     if (file.name.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+                        // Přeskočit smazané obrázky
+                        if (deletedImages.has(file.name)) {
+                            console.log(`🚫 Přeskakuji smazaný obrázek: ${file.name}`);
+                            continue;
+                        }
+                        
                         console.log(`🖼️ Stahuji obrázek: ${file.name}`);
                         
                         const { data: fileContent } = await octokit.repos.getContent({
@@ -76,6 +101,12 @@ async function fullRestoreFromGitHub() {
     const octokit = new Octokit({
         auth: process.env.GITHUB_TOKEN,
     });
+
+    // Načíst seznam smazaných obrázků
+    const deletedImages = await getDeletedImagesList();
+    if (deletedImages.size > 0) {
+        console.log(`🗑️ Nalezeno ${deletedImages.size} smazaných obrázků - ty budou přeskočeny`);
+    }
 
     try {
         // 1. Stáhni JSON soubory (pro nouzovou obnovu)
@@ -125,6 +156,12 @@ async function fullRestoreFromGitHub() {
 
                 for (const file of imageFiles) {
                     if (file.name.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+                        // Přeskočit smazané obrázky
+                        if (deletedImages.has(file.name)) {
+                            console.log(`🚫 Přeskakuji smazaný obrázek: ${file.name}`);
+                            continue;
+                        }
+                        
                         console.log(`🖼️ Stahuji obrázek: ${file.name}`);
                         
                         const { data: fileContent } = await octokit.repos.getContent({
