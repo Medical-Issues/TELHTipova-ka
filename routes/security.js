@@ -260,6 +260,11 @@ function logSecurityEvent(event) {
 
 async function saveSecurityLogToDB(event) {
     try {
+        // Skip pro localhost - neukládat interní requesty
+        const clientIP = event.ip;
+        const isLocalhost = clientIP === '::1' || clientIP === '127.0.0.1' || clientIP === 'localhost';
+        if (isLocalhost) return;
+        
         const { connectToDatabase } = require('../config/database');
         const db = await connectToDatabase();
         const collection = db.collection('security_logs');

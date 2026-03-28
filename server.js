@@ -167,16 +167,21 @@ app.get('/wake', async (req, res) => {
             // Ignorovat pokud kolekce neexistuje
         }
         
-        // Zápis do log kolekce (pokud existuje)
+        // Zápis do log kolekce (pokud existuje) - pouze pro externí IP
         try {
-            const logsCollection = db.collection('wake_logs');
-            await logsCollection.insertOne({
-                timestamp: new Date(),
-                ip: req.ip || req.connection.remoteAddress,
-                userAgent: req.get('User-Agent') || 'cron-job',
-                responseTime: Date.now() - startTime,
-                collectionsCount: collections.length
-            });
+            const clientIP = req.ip || req.connection.remoteAddress;
+            const isLocalhost = clientIP === '::1' || clientIP === '127.0.0.1' || clientIP === 'localhost';
+            
+            if (!isLocalhost) {
+                const logsCollection = db.collection('wake_logs');
+                await logsCollection.insertOne({
+                    timestamp: new Date(),
+                    ip: clientIP,
+                    userAgent: req.get('User-Agent') || 'cron-job',
+                    responseTime: Date.now() - startTime,
+                    collectionsCount: collections.length
+                });
+            }
         } catch (logError) {
             // Pokud kolekce neexistuje, ignorujeme chybu
         }
@@ -522,6 +527,27 @@ async function startServer() {
             console.error('❌ Keep-alive error:', error.message);
         }
     }, 5 * 60 * 1000); // 5 minut
+
+    // HTTP Keep-Alive pro Render - každých 2 minuty pingnout vlastní URL
+    const axios = require('axios');
+    const KEEP_ALIVE_URL = process.env.KEEP_ALIVE_URL || 'https://telhtipova-ka.onrender.com/health/ping';
+    
+    setInterval(async () => {
+        try {
+            const startTime = Date.now();
+            const response = await axios.get(KEEP_ALIVE_URL, {
+                timeout: 10000,
+                headers: {
+                    'User-Agent': 'Render-Keep-Alive',
+                    'Cache-Control': 'no-cache'
+                }
+            });
+            const responseTime = Date.now() - startTime;
+            console.log(`🌐 HTTP Keep-alive: ${response.status} (${responseTime}ms)`);
+        } catch (error) {
+            console.error('❌ HTTP Keep-alive error:', error.message);
+        }
+    }, 2 * 60 * 1000); // 2 minuty - dostatečné pro Render
 
     // Záloha každých 24 hodin
     setInterval(() => {
