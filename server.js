@@ -19,8 +19,6 @@ const {backupJsonFilesToGitHub} = require("./utils/githubBackup");
 const {restoreFromGitHub, fullRestoreFromGitHub} = require("./utils/githubRestore");
 const {startMonitoring} = require("./utils/monitoring");
 const {startSecurityMonitoring} = require("./utils/securityMonitoring");
-const {startAggressiveKeepAlive} = require("./utils/aggressiveKeepAlive");
-const extremeKeepAlive = require("./utils/extremeKeepAlive");
 
 const app = express();
 
@@ -84,35 +82,42 @@ app.use((req, res, next) => {
     const ip = req.ip || req.connection.remoteAddress;
     const now = Date.now();
     
-    // Sledování požadavků za poslední minutu
-    if (!requestCounts.has(ip)) {
-        requestCounts.set(ip, []);
-    }
+    // Detekce localhostu (interní keep-alive systémy)
+    const isLocalhost = ip === '::1' || ip === '127.0.0.1' || ip === 'localhost';
     
-    const requests = requestCounts.get(ip);
-    requests.push(now);
-    
-    // Vyčistit staré požadavky (> 1 minuta)
-    const recent = requests.filter(time => now - time < 60000);
-    requestCounts.set(ip, recent);
-    
-    // Detekce podezřelé aktivity
-    if (recent.length > 100) { // více než 100 požadavků za minutu
-        suspiciousIPs.add(ip);
-        console.warn(`🚨 SUSPICIOUS ACTIVITY: ${recent.length} requests from ${ip} in last minute`);
+    // Sledování požadavků za poslední minutu (pouze pro externí IP)
+    if (!isLocalhost) {
+        if (!requestCounts.has(ip)) {
+            requestCounts.set(ip, []);
+        }
         
-        // Zablokovat IP pokud je to extrémní
-        if (recent.length > 500) {
-            console.error(`🔒 BLOCKING IP: ${ip} - ${recent.length} requests in minute`);
-            return res.status(429).json({ 
-                error: 'Too Many Requests', 
-                message: 'IP temporarily blocked due to suspicious activity' 
-            });
+        const requests = requestCounts.get(ip);
+        requests.push(now);
+        
+        // Vyčistit staré požadavky (> 1 minuta)
+        const recent = requests.filter(time => now - time < 60000);
+        requestCounts.set(ip, recent);
+        
+        // Detekce podezřelé aktivity
+        if (recent.length > 100) { // více než 100 požadavků za minutu
+            suspiciousIPs.add(ip);
+            console.warn(`🚨 SUSPICIOUS ACTIVITY: ${recent.length} requests from ${ip} in last minute`);
+            
+            // Zablokovat IP pokud je to extrémní
+            if (recent.length > 500) {
+                console.error(`🔒 BLOCKING IP: ${ip} - ${recent.length} requests in minute`);
+                return res.status(429).json({ 
+                    error: 'Too Many Requests', 
+                    message: 'IP temporarily blocked due to suspicious activity' 
+                });
+            }
         }
     }
     
-    // Logování každého požadavku (pro analýzu)
-    console.log(`${req.method} ${req.url} - IP: ${ip} - Time: ${new Date().toISOString()}`);
+    // Logování každého požadavku (pro analýzu) - pouze externí IP
+    if (!isLocalhost) {
+        console.log(`${req.method} ${req.url} - IP: ${ip} - Time: ${new Date().toISOString()}`);
+    }
     
     next();
 });
@@ -501,17 +506,8 @@ async function startServer() {
                 console.log('🔒 Starting comprehensive security monitoring service...');
                 startSecurityMonitoring();
                 
-                // Spustit agresivní keep-alive po dalších 5 sekundách
-                setTimeout(() => {
-                    console.log('🔥🔥🔥 Starting AGGRESSIVE keep-alive system...');
-                    startAggressiveKeepAlive();
-                    
-                    // Spustit EXTREME keep-alive po dalších 5 sekundách
-                    setTimeout(() => {
-                        console.log('💀💀💀 Starting EXTREME keep-alive system... SERVER WILL NEVER SLEEP!');
-                        extremeKeepAlive.start();
-                    }, 5000);
-                }, 5000);
+                // Keep-alive je řešen interním intervalem níže
+                console.log('💓 Interní keep-alive aktivní (každých 5 minut)');
             }, 5000);
         }, 10000);
     });
