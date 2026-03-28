@@ -913,7 +913,7 @@ router.get('/new/match', requireAdmin, async (req, res) => {
 
     const knownSeasons = [...seasonsFromTeams, ...seasonsFromMatches];
     const currentYear = new Date().getFullYear();
-    const futureSeasons = generateSeasonRange(currentYear, 10);
+    const futureSeasons = await generateSeasonRange(currentYear, 10);
 
     const allSeasons = [...new Set([...futureSeasons, ...knownSeasons])];
     allSeasons.sort();

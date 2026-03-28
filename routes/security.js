@@ -70,7 +70,7 @@ const ddosLimiter = rateLimit({
 // Rate limiting pro auth endpointy
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minut
-    max: 5, // Level 2: max 5 pokusů o přihlášení za 15 minut (místo 10)
+    max: 20, // max 20 pokusů za 15 minut (přihlášení + registrace dohromady)
     message: { error: 'Too many auth attempts', blocked: true },
     keyGenerator: (req) => req.ip || req.connection.remoteAddress,
     handler: (req, res) => {
