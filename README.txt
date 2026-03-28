@@ -30,4 +30,8 @@ Správce exportu obrázků ✅
 
 Při exportu vyřešit nějak možnost pro ligy neveřejné ✅
 
+bruteforce obrana jebe
+
+nejde vypisovat zápasy
+
 Novinkovač (Otvírání tweetů atd.) ?
