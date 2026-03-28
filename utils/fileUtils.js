@@ -730,7 +730,7 @@ async function evaluateRegularSeasonTable(season, liga, groupKey = null, isForLe
     const scores = {};
     teams.forEach(t => scores[t.id] = { points: 0, gf: 0, ga: 0 });
 
-    matches.filter(m => m.season === season && m.liga === liga && m.result).forEach(m => {
+    matches.filter(m => m.season === season && m.liga === liga && m.result && !m.isPlayoff).forEach(m => {
         const homeId = m.homeTeamId;
         const awayId = m.awayTeamId;
         if(scores[homeId] && scores[awayId]) {
