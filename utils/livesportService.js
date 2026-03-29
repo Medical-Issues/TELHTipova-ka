@@ -4,12 +4,18 @@
  */
 const axios = require('axios');
 
-// Pokusíme se načíst puppeteer-core (lehčí verze, potřebuje externí Chrome)
+// Pokusíme se načíst puppeteer-core a chromium pro hosting
 let puppeteer;
+let chromium;
 try {
     puppeteer = require('puppeteer-core');
 } catch (e) {
     puppeteer = null;
+}
+try {
+    chromium = require('@sparticuz/chromium');
+} catch (e) {
+    chromium = null;
 }
 
 // Livesport API endpointy
@@ -50,21 +56,31 @@ const LEAGUE_ID_MAP = {
 function getLeagueId(ligaName, url = null) {
     if (!url) return null;
 
-    // Formát 1: Standardní livesport s ID v URL
+    // Formát 1: Kategorie URL bez ID (např. /hokej/svet/mistrovstvi-sveta/program/)
+    // Toto musí být PRVNÍ, jinak by Formát 2 vzal "program" jako ID
+    try {
+        const urlObj = new URL(url);
+        const pathParts = urlObj.pathname.split('/').filter(p => p);
+        // Path: ['hokej', 'svet', 'mistrovstvi-sveta', 'program']
+        if (pathParts.length >= 3 && pathParts[0] === 'hokej') {
+            const categoryName = pathParts[2]; // 'mistrovstvi-sveta'
+            // Vyloučíme 'program', 'zapasy', 'vysledky'
+            if (categoryName && !['program', 'zapasy', 'vysledky'].includes(categoryName)) {
+                return categoryName;
+            }
+        }
+    } catch (e) {
+        // URL parsing selhal
+    }
+
+    // Formát 2: Standardní livesport s ID v URL
     // /zapasy/2025-2026/telh-UCEL8Q9b/
     const standardMatch = url.match(/[-/]([A-Za-z0-9]{6,10})[/?#]?$/);
     if (standardMatch) {
-        return standardMatch[1];
-    }
-
-    // Formát 2: Kategorie URL bez ID (např. /hokej/svet/mistrovstvi-sveta/program/)
-    // Extrahujeme název soutěže z cesty (před /program/ nebo /zapasy/)
-    const categoryMatch = url.match(/\/hokej\/[^/]+\/([^/]+)(?:\/|$)/);
-    if (categoryMatch) {
-        const categoryName = categoryMatch[1];
-        // Vyloučíme 'program', 'zapasy', 'vysledky' - to jsou endpointy, ne názvy lig
-        if (categoryName && categoryName !== 'program' && categoryName !== 'zapasy' && categoryName !== 'vysledky') {
-            return categoryName;
+        const id = standardMatch[1];
+        // Vyloučíme běžná slova která nejsou ID
+        if (!['program', 'zapasy', 'vysledky'].includes(id)) {
+            return id;
         }
     }
 
@@ -271,11 +287,13 @@ async function fetchMatchesFromLivesport(options) {
         console.log(`   Nalezeno ${apiMatches.length} API endpointů:`);
         apiMatches.slice(0, 10).forEach(url => console.log(`     - ${url}`));
         
-        // Hledáme tournament ID v HTML
+        // Hledáme tournament ID v HTML - toto je skutečné Livesport ID
+        let realTournamentId = null;
         const tournamentMatch = html.match(/"tournamentId"\s*:\s*"([^"]+)"/) || 
                                html.match(/"id"\s*:\s*"([A-Za-z0-9]{6,})"/);
         if (tournamentMatch) {
-            console.log(`🏆 Tournament ID z HTML: ${tournamentMatch[1]}`);
+            realTournamentId = tournamentMatch[1];
+            console.log(`🏆 Tournament ID z HTML: ${realTournamentId}`);
         }
 
         // 4. Extrakce dat - Livesport embeduje data v JSON ve skriptech nebo v atributech
@@ -318,20 +336,22 @@ async function fetchMatchesFromLivesport(options) {
             }
         }
 
-        // Pokus 2: Přímé volání API - více variant včetně sezónních URL
-        if (events.length === 0 && tournamentId) {
+        // Pokus 2: Přímé volání API - použijeme reálné ID z HTML nebo kategorii
+        const apiId = realTournamentId || tournamentId;
+        if (events.length === 0 && apiId) {
+            console.log(`🌐 Používám API ID: ${apiId}`);
             // Pro URL typu /hokej/svet/mistrovstvi-sveta/program/ zkusíme sezónní formát
             const seasonYear = seasonToUse ? `20${seasonToUse.split('/')[0]}-20${seasonToUse.split('/')[1]}` : '2025-2026';
             
             const apiUrls = [
                 // Přímé API endpointy
-                `https://www.livesport.cz/api/v1/tournament/${tournamentId}/fixtures`,
-                `https://www.livesport.cz/api/v1/tournament/${tournamentId}/events`,
-                `https://www.livesport.cz/api/v2/tournament/${tournamentId}/fixtures`,
+                `https://www.livesport.cz/api/v1/tournament/${apiId}/fixtures`,
+                `https://www.livesport.cz/api/v1/tournament/${apiId}/events`,
+                `https://www.livesport.cz/api/v2/tournament/${apiId}/fixtures`,
                 // Sezónní stránky (pro MS apod.)
-                `https://www.livesport.cz/zapasy/${seasonYear}/${tournamentId}/`,
-                `https://www.livesport.cz/zapasy/${seasonYear}/ms-${tournamentId}/`,
-                `https://www.livesport.cz/zapasy/${seasonYear}/mistrovstvi-sveta-${tournamentId}/`,
+                `https://www.livesport.cz/zapasy/${seasonYear}/${apiId}/`,
+                `https://www.livesport.cz/zapasy/${seasonYear}/ms-${apiId}/`,
+                `https://www.livesport.cz/zapasy/${seasonYear}/mistrovstvi-sveta-${apiId}/`,
             ];
             
             for (const apiUrl of apiUrls) {
@@ -511,16 +531,53 @@ async function fetchMatchesFromLivesport(options) {
             console.log(`🤖 Spouštím Puppeteer pro dynamický scraping...`);
             let browser;
             try {
-                // Najdeme Chrome - na Renderu je v /usr/bin/google-chrome-stable
-                const chromePath = process.env.PUPPETEER_EXECUTABLE_PATH || 
-                                  '/usr/bin/google-chrome-stable' || 
-                                  '/usr/bin/chromium-browser' ||
-                                  '/usr/bin/chromium';
+                let executablePath;
+                let args = ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'];
+                
+                // Zkusíme najít Chrome - nejdřív systémový, pak @sparticuz/chromium
+                const fs = require('fs');
+                const possiblePaths = [
+                    process.env.PUPPETEER_EXECUTABLE_PATH,
+                    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', // Windows (z registru)
+                    process.env.LOCALAPPDATA + '\\Google\\Chrome\\Application\\chrome.exe', // Windows
+                    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe', // Windows
+                    '/usr/bin/google-chrome-stable', // Linux
+                    '/usr/bin/chromium-browser',
+                    '/usr/bin/chromium',
+                ];
+                
+                // Najdeme existující systémový Chrome
+                console.log('🔍 Hledám system Chrome...');
+                for (const path of possiblePaths) {
+                    if (path) {
+                        const exists = fs.existsSync(path);
+                        console.log(`   ${path}: ${exists ? '✅' : '❌'}`);
+                        if (exists) {
+                            executablePath = path;
+                            console.log(`✅ Nalezen system Chrome: ${path}`);
+                            break;
+                        }
+                    }
+                }
+                
+                // Pokud není systémový, zkusíme @sparticuz/chromium (pro hosting)
+                if (!executablePath && chromium) {
+                    console.log('📦 Používám @sparticuz/chromium');
+                    executablePath = await chromium.executablePath();
+                    args = chromium.args;
+                }
+                
+                if (!executablePath) {
+                    console.log('⚠️ Chrome nenalezen, přeskakuji Puppeteer');
+                    return;
+                }
+                
+                console.log(`🔍 Chrome path: ${executablePath}`);
                 
                 browser = await puppeteer.launch({
-                    headless: 'new',
-                    executablePath: chromePath,
-                    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+                    headless: chromium ? chromium.headless : 'new',
+                    executablePath,
+                    args
                 });
                 const page = await browser.newPage();
                 
@@ -538,8 +595,18 @@ async function fetchMatchesFromLivesport(options) {
                         const awayTeam = el.querySelector('.event__awayParticipant, [class*="away"] [class*="name"]')?.textContent?.trim();
                         const timeText = el.querySelector('.event__time')?.textContent?.trim();
 
-                        if (homeTeam && awayTeam) {
-                            matches.push({homeTeam, awayTeam, time: timeText || ''});
+                        if (homeTeam && awayTeam && timeText) {
+                            // timeText je ve formátu "15.05. 16:20" - obsahuje datum i čas
+                            const parts = timeText.split(' ');
+                            const datePart = parts[0]; // "15.05." - ponecháme tečku
+                            const timePart = parts[1] || '';
+                            
+                            matches.push({
+                                homeTeam, 
+                                awayTeam, 
+                                time: timePart,
+                                date: datePart
+                            });
                         }
                     });
                     return matches;
@@ -554,6 +621,10 @@ async function fetchMatchesFromLivesport(options) {
         }
 
         // 5. Zpracování zápasů
+        console.log(`🔄 Zpracovávám ${events.length} zápasů...`);
+        let skippedTeams = 0;
+        let skippedDate = 0;
+        
         for (const event of events) {
             // Různé struktury dat podle zdroje
             const homeTeamName = event.homeTeam?.name || event.homeTeam || event.team1;
@@ -569,16 +640,22 @@ async function fetchMatchesFromLivesport(options) {
 
             if (!homeTeamId) {
                 notFoundTeams.add(`${homeTeamName}`);
+                skippedTeams++;
             }
             if (!awayTeamId) {
                 notFoundTeams.add(`${awayTeamName}`);
+                skippedTeams++;
             }
 
             if (!homeTeamId || !awayTeamId) continue;
 
             // Parsování data a času
             const parsedDateTime = parseDateTime(dateStr, timeStr, seasonToUse);
-            if (!parsedDateTime) continue;
+            if (!parsedDateTime) {
+                console.log(`❌ Nelze parsovat datum: ${dateStr} ${timeStr}`);
+                skippedDate++;
+                continue;
+            }
 
             // Kontrola rozsahu dat
             if (dateFrom && parsedDateTime.date < dateFrom) {
@@ -600,6 +677,9 @@ async function fetchMatchesFromLivesport(options) {
                 time: parsedDateTime.time
             });
         }
+        
+        console.log(`📊 Statistika: ${matches.length} importováno, ${skippedTeams} bez týmu, ${skippedDate} bez data, ${outOfRangeCount} mimo rozsah`);
+        console.log(`🔍 Nenalezené týmy: ${Array.from(notFoundTeams).join(', ')}`);
 
         return {
             success: true,
