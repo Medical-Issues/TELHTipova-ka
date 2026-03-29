@@ -5,7 +5,7 @@ const path = require('path');
 const bodyParser = require("body-parser");
 const session = require("express-session");
 const { default: MongoStore } = require('connect-mongo');
-const fs = require('fs');
+require('fs');
 const userRoutes = require('./routes/user');
 const adminRoutes = require('./routes/admin');
 const authRoutes = require('./routes/auth');
@@ -90,6 +90,14 @@ app.use(session({
         secure: process.env.NODE_ENV === 'production'
     }
 }));
+
+// Serve static files (CSS, images, etc.)
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Body parser middleware
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json());
+
 // Health check endpoint pro monitoring služby (bez autentizace) - MUSÍ BÝT PŘED ROUTES!
 app.get('/health', (req, res) => {
     Date.now();
