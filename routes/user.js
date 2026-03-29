@@ -2792,6 +2792,7 @@ html += `<section class="matches-container" style="flex: 1; padding: 20px;">
 </section>
 </main>
 </body>
+<script src="/js/version-notification.js"></script>
 </html>`;
     res.send(html);
 });

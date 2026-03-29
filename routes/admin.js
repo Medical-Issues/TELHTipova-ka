@@ -273,6 +273,7 @@ router.get('/', requireAdmin, async (req, res) => {
         <h3>🔔 Systém a notifikace</h3>
         <div class="nav-buttons">
           <a href="/admin/broadcast-ping" class="btn btn-secondary">📢 Test notifikace</a>
+          <a href="/api/versions/manage" class="btn btn-secondary">📋 Správa verzí</a>
           <a id="backupBtn" class="btn btn-warning">💾 Záloha dat do JSONů</a>
           <a id="verifyStatsBtn" class="btn btn-danger">🔍 Kontrola statistik</a>
         </div>

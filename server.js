@@ -11,6 +11,7 @@ const adminRoutes = require('./routes/admin');
 const authRoutes = require('./routes/auth');
 const healthRoutes = require('./routes/health');
 const { router: securityRoutes, authLimiter } = require('./routes/security');
+const versionRoutes = require('./routes/version');
 const { Users } = require('./utils/mongoDataAccess');
 
 // MongoDB připojení
@@ -333,6 +334,7 @@ app.post('/admin/full-restore-from-github', (req, res) => {
 app.use('/auth', authLimiter, authRoutes);
 app.use('/health', healthRoutes);
 app.use('/security', securityRoutes);
+app.use('/api', versionRoutes);
 app.use('/', userRoutes)
 app.use('/admin', adminRoutes);
 
