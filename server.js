@@ -21,6 +21,19 @@ const {restoreFromGitHub, fullRestoreFromGitHub} = require("./utils/githubRestor
 const app = express();
 
 // Serve static files (CSS, images, etc.) - MUSÍ BÝT PRVNÍ!
+console.log(`[DEBUG] __dirname: ${__dirname}`);
+console.log(`[DEBUG] Public path: ${path.join(__dirname, 'public')}`);
+console.log(`[DEBUG] Images path: ${path.join(__dirname, 'public', 'images')}`);
+
+app.use((req, res, next) => {
+    if (req.url.startsWith('/images/') || req.url.startsWith('/css/')) {
+        console.log(`[STATIC REQUEST] ${req.method} ${req.url}`);
+        const fullPath = path.join(__dirname, 'public', req.url);
+        console.log(`[STATIC REQUEST] Looking for: ${fullPath}`);
+        console.log(`[STATIC REQUEST] File exists: ${fs.existsSync(fullPath)}`);
+    }
+    next();
+});
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Helmet-like security headers (bez balíčku)
