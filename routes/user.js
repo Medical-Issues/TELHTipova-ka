@@ -113,7 +113,10 @@ async function toggleNotifications() {
             // ODHLÁŠENÍ
             const res = await fetch('/api/unsubscribe', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': '${req.session.csrfToken || ''}'
+                },
                 body: JSON.stringify({ endpoint: subscription.endpoint })
             });
             if (res.ok) {
@@ -139,7 +142,10 @@ async function toggleNotifications() {
 
             const saveRes = await fetch('/api/subscribe', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': '${req.session.csrfToken || ''}'
+                },
                 body: JSON.stringify(newSub)
             });
             
@@ -234,6 +240,7 @@ html += await generateLeftPanel(data);
             <p style="text-align:center;">Chyť tým myší a přetáhni ho na požadovanou pozici.</p>
             
             <form id="sortForm">
+                <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
     `;
 
     for (const gKey of sortedGroupKeys) {
@@ -435,11 +442,15 @@ html += await generateLeftPanel(data);
 
                     fetch('/table-tip', {
                         method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-Token': '${req.session.csrfToken || ''}'
+                        },
                         body: JSON.stringify({
                             liga: '${selectedLiga}',
                             season: '${selectedSeason}',
-                            teamOrder: payloadData
+                            teamOrder: payloadData,
+                            _csrf: '${req.session.csrfToken || ''}'
                         })
                     }).then(res => {
                         if (res.ok) {
@@ -772,7 +783,10 @@ async function toggleNotifications() {
             // ODHLÁŠENÍ
             const res = await fetch('/api/unsubscribe', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': '${req.session.csrfToken || ''}'
+                },
                 body: JSON.stringify({ endpoint: subscription.endpoint })
             });
             if (res.ok) {
@@ -798,7 +812,10 @@ async function toggleNotifications() {
 
             const saveRes = await fetch('/api/subscribe', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': '${req.session.csrfToken || ''}'
+                },
                 body: JSON.stringify(newSub)
             });
             
@@ -1037,6 +1054,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
         <tr class="match-row loser-row" style="display:${existingTip ? 'table-row' : 'none'}">
             <td style="border-top: none" colspan="3">
                 <form class="loserwins-form" onsubmit="return false;" data-bo="${match.bo}">
+                    <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
                     <input type="hidden" name="matchId" value="${match.id}">
                     <input type="hidden" name="winner" value="${existingTip?.winner ?? ''}">
                     ${match.bo === 1 ?
@@ -1055,7 +1073,16 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 document.addEventListener('DOMContentLoaded', () => {
 function sendTip(formData, homeBtn, awayBtn, loserRow) {
 const winner = formData.get('winner');
-fetch('/tip', { method: 'POST', headers: { 'x-requested-with': 'fetch', 'Content-Type': 'application/x-www-form-urlencoded' }, body: formData })
+const csrfToken = document.querySelector('#sortForm input[name="_csrf"]')?.value || '';
+fetch('/tip', { 
+    method: 'POST', 
+    headers: { 
+        'x-requested-with': 'fetch', 
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-CSRF-Token': csrfToken
+    }, 
+    body: formData 
+})
 .then(res => { if (res.ok) { 
     if(homeBtn) { homeBtn.classList.toggle('selected', winner === 'home'); if(winner === 'home' && awayBtn) awayBtn.classList.remove('selected'); }
     if(awayBtn) { awayBtn.classList.toggle('selected', winner === 'away'); if(winner === 'away' && homeBtn) homeBtn.classList.remove('selected'); }
@@ -1901,7 +1928,10 @@ async function toggleNotifications() {
             // ODHLÁŠENÍ
             const res = await fetch('/api/unsubscribe', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': '${req.session.csrfToken || ''}'
+                },
                 body: JSON.stringify({ endpoint: subscription.endpoint })
             });
             if (res.ok) {
@@ -1927,7 +1957,10 @@ async function toggleNotifications() {
 
             const saveRes = await fetch('/api/subscribe', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': '${req.session.csrfToken || ''}'
+                },
                 body: JSON.stringify(newSub)
             });
             

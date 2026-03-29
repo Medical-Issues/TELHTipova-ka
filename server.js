@@ -44,11 +44,21 @@ function csrfMiddleware(req, res, next) {
     // Přidat token do res.locals pro EJS/views
     res.locals.csrfToken = req.session.csrfToken;
     
-    // Kontrolovat POST/PUT/DELETE requesty
+    // Přidat funkci pro vložení CSRF token do HTML
+    res.locals.csrfField = `<input type="hidden" name="_csrf" value="${req.session.csrfToken}">`;
+    
+    // Kontrolovat POST/PUT/DELETE requesty - token je POVINNÝ
     if (['POST', 'PUT', 'DELETE'].includes(req.method)) {
-        const token = req.body._csrf || req.headers['x-csrf-token'];
+        const token = req.body?._csrf || req.headers['x-csrf-token'];
+        
+        // Token je povinný pro všechny modifikující requesty
+        if (!token) {
+            return res.status(403).json({ error: 'CSRF token missing' });
+        }
+        
+        // Kontrola validity tokenu
         if (token !== req.session.csrfToken) {
-            return res.status(403).send('CSRF token invalid');
+            return res.status(403).json({ error: 'CSRF token invalid' });
         }
     }
     
@@ -303,7 +313,7 @@ app.use('/auth', authRoutes);
 app.use('/health', healthRoutes);
 app.use('/security', securityRoutes);
 app.use('/api', csrfMiddleware, versionRoutes);
-app.use('/', userRoutes)
+app.use('/', csrfMiddleware, userRoutes)
 app.use('/admin', csrfMiddleware, adminRoutes);
 
 app.get('/api/vapid-public-key', (req, res) => {

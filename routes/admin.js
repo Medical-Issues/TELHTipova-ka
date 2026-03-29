@@ -164,6 +164,7 @@ router.get('/', requireAdmin, async (req, res) => {
               <span class="setting-description">Aktuální sezóna pro celou aplikaci</span>
             </div>
             <form method="POST" action="/admin/season" style="display: flex; align-items: center; gap: 10px;">
+              <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
               <select id="season-select" class="modern-select" name="season" style="width: 150px;">
                 ${allSeasons.map(s => `<option value="${s}" ${s === chosenSeasonValue ? 'selected' : ''}>${s}</option>`).join('')}
               </select>
@@ -178,6 +179,7 @@ router.get('/', requireAdmin, async (req, res) => {
               <span class="setting-description">Ligy viditelné pro uživatele</span>
             </div>
             <form method="POST" action="/admin/leagues/visibility" style="display: flex; flex-direction: column; gap: 10px;">
+              <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
               <div class="leagues-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px;">
                 ${allLeagues.map(l => `
                   <label style="display: flex; align-items: center; gap: 6px; font-size: 0.9em;">
@@ -197,6 +199,7 @@ router.get('/', requireAdmin, async (req, res) => {
               <span class="setting-description">Ligy s aktivním přestupovým oknem</span>
             </div>
             <form method="POST" action="/admin/leagues/transfers" style="display: flex; flex-direction: column; gap: 10px;">
+              <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
               <div class="leagues-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px;">
                 ${allLeagues.map(l => `
                   <label style="display: flex; align-items: center; gap: 6px; font-size: 0.9em;">
@@ -216,6 +219,7 @@ router.get('/', requireAdmin, async (req, res) => {
               <span class="setting-description">Jak se týmy obarvují při zamykání pozic</span>
             </div>
             <form method="POST" action="/admin/settings/clinch" style="display: flex; flex-direction: column; gap: 10px;">
+              <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
               <div style="display: flex; flex-direction: column; gap: 8px;">
                 <label style="display: flex; align-items: center; gap: 8px;">
                   <input type="radio" name="mode" value="strict" ${clinchMode === 'strict' ? 'checked' : ''} />
@@ -348,6 +352,7 @@ router.get('/', requireAdmin, async (req, res) => {
           <div class="action-buttons">
             <a href="/admin/edit/${m.id}" class="btn btn-sm btn-primary">✏️</a>
             <form action="/admin/delete/${m.id}" method="POST" style="display:inline;" onsubmit="return confirm('Opravdu smazat zápas?');">
+              <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
               <button type="submit" class="btn btn-sm btn-danger">🗑️</button>
             </form>
             <a href="/admin/togglePostponed/${m.id}" 
@@ -413,6 +418,7 @@ router.get('/', requireAdmin, async (req, res) => {
             <div class="action-buttons">
               <a href="/admin/edit/${m.id}" class="btn btn-sm btn-primary">✏️</a>
               <form action="/admin/delete/${m.id}" method="POST" style="display:inline;" onsubmit="return confirm('Opravdu smazat zápas?');">
+                <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
                 <button type="submit" class="btn btn-sm btn-danger">🗑️</button>
               </form>
             </div>
@@ -729,6 +735,7 @@ router.get('/teams/edit/:id', requireAdmin, async (req, res) => {
   <h1>Upravit tým ${team.name} ID ${team.id}</h1>
   <img height="50" src="${team.logo ? `/logoteamu/${team.logo}` : '/images/logo.png'}" alt="Logo" />
   <form style="display: flex; flex-direction: row; gap: 10px; margin-bottom: 10px" action="/admin/teams/edit/${team.id}" method="POST" enctype="multipart/form-data">
+    <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
     <label style="display: flex; flex-direction: column" for="name">Název týmu
       <input autocomplete="off" style="width: 220px" class="league-select" type="text" id="name" name="name" value="${team.name}" required />
     </label>
@@ -754,6 +761,7 @@ router.get('/teams/edit/:id', requireAdmin, async (req, res) => {
     <button class="action-btn edit-btn" type="submit">Uložit změny</button>
   </form>
   <form action="/admin/teams/delete/${team.id}" method="POST" style="display:inline;" onsubmit="return confirm('Opravdu smazat tým?');">
+    <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
             <button type="submit" class="action-btn delete-btn">Smazat tým</button>
   </form>
   <a href="/admin" class="back-link">← Zpět na seznam týmů</a>
@@ -992,6 +1000,7 @@ router.get('/new/match', requireAdmin, async (req, res) => {
             </div>
 
             <form style="display: flex; flex-direction: row; gap: 10px; flex-wrap: wrap;" action="/admin/new/match" method="POST">
+                <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
                 <label style="display: flex; flex-direction: column" for="homeTeamId">Domácí tým
                     <select class="league-select" style="width: 220px" id="homeTeamId" name="homeTeamId" required>
                         ${teams.map(t => `<option value="${t.id}">${t.liga} - ${t.name}</option>`).join('')}
@@ -1130,6 +1139,7 @@ router.get('/new/team', requireAdmin, async (req, res) => {
     <main>
     <h1>Vytvořit nový tým</h1>
     <form style="display: flex; flex-direction: row; gap: 10px" method="POST" action="/admin/new/team" enctype="multipart/form-data">
+      <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
       <label style="display: flex; flex-direction: column;">Název týmu: <input style="width: 220px" class="league-select" autocomplete="off" type="text" name="name" required></label>
       <label style="display: flex; flex-direction: column;">Nahrát logo: 
         <input style="width: 220px" class="league-select" type="file" name="logo" accept="image/*">
@@ -1367,6 +1377,7 @@ router.get('/edit/:id', requireAdmin, async (req, res) => {
 <main>
   <h1>Upravit zápas ID ${match.id}</h1>
   <form class="login_form" action="/admin/edit/${match.id}" method="POST">
+    <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
     <label for="homeTeamId">Domácí tým
       <select class="league-select" style="width: 220px" id="homeTeamId" name="homeTeamId" required>
         ${teams.map(t => `<option value="${t.id}" ${t.id === match.homeTeamId ? 'selected' : ''}>${t.name}</option>`).join('')}
@@ -1801,6 +1812,7 @@ router.get('/playoff', requireAdmin, async (req, res) => {
         </p>
 
         <form action="/admin/playoff/save" method="POST">
+            <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
             <input type="hidden" name="season" value="${selectedSeason}">
             <input type="hidden" name="league" value="${selectedLeague}">
             
@@ -1811,6 +1823,7 @@ router.get('/playoff', requireAdmin, async (req, res) => {
         
         ${playoffFormat !== 'none' ? `
         <form action="/admin/playoff/delete" method="POST" onsubmit="return confirm('Opravdu vymazat celého pavouka pro tuto ligu? Všechny naklikané série ze slotů zmizí.');">
+            <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
             <input type="hidden" name="season" value="${selectedSeason}">
             <input type="hidden" name="league" value="${selectedLeague}">
             <button type="submit" class="action-btn delete-btn" style="width: 100%; padding: 15px; font-size: 1.1em; margin-top: 10px;">Vyresetovat pavouka</button>
@@ -1938,6 +1951,7 @@ router.get('/leagues/manage', requireAdmin, async (req, res) => {
         
         <h2>Přidat novou ligu</h2>
         <form method="POST" action="/admin/leagues/manage">
+             <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
              <label>Nová liga: <input type="text" class="league-select" name="newLeague[ligaName]" required style="width: 200px;"></label>
              <label style="display: flex; align-items: center; gap: 10px;">Více skupin: <input type="checkbox" id="multiGroupCheckbox" name="newLeague[multigroup]" onchange="toggleGroupInput()"></label>
              <label id="groupCountLabel" style="display:none; gap: 10px;">Počet skupin: <input type="number" class="league-select" min="1" max="10" id="groupCount" name="newLeague[groupCount]"></label>
@@ -1979,6 +1993,7 @@ router.get('/leagues/manage', requireAdmin, async (req, res) => {
 
                 groupLocksHTML += `
                     <form method="POST" action="/admin/toggle-table-tips-lock" style="display:inline-flex; align-items:center;">
+                        <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
                         <input type="hidden" name="season" value="${selectedSeason}">
                         <input type="hidden" name="liga" value="${l.name}">
                         <input type="hidden" name="group" value="${gKey}">
@@ -1997,6 +2012,7 @@ router.get('/leagues/manage', requireAdmin, async (req, res) => {
                 <li style="margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px;">
                     
                     <form method="POST" action="/admin/leagues/update" style="display:flex; flex-wrap: wrap; align-items:center; gap:10px; width: 100%;">
+                        <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
                         <input type="hidden" name="originalLeagueName" value="${l.name}">
                         
                         <div style="display:inline-flex; align-items:center; gap:10px;">
@@ -2045,6 +2061,7 @@ router.get('/leagues/manage', requireAdmin, async (req, res) => {
 
                     <div style="display: flex; gap: 15px; width: 100%; align-items: center; justify-content: flex-end; margin-top: 5px;">
                         <form method="POST" action="/admin/toggle-table-tips-lock" style="display:inline-flex;">
+                            <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
                             <input type="hidden" name="season" value="${selectedSeason}">
                             <input type="hidden" name="liga" value="${l.name}">
                             <input type="hidden" name="totalGroups" value="${l.groupCount || 0}">
@@ -2055,6 +2072,7 @@ router.get('/leagues/manage', requireAdmin, async (req, res) => {
                         </form>
 
                         <form method="POST" action="/admin/toggle-regular-season" style="display:inline-flex;">
+                            <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
                             <input type="hidden" name="season" value="${selectedSeason}">
                             <input type="hidden" name="liga" value="${l.name}">
                             <label style="cursor: pointer; display: flex; align-items: center; gap: 5px; ${statusStyle}">
@@ -2064,6 +2082,7 @@ router.get('/leagues/manage', requireAdmin, async (req, res) => {
                         </form>
 
                         <form method="POST" action="/admin/leagues/delete" style="display:inline;">
+                            <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
                             <input type="hidden" name="league" value="${l.name}">
                             <button class="action-btn delete-btn" type="submit" onclick="return confirm('Smazat ligu?')">Smazat</button>
                         </form>
@@ -2406,6 +2425,7 @@ router.get('/teams/points', requireAdmin, async (req, res) => {
         </form>
 
         <form method="POST" action="/admin/teams/points">
+            <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
             <input type="hidden" name="season" value="${selectedSeason}">
             <input type="hidden" name="liga" value="${selectedLiga}">
             <table class="points-table" style="width: 100%; max-width: 800px; text-align: center;">
@@ -2627,6 +2647,7 @@ router.get('/matches/import', requireAdmin, async (req, res) => {
                 </p>
 
                 <form method="POST" action="/admin/matches/import-run" style="display: flex; flex-direction: column; gap: 15px; width: 100%;">
+                    <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
                     
                     <label style="display: flex; flex-direction: column; color: orangered;">
                         URL adresa (https://www.hokej.cz/tipsport-extraliga/zapasy?matchList-view-displayAll=1&matchList-filter-season=2025&matchList-filter-competition=7397):
@@ -3097,6 +3118,7 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
             </form>
 
             <form method="POST" action="/admin/transfers/save" enctype="multipart/form-data">
+                <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
                 <input type="hidden" name="liga" value="${selectedLiga}">
                 <input type="hidden" name="season" value="${selectedSeason}">
                 
@@ -3574,6 +3596,7 @@ router.get('/users', requireAdmin, async (req, res) => {
                                 <a href="/admin/users/edit/${encodeURIComponent(user.username)}" class="btn-edit" style="background: orange; color: black; padding: 5px 10px; text-decoration: none; font-weight: bold;">Upravit</a>
                                 
                                 <form method="POST" action="/admin/users/delete" style="display:inline;" onsubmit="return confirm('OPRAVDU SMAZAT? Tato akce provede HLOUBKOVÉ smazání všech tipů uživatele ${user.username}!');">
+                                    <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
                                     <input type="hidden" name="usernameToDelete" value="${user.username}">
                                     <button type="submit" style="background: red; color: white; border: none; padding: 5px 10px; cursor: pointer; font-weight: bold;">Smazat</button>
                                 </form>
@@ -3707,6 +3730,7 @@ router.get('/users/edit/:username', requireAdmin, async (req, res) => {
             <div class="edit-card">
                 <h1>Upravit účet</h1>
                 <form action="/admin/users/update" method="POST">
+                    <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
                     <input type="hidden" name="oldUsername" value="${user.username}">
                     
                     <div class="form-group">
@@ -3822,6 +3846,7 @@ router.get('/playoff/templates', requireAdmin, async (req, res) => {
                 <div style="display: flex; gap: 10px;">
                     <a href="/admin/playoff/templates/edit/${key}" class="action-btn edit-btn">Upravit</a>
                     <form action="/admin/playoff/templates/delete/${key}" method="POST" style="display:inline;" onsubmit="return confirm('Opravdu smazat formát ${key}?');">
+                        <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
                         <button type="submit" class="action-btn delete-btn">Smazat</button>
                     </form>
                 </div>
@@ -3843,6 +3868,7 @@ router.get('/playoff/templates', requireAdmin, async (req, res) => {
             <div style="background: #1a1a1a; padding: 20px; border: 1px solid #333; margin-bottom: 20px;">
                 <h2>Vytvořit nový formát</h2>
                 <form action="/admin/playoff/templates/save" method="POST">
+                    <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
                     <label>Kód formátu (bez mezer, např. spengler_6): <input type="text" name="key" required class="league-select" style="width: 250px;"></label><br><br>
                     <label>Název (pro lidi): <input type="text" name="label" required class="league-select" style="width: 250px;"></label><br><br>
                     <label>JSON struktura sloupců (viz manuál):<br>
@@ -3904,6 +3930,7 @@ router.get('/playoff/templates/edit/:key', requireAdmin, async (req, res) => {
             <h1>Upravit formát playoff: <span style="color: orangered;">${key}</span></h1>
             <div style="background: #1a1a1a; padding: 20px; border: 1px solid #333; margin-bottom: 20px;">
                 <form action="/admin/playoff/templates/edit/${key}" method="POST">
+                    <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
                     <label>Název (pro lidi): <br><input type="text" name="label" value="${template.label}" required class="league-select" style="width: 300px; margin-top: 5px;"></label><br><br>
                     <label>JSON struktura sloupců:<br>
                         <textarea name="structure" style="width:100%; height:300px; background:#000; color:lime; font-family:monospace; padding: 10px; margin-top: 5px;">${jsonString}</textarea>
