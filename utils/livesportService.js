@@ -57,12 +57,18 @@ function getLeagueId(ligaName, url = null) {
         return standardMatch[1];
     }
 
-    // Formát 2: Kategorie URL bez ID (např. /hokej/svet/mistrovstvi-sveta/zapasy/)
-    // Extrahujeme název soutěže z cesty
-    const categoryMatch = url.match(/\/hokej\/[^/]+\/([^/]+)(?:\/zapasy|\/program)?/);
-    if (categoryMatch) {
+    // Formát 2: Kategorie URL bez ID (např. /hokej/svet/mistrovstvi-sveta/program/)
+    // Extrahujeme název soutěže z cesty (před /program/ nebo /zapasy/)
+    const categoryMatch = url.match(/\/hokej\/[^/]+\/([^/]+?)(?:\/program|\/zapasy|\/vysledky)?\/?$/);
+    if (categoryMatch && categoryMatch[1] && categoryMatch[1] !== 'program' && categoryMatch[1] !== 'zapasy' && categoryMatch[1] !== 'vysledky') {
         // Vrátíme název kategorie jako identifikátor
         return categoryMatch[1];
+    }
+    
+    // Zkusíme ještě jeden pattern pro případné jiné URL struktury
+    const categoryMatch2 = url.match(/\/hokej\/[^/]+\/([^/]+)\//);
+    if (categoryMatch2 && categoryMatch2[1]) {
+        return categoryMatch2[1];
     }
 
     // Fallback na mapu známých lig
