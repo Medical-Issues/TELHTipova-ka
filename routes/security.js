@@ -40,11 +40,12 @@ const ddosLimiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
     skip: (req) => {
-        // Skip pro bezpečné endpointy
+        // Skip pro bezpečné endpointy - keep-alive, monitoring, static
         const safeEndpoints = [
             '/css/', '/js/', '/images/', '/favicon.ico', '/robots.txt',
             '/sitemap.xml', '/health/ping', '/health/status', '/health',
-            '/wake', '/warm', '/'
+            '/wake', '/warm', '/', '/monitoring', '/api/monitoring',
+            '/security/security-alerts', '/security/security-status'
         ];
         return safeEndpoints.some(ep => req.path.startsWith(ep));
     },
@@ -111,7 +112,8 @@ const securityMonitor = (req, res, next) => {
     const safeEndpoints = [
         '/css/', '/js/', '/images/', '/favicon.ico', '/robots.txt',
         '/sitemap.xml', '/health/ping', '/health/status', '/health',
-        '/wake', '/warm', '/'
+        '/wake', '/warm', '/', '/monitoring', '/api/monitoring',
+        '/security/security-alerts', '/security/security-status'
     ];
     
     const isSafeEndpoint = safeEndpoints.some(ep => endpoint.startsWith(ep));
