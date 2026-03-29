@@ -303,38 +303,37 @@ async function fetchMatchesFromLivesport(options) {
             }
         }
 
-        // Pokus 2: Přímé volání API endpointu pro zápasy
+        // Pokus 2: Přímé volání API endpointu pro zápasy - více variant
         if (events.length === 0 && tournamentId) {
-            try {
-                // Vytvoříme URL pro API - pro /program/ stránky použijeme tournament ID z URL
-                const apiUrl = `https://www.livesport.cz/api/v1/tournament/${tournamentId}/fixtures`;
-                console.log(`🌐 Zkouším API: ${apiUrl}`);
-
-                const apiResponse = await axios.get(apiUrl, {
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'Referer': url
-                    },
-                    timeout: 15000
-                });
-
-                console.log(`📡 API response keys: ${Object.keys(apiResponse.data || {}).join(', ')}`);
-
-                if (apiResponse.data) {
-                    // Různé struktury odpovědi
-                    if (apiResponse.data.fixtures) {
-                        events = apiResponse.data.fixtures;
-                    } else if (apiResponse.data.events) {
-                        events = apiResponse.data.events;
-                    } else if (Array.isArray(apiResponse.data)) {
-                        events = apiResponse.data;
+            const apiUrls = [
+                `https://www.livesport.cz/api/v1/tournament/${tournamentId}/fixtures`,
+                `https://www.livesport.cz/api/v1/tournament/${tournamentId}/events`,
+                `https://www.livesport.cz/api/v1/tournament/${tournamentId}/matches`,
+                `https://www.livesport.cz/api/v2/tournament/${tournamentId}/fixtures`,
+                `https://www.livesport.cz/api/v2/tournament/${tournamentId}/events`,
+            ];
+            
+            for (const apiUrl of apiUrls) {
+                try {
+                    console.log(`🌐 Zkouším API: ${apiUrl}`);
+                    const apiResponse = await axios.get(apiUrl, {
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Referer': url
+                        },
+                        timeout: 10000
+                    });
+                    
+                    if (apiResponse.data && (apiResponse.data.fixtures || apiResponse.data.events || Array.isArray(apiResponse.data))) {
+                        events = apiResponse.data.fixtures || apiResponse.data.events || apiResponse.data;
+                        console.log(`✅ API úspěšné: ${apiUrl} -> ${events.length} zápasů`);
+                        break;
                     }
-                    console.log(`✅ API: nalezeno ${events.length} zápasů`);
+                } catch (apiErr) {
+                    console.log(`❌ API selhalo: ${apiUrl} - ${apiErr.response?.status || apiErr.message}`);
                 }
-            } catch (apiErr) {
-                console.log(`❌ API selhalo: ${apiErr.message}`);
             }
         }
 
