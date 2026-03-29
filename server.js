@@ -299,7 +299,7 @@ app.post('/admin/full-restore-from-github', (req, res) => {
     });
 });
 
-app.use('/auth', csrfMiddleware, authRoutes);
+app.use('/auth', authRoutes);
 app.use('/health', healthRoutes);
 app.use('/security', securityRoutes);
 app.use('/api', csrfMiddleware, versionRoutes);
