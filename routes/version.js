@@ -179,7 +179,7 @@ router.get('/versions/manage', requireAdmin, async (req, res) => {
                 
                 <div class="version-form">
                     <h2>Vytvořit novou verzi</h2>
-                    <form method="POST" action="/api/version">
+                    <form method="POST" action="/api/version-form">
                         <label>Číslo verze:</label>
                         <input type="text" name="version" value="${nextVersion}" required 
                                placeholder="např. 1.0.1">
