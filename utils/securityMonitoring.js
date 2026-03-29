@@ -2,25 +2,18 @@ const axios = require('axios');
 
 // Konfigurace pro bezpečnostní monitoring
 const SECURITY_MONITORING = {
-    // UptimeRobot - bezpečnostní status
-    uptimeRobotSecurity: {
-        url: process.env.UPTIMEROBOT_SECURITY_URL || 'http://localhost:3000/security/security-alerts',
-        interval: 180000, // 3 minuty
+    // Hlavní security endpoint
+    mainSecurity: {
+        url: process.env.SECURITY_URL || 'https://telhtipova-ka.onrender.com/security/security-alerts',
+        interval: 300000, // 5 minut
         timeout: 15000
     },
     
-    // UptimeRobot - detailní bezpečnostní monitoring
-    uptimeRobotSecurityDetailed: {
-        url: process.env.UPTIMEROBOT_SECURITY_DETAILED_URL || 'http://localhost:3000/security/security-status',
-        interval: 300000, // 5 minut
-        timeout: 20000
-    },
-    
-    // Interní bezpečnostní kontrola
-    internalSecurity: {
-        url: process.env.INTERNAL_SECURITY_URL || 'http://localhost:3000/security/blacklist',
+    // Security status endpoint
+    securityStatus: {
+        url: process.env.SECURITY_STATUS_URL || 'https://telhtipova-ka.onrender.com/security/security-status',
         interval: 600000, // 10 minut
-        timeout: 25000
+        timeout: 20000
     }
 };
 

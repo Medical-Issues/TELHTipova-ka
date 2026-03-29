@@ -2,32 +2,18 @@ const axios = require('axios');
 
 // Konfigurace pro různé monitoring služby
 const MONITORING_ENDPOINTS = {
-    // UptimeRobot - základní
-    uptimeRobot: {
-        url: process.env.UPTIMEROBOT_URL || 'http://localhost:3000/health/ping',
-        interval: 60000, // 1 minuta
+    // Hlavní endpoint - health check
+    mainHealth: {
+        url: process.env.KEEP_ALIVE_URL || 'https://telhtipova-ka.onrender.com/health',
+        interval: 120000, // 2 minuty
         timeout: 10000
     },
     
-    // UptimeRobot - detailní
-    uptimeRobotDetailed: {
-        url: process.env.UPTIMEROBOT_DETAILED_URL || 'http://localhost:3000/health/status',
+    // Wake endpoint pro aktivitu
+    wakeEndpoint: {
+        url: process.env.WAKE_URL || 'https://telhtipova-ka.onrender.com/wake',
         interval: 300000, // 5 minut
         timeout: 15000
-    },
-    
-    // UptimeRobot - komplexní
-    uptimeRobotComplex: {
-        url: process.env.UPTIMEROBOT_COMPLEX_URL || 'http://localhost:3000/health',
-        interval: 600000, // 10 minut
-        timeout: 30000
-    },
-    
-    // Interní monitoring
-    internal: {
-        url: process.env.INTERNAL_URL || 'http://localhost:3000/wake',
-        interval: 300000, // 5 minut
-        timeout: 20000
     }
 };
 

@@ -498,13 +498,13 @@ async function startServer() {
         
         // Spustit monitoring service po 10 sekundách
         setTimeout(() => {
-            console.log('🔄 Monitoring service SKIPPED (způsoboval pády)');
-            // startMonitoring(); // VYPNUTO - volá neexistující localhost endpointy
+            console.log('🔄 Starting monitoring service...');
+            startMonitoring();
             
             // Spustit security monitoring po dalších 5 sekundách
             setTimeout(() => {
-                console.log('🔒 Security monitoring SKIPPED (způsoboval pády)');
-                // startSecurityMonitoring(); // VYPNUTO - volá neexistující endpointy
+                console.log('🔒 Starting security monitoring service...');
+                startSecurityMonitoring();
                 
                 // Keep-alive je řešen interním intervalem níže
                 console.log('💓 Interní keep-alive aktivní (každých 5 minut)');
