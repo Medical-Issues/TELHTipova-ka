@@ -27,7 +27,6 @@
     if (params.get('error') === '1') {
         document.getElementById('error-msg').style.display = 'block';
     }
-</script>
     // Fetch CSRF token from server
     fetch('/api/csrf-token')
         .then(res => res.json())
