@@ -224,6 +224,8 @@ async function fetchMatchesFromLivesport(options) {
     try {
         // 1. Získáme tournament ID
         const tournamentId = getLeagueId(liga, url);
+        console.log(`🏆 Tournament ID: ${tournamentId}`);
+        
         if (!tournamentId) {
             return {
                 success: false,
@@ -252,16 +254,18 @@ async function fetchMatchesFromLivesport(options) {
         
         const html = response.data;
         
-        // Debug: hledáme JSON s týmy v HTML
-        console.log(`🔍 Hledám JSON s týmy v HTML...`);
-        const teamMatches = html.match(/"homeTeam"\s*:\s*"([^"]+)"/g) || [];
-        console.log(`   Nalezeno ${teamMatches.length} homeTeam v JSON`);
-        const scoreMatches = html.match(/"score"\s*:\s*"([^"]+)"/g) || [];
-        console.log(`   Nalezeno ${scoreMatches.length} score v JSON`);
+        // Debug: hledáme všechny API endpointy v HTML
+        console.log(`🔍 Hledám API endpointy v HTML...`);
+        const apiMatches = html.match(/\/api\/[^"'\s]+/g) || [];
+        console.log(`   Nalezeno ${apiMatches.length} API endpointů:`);
+        apiMatches.slice(0, 10).forEach(url => console.log(`     - ${url}`));
         
-        // Hledáme fixture/event struktury
-        const fixtureMatch = html.match(/"fixtures"\s*:\s*(\[.*?]),?/s);
-        console.log(`🔎 Fixtures nalezeno v HTML: ${fixtureMatch ? 'ANO' : 'NE'}`);
+        // Hledáme tournament ID v HTML
+        const tournamentMatch = html.match(/"tournamentId"\s*:\s*"([^"]+)"/) || 
+                               html.match(/"id"\s*:\s*"([A-Za-z0-9]{6,})"/);
+        if (tournamentMatch) {
+            console.log(`🏆 Tournament ID z HTML: ${tournamentMatch[1]}`);
+        }
 
         // 4. Extrakce dat - Livesport embeduje data v JSON ve skriptech nebo v atributech
         // Hledáme "initialData" nebo podobné struktury
@@ -303,36 +307,61 @@ async function fetchMatchesFromLivesport(options) {
             }
         }
 
-        // Pokus 2: Přímé volání API endpointu pro zápasy - více variant
+        // Pokus 2: Přímé volání API - více variant včetně sezónních URL
         if (events.length === 0 && tournamentId) {
+            // Pro URL typu /hokej/svet/mistrovstvi-sveta/program/ zkusíme sezónní formát
+            const seasonYear = seasonToUse ? `20${seasonToUse.split('/')[0]}-20${seasonToUse.split('/')[1]}` : '2025-2026';
+            
             const apiUrls = [
+                // Přímé API endpointy
                 `https://www.livesport.cz/api/v1/tournament/${tournamentId}/fixtures`,
                 `https://www.livesport.cz/api/v1/tournament/${tournamentId}/events`,
-                `https://www.livesport.cz/api/v1/tournament/${tournamentId}/matches`,
                 `https://www.livesport.cz/api/v2/tournament/${tournamentId}/fixtures`,
-                `https://www.livesport.cz/api/v2/tournament/${tournamentId}/events`,
+                // Sezónní stránky (pro MS apod.)
+                `https://www.livesport.cz/zapasy/${seasonYear}/${tournamentId}/`,
+                `https://www.livesport.cz/zapasy/${seasonYear}/ms-${tournamentId}/`,
+                `https://www.livesport.cz/zapasy/${seasonYear}/mistrovstvi-sveta-${tournamentId}/`,
             ];
             
             for (const apiUrl of apiUrls) {
                 try {
-                    console.log(`🌐 Zkouším API: ${apiUrl}`);
+                    console.log(`🌐 Zkouším: ${apiUrl}`);
                     const apiResponse = await axios.get(apiUrl, {
                         headers: {
                             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                            'Accept': 'application/json',
+                            'Accept': 'application/json, text/html',
                             'X-Requested-With': 'XMLHttpRequest',
                             'Referer': url
                         },
                         timeout: 10000
                     });
                     
-                    if (apiResponse.data && (apiResponse.data.fixtures || apiResponse.data.events || Array.isArray(apiResponse.data))) {
-                        events = apiResponse.data.fixtures || apiResponse.data.events || apiResponse.data;
-                        console.log(`✅ API úspěšné: ${apiUrl} -> ${events.length} zápasů`);
-                        break;
+                    // Kontrola jestli je odpověď JSON nebo HTML
+                    const contentType = apiResponse.headers['content-type'] || '';
+                    
+                    if (contentType.includes('json')) {
+                        // JSON odpověď
+                        if (apiResponse.data && (apiResponse.data.fixtures || apiResponse.data.events || Array.isArray(apiResponse.data))) {
+                            events = apiResponse.data.fixtures || apiResponse.data.events || apiResponse.data;
+                            console.log(`✅ API úspěšné: ${apiUrl} -> ${events.length} zápasů`);
+                            break;
+                        }
+                    } else {
+                        // HTML odpověď - zkusíme najít JSON v HTML
+                        const html = apiResponse.data;
+                        const scriptMatch = html.match(/window\.__INITIAL_STATE__\s*=\s*(\{.*?});/s) ||
+                                           html.match(/window\.__DATA__\s*=\s*(\{.*?});/s);
+                        if (scriptMatch) {
+                            const jsonData = JSON.parse(scriptMatch[1]);
+                            events = jsonData.events || jsonData.matches || jsonData.data?.events || [];
+                            if (events.length > 0) {
+                                console.log(`✅ HTML+JSON úspěšné: ${apiUrl} -> ${events.length} zápasů`);
+                                break;
+                            }
+                        }
                     }
                 } catch (apiErr) {
-                    console.log(`❌ API selhalo: ${apiUrl} - ${apiErr.response?.status || apiErr.message}`);
+                    console.log(`❌ Selhalo: ${apiUrl} - ${apiErr.response?.status || apiErr.message}`);
                 }
             }
         }
@@ -466,7 +495,45 @@ async function fetchMatchesFromLivesport(options) {
             }
         }
 
-        console.log(`✅ Nalezeno ${events.length} zápasů v datech`);
+        // Pokus 4: Puppeteer pro dynamicky načítané stránky
+        if (events.length === 0 && puppeteer) {
+            console.log(`🤖 Spouštím Puppeteer pro dynamický scraping...`);
+            let browser;
+            try {
+                browser = await puppeteer.launch({
+                    headless: 'new',
+                    args: ['--no-sandbox', '--disable-setuid-sandbox']
+                });
+                const page = await browser.newPage();
+                
+                await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+                await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+                
+                // Počkáme na načtení zápasů
+                await page.waitForSelector('.event__match, .wcl-participant', { timeout: 10000 });
+                
+                // Extrahujeme data z prohlížeče
+                events = await page.evaluate(() => {
+                    const matches = [];
+                    document.querySelectorAll('.event__match').forEach(el => {
+                        const homeTeam = el.querySelector('.event__homeParticipant, [class*="home"] [class*="name"]')?.textContent?.trim();
+                        const awayTeam = el.querySelector('.event__awayParticipant, [class*="away"] [class*="name"]')?.textContent?.trim();
+                        const timeText = el.querySelector('.event__time')?.textContent?.trim();
+
+                        if (homeTeam && awayTeam) {
+                            matches.push({homeTeam, awayTeam, time: timeText || ''});
+                        }
+                    });
+                    return matches;
+                });
+                console.log(`✅ Puppeteer: nalezeno ${events.length} zápasů`);
+                
+            } catch (puppeteerErr) {
+                console.log(`❌ Puppeteer selhal: ${puppeteerErr.message}`);
+            } finally {
+                if (browser) await browser.close();
+            }
+        }
 
         // 5. Zpracování zápasů
         for (const event of events) {
