@@ -582,10 +582,10 @@ async function fetchMatchesFromLivesport(options) {
                 const page = await browser.newPage();
                 
                 await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
-                await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+                await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
                 
                 // Počkáme na načtení zápasů
-                await page.waitForSelector('.event__match, .wcl-participant', { timeout: 15000 });
+                await page.waitForSelector('.event__match, .wcl-participant', { timeout: 30000 });
                 
                 // Extrahujeme data z prohlížeče
                 events = await page.evaluate(() => {
