@@ -80,7 +80,8 @@
         try {
             const response = await fetch(API_URL);
             if (!response.ok) {
-                throw new Error('Nepodařilo se načíst verzi');
+                console.log('Verze: Response not OK, skipping');
+                return;
             }
 
             const data = await response.json();
