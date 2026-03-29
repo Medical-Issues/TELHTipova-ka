@@ -1,11 +1,11 @@
 require('dotenv').config();
 
 const express = require('express');
-require('path');
-require("body-parser");
+const path = require('path');
+const bodyParser = require("body-parser");
 const session = require("express-session");
 const { default: MongoStore } = require('connect-mongo');
-require('fs');
+const fs = require('fs');
 const userRoutes = require('./routes/user');
 const adminRoutes = require('./routes/admin');
 const authRoutes = require('./routes/auth');
