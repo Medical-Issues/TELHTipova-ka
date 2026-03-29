@@ -35,7 +35,7 @@ const securityStats = {
 // Rate limiting pro DDOS ochranu - Level 2
 const ddosLimiter = rateLimit({
     windowMs: 60 * 1000, // 1 minuta
-    max: 50, // Level 2: max 50 requestů za minutu (místo 100)
+    max: 500,
     message: { error: 'Too many requests', blocked: true },
     standardHeaders: true,
     legacyHeaders: false,
