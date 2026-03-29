@@ -259,10 +259,27 @@ async function fetchMatchesFromLivesport(options) {
         // Hledáme "initialData" nebo podobné struktury
         let events = [];
 
-        // Pokus 1: Hledáme JSON v <script> tagu
-        const scriptMatch = html.match(/window\.__INITIAL_STATE__\s*=\s*(\{.*?});/s) ||
-                           html.match(/window\.__DATA__\s*=\s*(\{.*?});/s) ||
-                           html.match(/var\s+initialData\s*=\s*(\[.*?]);/s);
+        // Pokus 1: Hledáme JSON v <script> tagu - rozšířené patterny
+        const scriptPatterns = [
+            /window\.__INITIAL_STATE__\s*=\s*(\{.*?});/s,
+            /window\.__DATA__\s*=\s*(\{.*?});/s,
+            /var\s+initialData\s*=\s*(\[.*?]);/s,
+            /window\.__APP__\s*=\s*(\{.*?});/s,
+            /window\.__CONFIG__\s*=\s*(\{.*?});/s,
+            /"fixtures":\s*(\[.*?]),?/s,
+            /"events":\s*(\[.*?]),?/s,
+            /"tournament":\s*(\{.*?}),?/s
+        ];
+
+        let scriptMatch = null;
+        for (const pattern of scriptPatterns) {
+            const match = html.match(pattern);
+            if (match) {
+                scriptMatch = match;
+                console.log(`✅ Pattern match: ${pattern.toString().substring(0, 50)}...`);
+                break;
+            }
+        }
 
         console.log(`🔎 Script match nalezen: ${scriptMatch ? 'ANO' : 'NE'}`);
 
@@ -278,7 +295,42 @@ async function fetchMatchesFromLivesport(options) {
             }
         }
 
-        // Pokus 2: Hledáme data v atributech HTML (novější verze Livesportu)
+        // Pokus 2: Přímé volání API endpointu pro zápasy
+        if (events.length === 0 && tournamentId) {
+            try {
+                // Vytvoříme URL pro API - pro /program/ stránky použijeme tournament ID z URL
+                const apiUrl = `https://www.livesport.cz/api/v1/tournament/${tournamentId}/fixtures`;
+                console.log(`🌐 Zkouším API: ${apiUrl}`);
+
+                const apiResponse = await axios.get(apiUrl, {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Referer': url
+                    },
+                    timeout: 15000
+                });
+
+                console.log(`📡 API response keys: ${Object.keys(apiResponse.data || {}).join(', ')}`);
+
+                if (apiResponse.data) {
+                    // Různé struktury odpovědi
+                    if (apiResponse.data.fixtures) {
+                        events = apiResponse.data.fixtures;
+                    } else if (apiResponse.data.events) {
+                        events = apiResponse.data.events;
+                    } else if (Array.isArray(apiResponse.data)) {
+                        events = apiResponse.data;
+                    }
+                    console.log(`✅ API: nalezeno ${events.length} zápasů`);
+                }
+            } catch (apiErr) {
+                console.log(`❌ API selhalo: ${apiErr.message}`);
+            }
+        }
+
+        // Pokus 3: Hledáme data v atributech HTML (novější verze Livesportu)
         if (events.length === 0) {
             // Hledáme API endpoint ve skriptech
             const apiMatch = html.match(/\/api\/v\d+\/[^"']*?tournament\/[A-Za-z0-9]+[^"']*/);
