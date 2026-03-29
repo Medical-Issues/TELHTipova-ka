@@ -3,6 +3,7 @@
  * Stahuje data o zápasech z livesport.cz API
  */
 const axios = require('axios');
+const {html} = require("mocha/lib/reporters");
 
 // Livesport API endpointy
 const LIVESPORT_BASE_URL = 'https://www.livesport.cz';
@@ -238,8 +239,7 @@ async function fetchMatchesFromLivesport(options) {
 
         // 3. Stažení stránky
         console.log(`📥 Stahuji data z: ${url}`);
-
-        const response = await axios.get(url, {
+        await axios.get(url, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -250,8 +250,7 @@ async function fetchMatchesFromLivesport(options) {
             },
             timeout: 30000
         });
-
-        // Debug: hledáme JSON s týmy v HTML
+// Debug: hledáme JSON s týmy v HTML
         console.log(`🔍 Hledám JSON s týmy v HTML...`);
         const teamMatches = html.match(/"homeTeam"\s*:\s*"([^"]+)"/g) || [];
         console.log(`   Nalezeno ${teamMatches.length} homeTeam v JSON`);
@@ -259,7 +258,7 @@ async function fetchMatchesFromLivesport(options) {
         console.log(`   Nalezeno ${scoreMatches.length} score v JSON`);
         
         // Hledáme fixture/event struktury
-        const fixtureMatch = html.match(/"fixtures"\s*:\s*(\[.*?\]),?/s);
+        const fixtureMatch = html.match(/"fixtures"\s*:\s*(\[.*?]),?/s);
         console.log(`🔎 Fixtures nalezeno v HTML: ${fixtureMatch ? 'ANO' : 'NE'}`);
 
         // 4. Extrakce dat - Livesport embeduje data v JSON ve skriptech nebo v atributech
