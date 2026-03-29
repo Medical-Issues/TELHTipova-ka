@@ -3801,6 +3801,217 @@ router.get('/toggleLocked/:id', requireAdmin, async (req, res) => {
 });
 
 // ==========================================
+// HROMADNÉ ZAMKNUTÍ/ODEMKNUTÍ ZÁPASŮ (všechny v lize/sezóně)
+// ==========================================
+router.post('/matches/bulk-lock', requireAdmin, async (req, res) => {
+    const { liga, season, action, redirectUrl } = req.body;
+    
+    if (!liga || !season || !action) {
+        return renderErrorHtml(res, "Chybí povinné parametry (liga, sezóna nebo akce).", 400);
+    }
+    
+    if (action !== 'lock' && action !== 'unlock') {
+        return renderErrorHtml(res, "Neplatná akce. Povolené hodnoty: 'lock' nebo 'unlock'.", 400);
+    }
+    
+    try {
+        // Načtení všech zápasů
+        let matches = await Matches.findAll();
+        const shouldLock = action === 'lock';
+        
+        // Filtrování zápasů podle ligy a sezóny
+        let affectedCount = 0;
+        
+        for (const match of matches) {
+            if (match.liga === liga && match.season === season) {
+                // Pokud měníme na zamčeno a zápas není již zamčen, zamkneme ho
+                // Pokud měníme na odemčeno a zápas je zamčen, odemkneme ho
+                if (match.locked !== shouldLock) {
+                    match.locked = shouldLock;
+                    affectedCount++;
+                    
+                    // Pokud zamykáme, odstraníme tipy
+                    if (shouldLock) {
+                        await removeTipsForDeletedMatch(match.id);
+                    }
+                }
+            }
+        }
+        
+        // Uložení změn
+        await Matches.replaceAll(matches);
+        
+        const actionText = shouldLock ? 'UZAMČENY' : 'ODEMČENY';
+        await logAdminAction(req.session.user, "HROMADNÝ_ZÁMEK", `${affectedCount} zápasů v lize ${liga} (${season}) bylo ${actionText}`);
+        
+        // Přesměrování zpět (buď na redirectUrl nebo na /admin)
+        const redirect = redirectUrl || '/admin';
+        res.redirect(redirect);
+        
+    } catch (error) {
+        console.error('Chyba při hromadném zamknutí/odemknutí:', error);
+        return renderErrorHtml(res, `Chyba při zpracování: ${error.message}`, 500);
+    }
+});
+
+// ==========================================
+// STRÁNKA PRO HROMADNÉ ZAMKNUTÍ/ODEMKNUTÍ
+// ==========================================
+router.get('/matches/bulk-lock', requireAdmin, async (req, res) => {
+    const { liga, season } = req.query;
+    
+    // Načtení dat
+    const allMatches = await Matches.findAll();
+    const allowedLeagues = await AllowedLeagues.findAll();
+    const currentSeason = await ChosenSeason.findAll();
+    
+    // Pokud není vybrána liga, zobrazíme formulář pro výběr
+    if (!liga || !season) {
+        const html = `
+        <!DOCTYPE html>
+        <html lang="cs">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+            <title>Hromadné zamknutí/odemknutí zápasů</title>
+            <link rel="stylesheet" href="/css/styles.css">
+            <link rel="icon" href="/images/logo.png">
+        </head>
+        <body class="admin_site">
+            <header class="header">
+                <div class="logo_title">
+                    <img alt="Logo" class="image_logo" src="/images/logo.png">
+                    <h1 id="title">Hromadné zamknutí/odemknutí</h1>
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <a href="/admin" style="color: orangered">Zpět do menu</a>
+                </div>
+            </header>
+
+            <main class="main_page" style="flex-direction: column; align-items: center;">
+                <div class="stats-container" style="width: 100%; max-width: 600px;">
+                    <h2 style="color: orangered;">Výběr ligy a sezóny</h2>
+                    <p style="color: lightgrey; margin-bottom: 20px;">
+                        Zde můžeš hromadně zamknout nebo odemknout všechny zápasy v dané lize a sezóně.
+                    </p>
+                    
+                    <form method="GET" action="/admin/matches/bulk-lock" style="display: flex; flex-direction: column; gap: 15px;">
+                        <label style="display: flex; flex-direction: column; color: orangered;">
+                            Liga:
+                            <select name="liga" required style="padding: 10px; background-color: #222; border: 1px solid orangered; color: white;">
+                                ${allowedLeagues.map(l => `<option value="${l}" ${l === allowedLeagues[0] ? 'selected' : ''}>${l}</option>`).join('')}
+                            </select>
+                        </label>
+                        
+                        <label style="display: flex; flex-direction: column; color: orangered;">
+                            Sezóna:
+                            <select name="season" required style="padding: 10px; background-color: #222; border: 1px solid orangered; color: white;">
+                                <option value="${currentSeason}" selected>${currentSeason}</option>
+                            </select>
+                        </label>
+                        
+                        <button type="submit" class="login_button" style="width: 100%; margin-top: 10px;">Pokračovat</button>
+                    </form>
+                </div>
+            </main>
+        </body>
+        </html>`;
+        return res.send(html);
+    }
+    
+    // Zobrazení přehledu zápasů pro vybranou ligu a sezónu
+    const filteredMatches = allMatches.filter(m => m.liga === liga && m.season === season);
+    const lockedCount = filteredMatches.filter(m => m.locked).length;
+    const unlockedCount = filteredMatches.filter(m => !m.locked).length;
+    
+    const html = `
+    <!DOCTYPE html>
+    <html lang="cs">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        <title>Hromadné zamknutí - ${liga}</title>
+        <link rel="stylesheet" href="/css/styles.css">
+        <link rel="icon" href="/images/logo.png">
+    </head>
+    <body class="admin_site">
+        <header class="header">
+            <div class="logo_title">
+                <img alt="Logo" class="image_logo" src="/images/logo.png">
+                <h1 id="title">Hromadné zamknutí/odemknutí</h1>
+            </div>
+            <div style="display:flex; gap:10px;">
+                <a href="/admin" style="color: orangered">Zpět do menu</a>
+            </div>
+        </header>
+
+        <main class="main_page" style="flex-direction: column; align-items: center;">
+            <div class="stats-container" style="width: 100%; max-width: 700px;">
+                <h2 style="color: orangered;">${liga} - ${season}</h2>
+                
+                <div style="display: flex; gap: 20px; margin: 20px 0; justify-content: center;">
+                    <div style="background: rgba(0,255,0,0.1); border: 1px solid #00ff00; padding: 15px; border-radius: 5px; text-align: center;">
+                        <div style="font-size: 24px; color: #00ff00; font-weight: bold;">${unlockedCount}</div>
+                        <div style="color: lightgrey;">Odemčených</div>
+                    </div>
+                    <div style="background: rgba(255,0,0,0.1); border: 1px solid #ff0000; padding: 15px; border-radius: 5px; text-align: center;">
+                        <div style="font-size: 24px; color: #ff0000; font-weight: bold;">${lockedCount}</div>
+                        <div style="color: lightgrey;">Zamčených</div>
+                    </div>
+                    <div style="background: rgba(255,165,0,0.1); border: 1px solid orange; padding: 15px; border-radius: 5px; text-align: center;">
+                        <div style="font-size: 24px; color: orange; font-weight: bold;">${filteredMatches.length}</div>
+                        <div style="color: lightgrey;">Celkem</div>
+                    </div>
+                </div>
+                
+                <p style="color: lightgrey; margin-bottom: 20px; text-align: center;">
+                    Vyber akci pro všechny zápasy v této lize a sezóně:
+                </p>
+                
+                <div style="display: flex; gap: 15px; justify-content: center;">
+                    <form method="POST" action="/admin/matches/bulk-lock" onsubmit="return confirm('Opravdu chceš ZAMKNOUT všechny ${unlockedCount} odemčené zápasy v lize ${liga}?');">
+                        <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
+                        <input type="hidden" name="liga" value="${liga}">
+                        <input type="hidden" name="season" value="${season}">
+                        <input type="hidden" name="action" value="lock">
+                        <input type="hidden" name="redirectUrl" value="/admin/matches/bulk-lock?liga=${encodeURIComponent(liga)}&season=${encodeURIComponent(season)}">
+                        <button type="submit" class="action-btn delete-btn" style="font-size: 16px; padding: 15px 30px;" ${unlockedCount === 0 ? 'disabled style="opacity:0.5;"' : ''}>
+                            🔒 Zamknout vše (${unlockedCount})
+                        </button>
+                    </form>
+                    
+                    <form method="POST" action="/admin/matches/bulk-lock" onsubmit="return confirm('Opravdu chceš ODEMKNOUT všechny ${lockedCount} zamčené zápasy v lize ${liga}?');">
+                        <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
+                        <input type="hidden" name="liga" value="${liga}">
+                        <input type="hidden" name="season" value="${season}">
+                        <input type="hidden" name="action" value="unlock">
+                        <input type="hidden" name="redirectUrl" value="/admin/matches/bulk-lock?liga=${encodeURIComponent(liga)}&season=${encodeURIComponent(season)}">
+                        <button type="submit" class="action-btn edit-btn" style="font-size: 16px; padding: 15px 30px;" ${lockedCount === 0 ? 'disabled style="opacity:0.5;"' : ''}>
+                            🔓 Odemknout vše (${lockedCount})
+                        </button>
+                    </form>
+                </div>
+                
+                <div style="margin-top: 30px; padding: 15px; background: rgba(255,69,0,0.1); border: 1px dashed orangered; border-radius: 5px;">
+                    <h4 style="color: orangered; margin: 0 0 10px 0;">⚠️ Upozornění</h4>
+                    <p style="color: lightgrey; font-size: 14px; margin: 0;">
+                        Zamknutí zápasů způsobí, že uživatelé nebudou moci zadávat ani měnit tipy.
+                        <br>Již existující tipy u zamčených zápasů budou zachovány, ale nebude možné je měnit.
+                    </p>
+                </div>
+                
+                <div style="margin-top: 20px; text-align: center;">
+                    <a href="/admin/matches/bulk-lock" class="action-btn" style="background-color: #333; border: 1px solid orangered;">← Změnit ligu/sezónu</a>
+                </div>
+            </div>
+        </main>
+    </body>
+    </html>`;
+    
+    res.send(html);
+});
+
+// ==========================================
 // SPRÁVA TEMPLATŮ PRO PLAYOFF (VÝPIS A TVORBA)
 // ==========================================
 router.get('/playoff/templates', requireAdmin, async (req, res) => {

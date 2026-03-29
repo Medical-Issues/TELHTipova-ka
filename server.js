@@ -1,11 +1,11 @@
 require('dotenv').config();
 
 const express = require('express');
-const path = require('path');
-const bodyParser = require("body-parser");
+require('path');
+require("body-parser");
 const session = require("express-session");
-const FileStore = require('session-file-store')(session);
-const fs = require('fs');
+const MongoStore = require('connect-mongo');
+require('fs');
 const userRoutes = require('./routes/user');
 const adminRoutes = require('./routes/admin');
 const authRoutes = require('./routes/auth');
@@ -76,23 +76,10 @@ function csrfMiddleware(req, res, next) {
 // Důvěřovat proxy hlavičkám (X-Forwarded-For) pro získání reálné IP klienta
 app.set('trust proxy', true);
 
-// Vytvoření sessions adresáře pokud neexistuje
-// Na Render používáme /tmp (ephemeral filesystem), lokálně ./sessions
-const sessionsDir = process.env.NODE_ENV === 'production' 
-    ? '/tmp/sessions' 
-    : path.join(__dirname, 'sessions');
-if (!fs.existsSync(sessionsDir)) {
-    fs.mkdirSync(sessionsDir, { recursive: true });
-}
-
-app.use(express.static(path.join(__dirname, 'public')));
-app.use('/logoteamu', express.static(path.join(__dirname, 'data', 'images')));
-app.use(bodyParser.urlencoded({extended: true}));
-app.use(bodyParser.json());
-
 app.use(session({
-    store: new FileStore({
-        path: sessionsDir
+    store: MongoStore.create({
+        mongoUrl: process.env.MONGODB_URI || 'mongodb://localhost:27017/tipovacka',
+        touchAfter: 24 * 3600
     }),
     secret: 'tajnyklic',
     resave: false,
