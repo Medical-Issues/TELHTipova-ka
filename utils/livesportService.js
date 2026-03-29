@@ -3,7 +3,6 @@
  * Stahuje data o zápasech z livesport.cz API
  */
 const axios = require('axios');
-const {html} = require("mocha/lib/reporters");
 
 // Livesport API endpointy
 const LIVESPORT_BASE_URL = 'https://www.livesport.cz';
