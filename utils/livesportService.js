@@ -251,9 +251,16 @@ async function fetchMatchesFromLivesport(options) {
             timeout: 30000
         });
 
-        const html = response.data;
-        console.log(`📄 Staženo ${html.length} znaků HTML`);
-        console.log(`🔍 Prvních 500 znaků: ${html.substring(0, 500)}`);
+        // Debug: hledáme JSON s týmy v HTML
+        console.log(`🔍 Hledám JSON s týmy v HTML...`);
+        const teamMatches = html.match(/"homeTeam"\s*:\s*"([^"]+)"/g) || [];
+        console.log(`   Nalezeno ${teamMatches.length} homeTeam v JSON`);
+        const scoreMatches = html.match(/"score"\s*:\s*"([^"]+)"/g) || [];
+        console.log(`   Nalezeno ${scoreMatches.length} score v JSON`);
+        
+        // Hledáme fixture/event struktury
+        const fixtureMatch = html.match(/"fixtures"\s*:\s*(\[.*?\]),?/s);
+        console.log(`🔎 Fixtures nalezeno v HTML: ${fixtureMatch ? 'ANO' : 'NE'}`);
 
         // 4. Extrakce dat - Livesport embeduje data v JSON ve skriptech nebo v atributech
         // Hledáme "initialData" nebo podobné struktury
@@ -382,13 +389,19 @@ async function fetchMatchesFromLivesport(options) {
                 const $el = $(el);
 
                 // Extrakce týmů - podle skutečné struktury z screenshotu
-                const homeTeam = $el.find('.event__participant--home').first().text().trim() ||
-                               $el.find('[class*="participant"]').first().text().trim();
-                const awayTeam = $el.find('.event__participant--away').first().text().trim() ||
-                               $el.find('[class*="participant"]').last().text().trim();
+                // Hledáme v .wcl-participant -> span s class obsahující "name"
+                const homeTeam = $el.find('.event__homeParticipant [class*="name"]').first().text().trim() ||
+                               $el.find('.wcl-participant').first().find('[class*="name"]').first().text().trim();
+                const awayTeam = $el.find('.event__awayParticipant [class*="name"]').first().text().trim() ||
+                               $el.find('.wcl-participant').last().find('[class*="name"]').first().text().trim();
 
                 // Extrakce času - např. "16.05. 12:20"
                 const timeText = $el.find('.event__time').first().text().trim();
+
+                // Debug pro prvních 5 elementů
+                if (i < 5) {
+                    console.log(`🎯 Zápas ${i}: home="${homeTeam}" away="${awayTeam}" time="${timeText}"`);
+                }
 
                 // Extrakce data - z času nebo z atributu
                 let dateText = $el.closest('[class*="round"]').find('[class*="date"]').first().text().trim() ||
