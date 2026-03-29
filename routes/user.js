@@ -33,6 +33,7 @@ router.get("/table-tip", requireLogin, async (req, res) => {
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Tipovačka</title>
 <link rel="stylesheet" href="/css/styles.css" />
+<script src="/js/version-notification.js"></script>
 <link rel="icon" href="/images/logo.png">
 </head>
 <script>
@@ -468,6 +469,7 @@ html += await generateLeftPanel(data);
                 });
             });
         </script>
+        <script src="/js/version-notification.js"></script>
         </body>
         </html>
     `;
@@ -690,6 +692,7 @@ router.get('/', requireLogin, async (req, res) => {
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Tipovačka</title>
 <link rel="stylesheet" href="/css/styles.css" />
+<script src="/js/version-notification.js"></script>
 <link rel="icon" href="/images/logo.png">
 </head>
 <script>
@@ -1176,6 +1179,7 @@ router.get('/history', requireLogin, async (req, res) => {
         <meta charset="UTF-8">
         <title>Historie lig a sezón</title>
         <link rel="stylesheet" href="/css/styles.css">
+        <script src="/js/version-notification.js"></script>
         <link rel="icon" href="/images/logo.png">
     </head>
     <body class="usersite">
@@ -1244,6 +1248,7 @@ router.get('/history/a', requireLogin, async (req, res) => {
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Tipovačka</title>
 <link rel="stylesheet" href="/css/styles.css" />
+<script src="/js/version-notification.js"></script>
 <link rel="icon" href="/images/logo.png">
 </head>
 <script>
@@ -1596,6 +1601,7 @@ router.get('/history/table', requireLogin, async (req, res) => {
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Tipovačka</title>
 <link rel="stylesheet" href="/css/styles.css" />
+<script src="/js/version-notification.js"></script>
 <link rel="icon" href="/images/logo.png">
 </head>
 <script>
@@ -1815,6 +1821,7 @@ router.get("/prestupy", requireLogin, async (req, res) => {
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Tipovačka</title>
 <link rel="stylesheet" href="/css/styles.css" />
+<script src="/js/version-notification.js"></script>
 <link rel="icon" href="/images/logo.png">
 </head>
 <script>
@@ -2480,6 +2487,7 @@ router.get("/image-exporter", requireLogin, async (req, res) => {
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Image Exporter - Tipovačka</title>
 <link rel="stylesheet" href="/css/styles.css" />
+<script src="/js/version-notification.js"></script>
 <link rel="icon" href="/images/logo.png">
 </head>
 <script>

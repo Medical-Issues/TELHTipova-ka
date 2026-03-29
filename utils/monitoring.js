@@ -2,17 +2,17 @@ const axios = require('axios');
 
 // Konfigurace pro různé monitoring služby
 const MONITORING_ENDPOINTS = {
-    // Hlavní endpoint - health check
+    // Hlavní endpoint - lightweight ping
     mainHealth: {
-        url: process.env.KEEP_ALIVE_URL || 'https://telhtipova-ka.onrender.com/health',
-        interval: 120000, // 2 minuty
+        url: process.env.KEEP_ALIVE_URL || 'https://telhtipova-ka.onrender.com/health/ping',
+        interval: 60000, // 1 minuta
         timeout: 10000
     },
     
     // Wake endpoint pro aktivitu
     wakeEndpoint: {
         url: process.env.WAKE_URL || 'https://telhtipova-ka.onrender.com/wake',
-        interval: 300000, // 5 minut
+        interval: 180000, // 3 minuty
         timeout: 15000
     }
 };

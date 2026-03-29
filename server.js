@@ -514,7 +514,7 @@ async function startServer() {
         }, 10000);
     });
 
-    // Interní keep-alive mechanismus - každých 5 minut
+    // Interní keep-alive mechanismus - každých 3 minuty
     setInterval(async () => {
         try {
             const { connectToDatabase } = require('./config/database');
@@ -524,9 +524,9 @@ async function startServer() {
         } catch (error) {
             console.error('❌ Keep-alive error:', error.message);
         }
-    }, 5 * 60 * 1000); // 5 minut
+    }, 3 * 60 * 1000); // 3 minuty
 
-    // HTTP Keep-Alive pro Render - každých 2 minuty pingnout vlastní URL
+    // HTTP Keep-Alive pro Render - každých 1 minutu pingnout vlastní URL (agresivnější)
     const axios = require('axios');
     const KEEP_ALIVE_URL = process.env.KEEP_ALIVE_URL || 'https://telhtipova-ka.onrender.com/health/ping';
     
@@ -545,7 +545,30 @@ async function startServer() {
         } catch (error) {
             console.error('❌ HTTP Keep-alive error:', error.message);
         }
-    }, 2 * 60 * 1000); // 2 minuty - dostatečné pro Render
+    }, 1 * 60 * 1000); // 1 minuta - agresivnější pro Render
+
+    // SUPER agresivní keep-alive - každých 30 sekund (pro Render free tier)
+    const SUPER_KEEP_ALIVE_URL = process.env.SUPER_KEEP_ALIVE_URL || 'https://telhtipova-ka.onrender.com/health/ping';
+    let keepAliveCounter = 0;
+    
+    setInterval(async () => {
+        try {
+            keepAliveCounter++;
+            const response = await axios.get(SUPER_KEEP_ALIVE_URL, {
+                timeout: 5000,
+                headers: {
+                    'User-Agent': 'Render-Super-Keep-Alive',
+                    'Cache-Control': 'no-cache'
+                }
+            });
+            // Logovat jen každý 10. ping aby nezahlcoval logy
+            if (keepAliveCounter % 10 === 0) {
+                console.log(`💓 Super keep-alive #${keepAliveCounter}: ${response.status}`);
+            }
+        } catch (error) {
+            console.error(`❌ Super keep-alive #${keepAliveCounter} error:`, error.message);
+        }
+    }, 30 * 1000); // 30 sekund - ultra agresivní
 
     // Záloha každých 24 hodin
     setInterval(() => {
