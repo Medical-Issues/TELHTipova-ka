@@ -381,18 +381,28 @@ async function fetchMatchesFromLivesport(options) {
             $('.event__match, .match, [class*="event"]').each((i, el) => {
                 const $el = $(el);
 
-                // Extrakce týmů
-                const homeTeam = $el.find('.event__participant--home, .home-team, [class*="home"]').first().text().trim();
-                const awayTeam = $el.find('.event__participant--away, .away-team, [class*="away"]').first().text().trim();
+                // Extrakce týmů - podle skutečné struktury z screenshotu
+                const homeTeam = $el.find('.event__participant--home').first().text().trim() ||
+                               $el.find('[class*="participant"]').first().text().trim();
+                const awayTeam = $el.find('.event__participant--away').first().text().trim() ||
+                               $el.find('[class*="participant"]').last().text().trim();
 
-                // Extrakce času
-                const timeText = $el.find('.event__time, .match-time, [class*="time"]').first().text().trim();
+                // Extrakce času - např. "16.05. 12:20"
+                const timeText = $el.find('.event__time').first().text().trim();
 
-                // Extrakce data
-                const dateText = $el.closest('.event__round, [class*="round"], [class*="date"]').find('.event__date, .date').first().text().trim() ||
-                                $el.attr('data-date');
+                // Extrakce data - z času nebo z atributu
+                let dateText = $el.closest('[class*="round"]').find('[class*="date"]').first().text().trim() ||
+                              $el.attr('data-date');
 
-                if (homeTeam && awayTeam && timeText) {
+                // Pokud máme čas ve formátu "16.05. 12:20", extrahujeme datum
+                if (timeText && timeText.includes('.')) {
+                    const parts = timeText.split(' ');
+                    if (parts.length >= 1) {
+                        dateText = parts[0] + '.' + (seasonToUse ? seasonToUse.split('/')[0] : '2025');
+                    }
+                }
+
+                if (homeTeam && awayTeam) {
                     events.push({
                         homeTeam,
                         awayTeam,
