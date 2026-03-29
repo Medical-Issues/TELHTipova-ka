@@ -302,6 +302,7 @@ async function fetchMatchesFromLivesport(options) {
             const cheerio = require('cheerio');
             const $ = cheerio.load(html);
 
+            // Selektory pro stránku "Zápasy"
             $('.event__match, .match, [class*="event"]').each((i, el) => {
                 const $el = $(el);
 
@@ -326,6 +327,38 @@ async function fetchMatchesFromLivesport(options) {
                     });
                 }
             });
+
+            // Selektory pro stránku "Program" (tabulkový formát)
+            if (events.length === 0) {
+                $('table tr, .program__row, [class*="program"]').each((i, el) => {
+                    const $el = $(el);
+
+                    // Hledáme buňky s týmy
+                    const cells = $el.find('td, .team, [class*="team"], .participant');
+                    if (cells.length >= 2) {
+                        const homeTeam = $(cells[0]).text().trim();
+                        const awayTeam = $(cells[1]).text().trim();
+
+                        // Čas může být v další buňce nebo atributu
+                        const timeText = $el.find('[class*="time"], .time, td:nth-child(3)').first().text().trim() ||
+                                        $el.attr('data-time') || '17:00';
+
+                        // Datum z atributu nebo nadpisu sekce
+                        const dateText = $el.attr('data-date') ||
+                                        $el.closest('[class*="date"], .date, [class*="round"]').find('[class*="date"], .date-header').first().text().trim();
+
+                        if (homeTeam && awayTeam && homeTeam !== awayTeam) {
+                            events.push({
+                                homeTeam,
+                                awayTeam,
+                                time: timeText,
+                                date: dateText,
+                                status: 'scheduled'
+                            });
+                        }
+                    }
+                });
+            }
         }
 
         console.log(`✅ Nalezeno ${events.length} zápasů v datech`);
