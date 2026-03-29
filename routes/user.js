@@ -2598,9 +2598,13 @@ async function generateImage(type) {
     data.type = type;
     
     try {
+        const csrfToken = document.getElementById('globalCsrfToken')?.value || '';
         const res = await fetch('/image-exporter/generate', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
+            },
             body: JSON.stringify(data)
         });
         
