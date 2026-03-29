@@ -36,6 +36,9 @@ app.use((req, res, next) => {
 });
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Also serve images from data/images
+app.use('/images', express.static(path.join(__dirname, 'data', 'images')));
+
 // Helmet-like security headers (bez balíčku)
 app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');

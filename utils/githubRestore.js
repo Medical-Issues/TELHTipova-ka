@@ -6,7 +6,7 @@ const REPO_OWNER = 'Medical-Issues';
 const REPO_NAME = 'TELHTipovackaZaloha';
 const BRANCH = 'main';
 const DATA_FOLDER = path.join(__dirname, '..', 'data');
-const IMAGES_FOLDER = path.join(__dirname, '..', 'public', 'images');
+const IMAGES_FOLDER = path.join(DATA_FOLDER, 'images');
 
 async function getDeletedImagesList() {
     try {
