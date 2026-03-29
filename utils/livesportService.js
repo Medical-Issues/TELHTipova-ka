@@ -4,6 +4,14 @@
  */
 const axios = require('axios');
 
+// Pokusíme se načíst puppeteer-core (lehčí verze, potřebuje externí Chrome)
+let puppeteer;
+try {
+    puppeteer = require('puppeteer-core');
+} catch (e) {
+    puppeteer = null;
+}
+
 // Livesport API endpointy
 const LIVESPORT_BASE_URL = 'https://www.livesport.cz';
 
@@ -500,9 +508,16 @@ async function fetchMatchesFromLivesport(options) {
             console.log(`🤖 Spouštím Puppeteer pro dynamický scraping...`);
             let browser;
             try {
+                // Najdeme Chrome - na Renderu je v /usr/bin/google-chrome-stable
+                const chromePath = process.env.PUPPETEER_EXECUTABLE_PATH || 
+                                  '/usr/bin/google-chrome-stable' || 
+                                  '/usr/bin/chromium-browser' ||
+                                  '/usr/bin/chromium';
+                
                 browser = await puppeteer.launch({
                     headless: 'new',
-                    args: ['--no-sandbox', '--disable-setuid-sandbox']
+                    executablePath: chromePath,
+                    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
                 });
                 const page = await browser.newPage();
                 
@@ -510,7 +525,7 @@ async function fetchMatchesFromLivesport(options) {
                 await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
                 
                 // Počkáme na načtení zápasů
-                await page.waitForSelector('.event__match, .wcl-participant', { timeout: 10000 });
+                await page.waitForSelector('.event__match, .wcl-participant', { timeout: 15000 });
                 
                 // Extrahujeme data z prohlížeče
                 events = await page.evaluate(() => {
