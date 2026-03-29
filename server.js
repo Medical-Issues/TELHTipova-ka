@@ -524,8 +524,7 @@ async function startServer() {
         
         setInterval(async () => {
             counter++;
-            const timestamp = new Date().toISOString();
-            
+            new Date().toISOString();
             try {
                 // 1. Externí HTTP wake - reálná aktivita pro Render (každých 30s)
                 const wakePromise = axios.get(WAKE_URL, {
