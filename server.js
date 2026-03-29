@@ -51,13 +51,20 @@ function csrfMiddleware(req, res, next) {
     if (['POST', 'PUT', 'DELETE'].includes(req.method)) {
         const token = req.body?._csrf || req.headers['x-csrf-token'];
         
+        console.log('CSRF Debug - URL:', req.url);
+        console.log('CSRF Debug - Session token:', req.session.csrfToken);
+        console.log('CSRF Debug - Body token:', req.body?._csrf);
+        console.log('CSRF Debug - Header token:', req.headers['x-csrf-token']);
+        
         // Token je povinný pro všechny modifikující requesty
         if (!token) {
+            console.log('CSRF Debug - Token chybí!');
             return res.status(403).json({ error: 'CSRF token missing' });
         }
         
         // Kontrola validity tokenu
         if (token !== req.session.csrfToken) {
+            console.log('CSRF Debug - Token neplatný!');
             return res.status(403).json({ error: 'CSRF token invalid' });
         }
     }

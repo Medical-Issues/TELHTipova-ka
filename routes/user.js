@@ -32,6 +32,18 @@ function sanitizeBody(req, res, next) {
 }
 
 router.use(sanitizeBody);
+
+// Middleware pro zajištění CSRF tokenu v session
+router.use((req, res, next) => {
+    if (!req.session.csrfToken) {
+        req.session.csrfToken = require('crypto').randomBytes(32).toString('hex');
+        req.session.save((err) => {
+            if (err) console.error('Chyba při ukládání session:', err);
+        });
+    }
+    next();
+});
+
 router.get("/table-tip", requireLogin, async (req, res) => {
     // Kontrola jest je liga veřejná
     const allowedLeagues = await getAllowedLeagues();
@@ -214,6 +226,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
         Zjišťuji stav...
     </button>
 </div>
+<input type="hidden" id="globalCsrfToken" value="${req.session.csrfToken || ''}">
 </form>
 <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
@@ -884,6 +897,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
         Zjišťuji stav...
     </button>
 </div>
+<input type="hidden" id="globalCsrfToken" value="${req.session.csrfToken || ''}">
 </form>
 <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
@@ -1073,7 +1087,8 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 document.addEventListener('DOMContentLoaded', () => {
 function sendTip(formData, homeBtn, awayBtn, loserRow) {
 const winner = formData.get('winner');
-const csrfToken = document.querySelector('#sortForm input[name="_csrf"]')?.value || '';
+const csrfToken = document.getElementById('globalCsrfToken')?.value || document.querySelector('input[name="_csrf"]')?.value || '';
+formData.append('_csrf', csrfToken);
 fetch('/tip', { 
     method: 'POST', 
     headers: { 
@@ -2029,6 +2044,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
         Zjišťuji stav...
     </button>
 </div>
+<input type="hidden" id="globalCsrfToken" value="${req.session.csrfToken || ''}">
 </form>
 <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
