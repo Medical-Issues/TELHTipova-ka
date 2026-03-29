@@ -238,7 +238,7 @@ async function fetchMatchesFromLivesport(options) {
 
         // 3. Stažení stránky
         console.log(`📥 Stahuji data z: ${url}`);
-        await axios.get(url, {
+        const response = await axios.get(url, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -249,7 +249,10 @@ async function fetchMatchesFromLivesport(options) {
             },
             timeout: 30000
         });
-// Debug: hledáme JSON s týmy v HTML
+        
+        const html = response.data;
+        
+        // Debug: hledáme JSON s týmy v HTML
         console.log(`🔍 Hledám JSON s týmy v HTML...`);
         const teamMatches = html.match(/"homeTeam"\s*:\s*"([^"]+)"/g) || [];
         console.log(`   Nalezeno ${teamMatches.length} homeTeam v JSON`);
