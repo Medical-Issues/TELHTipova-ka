@@ -83,6 +83,17 @@ app.use((req, res, next) => {
     const ip = req.ip || req.connection.remoteAddress;
     const now = Date.now();
     
+    // Skip pro keep-alive a monitoring endpointy
+    const safeEndpoints = [
+        '/css/', '/js/', '/images/', '/favicon.ico', '/robots.txt',
+        '/sitemap.xml', '/health/ping', '/health/status', '/health',
+        '/wake', '/warm', '/'
+    ];
+    const isSafeEndpoint = safeEndpoints.some(ep => req.path.startsWith(ep));
+    if (isSafeEndpoint) {
+        return next();
+    }
+    
     // Detekce localhostu (interní keep-alive systémy)
     const isLocalhost = ip === '::1' || ip === '127.0.0.1' || ip === 'localhost';
     
