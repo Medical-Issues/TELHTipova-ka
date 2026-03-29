@@ -252,6 +252,8 @@ async function fetchMatchesFromLivesport(options) {
         });
 
         const html = response.data;
+        console.log(`📄 Staženo ${html.length} znaků HTML`);
+        console.log(`🔍 Prvních 500 znaků: ${html.substring(0, 500)}`);
 
         // 4. Extrakce dat - Livesport embeduje data v JSON ve skriptech nebo v atributech
         // Hledáme "initialData" nebo podobné struktury
@@ -262,13 +264,17 @@ async function fetchMatchesFromLivesport(options) {
                            html.match(/window\.__DATA__\s*=\s*(\{.*?});/s) ||
                            html.match(/var\s+initialData\s*=\s*(\[.*?]);/s);
 
+        console.log(`🔎 Script match nalezen: ${scriptMatch ? 'ANO' : 'NE'}`);
+
         if (scriptMatch) {
             try {
                 const jsonData = JSON.parse(scriptMatch[1]);
+                console.log(`📊 JSON klíče: ${Object.keys(jsonData).join(', ')}`);
                 // Livesport má různé struktury podle verze
                 events = jsonData.events || jsonData.matches || jsonData.data?.events || [];
+                console.log(`✅ JSON parse: nalezeno ${events.length} events`);
             } catch (e) {
-                console.log('Nepodařilo se parsovat JSON z script tagu');
+                console.log('Nepodařilo se parsovat JSON z script tagu:', e.message);
             }
         }
 
@@ -302,7 +308,12 @@ async function fetchMatchesFromLivesport(options) {
             const cheerio = require('cheerio');
             const $ = cheerio.load(html);
 
+            console.log(`🔍 Po Pokusu 1 a 2: ${events.length} events`);
+
             // Selektory pro stránku "Zápasy"
+            const matchSelectors = '.event__match, .match, [class*="event"]';
+            const matchElements = $(matchSelectors);
+            console.log(`🎯 Nalezeno ${matchElements.length} elementů se selektorem "${matchSelectors}"`);
             $('.event__match, .match, [class*="event"]').each((i, el) => {
                 const $el = $(el);
 
@@ -330,7 +341,12 @@ async function fetchMatchesFromLivesport(options) {
 
             // Selektory pro stránku "Program" (tabulkový formát)
             if (events.length === 0) {
-                $('table tr, .program__row, [class*="program"]').each((i, el) => {
+                const programSelectors = 'table tr, .program__row, [class*="program"]';
+                const programElements = $(programSelectors);
+                console.log(`📋 Nalezeno ${programElements.length} elementů pro "Program"`);
+
+                programElements.each((i, el) => {
+                    if (i > 5) return false; // Debug: ukážeme jen prvních 6
                     const $el = $(el);
 
                     // Hledáme buňky s týmy
@@ -355,9 +371,11 @@ async function fetchMatchesFromLivesport(options) {
                                 date: dateText,
                                 status: 'scheduled'
                             });
+                            console.log(`✅ Zápas nalezen: ${homeTeam} vs ${awayTeam}`);
                         }
                     }
                 });
+                console.log(`📋 Program scraper: nalezeno ${events.length} zápasů`);
             }
         }
 
