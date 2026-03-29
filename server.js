@@ -545,7 +545,7 @@ async function startServer() {
         } catch (error) {
             console.error('❌ HTTP Keep-alive error:', error.message);
         }
-    }, 1 * 60 * 1000); // 1 minuta - agresivnější pro Render
+    }, 60 * 1000); // 1 minuta - agresivnější pro Render
 
     // SUPER agresivní keep-alive - každých 30 sekund (pro Render free tier)
     const SUPER_KEEP_ALIVE_URL = process.env.SUPER_KEEP_ALIVE_URL || 'https://telhtipova-ka.onrender.com/health/ping';
