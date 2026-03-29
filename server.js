@@ -49,12 +49,13 @@ function csrfMiddleware(req, res, next) {
     
     // Kontrolovat POST/PUT/DELETE requesty - token je POVINNÝ
     if (['POST', 'PUT', 'DELETE'].includes(req.method)) {
-        const token = req.body?._csrf || req.headers['x-csrf-token'];
+        const token = req.body?._csrf || req.headers['x-csrf-token'] || req.query._csrf;
         
         console.log('CSRF Debug - URL:', req.url);
         console.log('CSRF Debug - Session token:', req.session.csrfToken);
         console.log('CSRF Debug - Body token:', req.body?._csrf);
         console.log('CSRF Debug - Header token:', req.headers['x-csrf-token']);
+        console.log('CSRF Debug - Query token:', req.query._csrf);
         
         // Token je povinný pro všechny modifikující requesty
         if (!token) {
@@ -76,7 +77,10 @@ function csrfMiddleware(req, res, next) {
 app.set('trust proxy', true);
 
 // Vytvoření sessions adresáře pokud neexistuje
-const sessionsDir = path.join(__dirname, 'sessions');
+// Na Render používáme /tmp (ephemeral filesystem), lokálně ./sessions
+const sessionsDir = process.env.NODE_ENV === 'production' 
+    ? '/tmp/sessions' 
+    : path.join(__dirname, 'sessions');
 if (!fs.existsSync(sessionsDir)) {
     fs.mkdirSync(sessionsDir, { recursive: true });
 }
@@ -316,12 +320,17 @@ app.post('/admin/full-restore-from-github', (req, res) => {
     });
 });
 
-app.use('/auth', authRoutes);
+app.use('/auth', csrfMiddleware, authRoutes);
 app.use('/health', healthRoutes);
 app.use('/security', securityRoutes);
 app.use('/api', csrfMiddleware, versionRoutes);
 app.use('/', csrfMiddleware, userRoutes)
 app.use('/admin', csrfMiddleware, adminRoutes);
+
+// API endpoint pro CSRF token
+app.get('/api/csrf-token', (req, res) => {
+    res.json({ csrfToken: req.session.csrfToken || '' });
+});
 
 app.get('/api/vapid-public-key', (req, res) => {
     if (!process.env.VAPID_PUBLIC_KEY) {
@@ -500,10 +509,10 @@ async function startServer() {
 
     // JEDNOTNÝ KEEP-ALIVE SYSTÉM - kombinuje všechny mechanismy
     function startUnifiedKeepAlive() {
-        console.log('💓 Starting unified keep-alive system (every 30s)');
+        const WAKE_URL = process.env.WAKE_URL || 'https://telhtipova-ka.onrender.com/wake';
+        console.log(`💓 Starting unified keep-alive system (every 60s), WAKE_URL: ${WAKE_URL}`);
         
         const axios = require('axios');
-        const WAKE_URL = process.env.WAKE_URL || 'https://telhtipova-ka.onrender.com/wake';
         let counter = 0;
         
         setInterval(async () => {
@@ -540,7 +549,7 @@ async function startServer() {
                     console.error(`❌ Keep-alive #${counter} error:`, error.message);
                 }
             }
-        }, 30 * 1000); // Každých 30 sekund
+        }, 60 * 1000); // Každých 30 sekund
     }
 
     // Záloha každých 24 hodin

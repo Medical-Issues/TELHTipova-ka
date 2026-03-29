@@ -734,7 +734,7 @@ router.get('/teams/edit/:id', requireAdmin, async (req, res) => {
 <main>
   <h1>Upravit tým ${team.name} ID ${team.id}</h1>
   <img height="50" src="${team.logo ? `/logoteamu/${team.logo}` : '/images/logo.png'}" alt="Logo" />
-  <form style="display: flex; flex-direction: row; gap: 10px; margin-bottom: 10px" action="/admin/teams/edit/${team.id}" method="POST" enctype="multipart/form-data">
+  <form style="display: flex; flex-direction: row; gap: 10px; margin-bottom: 10px" action="/admin/teams/edit/${team.id}?_csrf=${req.session.csrfToken || ''}" method="POST" enctype="multipart/form-data">
     <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
     <label style="display: flex; flex-direction: column" for="name">Název týmu
       <input autocomplete="off" style="width: 220px" class="league-select" type="text" id="name" name="name" value="${team.name}" required />
@@ -1138,7 +1138,7 @@ router.get('/new/team', requireAdmin, async (req, res) => {
     </header>
     <main>
     <h1>Vytvořit nový tým</h1>
-    <form style="display: flex; flex-direction: row; gap: 10px" method="POST" action="/admin/new/team" enctype="multipart/form-data">
+    <form style="display: flex; flex-direction: row; gap: 10px" method="POST" action="/admin/new/team?_csrf=${req.session.csrfToken || ''}" enctype="multipart/form-data">
       <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
       <label style="display: flex; flex-direction: column;">Název týmu: <input style="width: 220px" class="league-select" autocomplete="off" type="text" name="name" required></label>
       <label style="display: flex; flex-direction: column;">Nahrát logo: 
@@ -3117,7 +3117,7 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
                 </select>
             </form>
 
-            <form method="POST" action="/admin/transfers/save" enctype="multipart/form-data">
+            <form method="POST" action="/admin/transfers/save?_csrf=${req.session.csrfToken || ''}" enctype="multipart/form-data">
                 <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
                 <input type="hidden" name="liga" value="${selectedLiga}">
                 <input type="hidden" name="season" value="${selectedSeason}">
