@@ -18,7 +18,6 @@ const { Users } = require('./utils/mongoDataAccess');
 const { connectToDatabase } = require('./config/database');
 const {backupJsonFilesToGitHub} = require("./utils/githubBackup");
 const {restoreFromGitHub, fullRestoreFromGitHub} = require("./utils/githubRestore");
-const {startMonitoring} = require("./utils/monitoring");
 const {startSecurityMonitoring} = require("./utils/securityMonitoring");
 
 const app = express();
@@ -511,8 +510,8 @@ async function startServer() {
         
         // Spustit monitoring service po 10 sekundách
         setTimeout(() => {
-            console.log('🔄 Starting monitoring service...');
-            startMonitoring();
+            // Monitoring vypnut - unified keep-alive už zajišťuje probuzení
+            console.log('🔄 Monitoring service skipped (unified keep-alive handles this)');
             
             // Spustit security monitoring po dalších 5 sekundách
             setTimeout(() => {
