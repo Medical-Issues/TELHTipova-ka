@@ -3,8 +3,8 @@ const { Users, Matches, Teams, Leagues, AllowedLeagues, ChosenSeason, Settings, 
 const express = require("express");
 const router = express.Router();
 const path = require('path');
-const axios = require('axios');
-const cheerio = require('cheerio');
+require('axios');
+require('cheerio');
 const multer = require('multer');
 const notif = require('./notificationService');
 const bcrypt = require("bcrypt");
@@ -19,6 +19,7 @@ const {
     renderErrorHtml,
     logAdminAction,
 } = require("../utils/fileUtils");
+const { fetchMatchesFromLivesport } = require('../utils/livesportService');
 router.post('/backup', async (req, res) => {
     try {
         await backupJsonFilesToGitHub();
@@ -2622,7 +2623,7 @@ router.get('/matches/import', requireAdmin, async (req, res) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-        <title>Import z Hokej.cz</title>
+        <title>Import z Livesport.cz</title>
         <link rel="stylesheet" href="/css/styles.css">
         <link rel="icon" href="/images/logo.png">
     </head>
@@ -2641,17 +2642,27 @@ router.get('/matches/import', requireAdmin, async (req, res) => {
         <main class="main_page" style="flex-direction: column; align-items: center;">
             
             <div class="stats-container" style="width: 100%; max-width: 800px; text-align: left;">
-                <h2 style="color: orangered; text-align: center;">Hokej.cz Scraper</h2>
+                <h2 style="color: orangered; text-align: center;">Livesport.cz Import</h2>
                 <p style="text-align: center; color: lightgrey;">
-                    Vyber parametry a vlož odkaz na sekci <strong>ZÁPASY</strong> z webu hokej.cz.
+                    Vyber parametry a vlož odkaz na sekci <strong>ZÁPASY</strong> z webu livesport.cz.<br>
+                    <small>Podporuje <strong>jakoukoliv</strong> ligu - stačí mít vytvořené týmy v databázi</small>
                 </p>
+
+                <div style="background: rgba(255, 69, 0, 0.1); border: 1px dashed orangered; padding: 15px; margin-bottom: 15px; border-radius: 5px;">
+                    <p style="margin: 0; color: white; font-size: 14px;">
+                        <strong>Příklady URL (záložka "Zápasy"):</strong><br>
+                        <code style="color: #00ff00;">https://www.livesport.cz/zapasy/2025-2026/telh-UCEL8Q9b/</code><br>
+                        <code style="color: #00ff00;">https://www.livesport.cz/hokej/svet/mistrovstvi-sveta/zapasy/</code><br>
+                        <code style="color: #00ff00;">https://www.livesport.cz/hokej/cesko/tipsport-extraliga/zapasy/</code>
+                    </p>
+                </div>
 
                 <form method="POST" action="/admin/matches/import-run" style="display: flex; flex-direction: column; gap: 15px; width: 100%;">
                     <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
                     
                     <label style="display: flex; flex-direction: column; color: orangered;">
-                        URL adresa (https://www.hokej.cz/tipsport-extraliga/zapasy?matchList-view-displayAll=1&matchList-filter-season=2025&matchList-filter-competition=7397):
-                        <input type="text" name="url" placeholder="https://www.hokej.cz/tipsport-extraliga/zapasy?season=..." required 
+                        URL adresa z livesport.cz:
+                        <input type="text" name="url" placeholder="https://www.livesport.cz/zapasy/2025-2026/telh-UCEL8Q9b/" required 
                                style="padding: 10px; background-color: #222; border: 1px solid orangered; color: white;">
                     </label>
 
@@ -2703,170 +2714,105 @@ router.get('/matches/import', requireAdmin, async (req, res) => {
 
 router.post('/matches/import-run', requireAdmin, async (req, res) => {
     const { url, liga, season, dateFrom, dateTo, lockImported } = req.body;
-
     const shouldLock = lockImported === 'on';
 
     try {
-        // 1. Stahování
-        const response = await axios.get(url, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
-            }
-        });
-
-        const html = response.data;
-        const $ = cheerio.load(html);
-        const pageTitle = $('title').text().trim();
-
+        // 1. Načtení týmů z DB
         const allTeams = await Teams.findAll();
-        const myTeams = allTeams.filter(t => t.liga === liga);
 
-        // --- ID MATCHING (Zjištění posledního ID) ---
+        // 2. Načtení existujících zápasů pro kontrolu duplicit
         const matchesDB = await Matches.findAll();
-
-        // Najdeme nejvyšší ID (číslo)
         let maxId = matchesDB.reduce((max, m) => {
-            const numId = Number(m.id); // Převedeme na číslo
+            const numId = Number(m.id);
             return !isNaN(numId) && numId > max ? numId : max;
         }, 0);
 
         console.log(`ℹ️ Start ID: ${maxId + 1}`);
+        console.log(`📥 Importuji z Livesport: ${liga} - ${season}`);
 
-        let newMatchesCount = 0;
-        let skippedCount = 0;
-        let outOfRangeCount = 0;
-        let notFoundTeams = new Set();
-
-        // --- POMOCNÉ FUNKCE ---
-        const cleanTeamName = (rawName) => {
-            if (!rawName) return "";
-            let clean = rawName.trim();
-            clean = clean.replace(/^([A-Z]{1,2})\s+/, "");
-            clean = clean.split(/\s{2,}|\n/)[0];
-            clean = clean.replace("Č.", "České").replace("K.", "Karlovy");
-            return clean.trim();
-        };
-
-        const findTeamId = (scrapedName) => {
-            if (!scrapedName) return null;
-            let clean = cleanTeamName(scrapedName);
-            let found = myTeams.find(t => t.name.toLowerCase() === clean.toLowerCase());
-            if (!found) found = myTeams.find(t => t.name.toLowerCase().includes(clean.toLowerCase()));
-            if (!found) found = myTeams.find(t => clean.toLowerCase().includes(t.name.toLowerCase()));
-            if (!found && clean.includes(" B")) {
-                const baseName = clean.replace(" B", "").trim();
-                found = myTeams.find(t => t.name.includes(baseName) && t.name.includes(" B"));
-            }
-            if (!found) notFoundTeams.add(`${clean} (orig: ${scrapedName})`);
-
-            // Důležité: Vracíme ID jako ČÍSLO (pokud je v teams.json string, převedeme ho)
-            return found ? Number(found.id) : null;
-        };
-
-        const rows = $('table.preview tr');
-        console.log(`ℹ️ Nalezeno řádků: ${rows.length}`);
-
-        rows.each((i, el) => {
-            // Jména týmů
-            const getDirectText = (selector) => $(el).find(selector).contents().filter(function() { return this.type === 'text'; }).text().trim();
-            let homeName = getDirectText('.preview__name:first') || $(el).find('.preview__name').first().text().trim();
-            let awayName = getDirectText('.preview__name:last') || $(el).find('.preview__name').last().text().trim();
-
-            if (!homeName || !awayName) return;
-
-            // --- DATA A ČAS ---
-            let dateRaw = null;
-            let timeRaw = "17:00";
-
-            const dateBoxCols = $(el).find('.preview__center .box-snow .col-1_3');
-            if (dateBoxCols.length >= 2) {
-                dateBoxCols.each((idx, col) => {
-                    const txt = $(col).text().trim();
-                    if (txt.match(/^\d{1,2}\.\s*\d{1,2}\.$/)) dateRaw = txt;
-                    if (txt.match(/^\d{1,2}:\d{2}$/)) timeRaw = txt;
-                });
-            }
-
-            // Fallbacky
-            if (!dateRaw) dateRaw = $(el).closest('table').prevAll('h2, h3, .date-header').first().text().trim();
-            if (!dateRaw) {
-                const centerText = $(el).find('.preview__center').text().trim();
-                const dateMatch = centerText.match(/(\d{1,2})\.\s*(\d{1,2})\./);
-                if (dateMatch) dateRaw = `${dateMatch[1]}. ${dateMatch[2]}.`;
-            }
-
-            const homeId = findTeamId(homeName);
-            const awayId = findTeamId(awayName);
-
-            if (homeId && awayId) {
-                const parseMatch = dateRaw ? dateRaw.match(/(\d{1,2})\.\s*(\d{1,2})\./) : null;
-
-                if (parseMatch) {
-                    const day = parseMatch[1].padStart(2, '0');
-                    const month = parseMatch[2].padStart(2, '0');
-
-                    // Výpočet roku
-                    const seasonYears = season.split('/');
-                    const startYear = "20" + seasonYears[0];
-                    const endYear = "20" + seasonYears[1];
-                    const year = (parseInt(month) >= 8) ? startYear : endYear;
-
-                    const fullDate = `${year}-${month}-${day}`;
-
-                    // Vytvoření datetime stringu (YYYY-MM-DDTHH:MM)
-                    const isoDateTime = `${fullDate}T${timeRaw}`;
-
-                    // Kontrola rozsahu (porovnáváme jen datumovou část)
-                    if (dateFrom && fullDate < dateFrom) { outOfRangeCount++; return; }
-                    if (dateTo && fullDate > dateTo) { outOfRangeCount++; return; }
-
-                    // Kontrola existence - musíme parsovat existující datetime v DB
-                    const exists = matchesDB.some(m => {
-                        // Pokud v DB datetime chybí, nemůžeme porovnat
-                        if (!m.datetime) return false;
-                        // Porovnáváme začátek stringu (datum) + ID týmů
-                        return m.datetime.startsWith(fullDate) && m.homeTeamId === homeId && m.awayTeamId === awayId;
-                    });
-
-                    if (!exists) {
-                        maxId++;
-
-                        // PUSHUJEME PŘESNĚ TVŮJ FORMÁT
-                        matchesDB.push({
-                            id: maxId,              // Číslo (16)
-                            homeTeamId: homeId,     // Číslo (10)
-                            awayTeamId: awayId,     // Číslo (8)
-                            datetime: isoDateTime,  // "2025-09-14T16:00"
-                            liga: liga,             // "TELH"
-                            season: season,         // "25/26"
-                            isPlayoff: false,       // false
-                            postponed: false,       // Výchozí stav (neodloženo)
-                            locked: shouldLock,     // Výchozí stav (odemčeno)
-                            result: null            // null (výsledek zatím není)
-                        });
-                        newMatchesCount++;
-                    } else {
-                        skippedCount++;
-                    }
-                }
-            }
+        // 3. Stažení zápasů z Livesportu
+        const importResult = await fetchMatchesFromLivesport({
+            url,
+            liga,
+            season,
+            dateFrom,
+            dateTo,
+            dbTeams: allTeams
         });
 
-        if (newMatchesCount > 0) {
-            // Uložení do MongoDB
-            await Matches.replaceAll(matchesDB);
+        if (!importResult.success) {
+            console.error('❌ Chyba při importu z Livesport:', importResult.error);
+            return res.status(500).send(`
+            <!DOCTYPE html>
+            <html lang="cs">
+            <head>
+                <meta charset="UTF-8">
+                <title>Chyba importu</title>
+                <link rel="stylesheet" href="/css/styles.css">
+            </head>
+            <body class="admin_site">
+                <main class="main_page" style="flex-direction: column; align-items: center; padding: 40px;">
+                    <div class="stats-container" style="border: 2px solid red; background: #330000;">
+                        <h2 style="color: red;">❌ Chyba při importu</h2>
+                        <p style="color: white;">${importResult.error || 'Nepodařilo se stáhnout data z Livesportu'}</p>
+                        <div style="margin-top: 20px;">
+                            <a href="/admin/matches/import" class="action-btn" style="background-color: #333; border: 1px solid orangered;">← Zpět na import</a>
+                        </div>
+                    </div>
+                </main>
+            </body>
+            </html>
+            `);
         }
 
-        const notFoundArray = Array.from(notFoundTeams);
+        // 4. Zpracování stažených zápasů
+        let newMatchesCount = 0;
+        let skippedCount = 0;
+        let outOfRangeCount = importResult.stats?.outOfRange || 0;
 
+        for (const match of importResult.matches) {
+            // Kontrola existence - porovnáváme datum + ID týmů
+            const exists = matchesDB.some(m => {
+                if (!m.datetime) return false;
+                return m.datetime.startsWith(match.date) &&
+                       m.homeTeamId === match.homeTeamId &&
+                       m.awayTeamId === match.awayTeamId;
+            });
+
+            if (!exists) {
+                maxId++;
+                matchesDB.push({
+                    id: maxId,
+                    homeTeamId: match.homeTeamId,
+                    awayTeamId: match.awayTeamId,
+                    datetime: match.datetime,
+                    liga: liga,
+                    season: season,
+                    isPlayoff: false,
+                    postponed: false,
+                    locked: shouldLock,
+                    result: null
+                });
+                newMatchesCount++;
+            } else {
+                skippedCount++;
+            }
+        }
+
+        // 5. Uložení do MongoDB
+        if (newMatchesCount > 0) {
+            await Matches.replaceAll(matchesDB);
+            console.log(`✅ Uloženo ${newMatchesCount} nových zápasů`);
+        }
+
+        // 6. Výsledková stránka
         const htmlRes = `
         <!DOCTYPE html>
         <html lang="cs">
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-            <title>Výsledek importu</title>
+            <title>Výsledek importu z Livesport</title>
             <link rel="stylesheet" href="/css/styles.css">
             <link rel="icon" href="/images/logo.png">
         </head>
@@ -2883,22 +2829,26 @@ router.post('/matches/import-run', requireAdmin, async (req, res) => {
                     <h2 style="color: ${newMatchesCount > 0 ? '#00ff00' : 'orangered'};">
                         ${newMatchesCount > 0 ? 'Úspěch!' : 'Dokončeno'}
                     </h2>
-                    
-                    <p style="color:gray; font-size:12px;">Titulek stránky: ${pageTitle}</p>
+
+                    <p style="color:gray; font-size:12px;">Zdroj: Livesport.cz | Liga: ${liga} | Sezóna: ${season}</p>
 
                     <table class="points-table" style="font-size: 14px; margin-top: 20px;">
                         <tr><td style="text-align: left;">Vybraná liga:</td><td>${liga}</td></tr>
-                        <tr><td style="text-align: left;">Prohledáno řádků:</td><td>${rows.length}</td></tr>
+                        <tr><td style="text-align: left;">Nalezeno na Livesportu:</td><td>${importResult.stats?.totalFound || 0}</td></tr>
+                        <tr><td style="text-align: left;">Úspěšně spárováno:</td><td>${importResult.matches.length}</td></tr>
                         <tr><td style="text-align: left;">Nové zápasy:</td><td style="color: #00ff00; font-weight: bold;">${newMatchesCount}</td></tr>
                         <tr><td style="text-align: left;">Již existující:</td><td style="color: yellow;">${skippedCount}</td></tr>
-                        <tr><td style="text-align: left;">Mimo datum:</td><td style="color: gray;">${outOfRangeCount}</td></tr>
+                        <tr><td style="text-align: left;">Mimo datum. rozsah:</td><td style="color: gray;">${outOfRangeCount}</td></tr>
                     </table>
 
-                    ${notFoundArray.length > 0 ? `
+                    ${importResult.notFoundTeams.length > 0 ? `
                     <div style="margin-top: 20px; border: 1px solid red; padding: 10px; background: #330000;">
-                        <h3 style="color: red; margin: 0 0 10px 0;">⚠️ Nespárované týmy</h3>
-                        <ul style="color: white; text-align: left; columns: 1;">
-                            ${notFoundArray.map(t => `<li>${t}</li>`).join('')}
+                        <h3 style="color: red; margin: 0 0 10px 0;">⚠️ Nespárované týmy (${importResult.notFoundTeams.length})</h3>
+                        <p style="color: #ff9999; font-size: 12px; margin-bottom: 10px;">
+                            Tyto týmy se nepodařilo najít v databázi. Zkontrolujte, zda máte vytvořené všechny týmy pro ligu ${liga}.
+                        </p>
+                        <ul style="color: white; text-align: left; columns: 1; max-height: 200px; overflow-y: auto;">
+                            ${importResult.notFoundTeams.map(t => `<li>${t}</li>`).join('')}
                         </ul>
                     </div>
                     ` : ''}
@@ -2912,12 +2862,34 @@ router.post('/matches/import-run', requireAdmin, async (req, res) => {
         </body>
         </html>
         `;
-        await logAdminAction(req.session.user, "IMPORT_ZÁPASŮ", `Hromadně importováno ${newMatchesCount} zápasů pro ligu ${liga} (${season})`);
+
+        await logAdminAction(req.session.user, "IMPORT_ZÁPASŮ_LIVESPORT", `Importováno ${newMatchesCount} zápasů z Livesportu pro ${liga} (${season})`);
         res.send(htmlRes);
 
     } catch (error) {
-        console.error(error);
-        res.status(500).send(`Chyba: ${error.message}`);
+        console.error('❌ Chyba při importu z Livesport:', error);
+        res.status(500).send(`
+        <!DOCTYPE html>
+        <html lang="cs">
+        <head>
+            <meta charset="UTF-8">
+            <title>Chyba importu</title>
+            <link rel="stylesheet" href="/css/styles.css">
+        </head>
+        <body class="admin_site">
+            <main class="main_page" style="flex-direction: column; align-items: center; padding: 40px;">
+                <div class="stats-container" style="border: 2px solid red; background: #330000;">
+                    <h2 style="color: red;">❌ Chyba při importu</h2>
+                    <p style="color: white;">${error.message}</p>
+                    <pre style="color: #ff9999; background: #220000; padding: 10px; border-radius: 5px; overflow-x: auto;">${error.stack}</pre>
+                    <div style="margin-top: 20px;">
+                        <a href="/admin/matches/import" class="action-btn" style="background-color: #333; border: 1px solid orangered;">← Zpět na import</a>
+                    </div>
+                </div>
+            </main>
+        </body>
+        </html>
+        `);
     }
 });
 router.post('/leagues/transfers', requireAdmin, express.urlencoded({ extended: true }), async (req, res) => {
