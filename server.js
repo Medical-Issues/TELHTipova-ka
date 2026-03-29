@@ -20,6 +20,9 @@ const {backupJsonFilesToGitHub} = require("./utils/githubBackup");
 const {restoreFromGitHub, fullRestoreFromGitHub} = require("./utils/githubRestore");
 const app = express();
 
+// Serve static files (CSS, images, etc.) - MUSÍ BÝT PRVNÍ!
+app.use(express.static(path.join(__dirname, 'public')));
+
 // Helmet-like security headers (bez balíčku)
 app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -90,9 +93,6 @@ app.use(session({
         secure: process.env.NODE_ENV === 'production'
     }
 }));
-
-// Serve static files (CSS, images, etc.)
-app.use(express.static(path.join(__dirname, 'public')));
 
 // Body parser middleware
 app.use(bodyParser.urlencoded({ extended: true }));
