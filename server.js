@@ -508,67 +508,57 @@ async function startServer() {
                 console.log('🔒 Starting security monitoring service...');
                 startSecurityMonitoring();
                 
-                // Keep-alive je řešen interním intervalem níže
-                console.log('💓 Interní keep-alive aktivní (každých 5 minut)');
+                // Spustit jednotný keep-alive systém
+                startUnifiedKeepAlive();
             }, 5000);
         }, 10000);
     });
 
-    // Interní keep-alive mechanismus - každých 3 minuty
-    setInterval(async () => {
-        try {
-            const { connectToDatabase } = require('./config/database');
-            const db = await connectToDatabase();
-            await db.admin().ping();
-            console.log(`💓 Interní keep-alive: ${new Date().toISOString()}`);
-        } catch (error) {
-            console.error('❌ Keep-alive error:', error.message);
-        }
-    }, 3 * 60 * 1000); // 3 minuty
-
-    // HTTP Keep-Alive pro Render - každých 1 minutu pingnout vlastní URL (agresivnější)
-    const axios = require('axios');
-    const KEEP_ALIVE_URL = process.env.KEEP_ALIVE_URL || 'https://telhtipova-ka.onrender.com/health/ping';
-    
-    setInterval(async () => {
-        try {
-            const startTime = Date.now();
-            const response = await axios.get(KEEP_ALIVE_URL, {
-                timeout: 10000,
-                headers: {
-                    'User-Agent': 'Render-Keep-Alive',
-                    'Cache-Control': 'no-cache'
+    // JEDNOTNÝ KEEP-ALIVE SYSTÉM - kombinuje všechny mechanismy
+    function startUnifiedKeepAlive() {
+        console.log('💓 Starting unified keep-alive system (every 30s)');
+        
+        const axios = require('axios');
+        const WAKE_URL = process.env.WAKE_URL || 'https://telhtipova-ka.onrender.com/wake';
+        let counter = 0;
+        
+        setInterval(async () => {
+            counter++;
+            const timestamp = new Date().toISOString();
+            
+            try {
+                // 1. Externí HTTP wake - reálná aktivita pro Render (každých 30s)
+                const wakePromise = axios.get(WAKE_URL, {
+                    timeout: 8000,
+                    headers: {
+                        'User-Agent': 'Render-Keep-Alive',
+                        'Cache-Control': 'no-cache'
+                    }
+                });
+                
+                // 2. Interní MongoDB ping (každé 3 minuty = every 6th run)
+                let dbPromise = Promise.resolve();
+                if (counter % 6 === 0) {
+                    const { connectToDatabase } = require('./config/database');
+                    dbPromise = connectToDatabase().then(db => db.admin().ping());
                 }
-            });
-            const responseTime = Date.now() - startTime;
-            console.log(`🌐 HTTP Keep-alive: ${response.status} (${responseTime}ms)`);
-        } catch (error) {
-            console.error('❌ HTTP Keep-alive error:', error.message);
-        }
-    }, 60 * 1000); // 1 minuta - agresivnější pro Render
-
-    // SUPER agresivní keep-alive - každých 30 sekund (pro Render free tier)
-    const SUPER_KEEP_ALIVE_URL = process.env.SUPER_KEEP_ALIVE_URL || 'https://telhtipova-ka.onrender.com/health/ping';
-    let keepAliveCounter = 0;
-    
-    setInterval(async () => {
-        try {
-            keepAliveCounter++;
-            const response = await axios.get(SUPER_KEEP_ALIVE_URL, {
-                timeout: 5000,
-                headers: {
-                    'User-Agent': 'Render-Super-Keep-Alive',
-                    'Cache-Control': 'no-cache'
+                
+                // Spustit paralelně
+                const [wakeResponse] = await Promise.all([wakePromise, dbPromise]);
+                
+                // Logovat jen každý 10. úspěšný běh
+                if (counter % 10 === 0) {
+                    console.log(`💓 Keep-alive #${counter}: wake=${wakeResponse.status}, db=${counter % 6 === 0 ? 'pinged' : 'skipped'}`);
                 }
-            });
-            // Logovat jen každý 10. ping aby nezahlcoval logy
-            if (keepAliveCounter % 10 === 0) {
-                console.log(`💓 Super keep-alive #${keepAliveCounter}: ${response.status}`);
+                
+            } catch (error) {
+                // Logovat jen každý 5. error aby nezahlcoval
+                if (counter % 5 === 0) {
+                    console.error(`❌ Keep-alive #${counter} error:`, error.message);
+                }
             }
-        } catch (error) {
-            console.error(`❌ Super keep-alive #${keepAliveCounter} error:`, error.message);
-        }
-    }, 30 * 1000); // 30 sekund - ultra agresivní
+        }, 30 * 1000); // Každých 30 sekund
+    }
 
     // Záloha každých 24 hodin
     setInterval(() => {
