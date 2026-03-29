@@ -10,7 +10,7 @@ const userRoutes = require('./routes/user');
 const adminRoutes = require('./routes/admin');
 const authRoutes = require('./routes/auth');
 const healthRoutes = require('./routes/health');
-const { router: securityRoutes, authLimiter } = require('./routes/security');
+const { router: securityRoutes } = require('./routes/security');
 const versionRoutes = require('./routes/version');
 const { Users } = require('./utils/mongoDataAccess');
 
@@ -18,9 +18,42 @@ const { Users } = require('./utils/mongoDataAccess');
 const { connectToDatabase } = require('./config/database');
 const {backupJsonFilesToGitHub} = require("./utils/githubBackup");
 const {restoreFromGitHub, fullRestoreFromGitHub} = require("./utils/githubRestore");
-const {startSecurityMonitoring} = require("./utils/securityMonitoring");
-
 const app = express();
+
+// Helmet-like security headers (bez balíčku)
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+    next();
+});
+
+// CSRF token generátor a middleware
+function generateCsrfToken() {
+    return require('crypto').randomBytes(32).toString('hex');
+}
+
+function csrfMiddleware(req, res, next) {
+    // Vytvořit token pokud neexistuje
+    if (!req.session.csrfToken) {
+        req.session.csrfToken = generateCsrfToken();
+    }
+    
+    // Přidat token do res.locals pro EJS/views
+    res.locals.csrfToken = req.session.csrfToken;
+    
+    // Kontrolovat POST/PUT/DELETE requesty
+    if (['POST', 'PUT', 'DELETE'].includes(req.method)) {
+        const token = req.body._csrf || req.headers['x-csrf-token'];
+        if (token !== req.session.csrfToken) {
+            return res.status(403).send('CSRF token invalid');
+        }
+    }
+    
+    next();
+}
 
 // Důvěřovat proxy hlavičkám (X-Forwarded-For) pro získání reálné IP klienta
 app.set('trust proxy', true);
@@ -45,6 +78,8 @@ app.use(session({
     saveUninitialized: true,
     cookie: {
         maxAge: 1000 * 60 * 60 * 24 * 30,
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production'
     }
 }));
 // Health check endpoint pro monitoring služby (bez autentizace) - MUSÍ BÝT PŘED ROUTES!
@@ -74,86 +109,9 @@ app.get('/health', (req, res) => {
     });
 });
 
-// Middleware pro sledování útoků a DDOS
-const requestCounts = new Map();
-const suspiciousIPs = new Set();
+// DDOS ochrana ODSTRANĚNA - Render má vlastní ochranu
 
-app.use((req, res, next) => {
-    const ip = req.ip || req.connection.remoteAddress;
-    const now = Date.now();
-    
-    // Skip pro keep-alive a monitoring endpointy
-    const safeEndpoints = [
-        '/css/', '/js/', '/images/', '/favicon.ico', '/robots.txt',
-        '/sitemap.xml', '/health/ping', '/health/status', '/health',
-        '/wake', '/warm', '/'
-    ];
-    const isSafeEndpoint = safeEndpoints.some(ep => req.path.startsWith(ep));
-    if (isSafeEndpoint) {
-        return next();
-    }
-    
-    // Detekce localhostu (interní keep-alive systémy)
-    const isLocalhost = ip === '::1' || ip === '127.0.0.1' || ip === 'localhost';
-    
-    // Sledování požadavků za poslední minutu (pouze pro externí IP)
-    if (!isLocalhost) {
-        if (!requestCounts.has(ip)) {
-            requestCounts.set(ip, []);
-        }
-        
-        const requests = requestCounts.get(ip);
-        requests.push(now);
-        
-        // Vyčistit staré požadavky (> 1 minuta)
-        const recent = requests.filter(time => now - time < 60000);
-        requestCounts.set(ip, recent);
-        
-        // Detekce podezřelé aktivity
-        if (recent.length > 100) { // více než 100 požadavků za minutu
-            suspiciousIPs.add(ip);
-            console.warn(`🚨 SUSPICIOUS ACTIVITY: ${recent.length} requests from ${ip} in last minute`);
-            
-            // Zablokovat IP pokud je to extrémní
-            if (recent.length > 500) {
-                console.error(`🔒 BLOCKING IP: ${ip} - ${recent.length} requests in minute`);
-                return res.status(429).json({ 
-                    error: 'Too Many Requests', 
-                    message: 'IP temporarily blocked due to suspicious activity' 
-                });
-            }
-        }
-    }
-    
-    // Logování každého požadavku (pro analýzu) - pouze externí IP
-    if (!isLocalhost) {
-        console.log(`${req.method} ${req.url} - IP: ${ip} - Time: ${new Date().toISOString()}`);
-    }
-    
-    next();
-});
-
-// Endpoint pro monitoring bezpečnosti (jen pro admina)
-app.get('/security-monitor', (req, res) => {
-    const suspiciousList = Array.from(suspiciousIPs);
-    const activeRequests = {};
-    
-    requestCounts.forEach((requests, ip) => {
-        activeRequests[ip] = {
-            count: requests.length,
-            lastRequest: requests[requests.length - 1] || 0
-        };
-    });
-    
-    res.json({
-        timestamp: new Date().toISOString(),
-        suspiciousIPs: suspiciousList,
-        activeRequests: activeRequests,
-        totalActiveIPs: requestCounts.size,
-        memoryUsage: process.memoryUsage(),
-        uptime: process.uptime()
-    });
-});
+// Keep-alive endpointy
 app.get('/wake', async (req, res) => {
     try {
         const startTime = Date.now();
@@ -341,12 +299,12 @@ app.post('/admin/full-restore-from-github', (req, res) => {
     });
 });
 
-app.use('/auth', authLimiter, authRoutes);
+app.use('/auth', csrfMiddleware, authRoutes);
 app.use('/health', healthRoutes);
 app.use('/security', securityRoutes);
-app.use('/api', versionRoutes);
+app.use('/api', csrfMiddleware, versionRoutes);
 app.use('/', userRoutes)
-app.use('/admin', adminRoutes);
+app.use('/admin', csrfMiddleware, adminRoutes);
 
 app.get('/api/vapid-public-key', (req, res) => {
     if (!process.env.VAPID_PUBLIC_KEY) {
@@ -515,8 +473,7 @@ async function startServer() {
             
             // Spustit security monitoring po dalších 5 sekundách
             setTimeout(() => {
-                console.log('🔒 Starting security monitoring service...');
-                startSecurityMonitoring();
+                console.log('🔒 Security monitoring disabled - using Render protection');
                 
                 // Spustit jednotný keep-alive systém
                 startUnifiedKeepAlive();

@@ -7,6 +7,31 @@ const {
     getLeagueStatusData, getTableTipsData, generateTimeWidget, getAllowedLeagues
 } = require("../utils/fileUtils");
 const { Users, Matches, Leagues, TableTips } = require('../utils/mongoDataAccess');
+
+// Jednoduchá XSS ochrana - sanitizace HTML tagů
+function sanitizeInput(input) {
+    if (typeof input !== 'string') return input;
+    return input
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;')
+        .replace(/&/g, '&amp;');
+}
+
+// Middleware pro sanitizaci req.body
+function sanitizeBody(req, res, next) {
+    if (req.body) {
+        for (const key in req.body) {
+            if (typeof req.body[key] === 'string') {
+                req.body[key] = sanitizeInput(req.body[key]);
+            }
+        }
+    }
+    next();
+}
+
+router.use(sanitizeBody);
 router.get("/table-tip", requireLogin, async (req, res) => {
     // Kontrola jest je liga veřejná
     const allowedLeagues = await getAllowedLeagues();
