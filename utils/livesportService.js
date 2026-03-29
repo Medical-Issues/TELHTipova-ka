@@ -314,6 +314,18 @@ async function fetchMatchesFromLivesport(options) {
             const matchSelectors = '.event__match, .match, [class*="event"]';
             const matchElements = $(matchSelectors);
             console.log(`🎯 Nalezeno ${matchElements.length} elementů se selektorem "${matchSelectors}"`);
+            
+            // Debug: ukážeme HTML prvních 3 elementů
+            matchElements.each((i, el) => {
+                if (i < 3) {
+                    const $el = $(el);
+                    console.log(`\n--- Element ${i} ---`);
+                    console.log(`Tag: ${el.tagName}`);
+                    console.log(`Class: ${$el.attr('class')}`);
+                    console.log(`Text: ${$el.text().substring(0, 100)}`);
+                }
+            });
+            
             $('.event__match, .match, [class*="event"]').each((i, el) => {
                 const $el = $(el);
 
