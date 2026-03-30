@@ -789,6 +789,11 @@ router.post('/toggle-bulk-lock', express.urlencoded({ extended: true }), require
 });
 
 router.post('/leagues', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    
     const ligaName = req.body.name?.trim();
     if (!ligaName) return renderErrorHtml(res, "Název ligy je povinný.", 400);
 
@@ -824,7 +829,12 @@ router.post('/leagues', express.urlencoded({ extended: true }), requireAdmin, as
     res.redirect('/admin/leagues/manage');
 });
 
-router.post('/leagues/visibility', requireAdmin, async (req, res) => {
+router.post('/leagues/visibility', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    
     let ligaNames = req.body.allowedLeagues || [];
     if (!Array.isArray(ligaNames)) ligaNames = [ligaNames];
 
@@ -919,7 +929,12 @@ router.get('/teams/edit/:id', requireAdmin, async (req, res) => {
     res.send(html);
 });
 
-router.post('/edit/:id', requireAdmin, async (req, res) => {
+router.post('/edit/:id', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    
     const matchId = parseInt(req.params.id);
     const matches = await Matches.findAll();
 
@@ -1211,7 +1226,12 @@ router.get('/new/match', requireAdmin, async (req, res) => {
     res.send(html);
 });
 
-router.post('/new/match', requireAdmin, async (req, res) => {
+router.post('/new/match', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    
     const { homeTeamId, awayTeamId, datetime, season, isPlayoff, bo, locked, matchLiga, isBaraz } = req.body;
 
     let matches = await Matches.findAll();
@@ -1331,7 +1351,12 @@ router.get('/new/team', requireAdmin, async (req, res) => {
   `);
 });
 
-router.post('/new/team', requireAdmin, upload.single('logo'), express.urlencoded({extended: true}), async (req, res) => {
+router.post('/new/team', express.urlencoded({ extended: true }), requireAdmin, upload.single('logo'), async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    
     const teams = await Teams.findAll();
     let {name, liga, active} = req.body;
     active = active === 'on';
@@ -1613,7 +1638,12 @@ router.get('/edit/:id', requireAdmin, async (req, res) => {
     res.send(html);
 });
 
-router.post('/edit/:id', requireAdmin, async (req, res) => {
+router.post('/edit/:id', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    
     const matchId = parseInt(req.params.id);
     const matches = await Matches.findAll();
 
@@ -1751,7 +1781,12 @@ router.post('/edit/:id', requireAdmin, async (req, res) => {
     res.redirect('/admin');
 });
 
-router.post('/teams/edit/:id', requireAdmin, upload.single('logo'), express.urlencoded({extended: true}), async (req, res) => {
+router.post('/teams/edit/:id', express.urlencoded({ extended: true }), requireAdmin, upload.single('logo'), async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    
     const teamId = parseInt(req.params.id);
     const teams = await Teams.findAll();
     
@@ -1779,7 +1814,12 @@ router.post('/teams/edit/:id', requireAdmin, upload.single('logo'), express.urle
     res.redirect('/admin');
 });
 
-router.post('/teams/delete/:id', requireAdmin, async (req, res) => {
+router.post('/teams/delete/:id', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    
     const teamsId = parseInt(req.params.id);
     let teams = await Teams.findAll();
 
@@ -1792,7 +1832,12 @@ router.post('/teams/delete/:id', requireAdmin, async (req, res) => {
     res.redirect('/admin');
 });
 
-router.post('/delete/:id', requireAdmin, async (req, res) => {
+router.post('/delete/:id', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    
     const matchId = parseInt(req.params.id);
     let matches = await Matches.findAll();
 
@@ -1833,6 +1878,11 @@ router.get('/api/seasons', requireAdmin, (req, res) => {
 });
 
 router.post('/season', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    
     const selectedSeason = req.body.season || 'Neurčeno';
     
     // Uložení do MongoDB
@@ -1984,7 +2034,12 @@ router.get('/playoff', requireAdmin, async (req, res) => {
     res.send(html);
 });
 
-router.post('/playoff/save', requireAdmin, async (req, res) => {
+router.post('/playoff/save', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    
     const { league, season, ...slots } = req.body;
 
     if (!league || !season) return renderErrorHtml(res, "Chybí data k uložení.", 400);
@@ -2005,7 +2060,12 @@ router.post('/playoff/save', requireAdmin, async (req, res) => {
     res.redirect(`/admin/playoff?league=${encodeURIComponent(league)}`);
 });
 
-router.post('/playoff/delete', requireAdmin, async (req, res) => {
+router.post('/playoff/delete', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    
     const { season, league } = req.body;
 
     if (!season || !league) {
@@ -2255,7 +2315,12 @@ router.get('/leagues/manage', requireAdmin, async (req, res) => {
     res.send(html);
 });
 
-router.post('/leagues/manage', requireAdmin, express.urlencoded({ extended: true }), async (req, res) => {
+router.post('/leagues/manage', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    
     const { ligaName, multigroup, groupCount, maxMatches, quarterfinal, playin, relegation } = req.body.newLeague;
     const allSeasonData = await Leagues.findAll();
     const selectedSeason = await ChosenSeason.findAll();
@@ -2284,7 +2349,12 @@ router.post('/leagues/manage', requireAdmin, express.urlencoded({ extended: true
     res.redirect('/admin/leagues/manage');
 });
 
-router.post('/leagues/update', requireAdmin, express.urlencoded({ extended: true }), async (req, res) => {
+router.post('/leagues/update', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    
     const {
         originalLeagueName, leagueName, maxMatches, quarterfinal, playin, relegation,
         // Nová pole z formuláře
@@ -2330,7 +2400,12 @@ router.post('/leagues/update', requireAdmin, express.urlencoded({ extended: true
     res.redirect('/admin/leagues/manage');
 });
 
-router.post('/leagues/delete', requireAdmin, express.urlencoded({ extended: true }), async (req, res) => {
+router.post('/leagues/delete', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    
     const { league } = req.body;
     const allSeasonData = await Leagues.findAll();
     const selectedSeason = await ChosenSeason.findAll();
@@ -2344,7 +2419,12 @@ router.post('/leagues/delete', requireAdmin, express.urlencoded({ extended: true
     await logAdminAction(req.session.user, "SMAZÁNÍ_LIGY", `Kompletně smazána liga: ${league}`);
     res.redirect('/admin/leagues/manage');
 });
-router.post("/toggle-regular-season", requireAdmin, async (req, res) => {
+router.post("/toggle-regular-season", express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    
     if (req.session.role !== "admin") return renderErrorHtml(res, "Nemáte oprávnění k této akci.", 403);
 
     const { season, liga } = req.body;
@@ -2400,7 +2480,12 @@ router.post("/toggle-regular-season", requireAdmin, async (req, res) => {
     res.redirect('/admin');
 });
 
-router.post("/toggle-table-tips-lock", requireAdmin, express.urlencoded({ extended: true }), async (req, res) => {
+router.post("/toggle-table-tips-lock", express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    
     const { season, liga, locked, group, totalGroups } = req.body;
     const shouldLock = (locked === 'true');
 
@@ -2649,7 +2734,12 @@ router.get('/teams/points', requireAdmin, async (req, res) => {
     res.send(html);
 });
 
-router.post('/teams/points', requireAdmin, express.urlencoded({ extended: true }), async (req, res) => {
+router.post('/teams/points', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    
     const { season, liga } = req.body;
 
     // Načtení z MongoDB
@@ -2692,7 +2782,12 @@ router.post('/teams/points', requireAdmin, express.urlencoded({ extended: true }
     res.redirect(`/admin/teams/points?liga=${encodeURIComponent(liga)}`);
 });
 
-router.post('/settings/clinch', requireAdmin, async (req, res) => {
+router.post('/settings/clinch', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    
     // 1. Zkontrolujeme, co přesně přišlo z formuláře
     console.log("--- UKLÁDÁNÍ NASTAVENÍ ---");
     console.log("Přijatá data v req.body:", req.body);
@@ -2857,7 +2952,12 @@ router.get('/matches/import', requireAdmin, async (req, res) => {
     res.send(html);
 });
 
-router.post('/matches/import-run', requireAdmin, async (req, res) => {
+router.post('/matches/import-run', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    
     const { url, liga, season, dateFrom, dateTo, lockImported } = req.body;
     const shouldLock = lockImported === 'on';
 
@@ -3037,7 +3137,12 @@ router.post('/matches/import-run', requireAdmin, async (req, res) => {
         `);
     }
 });
-router.post('/leagues/transfers', requireAdmin, express.urlencoded({ extended: true }), async (req, res) => {
+router.post('/leagues/transfers', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    
     let { transferLeagues } = req.body;
 
     // Ošetření, aby to bylo vždycky pole
@@ -3424,7 +3529,12 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
 });
 
 // Endpoint pro generování náhledu obrázku přestupu
-router.post('/transfers/generate-preview', requireAdmin, upload.single('playerPhoto'), async (req, res) => {
+router.post('/transfers/generate-preview', express.urlencoded({ extended: true }), requireAdmin, upload.single('playerPhoto'), async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    
     try {
         const { fromTeamId, toTeamId, playerName, watermark } = req.body;
         
@@ -3481,7 +3591,12 @@ router.post('/transfers/generate-preview', requireAdmin, upload.single('playerPh
     }
 });
 
-router.post('/transfers/save', requireAdmin, upload.any(), express.urlencoded({ extended: true }), async (req, res) => {
+router.post('/transfers/save', express.urlencoded({ extended: true }), requireAdmin, upload.any(), async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    
     const notif = require('./notificationService');
 
     const { liga, season, t, sendNotification, imageType, customMessage } = req.body;
@@ -3729,7 +3844,12 @@ router.get('/users', requireAdmin, async (req, res) => {
     res.send(html);
 });
 
-router.post('/users/delete', requireAdmin, async (req, res) => {
+router.post('/users/delete', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    
     const { usernameToDelete } = req.body;
 
     if (usernameToDelete === req.session.user) {
@@ -3882,7 +4002,12 @@ router.get('/users/edit/:username', requireAdmin, async (req, res) => {
 
 // Uložení úpravy
 // Uložení úpravy (Přidáno slovo 'async')
-router.post('/users/update', requireAdmin, async (req, res) => {
+router.post('/users/update', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    
     const { oldUsername, newUsername, newPassword, newRole } = req.body;
     let users = await Users.findAll();
 
@@ -3948,7 +4073,12 @@ router.get('/toggleLocked/:id', requireAdmin, async (req, res) => {
 // ==========================================
 // HROMADNÉ ZAMKNUTÍ/ODEMKNUTÍ ZÁPASŮ (všechny v lize/sezóně)
 // ==========================================
-router.post('/matches/bulk-lock', requireAdmin, async (req, res) => {
+router.post('/matches/bulk-lock', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    
     const { liga, season, action, redirectUrl } = req.body;
     
     if (!liga || !season || !action) {
@@ -4219,7 +4349,12 @@ router.get('/playoff/templates', requireAdmin, async (req, res) => {
     `);
 });
 
-router.post('/playoff/templates/save', requireAdmin, async (req, res) => {
+router.post('/playoff/templates/save', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    
     const { key, label, structure } = req.body;
     let templates = await PlayoffTemplates.findAll() || {};
 
@@ -4271,7 +4406,12 @@ router.get('/playoff/templates/edit/:key', requireAdmin, async (req, res) => {
     `);
 });
 
-router.post('/playoff/templates/edit/:key', requireAdmin, async (req, res) => {
+router.post('/playoff/templates/edit/:key', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    
     const key = req.params.key;
     const { label, structure } = req.body;
     let templates = await PlayoffTemplates.findAll() || {};
@@ -4291,7 +4431,12 @@ router.post('/playoff/templates/edit/:key', requireAdmin, async (req, res) => {
 // ==========================================
 // SMAZAT FORMÁT
 // ==========================================
-router.post('/playoff/templates/delete/:key', requireAdmin, async (req, res) => {
+router.post('/playoff/templates/delete/:key', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    
     const key = req.params.key;
     let templates = await PlayoffTemplates.findAll() || {};
 
@@ -4305,7 +4450,12 @@ router.post('/playoff/templates/delete/:key', requireAdmin, async (req, res) => 
 // ==========================================
 // KONTROLA A OPRAVA STATISTIK
 // ==========================================
-router.post('/verify-stats', requireAdmin, async (req, res) => {
+router.post('/verify-stats', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).json({ success: false, message: 'Neplatný CSRF token' });
+    }
+    
     try {
         const { season, liga } = req.body;
         

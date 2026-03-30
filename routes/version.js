@@ -55,7 +55,12 @@ router.get('/version-history', async (req, res) => {
 });
 
 // POST - Vytvořit novou verzi (pouze admin)
-router.post('/version', requireAdmin, async (req, res) => {
+router.post('/version', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).json({ error: 'Neplatný CSRF token' });
+    }
+    
     try {
         const { version, title, changelog } = req.body;
         
@@ -223,7 +228,12 @@ router.get('/versions/manage', requireAdmin, async (req, res) => {
 });
 
 // POST z formuláře - přesměrování na JSON API
-router.post('/version-form', requireAdmin, async (req, res) => {
+router.post('/version-form', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    
     try {
         const { version, title, changelog } = req.body;
         

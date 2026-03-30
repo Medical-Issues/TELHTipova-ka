@@ -50,7 +50,12 @@ function checkBruteForce(req, res, next) {
 router.get("/register", (req, res) => {
     res.sendFile(path.join(__dirname, "../views/register.html"));
 });
-router.post("/register", async (req, res) => {
+router.post("/register", express.urlencoded({ extended: true }), async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    
     let {username, password} = req.body;
     
     // Validace - username musí být string
@@ -102,7 +107,12 @@ router.get("/login", (req, res) => {
     res.sendFile(path.join(__dirname, "../views/login.html"));
 });
 
-router.post('/login', checkBruteForce, async (req, res) => {
+router.post('/login', express.urlencoded({ extended: true }), checkBruteForce, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    
     let {username, password} = req.body;
     
     // Validace - username musí být string
