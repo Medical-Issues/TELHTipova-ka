@@ -34,4 +34,6 @@ bruteforce obrana jebe ✅
 
 nejde vypisovat zápasy ✅
 
+Doopravit změnu sezóny
+
 Novinkovač (Otvírání tweetů atd.) ?
