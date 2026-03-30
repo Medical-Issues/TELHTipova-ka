@@ -101,7 +101,6 @@ function csrfMiddleware(req, res, next) {
     
     next();
 }
-
 // Důvěřovat proxy hlavičkám (X-Forwarded-For) pro získání reálné IP klienta
 app.set('trust proxy', true);
 
