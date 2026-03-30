@@ -4099,14 +4099,18 @@ router.post('/matches/bulk-lock', express.urlencoded({ extended: true }), requir
         
         for (const match of matches) {
             if (match.liga === liga && match.season === season) {
+                // Zajistíme že locked je boolean (pro jistotu při undefined)
+                const isCurrentlyLocked = match.locked === true;
+                
                 // Pokud měníme na zamčeno a zápas není již zamčen, zamkneme ho
                 // Pokud měníme na odemčeno a zápas je zamčen, odemkneme ho
-                if (match.locked !== shouldLock) {
+                if (isCurrentlyLocked !== shouldLock) {
                     match.locked = shouldLock;
                     affectedCount++;
                     
-                    // Pokud zamykáme, odstraníme tipy
-                    if (shouldLock) {
+                    // Pokud zamykáme, odstraníme tipy POUZE pokud zápas NENÍ vyhodnocený
+                    // (u vyhodnocených zápasů ponecháme tipy pro historii)
+                    if (shouldLock && !match.result) {
                         await removeTipsForDeletedMatch(match.id);
                     }
                 }
