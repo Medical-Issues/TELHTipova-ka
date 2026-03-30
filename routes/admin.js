@@ -300,10 +300,13 @@ router.get('/', requireAdmin, async (req, res) => {
       </select>
     </div>
     <div class="filter-group" style="margin-left: 20px; border-left: 2px solid orangered; padding-left: 15px;">
-      <label class="filter-label">🔒 Tipování tabulky:</label>
-      <button type="button" id="bulkLockBtn" class="btn btn-warning" onclick="toggleBulkLock()">
-        🔄 Hromadně zamknout/odemknout
-      </button>
+      <label class="filter-label">⚙️ Hromadné akce:</label>
+      <a href="/admin/matches/bulk-lock" class="btn btn-secondary">
+        🔒 Lock/Unlock zápasů
+      </a>
+      <a href="/admin/matches/bulk-lock" class="btn btn-danger" style="background: #8B0000; border-color: #ff0000; margin-left: 5px;">
+        🗑️ Smazat nevyhodnocené
+      </a>
     </div>
   </form>
   
