@@ -21,13 +21,6 @@ const {restoreFromGitHub, fullRestoreFromGitHub} = require("./utils/githubRestor
 const app = express();
 
 // Serve static files (CSS, images, etc.) - MUSÍ BÝT PRVNÍ!
-app.use((req, res, next) => {
-    if (req.url.startsWith('/images/') || req.url.startsWith('/css/')) {
-        console.log(`[STATIC REQUEST] ${req.method} ${req.url}`);
-    }
-    next();
-});
-
 // CSS a JS z public
 app.use('/css', express.static(path.join(__dirname, 'public', 'css')));
 app.use('/js', express.static(path.join(__dirname, 'public', 'js')));
@@ -38,19 +31,12 @@ app.use('/images', (req, res, next) => {
     const publicPath = path.join(__dirname, 'public', 'images', filename);
     const dataPath = path.join(__dirname, 'data', 'images', filename);
     
-    console.log(`[IMAGES] Request: ${filename}`);
-    console.log(`[IMAGES] Trying public: ${publicPath} - exists: ${fs.existsSync(publicPath)}`);
-    console.log(`[IMAGES] Trying data: ${dataPath} - exists: ${fs.existsSync(dataPath)}`);
-    
     if (fs.existsSync(publicPath)) {
-        console.log(`[IMAGES] Serving from public`);
         return res.sendFile(publicPath);
     }
     if (fs.existsSync(dataPath)) {
-        console.log(`[IMAGES] Serving from data`);
         return res.sendFile(dataPath);
     }
-    console.log(`[IMAGES] Not found anywhere`);
     next();
 });
 
@@ -60,17 +46,12 @@ app.use('/logoteamu', (req, res, next) => {
     const dataPath = path.join(__dirname, 'data', 'images', filename);
     const publicPath = path.join(__dirname, 'public', 'images', filename);
     
-    console.log(`[LOGOTEAMU] Request: ${filename}`);
-    
     if (fs.existsSync(dataPath)) {
-        console.log(`[LOGOTEAMU] Serving from data/images`);
         return res.sendFile(dataPath);
     }
     if (fs.existsSync(publicPath)) {
-        console.log(`[LOGOTEAMU] Serving from public/images`);
         return res.sendFile(publicPath);
     }
-    console.log(`[LOGOTEAMU] Not found`);
     next();
 });
 
@@ -104,12 +85,6 @@ function csrfMiddleware(req, res, next) {
     // Kontrolovat POST/PUT/DELETE requesty - token je POVINNÝ
     if (['POST', 'PUT', 'DELETE'].includes(req.method)) {
         const token = req.body?._csrf || req.headers['x-csrf-token'] || req.query._csrf;
-        
-        console.log('CSRF Debug - URL:', req.url);
-        console.log('CSRF Debug - Session token:', req.session.csrfToken);
-        console.log('CSRF Debug - Body token:', req.body?._csrf);
-        console.log('CSRF Debug - Header token:', req.headers['x-csrf-token']);
-        console.log('CSRF Debug - Query token:', req.query._csrf);
         
         // Token je povinný pro všechny modifikující requesty
         if (!token) {
