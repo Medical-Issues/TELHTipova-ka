@@ -4134,6 +4134,61 @@ router.post('/matches/bulk-lock', express.urlencoded({ extended: true }), requir
 });
 
 // ==========================================
+// HROMADNÉ SMAZÁNÍ NEVYHODNOCENÝCH ZÁPASŮ
+// ==========================================
+router.post('/matches/bulk-delete', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    
+    const { liga, season, redirectUrl } = req.body;
+    
+    if (!liga || !season) {
+        return renderErrorHtml(res, "Chybí povinné parametry (liga nebo sezóna).", 400);
+    }
+    
+    try {
+        // Načtení všech zápasů
+        let matches = await Matches.findAll();
+        let deletedCount = 0;
+        let preservedCount = 0;
+        
+        // Filtrování a mazání pouze nevyhodnocených zápasů
+        const matchesToKeep = matches.filter(match => {
+            if (match.liga === liga && match.season === season) {
+                // Pokud zápas má výsledek (je vyhodnocený), ponecháme ho
+                if (match.result) {
+                    preservedCount++;
+                    return true;
+                }
+                // Pokud zápas nemá výsledek, smažeme ho (nevrátíme ho do nového pole)
+                deletedCount++;
+                return false;
+            }
+            // Zápasy z jiných lig/sezón ponecháme
+            return true;
+        });
+        
+        // Uložení změn - pouze pokud se něco změnilo
+        if (deletedCount > 0) {
+            await Matches.replaceAll(matchesToKeep);
+            
+            await logAdminAction(req.session.user, "HROMADNÉ_SMAZÁNÍ", 
+                `Smazeno ${deletedCount} nevyhodnocených zápasů v lize ${liga} (${season}), zachováno ${preservedCount} vyhodnocených`);
+        }
+        
+        // Přesměrování zpět
+        const redirect = redirectUrl || '/admin';
+        res.redirect(redirect);
+        
+    } catch (error) {
+        console.error('Chyba při hromadném mazání:', error);
+        return renderErrorHtml(res, `Chyba při zpracování: ${error.message}`, 500);
+    }
+});
+
+// ==========================================
 // STRÁNKA PRO HROMADNÉ ZAMKNUTÍ/ODEMKNUTÍ
 // ==========================================
 router.get('/matches/bulk-lock', requireAdmin, async (req, res) => {
@@ -4205,6 +4260,7 @@ router.get('/matches/bulk-lock', requireAdmin, async (req, res) => {
     const isMatchLocked = (m) => m.locked === true || m.locked === 'true' || m.locked === 'on' || m.locked === 1;
     
     const lockedCount = filteredMatches.filter(isMatchLocked).length;
+    const unevaluatedCount = filteredMatches.filter(m => !m.result).length;
     const unlockedCount = filteredMatches.length - lockedCount;
     
     const html = `
@@ -4251,7 +4307,7 @@ router.get('/matches/bulk-lock', requireAdmin, async (req, res) => {
                     Vyber akci pro všechny zápasy v této lize a sezóně:
                 </p>
                 
-                <div style="display: flex; gap: 15px; justify-content: center;">
+                <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
                     <form method="POST" action="/admin/matches/bulk-lock" onsubmit="return confirm('Opravdu chceš ZAMKNOUT všechny ${unlockedCount} odemčené zápasy v lize ${liga}?');">
                         <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
                         <input type="hidden" name="liga" value="${liga}">
@@ -4273,6 +4329,16 @@ router.get('/matches/bulk-lock', requireAdmin, async (req, res) => {
                             🔓 Odemknout vše (${lockedCount})
                         </button>
                     </form>
+                    
+                    <form method="POST" action="/admin/matches/bulk-delete" onsubmit="return confirm('⚠️ POZOR! Opravdu chceš SMAZAT všechny ${unevaluatedCount} NEVYHODNOCENÉ zápasy v lize ${liga}?\\n\\nVyhodnocené zápasy zůstanou zachovány.');">
+                        <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
+                        <input type="hidden" name="liga" value="${liga}">
+                        <input type="hidden" name="season" value="${season}">
+                        <input type="hidden" name="redirectUrl" value="/admin/matches/bulk-lock?liga=${encodeURIComponent(liga)}&season=${encodeURIComponent(season)}">
+                        <button type="submit" class="action-btn delete-btn" style="font-size: 16px; padding: 15px 30px; background: #8B0000; border-color: #ff0000;" ${unevaluatedCount === 0 ? 'disabled style="opacity:0.5;"' : ''}>
+                            🗑️ Smazat nevyhodnocené (${unevaluatedCount})
+                        </button>
+                    </form>
                 </div>
                 
                 <div style="margin-top: 30px; padding: 15px; background: rgba(255,69,0,0.1); border: 1px dashed orangered; border-radius: 5px;">
@@ -4280,6 +4346,7 @@ router.get('/matches/bulk-lock', requireAdmin, async (req, res) => {
                     <p style="color: lightgrey; font-size: 14px; margin: 0;">
                         Zamknutí zápasů způsobí, že uživatelé nebudou moci zadávat ani měnit tipy.
                         <br>Již existující tipy u zamčených zápasů budou zachovány, ale nebude možné je měnit.
+                        <br><strong>Smazání:</strong> Smažou se pouze nevyhodnocené zápasy (bez výsledku). Vyhodnocené zápasy zůstanou.
                     </p>
                 </div>
                 
