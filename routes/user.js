@@ -2648,6 +2648,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 </form>
 <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
+<input type="hidden" id="globalCsrfToken" value="${req.session.csrfToken || ''}">
 <header class="time-header">${await generateTimeWidget()}</header>
 <main class="main_page">`;
 
