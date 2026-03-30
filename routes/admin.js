@@ -4099,8 +4099,8 @@ router.post('/matches/bulk-lock', express.urlencoded({ extended: true }), requir
         
         for (const match of matches) {
             if (match.liga === liga && match.season === season) {
-                // Zajistíme že locked je boolean (pro jistotu při undefined)
-                const isCurrentlyLocked = match.locked === true;
+                // Normalizace locked hodnoty - může být boolean true/false, string "true"/"on", nebo undefined
+                const isCurrentlyLocked = match.locked === true || match.locked === 'true' || match.locked === 'on' || match.locked === 1;
                 
                 // Pokud měníme na zamčeno a zápas není již zamčen, zamkneme ho
                 // Pokud měníme na odemčeno a zápas je zamčen, odemkneme ho
@@ -4200,8 +4200,12 @@ router.get('/matches/bulk-lock', requireAdmin, async (req, res) => {
     
     // Zobrazení přehledu zápasů pro vybranou ligu a sezónu
     const filteredMatches = allMatches.filter(m => m.liga === liga && m.season === season);
-    const lockedCount = filteredMatches.filter(m => m.locked).length;
-    const unlockedCount = filteredMatches.filter(m => !m.locked).length;
+    
+    // Helper funkce pro kontrolu zamčení - musí odpovídat POST endpointu
+    const isMatchLocked = (m) => m.locked === true || m.locked === 'true' || m.locked === 'on' || m.locked === 1;
+    
+    const lockedCount = filteredMatches.filter(isMatchLocked).length;
+    const unlockedCount = filteredMatches.length - lockedCount;
     
     const html = `
     <!DOCTYPE html>

@@ -530,7 +530,7 @@ async function startServer() {
     // JEDNOTNÝ KEEP-ALIVE SYSTÉM - kombinuje všechny mechanismy
     function startUnifiedKeepAlive() {
         const WAKE_URL = process.env.WAKE_URL || 'https://telhtipova-ka.onrender.com/wake';
-        console.log(`💓 Starting unified keep-alive system (every 60s), WAKE_URL: ${WAKE_URL}`);
+        console.log(`💓 Starting unified keep-alive system (every 45s), WAKE_URL: ${WAKE_URL}`);
         
         const axios = require('axios');
         let counter = 0;
@@ -539,7 +539,7 @@ async function startServer() {
             counter++;
             new Date().toISOString();
             try {
-                // 1. Externí HTTP wake - reálná aktivita pro Render (každých 30s)
+                // 1. Externí HTTP wake - reálná aktivita pro Render (každých 45s)
                 const wakePromise = axios.get(WAKE_URL, {
                     timeout: 8000,
                     headers: {
@@ -564,12 +564,13 @@ async function startServer() {
                 }
                 
             } catch (error) {
-                // Logovat jen každý 5. error aby nezahlcoval
-                if (counter % 5 === 0) {
-                    console.error(`❌ Keep-alive #${counter} error:`, error.message);
+                // Logovat každý error s detaily pro diagnostiku
+                console.error(`❌ Keep-alive #${counter} error:`, error.message);
+                if (error.response) {
+                    console.error(`   Status: ${error.response.status}, URL: ${WAKE_URL}`);
                 }
             }
-        }, 60 * 1000); // Každých 30 sekund
+        }, 45 * 1000); // Každých 45 sekund
     }
 
     // Záloha každých 24 hodin
