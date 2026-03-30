@@ -299,6 +299,12 @@ router.get('/', requireAdmin, async (req, res) => {
         ${allSeasons.map(s => `<option value="${s}" ${s === selectedSeason ? 'selected' : ''}>${s}</option>`).join('')}
       </select>
     </div>
+    <div class="filter-group" style="margin-left: 20px; border-left: 2px solid orangered; padding-left: 15px;">
+      <label class="filter-label">🔒 Tipování tabulky:</label>
+      <button type="button" id="bulkLockBtn" class="btn btn-warning" onclick="toggleBulkLock()">
+        🔄 Hromadně zamknout/odemknout
+      </button>
+    </div>
   </form>
   
   <section class="matches-section">
@@ -606,6 +612,61 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 });
+
+// Funkce pro hromadný unlock/lock tabulky
+async function toggleBulkLock() {
+    const btn = document.getElementById('bulkLockBtn');
+    const selectedLiga = document.querySelector('select[name="liga"]').value;
+    const selectedSeason = document.querySelector('select[name="season"]').value;
+    
+    if (!selectedLiga || !selectedSeason) {
+        alert('Prosím vyberte ligu a sezónu.');
+        return;
+    }
+    
+    const confirmMsg = 'Opravdu chcete změnit stav zamčení tabulky pro ' + selectedLiga + ' - ' + selectedSeason + '?\\n\\nToto zamkne nebo odemkne tipování tabulky pro všechny skupiny v této lize.';
+    if (!confirm(confirmMsg)) {
+        return;
+    }
+    
+    btn.disabled = true;
+    btn.textContent = '🔄 Pracuji...';
+    
+    try {
+        const bodyParams = 'season=' + encodeURIComponent(selectedSeason) + '&liga=' + encodeURIComponent(selectedLiga);
+        const response = await fetch('/admin/toggle-bulk-lock', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: bodyParams
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            btn.textContent = '✅ Hotovo';
+            alert(result.message);
+            setTimeout(function() {
+                window.location.reload();
+            }, 1000);
+        } else {
+            btn.className = 'btn btn-danger';
+            btn.textContent = '❌ Chyba';
+            alert('Chyba: ' + result.message);
+            btn.disabled = false;
+            btn.className = 'btn btn-warning';
+            btn.textContent = '🔄 Hromadně zamknout/odemknout';
+        }
+    } catch (error) {
+        btn.className = 'btn btn-danger';
+        btn.textContent = '❌ Chyba';
+        alert('Chyba při komunikaci se serverem: ' + error.message);
+        btn.disabled = false;
+        btn.className = 'btn btn-warning';
+        btn.textContent = '🔄 Hromadně zamknout/odemknout';
+    }
+}
 </script>
 </html>
 `;
@@ -619,11 +680,17 @@ router.post('/toggle-registrations', requireAdmin, async (req, res) => {
         // Načtení aktuálních nastavení
         let settings = await Settings.findAll();
         
-        // Přepnutí stavu
-        const newBlockedState = !settings.registrationsBlocked;
+        // Ošetření případu kdy settings neexistuje nebo je null
+        if (!settings) {
+            settings = {};
+        }
+        
+        // Přepnutí stavu - pokud registrationsBlocked není definováno, použijeme false (povoleno)
+        const currentBlockedState = settings.registrationsBlocked === true;
+        const newBlockedState = !currentBlockedState;
         
         // Aktualizace v MongoDB
-        await Settings.updateOne({}, { registrationsBlocked: newBlockedState });
+        await Settings.updateOne({}, { registrationsBlocked: newBlockedState }, { upsert: true });
         
         // Logování akce
         await logAdminAction(req.session.user, "TOGGLE_REGISTRATIONS",
@@ -638,7 +705,61 @@ router.post('/toggle-registrations', requireAdmin, async (req, res) => {
         console.error('Chyba při přepínání registrací:', error);
         res.status(500).json({ 
             success: false, 
-            message: 'Chyba serveru při změně nastavení' 
+            message: 'Chyba serveru při změně nastavení: ' + (error.message || 'Neznámá chyba')
+        });
+    }
+});
+
+// Endpoint pro hromadný lock/unlock tabulky
+router.post('/toggle-bulk-lock', requireAdmin, async (req, res) => {
+    try {
+        const { season, liga } = req.body;
+        
+        if (!season || !liga) {
+            return res.status(400).json({
+                success: false,
+                message: 'Chybí sezóna nebo liga.'
+            });
+        }
+        
+        // Načtení aktuálního stavu
+        const statusData = await LeagueStatus.findAll();
+        const currentSeasonData = statusData?.[season] || {};
+        const currentLigaData = currentSeasonData?.[liga] || {};
+        const currentLockStatus = currentLigaData?.tableTipsLocked || false;
+        
+        // Přepnutí stavu - true (zamčeno) ↔ false (odemčeno)
+        const newLockStatus = currentLockStatus !== true;
+        
+        // Aktualizace v MongoDB
+        const updateObj = {};
+        updateObj[`${season}.${liga}.tableTipsLocked`] = newLockStatus;
+        
+        const { getDatabase } = require('../config/database');
+        const db = await getDatabase();
+        const collection = db.collection('leagueStatus');
+        
+        await collection.updateOne(
+            {},
+            { $set: updateObj },
+            { upsert: true }
+        );
+        
+        // Logování akce
+        await logAdminAction(req.session.user, "BULK_LOCK_TOGGLE",
+            `Tabulka ${liga} - ${season}: ${newLockStatus ? 'ZAMČENO' : 'ODEMČENO'}`);
+        
+        res.json({
+            success: true,
+            locked: newLockStatus,
+            message: `Tipování tabulky pro ${liga} - ${season} bylo ${newLockStatus ? 'ZAMČENO' : 'ODEMČENO'}.`
+        });
+        
+    } catch (error) {
+        console.error('Chyba při hromadném zamykání:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Chyba serveru: ' + (error.message || 'Neznámá chyba')
         });
     }
 });

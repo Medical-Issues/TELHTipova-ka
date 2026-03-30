@@ -390,7 +390,7 @@ async function calculateTeamScores(matches, selectedSeason, selectedLiga) {
 
     return scores;
 }
-async function getLeagueZones(leagueObj) {
+function getLeagueZones(leagueObj) {
     if (!leagueObj) return { quarterfinal: 0, playin: 0, relegation: 0 };
     return {
         quarterfinal: Number(leagueObj.quarterfinal || 0),
@@ -399,7 +399,7 @@ async function getLeagueZones(leagueObj) {
     };
 }
 
-async function getTeamZone(index, totalTeams, cfg) {
+function getTeamZone(index, totalTeams, cfg) {
     const pos = index + 1;
     if (pos <= cfg.quarterfinal) return "quarterfinal";
     if (pos <= cfg.playin) return "playin";
