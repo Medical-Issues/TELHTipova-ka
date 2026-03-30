@@ -21,23 +21,58 @@ const {restoreFromGitHub, fullRestoreFromGitHub} = require("./utils/githubRestor
 const app = express();
 
 // Serve static files (CSS, images, etc.) - MUSÍ BÝT PRVNÍ!
-console.log(`[DEBUG] __dirname: ${__dirname}`);
-console.log(`[DEBUG] Public path: ${path.join(__dirname, 'public')}`);
-console.log(`[DEBUG] Images path: ${path.join(__dirname, 'public', 'images')}`);
-
 app.use((req, res, next) => {
     if (req.url.startsWith('/images/') || req.url.startsWith('/css/')) {
         console.log(`[STATIC REQUEST] ${req.method} ${req.url}`);
-        const fullPath = path.join(__dirname, 'public', req.url);
-        console.log(`[STATIC REQUEST] Looking for: ${fullPath}`);
-        console.log(`[STATIC REQUEST] File exists: ${fs.existsSync(fullPath)}`);
     }
     next();
 });
-app.use(express.static(path.join(__dirname, 'public')));
 
-// Also serve images from data/images
-app.use('/images', express.static(path.join(__dirname, 'data', 'images')));
+// CSS a JS z public
+app.use('/css', express.static(path.join(__dirname, 'public', 'css')));
+app.use('/js', express.static(path.join(__dirname, 'public', 'js')));
+
+// Obrázky - zkusíme nejprve public/images, pak data/images
+app.use('/images', (req, res, next) => {
+    const filename = req.path.replace(/^\//, '');
+    const publicPath = path.join(__dirname, 'public', 'images', filename);
+    const dataPath = path.join(__dirname, 'data', 'images', filename);
+    
+    console.log(`[IMAGES] Request: ${filename}`);
+    console.log(`[IMAGES] Trying public: ${publicPath} - exists: ${fs.existsSync(publicPath)}`);
+    console.log(`[IMAGES] Trying data: ${dataPath} - exists: ${fs.existsSync(dataPath)}`);
+    
+    if (fs.existsSync(publicPath)) {
+        console.log(`[IMAGES] Serving from public`);
+        return res.sendFile(publicPath);
+    }
+    if (fs.existsSync(dataPath)) {
+        console.log(`[IMAGES] Serving from data`);
+        return res.sendFile(dataPath);
+    }
+    console.log(`[IMAGES] Not found anywhere`);
+    next();
+});
+
+// Also serve from /logoteamu/ for backward compatibility
+app.use('/logoteamu', (req, res, next) => {
+    const filename = req.path.replace(/^\//, '');
+    const dataPath = path.join(__dirname, 'data', 'images', filename);
+    const publicPath = path.join(__dirname, 'public', 'images', filename);
+    
+    console.log(`[LOGOTEAMU] Request: ${filename}`);
+    
+    if (fs.existsSync(dataPath)) {
+        console.log(`[LOGOTEAMU] Serving from data/images`);
+        return res.sendFile(dataPath);
+    }
+    if (fs.existsSync(publicPath)) {
+        console.log(`[LOGOTEAMU] Serving from public/images`);
+        return res.sendFile(publicPath);
+    }
+    console.log(`[LOGOTEAMU] Not found`);
+    next();
+});
 
 // Helmet-like security headers (bez balíčku)
 app.use((req, res, next) => {
