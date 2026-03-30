@@ -508,7 +508,14 @@ async function toggleRegistrations() {
     btn.textContent = 'Pracuji...';
     
     try {
-        const response = await fetch('/admin/toggle-registrations', { method: 'POST' });
+        const csrfToken = document.querySelector('input[name="_csrf"]')?.value || '';
+        const response = await fetch('/admin/toggle-registrations', { 
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: '_csrf=' + encodeURIComponent(csrfToken)
+        });
         const result = await response.json();
         
         if (result.success) {
@@ -633,7 +640,8 @@ async function toggleBulkLock() {
     btn.textContent = '🔄 Pracuji...';
     
     try {
-        const bodyParams = 'season=' + encodeURIComponent(selectedSeason) + '&liga=' + encodeURIComponent(selectedLiga);
+        const csrfToken = document.querySelector('input[name="_csrf"]').value;
+        const bodyParams = 'season=' + encodeURIComponent(selectedSeason) + '&liga=' + encodeURIComponent(selectedLiga) + '&_csrf=' + encodeURIComponent(csrfToken);
         const response = await fetch('/admin/toggle-bulk-lock', {
             method: 'POST',
             headers: {
@@ -675,8 +683,16 @@ async function toggleBulkLock() {
 });
 
 // Endpoint pro přepínání registrací
-router.post('/toggle-registrations', requireAdmin, async (req, res) => {
+router.post('/toggle-registrations', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
     try {
+        // CSRF kontrola
+        if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+            return res.status(403).json({ 
+                success: false, 
+                message: 'Neplatný CSRF token' 
+            });
+        }
+        
         // Načtení aktuálních nastavení
         let settings = await Settings.findAll();
         
@@ -711,8 +727,16 @@ router.post('/toggle-registrations', requireAdmin, async (req, res) => {
 });
 
 // Endpoint pro hromadný lock/unlock tabulky
-router.post('/toggle-bulk-lock', requireAdmin, async (req, res) => {
+router.post('/toggle-bulk-lock', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
     try {
+        // CSRF kontrola
+        if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+            return res.status(403).json({ 
+                success: false, 
+                message: 'Neplatný CSRF token' 
+            });
+        }
+        
         const { season, liga } = req.body;
         
         if (!season || !liga) {
