@@ -560,8 +560,12 @@ router.post("/table-tip", requireLogin, express.json(), async (req, res) => {
         console.error("Chyba při čtení tableTips z MongoDB:", e);
     }
 
-    if (!tableTips[season]) tableTips[season] = {};
-    if (!tableTips[season][liga]) tableTips[season][liga] = {};
+    if (!tableTips[season]) {
+        tableTips[season] = {};
+    }
+    if (!tableTips[season][liga]) {
+        tableTips[season][liga] = {};
+    }
 
     // 2. SLOUČENÍ DAT (Abychom nesmazali zamčené skupiny, když uživatel ukládá ty odemčené)
     const existingUserTip = tableTips[season][liga][username] || {};

@@ -4822,9 +4822,12 @@ router.post('/transfer-data', express.urlencoded({ extended: true }), requireAdm
                 
                 if (teamsToTransfer.length > 0) {
                     // Nejprve smažeme existující týmy v aktuální sezóně pro vybrané ligy
-                    await Teams.deleteMany({ season: currentSeason, liga: { $in: leaguesToTransfer } });
+                    console.log(`🗑️ MAZUJI existující týmy pro sezónu ${currentSeason}, ligy: ${leaguesToTransfer.join(', ')}`);
+                    const deleteResult = await Teams.deleteMany({ season: currentSeason, liga: { $in: leaguesToTransfer } });
+                    console.log(`🗑️ SMAZÁNO ${deleteResult.deletedCount} týmů`);
                     // Pak vložíme nové
                     await Teams.insertMany(teamsToTransfer);
+                    console.log(`➕ VLOŽENO ${teamsToTransfer.length} nových týmů`);
                     transferResults.push(`✅ Přeneseno ${teamsToTransfer.length} týmů z lig: ${leaguesToTransfer.join(', ')}`);
                 } else {
                     transferResults.push(`⚠️ V sezóně ${sourceSeason} nebyly nalezeny žádné týmy z vybraných lig`);

@@ -779,7 +779,7 @@ async function evaluateRegularSeasonTable(season, liga, groupKey = null, isForLe
     teams.forEach(t => {
         if(!t.stats) t.stats = {};
         if(!t.stats[season]) t.stats[season] = {};
-        t.stats[season].points = scores[t.id].points;
+        t.stats[season].points = scores[t.id]?.points || 0; // OPRAVA: Bezpečné přiřazení
     });
 
     // Rozřazení do skupin pro backend
