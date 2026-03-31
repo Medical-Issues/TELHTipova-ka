@@ -108,9 +108,9 @@ app.use(session({
     store: MongoStore.create({
         mongoUrl: process.env.MONGODB_URI || 'mongodb://localhost:27017/tipovacka',
         touchAfter: 24 * 3600,
-        // OPRAVA: Vracíme zpět na default hodnoty pro hosting
-        stringify: true,
-        unserialize: true
+        // OPRAVA: Použijeme defaultní hodnoty bez transform funkcí
+        // stringify: true,
+        // unserialize: true
     }),
     secret: 'tajnyklic',
     resave: false,
@@ -118,7 +118,7 @@ app.use(session({
     cookie: {
         maxAge: 1000 * 60 * 60 * 24 * 30,
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production', // Na produkci true, na localhost false
+        secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax'
     }
 }));
