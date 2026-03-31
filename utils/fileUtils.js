@@ -1067,10 +1067,13 @@ async function prepareDashboardData(req, isHistory = false, isImageExporter = fa
         selectedSeason = req.query.season;
     }
 
-    // 2. Načtení základních dat
-    const teams = (await loadTeams()).filter(t => t.active);
+    // 2. Načtení základních dat a filtrování podle aktuální sezóny
+    const allTeams = await loadTeams();
+    const allMatches = await getMatches();
     
-    const matches = await getMatches();
+    // Filtrování týmy a zápasů pouze pro aktuální sezónu
+    const teams = allTeams.filter(t => t.active && (t.season === selectedSeason || (t.stats && t.stats[selectedSeason])));
+    const matches = allMatches.filter(m => m.season === selectedSeason);
     
     const allowedLeagues = await getAllowedLeagues();
     const allSeasonData = await getLeaguesData();

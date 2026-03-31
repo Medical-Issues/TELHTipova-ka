@@ -34,6 +34,16 @@ bruteforce obrana jebe ✅
 
 nejde vypisovat zápasy ✅
 
-Doopravit změnu sezóny
+Doopravit změnu sezóny kdy se sice překlopí ale není čístá úplně odznova ✅
+
+Zároveň routa pro převod dat z minulého roku (check boxy pro každou část dat (zápasy, týmy, počet zápasů, lockovací mechanismy tabulek, playoff, atd.) ✅
+
+U rout kde je možné přidat obrázek přidat možnost pracovat s galerií
+
+Dodělání oznámení u přestupů
+
+udělat routu na historii přestupů
+
+v exportéru udělat chytřeji ten VS image
 
 Novinkovač (Otvírání tweetů atd.) ?

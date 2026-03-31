@@ -107,7 +107,10 @@ app.set('trust proxy', true);
 app.use(session({
     store: MongoStore.create({
         mongoUrl: process.env.MONGODB_URI || 'mongodb://localhost:27017/tipovacka',
-        touchAfter: 24 * 3600
+        touchAfter: 24 * 3600,
+        // Přidáno logování pro debug
+        stringify: false,
+        unserialize: false
     }),
     secret: 'tajnyklic',
     resave: false,
@@ -115,7 +118,8 @@ app.use(session({
     cookie: {
         maxAge: 1000 * 60 * 60 * 24 * 30,
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production'
+        secure: false, // Vynuceně false pro localhost
+        sameSite: 'lax' // Přidáno pro lepší kompatibilitu
     }
 }));
 
@@ -340,7 +344,7 @@ app.post('/admin/full-restore-from-github', (req, res) => {
     });
 });
 
-app.use('/auth', csrfMiddleware, authRoutes);
+app.use('/auth', authRoutes);
 app.use('/health', healthRoutes);
 app.use('/security', securityRoutes);
 app.use('/api', csrfMiddleware, versionRoutes);

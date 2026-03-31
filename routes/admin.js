@@ -102,7 +102,7 @@ router.get('/', requireAdmin, async (req, res) => {
 
     const selectedSeasonQuery = req.query.season && allSeasons.includes(req.query.season)
         ? req.query.season
-        : allSeasons[0] || 'Neurčeno';
+        : chosenSeason || 'Neurčeno';
 
     const filteredMatches = matches.filter(m =>
         m.liga === selectedLiga && (m.season || 'Neurčeno') === selectedSeasonQuery
@@ -279,6 +279,8 @@ router.get('/', requireAdmin, async (req, res) => {
         <div class="nav-buttons">
           <a href="/admin/broadcast-ping" class="btn btn-secondary">📢 Test notifikace</a>
           <a href="/api/versions/manage" class="btn btn-secondary">📋 Správa verzí</a>
+          <a href="/admin/transfer-data" class="btn btn-warning">🔄 Převod dat z minulého roku</a>
+          <a href="/admin/fix-team-seasons" class="btn btn-info">🔧 Opravit sezóny týmů</a>
           <a id="backupBtn" class="btn btn-warning">💾 Záloha dat do JSONů</a>
           <a id="verifyStatsBtn" class="btn btn-danger">🔍 Kontrola statistik</a>
         </div>
@@ -333,6 +335,7 @@ router.get('/', requireAdmin, async (req, res) => {
     for (const m of pendingMatches) {
         const homeTeam = teams.find(t => t.id === m.homeTeamId)?.name || '???';
         const awayTeam = teams.find(t => t.id === m.awayTeamId)?.name || '???';
+        
         let result = '-';
         if (m.isPlayoff && m.bo > 1 && m.playedMatches && m.playedMatches.length > 0) {
             let sH = 0, sA = 0;
@@ -1887,9 +1890,19 @@ router.post('/season', express.urlencoded({ extended: true }), requireAdmin, asy
     }
     
     const selectedSeason = req.body.season || 'Neurčeno';
+    const previousSeason = await ChosenSeason.findAll();
     
-    // Uložení do MongoDB
+    // Uložení nové sezóny do MongoDB
     await ChosenSeason.replaceAll(selectedSeason);
+    
+    // ŽÁDNÉ MAZÁNÍ DAT - pouze změna aktivní sezóny
+    console.log(`🔄 Změna sezóny z "${previousSeason}" na "${selectedSeason}"`);
+    console.log('📚 Všechna data ze všech sezón zůstávají zachována');
+    console.log('🔒 Data se mažou pouze při explicitním požadku (transfer/smazání)');
+    
+    // Logování akce
+    await logAdminAction(req.session.user, "ZMENA_SEZONY", 
+        `Změna sezóny z "${previousSeason}" na "${selectedSeason}" (data zachována)`);
     
     res.redirect('/admin');
 });
@@ -2136,24 +2149,15 @@ router.get('/leagues/manage', requireAdmin, async (req, res) => {
         <title>Správa lig</title>
         <link rel="stylesheet" href="/css/styles.css">
         <link rel="icon" href="/images/logo.png">
-        <style>
             /* Styl pro boxík s nastavením X-tých týmů */
-            .cross-table-settings {
                 flex-basis: 100%;
                 background-color: #1a1a1a;
-                border: 1px dashed #555;
-                padding: 10px;
                 margin-top: 10px;
                 margin-bottom: 5px;
-                display: flex;
-                align-items: center;
-                gap: 15px;
                 flex-wrap: wrap;
-                font-size: 0.9em;
             }
             .cross-table-settings h4 { color: #ffa500; font-size: 1em; margin: 0 10px 0 0;}
             .separator { border-left: 1px solid #444; height: 20px; margin: 0 5px; }
-        </style>
     </head>
     <body>
         <h1>Správa lig (pro sezónu: ${selectedSeason})</h1>
@@ -3904,66 +3908,28 @@ router.get('/users/edit/:username', requireAdmin, async (req, res) => {
         <link rel="stylesheet" href="/css/styles.css">
         <link rel="icon" href="/public/images/logo.png">
         <title>Upravit uživatele - ${user.username}</title>
-        <style>
-            .edit-card {
-                background: #1a1a1a;
-                border: 1px solid #333;
-                padding: 30px;
-                max-width: 500px;
-                margin: 20px auto;
-                box-shadow: 0 4px 15px rgba(0,0,0,0.5);
             }
-            .edit-card h1 {
-                color: #fb6a18;
                 margin-top: 0;
                 border-bottom: 1px solid #fb6a18;
                 padding-bottom: 10px;
             }
-            .form-group {
                 margin-bottom: 20px;
             }
-            .form-group label {
-                display: block;
-                color: #ccc;
                 margin-bottom: 8px;
                 font-weight: bold;
             }
-            .form-group input, .form-group select {
-                width: 100%;
-                padding: 12px;
-                background: #000;
-                border: 1px solid #444;
-                color: #fff;
                 box-sizing: border-box;
             }
-            .form-group input:focus {
                 border-color: #fb6a18;
                 outline: none;
             }
-            .btn-save {
-                width: 100%;
-                padding: 15px;
-                background: #fb6a18;
-                color: #000;
-                border: none;
                 font-weight: bold;
-                cursor: pointer;
-                transition: 0.3s;
             }
-            .btn-save:hover {
-                background: #ff8c4a;
             }
-            .back-link {
-                display: block;
-                text-align: center;
                 margin-top: 20px;
-                color: #888;
                 text-decoration: none;
             }
-            .back-link:hover {
-                color: #fb6a18;
             }
-        </style>
     </head>
     <body class="usersite">
         <main class="admin_site">
@@ -4561,7 +4527,538 @@ router.post('/verify-stats', express.urlencoded({ extended: true }), requireAdmi
         });
     }
 });
+router.get('/transfer-data', requireAdmin, async (req, res) => {
+    try {
+        // Získání všech dostupných sezón
+        const matches = await Matches.findAll();
+        const teams = await Teams.findAll();
+        const allSeasons = [...new Set([
+            ...matches.map(m => m.season).filter(Boolean),
+            ...teams.map(t => t.season).filter(Boolean)
+        ])].sort();
+        
+        const currentSeason = await ChosenSeason.findAll();
+        
+        // Sezóny kromě aktuální
+        const availableSeasons = allSeasons.filter(s => s !== currentSeason);
+        
+        // Získání všech lig pro výběr
+        const allLeagues = [...new Set([
+            ...matches.map(m => m.liga).filter(Boolean),
+            ...teams.map(t => t.liga).filter(Boolean)
+        ])].sort();
+        
+        let html = `
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Převod dat z minulého roku</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="icon" href="/images/logo.png">
+</head>
+<body class="usersite">
+    <header class="header">
+        <div class="logo_title">
+            <img class="image_logo" src="/images/logo.png" alt="Logo">
+            <h1 id="title">Tipovačka</h1>
+        </div>
+        <a href="/admin">← Zpět na admin panel</a>
+    </header>
+    
+    <main class="admin_site">
+        <div class="transfer-container">
+            <h1>🔄 Převod dat z minulého roku</h1>
+            <p style="color: #ccc; margin-bottom: 20px;">Zde můžete vybrat data z předchozích sezón pro převod do aktuální sezóny "${currentSeason}".</p>
+            
+            <div class="warning-box">
+                <strong>⚠️ UPOZORNĚNÍ:</strong><br>
+                Tato operace zkopíruje vybraná data ze staré sezóny do aktuální sezóny. 
+                Duplicitní data budou přepsána. Doporučuje se vytvořit zálohu před převodem.
+            </div>
+            
+            <form method="POST" action="/admin/transfer-data" id="transferForm">
+                <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
+                
+                <div class="transfer-section">
+                    <h3>📅 Zdrojová sezóna</h3>
+                    <select name="sourceSeason" class="season-select" required>
+                        <option value="">-- Vyberte zdrojovou sezónu --</option>
+                        ${availableSeasons.map(season => `
+                            <option value="${season}">${season}</option>
+                        `).join('')}
+                    </select>
+                </div>
+                
+                <div class="transfer-section">
+                    <h3>🏆 Výběr lig</h3>
+                    <div class="checkbox-group">
+                        ${allLeagues.map(league => `
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="league_${league}" name="selectedLeagues" value="${league}">
+                                <label for="league_${league}">
+                                    <strong>${league}</strong><br>
+                                    <small>Přenést pouze data z této ligy</small>
+                                </label>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                
+                <div class="transfer-section">
+                    <h3>⚽ Zápasy a týmy</h3>
+                    <div class="checkbox-group">
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="transferMatches" name="transferMatches" value="true">
+                            <label for="transferMatches">
+                                <strong>Zápasy</strong><br>
+                                <small>Všechny zápasy včetně výsledků</small>
+                            </label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="transferTeams" name="transferTeams" value="true">
+                            <label for="transferTeams">
+                                <strong>Týmy</strong><br>
+                                <small>Všechny týmy včetně skupin</small>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="transfer-section">
+                    <h3>🏆 Playoff a soutěže</h3>
+                    <div class="checkbox-group">
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="transferPlayoff" name="transferPlayoff" value="true">
+                            <label for="transferPlayoff">
+                                <strong>Playoff data</strong><br>
+                                <small>Konfigurace a výsledky playoff</small>
+                            </label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="transferPlayoffTemplates" name="transferPlayoffTemplates" value="true">
+                            <label for="transferPlayoffTemplates">
+                                <strong>Playoff šablony</strong><br>
+                                <small>Šablony formátů playoff</small>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="transfer-section">
+                    <h3>🔒 Nastavení lig</h3>
+                    <div class="checkbox-group">
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="transferLeagueStatus" name="transferLeagueStatus" value="true">
+                            <label for="transferLeagueStatus">
+                                <strong>Lockovací mechanismy</strong><br>
+                                <small>Uzamčení tipování tabulek</small>
+                            </label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="transferTeamBonuses" name="transferTeamBonuses" value="true">
+                            <label for="transferTeamBonuses">
+                                <strong>Bonusy týmů</strong><br>
+                                <small>Bonusové body pro týmy</small>
+                            </label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="transferTableTips" name="transferTableTips" value="true">
+                            <label for="transferTableTips">
+                                <strong>Tipy na tabulky</strong><br>
+                                <small>Uživatelské tipy na konečné pořadí</small>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="transfer-section">
+                    <h3>💰 Přestupy</h3>
+                    <div class="checkbox-group">
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="transferTransfers" name="transferTransfers" value="true">
+                            <label for="transferTransfers">
+                                <strong>Přestupové okno</strong><br>
+                                <small>Nastavení a data přestupů</small>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn-transfer" id="transferBtn">
+                    🔄 Spustit převod dat
+                </button>
+            </form>
+        </div>
+    </main>
+    
+    <script>
+        document.getElementById('transferForm').addEventListener('submit', function(e) {
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]:checked');
+            const sourceSeason = document.querySelector('select[name="sourceSeason"]').value;
+            const leagueCheckboxes = document.querySelectorAll('input[name="selectedLeagues"]:checked');
+            const transferMatches = document.querySelector('#transferMatches').checked;
+            const transferTeams = document.querySelector('#transferTeams').checked;
+            
+            if (!sourceSeason) {
+                e.preventDefault();
+                alert('Prosím vyberte zdrojovou sezónu.');
+                return;
+            }
+            
+            if ((transferMatches || transferTeams) && leagueCheckboxes.length === 0) {
+                e.preventDefault();
+                alert('Pro převod zápasů a týmů musíte vybrat alespoň jednu ligu.');
+                return;
+            }
+            
+            if (checkboxes.length === 0) {
+                e.preventDefault();
+                alert('Prosím vyberte alespoň jednu položku k převodu.');
+                return;
+            }
+            
+            const confirmMsg = 'Opravdu chcete převést vybraná data ze sezóny ' + sourceSeason + ' do aktuální sezóny?\\n\\n' +
+                              'Tato operace může přepsat existující data v aktuální sezóně.\\n' +
+                              'Doporučuje se vytvořit zálohu před pokračováním.';
+                              
+            if (!confirm(confirmMsg)) {
+                e.preventDefault();
+            }
+        });
+        
+        // Zabránit odeslání formuláře při stisku Enter v selectu
+        document.querySelector('select[name="sourceSeason"]').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+            }
+        });
+    </script>
+</body>
+</html>`;
+        
+        res.send(html);
+        
+    } catch (error) {
+        console.error('Chyba při načítání stránky převodu dat:', error);
+        res.status(500).send('Chyba při načítání stránky');
+    }
+});
+
+router.post('/transfer-data', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    try {
+        // CSRF kontrola
+        if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+            return res.status(403).send('Neplatný CSRF token');
+        }
+        
+        const { sourceSeason, selectedLeagues, transferMatches, transferTeams, transferPlayoff, transferPlayoffTemplates, 
+                transferLeagueStatus, transferTeamBonuses, transferTableTips, transferTransfers } = req.body;
+        
+        if (!sourceSeason) {
+            return res.status(400).json({ success: false, message: 'Zdrojová sezóna není vybrána.' });
+        }
+        
+        // Zpracování vybraných lig
+        const leaguesToTransfer = Array.isArray(selectedLeagues) ? selectedLeagues : [selectedLeagues].filter(Boolean);
+        
+        if (transferMatches === 'true' || transferTeams === 'true') {
+            if (leaguesToTransfer.length === 0) {
+                return res.status(400).json({ success: false, message: 'Pro převod zápasů a týmů musíte vybrat alespoň jednu ligu.' });
+            }
+        }
+        
+        const currentSeason = await ChosenSeason.findAll();
+        const transferResults = [];
+        
+        console.log(`🔄 Spouštím převod dat ze sezóny "${sourceSeason}" do "${currentSeason}"`);
+        
+        // 1. Převod zápasů
+        if (transferMatches === 'true') {
+            try {
+                const sourceMatches = await Matches.findMany({ season: sourceSeason });
+                // Filtrování zápasů podle vybraných lig
+                const filteredMatches = sourceMatches.filter(match => leaguesToTransfer.includes(match.liga));
+                const matchesToTransfer = filteredMatches.map(match => ({
+                    ...match,
+                    season: currentSeason,
+                    _id: undefined // Odstraníme MongoDB _id pro vytvoření nových dokumentů
+                }));
+                
+                if (matchesToTransfer.length > 0) {
+                    // Nejprve smažeme existující zápasy v aktuální sezóně pro vybrané ligy
+                    await Matches.deleteMany({ season: currentSeason, liga: { $in: leaguesToTransfer } });
+                    // Pak vložíme nové
+                    await Matches.insertMany(matchesToTransfer);
+                    transferResults.push(`✅ Přeneseno ${matchesToTransfer.length} zápasů z lig: ${leaguesToTransfer.join(', ')}`);
+                } else {
+                    transferResults.push(`⚠️ V sezóně ${sourceSeason} nebyly nalezeny žádné zápasy z vybraných lig`);
+                }
+            } catch (error) {
+                transferResults.push(`❌ Chyba při převodu zápasů: ${error.message}`);
+            }
+        }
+        
+        // 2. Převod týmů
+        if (transferTeams === 'true') {
+            try {
+                const sourceTeams = await Teams.findMany({ season: sourceSeason });
+                // Filtrování týmů podle vybraných lig
+                const filteredTeams = sourceTeams.filter(team => leaguesToTransfer.includes(team.liga));
+                const teamsToTransfer = filteredTeams.map(team => ({
+                    ...team,
+                    season: currentSeason,
+                    _id: undefined
+                }));
+                
+                if (teamsToTransfer.length > 0) {
+                    // Nejprve smažeme existující týmy v aktuální sezóně pro vybrané ligy
+                    await Teams.deleteMany({ season: currentSeason, liga: { $in: leaguesToTransfer } });
+                    // Pak vložíme nové
+                    await Teams.insertMany(teamsToTransfer);
+                    transferResults.push(`✅ Přeneseno ${teamsToTransfer.length} týmů z lig: ${leaguesToTransfer.join(', ')}`);
+                } else {
+                    transferResults.push(`⚠️ V sezóně ${sourceSeason} nebyly nalezeny žádné týmy z vybraných lig`);
+                }
+            } catch (error) {
+                transferResults.push(`❌ Chyba při převodu týmů: ${error.message}`);
+            }
+        }
+        
+        // 3. Převod playoff dat
+        if (transferPlayoff === 'true') {
+            try {
+                const playoffData = await Playoff.findAll();
+                if (playoffData[sourceSeason]) {
+                    const updatedPlayoff = { ...playoffData };
+                    updatedPlayoff[currentSeason] = playoffData[sourceSeason];
+                    await Playoff.replaceAll(updatedPlayoff);
+                    transferResults.push(`✅ Přenesena playoff data`);
+                } else {
+                    transferResults.push(`⚠️ V sezóně ${sourceSeason} nebyla nalezena playoff data`);
+                }
+            } catch (error) {
+                transferResults.push(`❌ Chyba při převodu playoff dat: ${error.message}`);
+            }
+        }
+        
+        // 4. Převod playoff šablon
+        if (transferPlayoffTemplates === 'true') {
+            try {
+                const templatesData = await PlayoffTemplates.findAll();
+                console.log(`🔧 Debug playoff templates: Found keys: ${Object.keys(templatesData)}`);
+                console.log(`🔧 Debug: Looking for season "${sourceSeason}"`);
+                console.log(`🔧 Debug: Selected leagues: ${leaguesToTransfer.join(', ')}`);
+                
+                // Najdi playoff šablony pro vybrané ligy
+                let templatesFound = false;
+                const updatedTemplates = { ...templatesData };
+                
+                for (const league of leaguesToTransfer) {
+                    // Hledej klíče které obsahují název ligy
+                    const matchingKeys = Object.keys(templatesData).filter(key => 
+                        key.toLowerCase().includes(league.toLowerCase())
+                    );
+                    
+                    if (matchingKeys.length > 0) {
+                        templatesFound = true;
+                        // Přidej šablony pro novou sezónu s ligovým prefixem
+                        for (const key of matchingKeys) {
+                            const newKey = key.replace(/_\d+$/, ''); // Odstraň starý suffix
+                            updatedTemplates[`${newKey}_${currentSeason}`] = templatesData[key];
+                        }
+                        console.log(`✅ Found ${matchingKeys.length} templates for league: ${league}`);
+                    }
+                }
+                
+                if (templatesFound) {
+                    await PlayoffTemplates.replaceAll(updatedTemplates);
+                    transferResults.push(`✅ Přeneseny playoff šablony pro ligy: ${leaguesToTransfer.join(', ')}`);
+                } else {
+                    transferResults.push(`⚠️ V sezóně ${sourceSeason} nebyly nalezeny playoff šablony pro vybrané ligy`);
+                }
+            } catch (error) {
+                transferResults.push(`❌ Chyba při převodu playoff šablon: ${error.message}`);
+            }
+        }
+        
+        // 5. Převod lockovacích mechanismů
+        if (transferLeagueStatus === 'true') {
+            try {
+                const leagueStatusData = await LeagueStatus.findAll();
+                if (leagueStatusData[sourceSeason]) {
+                    const updatedLeagueStatus = { ...leagueStatusData };
+                    updatedLeagueStatus[currentSeason] = leagueStatusData[sourceSeason];
+                    await LeagueStatus.replaceAll(updatedLeagueStatus);
+                    transferResults.push(`✅ Přeneseny lockovací mechanismy`);
+                } else {
+                    transferResults.push(`⚠️ V sezóně ${sourceSeason} nebyly nalezeny lockovací mechanismy`);
+                }
+            } catch (error) {
+                transferResults.push(`❌ Chyba při převodu lockovacích mechanismů: ${error.message}`);
+            }
+        }
+        
+        // 6. Převod bonusů týmů
+        if (transferTeamBonuses === 'true') {
+            try {
+                const bonusesData = await TeamBonuses.findAll();
+                if (bonusesData[sourceSeason]) {
+                    const updatedBonuses = { ...bonusesData };
+                    updatedBonuses[currentSeason] = bonusesData[sourceSeason];
+                    await TeamBonuses.replaceAll(updatedBonuses);
+                    transferResults.push(`✅ Přeneseny bonusy týmů`);
+                } else {
+                    transferResults.push(`⚠️ V sezóně ${sourceSeason} nebyly nalezeny bonusy týmů`);
+                }
+            } catch (error) {
+                transferResults.push(`❌ Chyba při převodu bonusů týmů: ${error.message}`);
+            }
+        }
+        
+        // 7. Převod tipů na tabulky
+        if (transferTableTips === 'true') {
+            try {
+                const tableTipsData = await TableTips.findAll();
+                if (tableTipsData[sourceSeason]) {
+                    const updatedTableTips = { ...tableTipsData };
+                    updatedTableTips[currentSeason] = tableTipsData[sourceSeason];
+                    await TableTips.replaceAll(updatedTableTips);
+                    transferResults.push(`✅ Přeneseny tipy na tabulky`);
+                } else {
+                    transferResults.push(`⚠️ V sezóně ${sourceSeason} nebyly nalezeny tipy na tabulky`);
+                }
+            } catch (error) {
+                transferResults.push(`❌ Chyba při převodu tipů na tabulky: ${error.message}`);
+            }
+        }
+        
+        // 8. Převod přestupů
+        if (transferTransfers === 'true') {
+            try {
+                const transfersData = await Transfers.findAll();
+                if (transfersData[sourceSeason]) {
+                    const updatedTransfers = { ...transfersData };
+                    updatedTransfers[currentSeason] = transfersData[sourceSeason];
+                    await Transfers.replaceAll(updatedTransfers);
+                    transferResults.push(`✅ Přeneseny přestupy`);
+                } else {
+                    transferResults.push(`⚠️ V sezóně ${sourceSeason} nebyly nalezeny přestupy`);
+                }
+            } catch (error) {
+                transferResults.push(`❌ Chyba při převodu přestupů: ${error.message}`);
+            }
+        }
+        
+        console.log(`🎉 Převod dat dokončen. Výsledky:`, transferResults);
+        
+        // Logování akce
+        await logAdminAction(req.session.user, "PREVOD_DAT", 
+            `Převod dat ze sezóny "${sourceSeason}" do "${currentSeason}". Výsledky: ${transferResults.join(', ')}`);
+        
+        // Vrátíme HTML stránku s výsledky
+        let resultsHtml = `
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Výsledky převodu dat</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="icon" href="/images/logo.png">
+</head>
+<body class="usersite">
+    <header class="header">
+        <div class="logo_title">
+            <img class="image_logo" src="/images/logo.png" alt="Logo">
+            <h1 id="title">Tipovačka</h1>
+        </div>
+        <a href="/admin">← Zpět na admin panel</a>
+    </header>
+    
+    <main class="admin_site">
+        <div class="results-container">
+            <h1>🎉 Převod dat dokončen</h1>
+            <p style="color: #ccc; margin-bottom: 20px;">
+                Převod dat ze sezóny <strong>${sourceSeason}</strong> do aktuální sezóny <strong>${currentSeason}</strong> byl dokončen.
+            </p>
+            
+            <h3>📋 Výsledky převodu:</h3>
+            <div class="results-list">
+`;
+        
+        transferResults.forEach(result => {
+            let cssClass = 'result-success';
+            if (result.includes('⚠️')) cssClass = 'result-warning';
+            if (result.includes('❌')) cssClass = 'result-error';
+            
+            resultsHtml += `<div class="result-item ${cssClass}">${result}</div>`;
+        });
+        
+        resultsHtml += `
+            </div>
+            
+            <div style="text-align: center; margin-top: 30px;">
+                <a href="/admin/transfer-data" class="btn-back">🔄 Další převod</a>
+                <a href="/admin" class="btn-back">🏠 Admin panel</a>
+            </div>
+        </div>
+    </main>
+</body>
+</html>`;
+        
+        res.send(resultsHtml);
+        
+    } catch (error) {
+        console.error('Chyba při převodu dat:', error);
+        res.status(500).json({
+            success: false,
+            message: `Chyba při převodu dat: ${error.message}`
+        });
+    }
+});
+
+router.get('/fix-team-seasons', requireAdmin, async (req, res) => {
+    try {
+        const teams = await Teams.findAll();
+        let fixedCount = 0;
+        let skippedCount = 0;
+        
+        console.log(`🔧 Kontroluji ${teams.length} týmů`);
+        
+        for (const team of teams) {
+            // Hledej týmy bez season nebo s undefined season
+            if (!team.season || team.season === 'undefined' || team.season === '') {
+                if (team.stats && Object.keys(team.stats).length > 0) {
+                    // Najdi sezónu z stats klíčů
+                    const seasonKeys = Object.keys(team.stats);
+                    const latestSeason = seasonKeys.sort().pop();
+                    
+                    console.log(`Opravuji tým ${team.name}: season=${team.season} -> ${latestSeason}`);
+                    
+                    await Teams.updateOne({ _id: team._id }, { season: latestSeason });
+                    fixedCount++;
+                } else {
+                    console.log(`Tým ${team.name} nemá stats data, přeskakuji`);
+                    skippedCount++;
+                }
+            }
+        }
+        
+        res.send(`
+            <h1>✅ Sezóny týmů opraveny</h1>
+            <p>Opraveno ${fixedCount} z ${teams.length} týmů</p>
+            <p>Přeskočeno ${skippedCount} týmů (bez stats dat)</p>
+            <a href="/admin">← Zpět na admin panel</a>
+        `);
+        
+        console.log(`🔧 Dokončeno: Opraveno ${fixedCount} týmů, přeskočeno ${skippedCount}`);
+        
+    } catch (error) {
+        console.error('Chyba při opravě sezón týmů:', error);
+        res.status(500).send('Chyba při opravě sezón týmů');
+    }
+});
 
 module.exports = router;
-
-

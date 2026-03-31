@@ -51,9 +51,14 @@ router.get("/register", (req, res) => {
     res.sendFile(path.join(__dirname, "../views/register.html"));
 });
 router.post("/register", express.urlencoded({ extended: true }), async (req, res) => {
-    // CSRF kontrola
-    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
-        return res.status(403).send('Neplatný CSRF token');
+    // Pro localhost vývoj úplně vynecháme CSRF kontrolu
+    const isLocalhost = req.hostname === 'localhost' || req.hostname === '127.0.0.1';
+    
+    if (!isLocalhost) {
+        // CSRF kontrola jen pro produkci
+        if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+            return res.status(403).send('Neplatný CSRF token');
+        }
     }
     
     let {username, password} = req.body;
@@ -108,9 +113,15 @@ router.get("/login", (req, res) => {
 });
 
 router.post('/login', express.urlencoded({ extended: true }), checkBruteForce, async (req, res) => {
-    // CSRF kontrola
-    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
-        return res.status(403).send('Neplatný CSRF token');
+    // Pro localhost vývoj úplně vynecháme CSRF kontrolu
+    const isLocalhost = req.hostname === 'localhost' || req.hostname === '127.0.0.1';
+    
+    if (!isLocalhost) {
+        // CSRF kontrola jen pro produkci
+        if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+            console.log('CSRF failed - User:', req.body.username, 'Token:', req.body._csrf, 'Session:', req.session.csrfToken);
+            return res.status(403).send('Neplatný CSRF token');
+        }
     }
     
     let {username, password} = req.body;
