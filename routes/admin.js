@@ -68,8 +68,12 @@ router.get('/', requireAdmin, async (req, res) => {
     let clinchMode = 'strict';
     if (settingsData && settingsData.clinchMode) clinchMode = settingsData.clinchMode;
 
-    const leaguesFromMatches = [...new Set(matches.map(m => m.liga))];
-    const leaguesFromTeams = [...new Set(teams.map(t => t.liga))];
+    // Filter teams and matches by chosenSeason - admin sees ALL data from current season
+    const teamsFromCurrentSeason = teams.filter(t => t.season === chosenSeason);
+    const matchesFromCurrentSeason = matches.filter(m => m.season === chosenSeason);
+
+    const leaguesFromMatches = [...new Set(matchesFromCurrentSeason.map(m => m.liga))];
+    const leaguesFromTeams = [...new Set(teamsFromCurrentSeason.map(t => t.liga))];
     const leaguesFromLeagues = [... new Set(leagues.map(t => t.name))];
     const allLeagues = [...new Set([...leaguesFromTeams, ...leaguesFromMatches, ...leaguesFromLeagues])];
     const currentYear = new Date().getFullYear();
@@ -88,12 +92,12 @@ router.get('/', requireAdmin, async (req, res) => {
         ? req.query.liga
         : uniqueLeagues[0] || allLeagues[0];
     const teamsByLeague = {};
-    teams.forEach(team => {
+    teamsFromCurrentSeason.forEach(team => {
         if (!teamsByLeague[team.liga]) teamsByLeague[team.liga] = [];
         teamsByLeague[team.liga].push(team);
     });
     const teamsByGroup = {};
-    teams.forEach(team => {
+    teamsFromCurrentSeason.forEach(team => {
         if (team.liga === selectedLiga) {
             if (!teamsByGroup[team.group]) teamsByGroup[team.group] = [];
             teamsByGroup[team.group].push(team);
@@ -104,7 +108,7 @@ router.get('/', requireAdmin, async (req, res) => {
         ? req.query.season
         : chosenSeason || 'Neurčeno';
 
-    const filteredMatches = matches.filter(m =>
+    const filteredMatches = matchesFromCurrentSeason.filter(m =>
         m.liga === selectedLiga && (m.season || 'Neurčeno') === selectedSeasonQuery
     );
 
@@ -1912,6 +1916,7 @@ router.get('/playoff', requireAdmin, async (req, res) => {
     const allSeasonData = await Leagues.findAll();
     const leagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues) ? allSeasonData[selectedSeason].leagues : [];
     const allLeagues = leagues.map(l => l.name);
+    // Admin vidí VŠECHNY ligy - žádné filtrování
     const selectedLeague = req.query.league || allLeagues[0] || "Neurčeno";
 
     // Zjistíme formát vybrané ligy
@@ -1923,18 +1928,21 @@ router.get('/playoff', requireAdmin, async (req, res) => {
         Teams.findAll()
     ]);
 
+    // Filter teams by selectedSeason - admin should only see teams from current season
+    const teamsFromCurrentSeason = teams.filter(t => t.season === selectedSeason);
+
     const playoffMatches = matches.filter(m => m.season === selectedSeason && m.liga === selectedLeague && m.isPlayoff);
 
     // Vytvoříme seznam sérií do roletky
     // (Toto už tam máš)
     const seriesOptionsHTML = playoffMatches.map(m => {
-        const teamA = teams.find(t => t.id === m.homeTeamId)?.name || 'Neznámý';
-        const teamB = teams.find(t => t.id === m.awayTeamId)?.name || 'Neznámý';
+        const teamA = teamsFromCurrentSeason.find(t => t.id === m.homeTeamId)?.name || 'Neznámý';
+        const teamB = teamsFromCurrentSeason.find(t => t.id === m.awayTeamId)?.name || 'Neznámý';
         return `<option value="series-${m.id}">${teamA} vs ${teamB} (Série ${m.id})</option>`;
     }).join('');
 
     // --- 1. PŘIDEJ TOTO (Seznam týmů pro čekající sloty) ---
-    const teamsInLeague = teams.filter(t => t.liga === selectedLeague);
+    const teamsInLeague = teamsFromCurrentSeason.filter(t => t.liga === selectedLeague);
     const teamsOptionsHTML = teamsInLeague.map(t => `<option value="${t.name}">${t.name}</option>`).join('');
 
     // --- CHYBĚJÍCÍ BLOK: Načteme už uložené přiřazení slotů ---
@@ -2149,15 +2157,6 @@ router.get('/leagues/manage', requireAdmin, async (req, res) => {
         <title>Správa lig</title>
         <link rel="stylesheet" href="/css/styles.css">
         <link rel="icon" href="/images/logo.png">
-            /* Styl pro boxík s nastavením X-tých týmů */
-                flex-basis: 100%;
-                background-color: #1a1a1a;
-                margin-top: 10px;
-                margin-bottom: 5px;
-                flex-wrap: wrap;
-            }
-            .cross-table-settings h4 { color: #ffa500; font-size: 1em; margin: 0 10px 0 0;}
-            .separator { border-left: 1px solid #444; height: 20px; margin: 0 5px; }
     </head>
     <body>
         <h1>Správa lig (pro sezónu: ${selectedSeason})</h1>
@@ -2564,7 +2563,10 @@ router.get('/teams/points', requireAdmin, async (req, res) => {
 
     const selectedLiga = req.query.liga || (seasonLeagues.length > 0 ? seasonLeagues[0].name : null);
 
-    teams.forEach(t => realScores[t.id] = { points: 0, gf: 0, ga: 0 });
+    // Filter teams by selectedSeason - admin should only see teams from current season
+    const teamsFromCurrentSeason = teams.filter(t => t.season === selectedSeason);
+
+    teamsFromCurrentSeason.forEach(t => realScores[t.id] = { points: 0, gf: 0, ga: 0 });
 
     matches.filter(m => m.season === selectedSeason && m.liga === selectedLiga).forEach(m => {
         if (m.result) {
@@ -2588,7 +2590,7 @@ router.get('/teams/points', requireAdmin, async (req, res) => {
     if (!bonusData || Object.keys(bonusData).length === 0) bonusData = {};
 
     // Filtrujeme týmy
-    const leagueTeams = teams.filter(t => t.liga === selectedLiga && t.active);
+    const leagueTeams = teamsFromCurrentSeason.filter(t => t.liga === selectedLiga && t.active);
 
     // PŘIDÁNO: Ultimátní seřazení (Body -> Rozdíl skóre -> Vstřelené góly)
     leagueTeams.sort((a, b) => {
@@ -3169,7 +3171,11 @@ router.post('/leagues/transfers', express.urlencoded({ extended: true }), requir
 router.get('/images/manage', requireAdmin, async (req, res) => {
     const imagesDir = path.join(__dirname, '..', 'data', 'images');
     const teams = await Teams.findAll();
-    const usedLogos = new Set(teams.map(t => t.logo).filter(Boolean));
+    const selectedSeason = await ChosenSeason.findAll();
+    
+    // Filter teams by selectedSeason - admin should only see logos from current season
+    const teamsFromCurrentSeason = teams.filter(t => t.season === selectedSeason);
+    const usedLogos = new Set(teamsFromCurrentSeason.map(t => t.logo).filter(Boolean));
 
     // Pojistka, kdyby složka neexistovala
     if (!fs.existsSync(imagesDir)) {
@@ -3300,7 +3306,9 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
     if (!transfersData || Object.keys(transfersData).length === 0) transfersData = {};
 
     const currentTransfers = transfersData[selectedSeason]?.[selectedLiga] || {};
-    const teamsInLiga = teams.filter(t => t.liga === selectedLiga && t.active);
+    // Filter teams by selectedSeason - admin should only see teams from current season
+    const teamsFromCurrentSeason = teams.filter(t => t.season === selectedSeason);
+    const teamsInLiga = teamsFromCurrentSeason.filter(t => t.liga === selectedLiga && t.active);
 
     let html = `
     <!DOCTYPE html>
