@@ -18,8 +18,15 @@ const {
     evaluateRegularSeasonTable,
     renderErrorHtml,
     logAdminAction,
+    getAvailableImages,
 } = require("../utils/fileUtils");
 const { fetchMatchesFromLivesport } = require('../utils/livesportService');
+const { 
+    scanImageHashes, 
+    findDuplicates, 
+    checkNewFileDuplicate,
+    syncImageHashesToDatabase 
+} = require('../utils/imageUtils');
 router.post('/backup', async (req, res) => {
     try {
         await backupJsonFilesToGitHub();
@@ -905,9 +912,14 @@ router.get('/teams/edit/:id', requireAdmin, async (req, res) => {
     <label style="display: flex; flex-direction: column" for="name">Název týmu
       <input autocomplete="off" style="width: 220px" class="league-select" type="text" id="name" name="name" value="${team.name}" required />
     </label>
-    <label style="display: flex; flex-direction: column" for="logo">Nahrát nové logo
-      <input style="width: 220px" class="league-select" type="file" id="logo" name="logo" accept="image/*" />
+    <label style="display: flex; flex-direction: column" for="logo">Logo týmu
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <input style="width: 220px" class="league-select" type="file" id="logo" name="logo" accept="image/*" />
+        <input type="hidden" name="selectedLogo" id="selectedLogo" value="">
+        <button type="button" class="btn btn-secondary" style="padding: 5px 10px; font-size: 0.85em;" onclick="openImageSelector('selectedLogo', 'logoPreview')">🖼️ Vybrat z galerie</button>
+      </div>
       ${team.logo ? `<small style="color: gray;">Aktuální: ${team.logo}</small>` : ''}
+      <img id="logoPreview" src="${team.logo ? `/logoteamu/${team.logo}` : ''}" style="width: 60px; height: 60px; object-fit: contain; margin-top: 5px; ${team.logo ? '' : 'display: none;'}"  alt=""/>
     </label>
     <label style="display: flex; flex-direction: column" for="liga">Liga
       <select class="league-select" id="liga" name="liga" required>
@@ -932,6 +944,46 @@ router.get('/teams/edit/:id', requireAdmin, async (req, res) => {
   </form>
   <a href="/admin" class="back-link">← Zpět na seznam týmů</a>
 </main>
+<script>
+// Otevře popup pro výběr obrázku
+function openImageSelector(hiddenInputId, previewId) {
+    const popup = window.open(
+        '/admin/images/selector?callback=' + hiddenInputId + '&preview=' + previewId,
+        'imageSelector',
+        'width=900,height=700,scrollbars=yes,resizable=yes,top=100,left=100'
+    );
+    
+    if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+        alert('Popup byl zablokován. Povolte popup okna pro tento web.');
+    }
+}
+
+// Posluchač pro zprávu z popup okna
+window.addEventListener('message', function(event) {
+    if (event.data && event.data.type === 'imageSelected') {
+        const { filename, path, callbackField, previewId } = event.data;
+        
+        // Nastavit hidden input
+        const hiddenInput = document.getElementById(callbackField);
+        if (hiddenInput) {
+            hiddenInput.value = filename;
+        }
+        
+        // Zobrazit náhled
+        const preview = document.getElementById(previewId);
+        if (preview) {
+            preview.src = path;
+            preview.style.display = 'block';
+        }
+        
+        // Vyčistit file input (pokud je vybrán existující, nový soubor se nepoužije)
+        const fileInput = document.querySelector('input[type="file"][name="logo"]');
+        if (fileInput) {
+            fileInput.value = '';
+        }
+    }
+});
+</script>
 </body>
 </html>
     `;
@@ -1318,8 +1370,13 @@ router.get('/new/team', requireAdmin, async (req, res) => {
     <form style="display: flex; flex-direction: row; gap: 10px" method="POST" action="/admin/new/team?_csrf=${req.session.csrfToken || ''}" enctype="multipart/form-data">
       <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
       <label style="display: flex; flex-direction: column;">Název týmu: <input style="width: 220px" class="league-select" autocomplete="off" type="text" name="name" required></label>
-      <label style="display: flex; flex-direction: column;">Nahrát logo: 
-        <input style="width: 220px" class="league-select" type="file" name="logo" accept="image/*">
+      <label style="display: flex; flex-direction: column;">Logo týmu:
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <input style="width: 220px" class="league-select" type="file" name="logo" accept="image/*" id="logoFile">
+          <input type="hidden" name="selectedLogo" id="selectedLogoNew" value="">
+          <button type="button" class="btn" style="background: #666; padding: 5px 10px; font-size: 0.85em; width: 220px;" onclick="openImageSelector('selectedLogoNew', 'logoPreviewNew')">🖼️ Vybrat z galerie</button>
+        </div>
+        <img id="logoPreviewNew" src="" style="width: 60px; height: 60px; object-fit: contain; margin-top: 5px; display: none;"  alt=""/>
       </label>
       <label style="display: flex; flex-direction: column;">Liga:
         <select class="league-select" style="width: 220px" name="liga" id="ligaSelect" required>
@@ -1357,6 +1414,45 @@ router.get('/new/team', requireAdmin, async (req, res) => {
     }
     updateGroups();
     ligaSelect.addEventListener('change', updateGroups);
+    
+    // Otevře popup pro výběr obrázku
+    function openImageSelector(hiddenInputId, previewId) {
+        const popup = window.open(
+            '/admin/images/selector?callback=' + hiddenInputId + '&preview=' + previewId,
+            'imageSelector',
+            'width=900,height=700,scrollbars=yes,resizable=yes,top=100,left=100'
+        );
+        
+        if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+            alert('Popup byl zablokován. Povolte popup okna pro tento web.');
+        }
+    }
+    
+    // Posluchač pro zprávu z popup okna
+    window.addEventListener('message', function(event) {
+        if (event.data && event.data.type === 'imageSelected') {
+            const { filename, path, callbackField, previewId } = event.data;
+            
+            // Nastavit hidden input
+            const hiddenInput = document.getElementById(callbackField);
+            if (hiddenInput) {
+                hiddenInput.value = filename;
+            }
+            
+            // Zobrazit náhled
+            const preview = document.getElementById(previewId);
+            if (preview) {
+                preview.src = path;
+                preview.style.display = 'block';
+            }
+            
+            // Vyčistit file input (pokud je vybrán existující, nový soubor se nepoužije)
+            const fileInput = document.getElementById('logoFile');
+            if (fileInput) {
+                fileInput.value = '';
+            }
+        }
+    });
     </script>
     </html>
   `);
@@ -1374,7 +1470,7 @@ router.post('/new/team', express.urlencoded({ extended: true }), requireAdmin, u
 
     const inputName = name.trim().toLowerCase();
     const inputLiga = liga.trim().toLowerCase();
-    const logoFilename = req.file ? req.file.filename : '';
+    const logoFilename = req.file ? req.file.filename : (req.body.selectedLogo || '');
 
     const exists = teams.some(team =>
         team.name.trim().toLowerCase() === inputName &&
@@ -1814,9 +1910,11 @@ router.post('/teams/edit/:id', express.urlencoded({ extended: true }), requireAd
     team.active = active === 'on';
     team.group = parseInt(req.body.group);
     
-    // Pokud bylo nahráno nové logo, aktualizujeme ho
+    // Pokud bylo nahráno nové logo nebo vybrán existující, aktualizujeme ho
     if (req.file) {
         team.logo = req.file.filename;
+    } else if (req.body.selectedLogo) {
+        team.logo = req.body.selectedLogo;
     }
     
     // Uložení do MongoDB
@@ -3182,46 +3280,551 @@ router.get('/images/manage', requireAdmin, async (req, res) => {
     // Načteme všechny soubory, které jsou obrázky
     const files = fs.readdirSync(imagesDir).filter(f => f.match(/\.(jpg|jpeg|png|gif|webp)$/i));
 
+    // Získáme hashe pro detekci duplicit (načteme z MongoDB pokud existují)
+    let imageHashes = [];
+    let duplicates = { exact: [], similar: [], filenameConflicts: [] };
+    try {
+        const { connectToDatabase } = require('../config/database');
+        const db = await connectToDatabase();
+        const hashCollection = db.collection('image_hashes');
+        imageHashes = await hashCollection.find({}).toArray();
+        
+        // Pokud nemáme hashe v DB, naskenujeme je
+        if (imageHashes.length === 0) {
+            imageHashes = await scanImageHashes(imagesDir);
+            await syncImageHashesToDatabase(db, imagesDir);
+        }
+        
+        // Najdeme duplicity
+        duplicates = findDuplicates(imageHashes, { similarThreshold: 10 });
+    } catch (err) {
+        console.log('ℹ️ Hash index není dostupný, pokračuji bez detekce duplicit');
+    }
+
+    // Seskuptíme obrázky podle duplicit
+    const duplicateGroups = {};
+    [...duplicates.exact, ...duplicates.similar].forEach(dup => {
+        const key = dup.type === 'exact' ? dup.original : dup.image1;
+        if (!duplicateGroups[key]) duplicateGroups[key] = [];
+        duplicateGroups[key].push(dup);
+    });
+
     let html = `
     <!DOCTYPE html>
     <html lang="cs">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-        <title>Správce log</title>
+        <title>Galerie obrázků - Správa log</title>
         <link rel="stylesheet" href="/css/styles.css">
         <link rel="icon" href="/images/logo.png">
+        <style>
+            .gallery-container { padding: 20px; }
+            .gallery-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 20px; }
+            .gallery-stats { display: flex; gap: 20px; flex-wrap: wrap; }
+            .stat-box { background: #1a1a2e; padding: 10px 20px; border-radius: 8px; border: 1px solid #333; }
+            .stat-box .number { font-size: 1.5em; font-weight: bold; color: #00d4ff; }
+            .stat-box .label { font-size: 0.85em; color: #888; }
+            .upload-section { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 2px dashed #00d4ff; padding: 30px; margin-bottom: 30px; border-radius: 12px; text-align: center; }
+            .upload-section.dragover { background: rgba(0, 212, 255, 0.1); border-color: #00ff00; }
+            .file-input-wrapper { position: relative; display: inline-block; margin: 10px; }
+            .file-input-wrapper input[type="file"] { display: none; }
+            .file-input-label { background: #00d4ff; color: #000; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-weight: bold; display: inline-flex; align-items: center; gap: 8px; }
+            .file-input-label:hover { background: #00b4d8; }
+            .duplicate-warning { background: #ff4444; color: white; padding: 15px; border-radius: 8px; margin: 10px 0; display: none; }
+            .duplicate-warning.visible { display: block; }
+            .duplicate-group { background: rgba(255, 68, 68, 0.1); border: 1px solid #ff4444; padding: 10px; margin: 5px 0; border-radius: 6px; }
+            .batch-upload-preview { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px; margin-top: 20px; }
+            .preview-item { position: relative; background: #1a1a2e; padding: 10px; border-radius: 8px; text-align: center; }
+            .preview-item img { max-width: 100%; height: 100px; object-fit: cover; border-radius: 4px; }
+            .preview-item .filename { font-size: 0.75em; color: #888; margin-top: 5px; word-break: break-all; }
+            .preview-item .duplicate-badge { position: absolute; top: 5px; right: 5px; background: #ff4444; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75em; }
+            .preview-item .similar-badge { position: absolute; top: 5px; right: 5px; background: #ffaa00; color: #000; padding: 2px 8px; border-radius: 12px; font-size: 0.75em; }
+            .filter-tabs { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+            .filter-tab { background: #1a1a2e; border: 1px solid #444; padding: 10px 20px; border-radius: 8px; cursor: pointer; color: #888; }
+            .filter-tab.active { background: #00d4ff; color: #000; border-color: #00d4ff; }
+            .filter-tab:hover:not(.active) { border-color: #00d4ff; color: #00d4ff; }
+            .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; }
+            .gallery-item { position: relative; background: #1a1a2e; border-radius: 12px; overflow: hidden; border: 2px solid transparent; transition: all 0.3s ease; }
+            .gallery-item:hover { border-color: #00d4ff; transform: translateY(-2px); }
+            .gallery-item.selected { border-color: #00ff00; box-shadow: 0 0 20px rgba(0, 255, 0, 0.3); }
+            .gallery-item.duplicate { border-color: #ff4444; }
+            .gallery-item.similar { border-color: #ffaa00; }
+            .gallery-item img { width: 100%; height: 150px; object-fit: cover; cursor: pointer; }
+            .gallery-item .info { padding: 12px; }
+            .gallery-item .name { font-size: 0.85em; color: #fff; word-break: break-all; }
+            .gallery-item .meta { font-size: 0.75em; color: #666; margin-top: 5px; }
+            .gallery-item .checkbox { position: absolute; top: 10px; left: 10px; width: 24px; height: 24px; cursor: pointer; }
+            .gallery-item .status-badge { position: absolute; top: 10px; right: 10px; padding: 4px 10px; border-radius: 12px; font-size: 0.7em; font-weight: bold; }
+            .gallery-item .status-badge.active { background: #00ff00; color: #000; }
+            .gallery-item .status-badge.unused { background: #666; color: #fff; }
+            .gallery-item .duplicate-badge { position: absolute; bottom: 60px; left: 10px; right: 10px; background: rgba(255, 68, 68, 0.9); color: white; padding: 5px; border-radius: 6px; font-size: 0.75em; text-align: center; }
+            .gallery-item .similar-badge { position: absolute; bottom: 60px; left: 10px; right: 10px; background: rgba(255, 170, 0, 0.9); color: #000; padding: 5px; border-radius: 6px; font-size: 0.75em; text-align: center; }
+            .gallery-item .actions { display: flex; gap: 5px; padding: 10px; }
+            .gallery-item .actions a, .gallery-item .actions button { flex: 1; text-align: center; padding: 8px; border-radius: 6px; font-size: 0.8em; text-decoration: none; border: none; cursor: pointer; }
+            .gallery-item .actions .delete { background: #ff4444; color: white; }
+            .gallery-item .actions .delete:disabled { background: #444; cursor: not-allowed; }
+            .bulk-actions { display: none; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1a1a2e; border: 2px solid #00d4ff; padding: 15px 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); z-index: 100; }
+            .bulk-actions.visible { display: flex; gap: 10px; align-items: center; }
+            .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center; }
+            .modal-overlay.visible { display: flex; }
+            .modal-content { background: #1a1a2e; padding: 30px; border-radius: 16px; max-width: 90vw; max-height: 90vh; overflow: auto; border: 2px solid #00d4ff; }
+            .modal-content img { max-width: 100%; max-height: 70vh; }
+            .duplicates-section { background: rgba(255, 68, 68, 0.1); border: 1px solid #ff4444; padding: 20px; margin-bottom: 30px; border-radius: 12px; }
+            .duplicates-section h3 { color: #ff4444; margin-top: 0; }
+            .duplicate-comparison { display: flex; gap: 20px; flex-wrap: wrap; margin: 15px 0; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 8px; }
+            .duplicate-comparison img { width: 150px; height: 150px; object-fit: cover; border-radius: 8px; }
+            .duplicate-info { flex: 1; min-width: 200px; }
+        </style>
     </head>
     <body class="usersite">
-        <main class="admin_site">
-            <h1>Správce nahraných log (${files.length} souborů)</h1>
-            <p><a href="/admin" style="color: orangered;">← Zpět do adminu</a></p>
-            
-            <div class="image-grid">
+        <main class="admin_site gallery-container">
+            <div class="gallery-header">
+                <div>
+                    <h1>🖼️ Galerie obrázků</h1>
+                    <p><a href="/admin" style="color: orangered;">← Zpět do adminu</a></p>
+                </div>
+                <div class="gallery-stats">
+                    <div class="stat-box">
+                        <div class="number">${files.length}</div>
+                        <div class="label">Celkem obrázků</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="number">${usedLogos.size}</div>
+                        <div class="label">Používá se</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="number" style="color: ${duplicates.exact.length + duplicates.similar.length > 0 ? '#ff4444' : '#00ff00'};">${duplicates.exact.length + duplicates.similar.length}</div>
+                        <div class="label">Duplicity</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Upload sekce -->
+            <div class="upload-section" id="dropZone">
+                <h3>📤 Nahrát obrázky</h3>
+                <p style="color: #888; margin: 10px 0;">Přetáhni soubory sem nebo vyber z počítače (podporováno více souborů najednou)</p>
+                <div class="file-input-wrapper">
+                    <input type="file" id="fileInput" accept="image/*" multiple onchange="handleFiles(this.files)">
+                    <label for="fileInput" class="file-input-label">
+                        📁 Vybrat obrázky
+                    </label>
+                </div>
+                <div class="file-input-wrapper">
+                    <input type="file" id="folderInput" webkitdirectory directory onchange="handleFiles(this.files)">
+                    <label for="folderInput" class="file-input-label" style="background: #666;">
+                        📂 Vybrat složku
+                    </label>
+                </div>
+                <div id="duplicateWarning" class="duplicate-warning"></div>
+                <div id="uploadPreview" class="batch-upload-preview"></div>
+                <button id="uploadBtn" class="btn new-btn-admin" style="display: none; margin-top: 20px;" onclick="uploadFiles()">
+                    🚀 Nahrát vybrané soubory
+                </button>
+            </div>
+
+            <!-- Sekce duplicit -->
+            ${(duplicates.exact.length > 0 || duplicates.similar.length > 0) ? `
+            <div class="duplicates-section">
+                <h3>⚠️ Nalezeny duplicity (${duplicates.exact.length} identických, ${duplicates.similar.length} podobných)</h3>
+                <p style="color: #888; margin-bottom: 15px;">Následující obrázky jsou duplicitní. Zvaž jejich smazání pro úsporu místa.</p>
+                ${duplicates.exact.map(dup => `
+                    <div class="duplicate-comparison">
+                        <div>
+                            <img src="/logoteamu/${dup.original}" alt="">
+                            <p style="font-size: 0.8em; color: #888; margin-top: 5px;">${dup.original}</p>
+                        </div>
+                        <div style="display: flex; align-items: center; color: #ff4444; font-size: 1.5em;">=</div>
+                        <div>
+                            <img src="/logoteamu/${dup.duplicate}" alt="">
+                            <p style="font-size: 0.8em; color: #888; margin-top: 5px;">${dup.duplicate}</p>
+                            <a href="/admin/images/delete/${dup.duplicate}" class="btn" style="background: #ff4444; color: white; padding: 5px 15px; font-size: 0.8em; margin-top: 5px;">Smazat duplicitu</a>
+                        </div>
+                    </div>
+                `).join('')}
+                ${duplicates.similar.slice(0, 5).map(dup => `
+                    <div class="duplicate-comparison">
+                        <div>
+                            <img src="/logoteamu/${dup.image1}" alt="">
+                            <p style="font-size: 0.8em; color: #888; margin-top: 5px;">${dup.image1}</p>
+                        </div>
+                        <div style="display: flex; align-items: center; color: #ffaa00; font-size: 1.2em;">~${dup.similarity}%</div>
+                        <div>
+                            <img src="/logoteamu/${dup.image2}" alt="">
+                            <p style="font-size: 0.8em; color: #888; margin-top: 5px;">${dup.image2}</p>
+                        </div>
+                    </div>
+                `).join('')}
+                ${duplicates.similar.length > 5 ? `<p style="color: #888;">... a dalších ${duplicates.similar.length - 5} podobných párů</p>` : ''}
+            </div>
+            ` : ''}
+
+            <!-- Filtry -->
+            <div class="filter-tabs">
+                <div class="filter-tab active" onclick="filterImages('all')">Všechny</div>
+                <div class="filter-tab" onclick="filterImages('active')">Používané</div>
+                <div class="filter-tab" onclick="filterImages('unused')">Nepoužité</div>
+                <div class="filter-tab" onclick="filterImages('duplicates')">Duplicity</div>
+            </div>
+
+            <!-- Galerie -->
+            <div class="gallery-grid" id="gallery">
                 ${files.map(file => {
         const isActive = usedLogos.has(file);
+        const isDuplicate = duplicateGroups[file] || duplicates.exact.some(d => d.duplicate === file);
+        const isSimilar = duplicates.similar.some(d => d.image1 === file || d.image2 === file);
+        const fileData = imageHashes.find(h => h.filename === file);
+        const size = fileData ? (fileData.size / 1024).toFixed(1) : '?';
+
         return `
-                    <div class="image-card ${isActive ? 'active' : ''}">
-                        <span class="status-badge ${isActive ? 'status-active' : 'status-unused'}">
+                    <div class="gallery-item ${isActive ? '' : 'unused'} ${isDuplicate ? 'duplicate' : ''} ${isSimilar ? 'similar' : ''}" 
+                         data-filename="${file}" 
+                         data-status="${isActive ? 'active' : 'unused'}"
+                         data-duplicate="${isDuplicate || isSimilar}">
+                        <input type="checkbox" class="checkbox" onchange="toggleSelection('${file}')">
+                        <span class="status-badge ${isActive ? 'active' : 'unused'}">
                             ${isActive ? 'POUŽÍVÁ SE' : 'NEVYUŽITO'}
                         </span>
-                        <img src="/logoteamu/${file}" alt="${file}">
-                        <span class="image-name">${file}</span>
-                        
-                        ${isActive
-            ? `<span class="delete-link disabled" title="Nelze smazat logo, které je přiřazeno týmu">SMAZAT</span>`
-            : `<a href="/admin/images/delete/${file}" class="delete-link" onclick="return confirm('Opravdu smazat nepoužívané logo?')">SMAZAT</a>`
+                        ${isDuplicate ? `<div class="duplicate-badge">⚠️ Duplicitní</div>` : ''}
+                        ${isSimilar && !isDuplicate ? `<div class="similar-badge">~ Podobný</div>` : ''}
+                        <img src="/logoteamu/${file}" alt="${file}" onclick="openModal('/logoteamu/${file}')">
+                        <div class="info">
+                            <div class="name">${file}</div>
+                            <div class="meta">${size} KB</div>
+                        </div>
+                        <div class="actions">
+                            ${!isActive
+            ? `<a href="/admin/images/delete/${file}" class="delete" onclick="return confirm('Opravdu smazat tento obrázek?')">Smazat</a>`
+            : `<button class="delete" disabled title="Nelze smazat používané logo">Smazat</button>`
         }
+                        </div>
                     </div>
-                `;}).join('')}
+                    `;
+    }).join('')}
             </div>
             
-            ${files.length === 0 ? '<p style="text-align:center; color: gray;">Žádné obrázky nenalezeny.</p>' : ''}
+            ${files.length === 0 ? '<p style="text-align:center; color: gray; padding: 40px;">Žádné obrázky nenalezeny.</p>' : ''}
+
+            <!-- Bulk actions -->
+            <div class="bulk-actions" id="bulkActions">
+                <span id="selectedCount">0 vybráno</span>
+                <button class="btn" onclick="deleteSelected()" style="background: #ff4444; color: white;">Smazat vybrané</button>
+                <button class="btn" onclick="clearSelection()" style="background: #666;">Zrušit výběr</button>
+            </div>
+
+            <!-- Modal -->
+            <div class="modal-overlay" id="modal" onclick="closeModal()">
+                <div class="modal-content" onclick="event.stopPropagation()">
+                    <img id="modalImage" src="" alt="">
+                    <div style="display: flex; justify-content: center; gap: 10px; margin-top: 20px;">
+                        <a id="modalDelete" class="btn" style="background: #ff4444; color: white;" href="#">Smazat</a>
+                        <button class="btn" onclick="closeModal()" style="background: #666;">Zavřít</button>
+                    </div>
+                </div>
+            </div>
         </main>
+
+        <script>
+            let selectedFiles = new Set();
+            let filesToUpload = [];
+
+            // Drag and drop
+            const dropZone = document.getElementById('dropZone');
+            
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, preventDefaults, false);
+            });
+            
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropZone.addEventListener(eventName, () => dropZone.classList.add('dragover'), false);
+            });
+            
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragover'), false);
+            });
+            
+            dropZone.addEventListener('drop', (e) => handleFiles(e.dataTransfer.files), false);
+
+            async function handleFiles(files) {
+                filesToUpload = Array.from(files).filter(f => f.type.startsWith('image/'));
+                if (filesToUpload.length === 0) return;
+
+                const preview = document.getElementById('uploadPreview');
+                const warning = document.getElementById('duplicateWarning');
+                const uploadBtn = document.getElementById('uploadBtn');
+                preview.innerHTML = '';
+                warning.innerHTML = '';
+                warning.classList.remove('visible');
+
+                // Kontrola duplicit na serveru
+for (const file of filesToUpload) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const div = document.createElement('div');
+                        div.className = 'preview-item';
+                        div.innerHTML = \`
+                            <img src="\${e.target.result}" alt="">
+                            <div class="filename">\${file.name}</div>
+                        \`;
+                        preview.appendChild(div);
+                    };
+                    reader.readAsDataURL(file);
+                }
+
+                uploadBtn.style.display = 'inline-block';
+                
+                // Kontrola duplicit přes API
+                try {
+                    const formData = new FormData();
+                    filesToUpload.forEach(f => formData.append('files', f));
+                    
+                    const response = await fetch('/admin/images/check-duplicates', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    if (response.ok) {
+                        const result = await response.json();
+                        if (result.conflicts && result.conflicts.length > 0) {
+                            warning.innerHTML = \`⚠️ Nalezeny potenciální duplicity: \${result.conflicts.length} souborů (\${result.conflicts.map(c => c.conflicts.map(cc => cc.type).join(', ')).flat().filter((v,i,a) => a.indexOf(v)===i).join(', ')})\`;
+                            warning.classList.add('visible');
+                            
+                            // Označení duplicit v preview
+                            result.conflicts.forEach((conflict, idx) => {
+                                if (conflict.conflicts.length > 0) {
+                                    const badge = document.createElement('div');
+                                    badge.className = conflict.conflicts.some(c => c.type === 'exact') ? 'duplicate-badge' : 'similar-badge';
+                                    badge.textContent = conflict.conflicts.some(c => c.type === 'exact') ? 'Duplicitní' : 'Podobný';
+                                    preview.children[idx]?.appendChild(badge);
+                                }
+                            });
+                        }
+                    }
+                } catch (err) {
+                    console.error('Chyba při kontrole duplicit:', err);
+                }
+            }
+
+            async function uploadFiles() {
+                if (filesToUpload.length === 0) return;
+                
+                const uploadBtn = document.getElementById('uploadBtn');
+                uploadBtn.disabled = true;
+                uploadBtn.textContent = '⏳ Nahrávám...';
+
+                try {
+                    const formData = new FormData();
+                    filesToUpload.forEach(f => formData.append('images', f));
+                    formData.append('_csrf', '${req.session.csrfToken || ''}');
+
+                    const response = await fetch('/admin/images/batch-upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (response.ok) {
+                        const result = await response.json();
+                        alert(\`✅ Nahráno \${result.uploaded} souborů\${result.skipped > 0 ? ', přeskočeno ' + result.skipped + ' duplicit' : ''}\`);
+                        window.location.reload();
+                    } else {
+                        alert('❌ Chyba při nahrávání');
+                    }
+                } catch (err) {
+                    alert('❌ Chyba: ' + err.message);
+                } finally {
+                    uploadBtn.disabled = false;
+                    uploadBtn.textContent = '🚀 Nahrát vybrané soubory';
+                }
+            }
+
+            function toggleSelection(filename) {
+                if (selectedFiles.has(filename)) {
+                    selectedFiles.delete(filename);
+                } else {
+                    selectedFiles.add(filename);
+                }
+                updateBulkActions();
+            }
+
+            function updateBulkActions() {
+                const bulkActions = document.getElementById('bulkActions');
+                const count = document.getElementById('selectedCount');
+                
+                count.textContent = selectedFiles.size + ' vybráno';
+                
+                if (selectedFiles.size > 0) {
+                    bulkActions.classList.add('visible');
+                } else {
+                    bulkActions.classList.remove('visible');
+                }
+
+                // Update visual selection
+                document.querySelectorAll('.gallery-item').forEach(item => {
+                    if (selectedFiles.has(item.dataset.filename)) {
+                        item.classList.add('selected');
+                    } else {
+                        item.classList.remove('selected');
+                    }
+                });
+            }
+
+            function clearSelection() {
+                selectedFiles.clear();
+                document.querySelectorAll('.gallery-item .checkbox').forEach(cb => cb.checked = false);
+                updateBulkActions();
+            }
+
+            async function deleteSelected() {
+                if (selectedFiles.size === 0) return;
+                
+                if (!confirm(\`Opravdu smazat \${selectedFiles.size} vybraných obrázků?\`)) return;
+                
+                let deleted = 0;
+                for (const filename of selectedFiles) {
+                    try {
+                        const response = await fetch(\`/admin/images/delete/\${filename}\`);
+                        if (response.ok || response.redirected) deleted++;
+                    } catch (err) {
+                        console.error('Chyba při mazání:', filename);
+                    }
+                }
+                
+                alert(\`Smazáno \${deleted} obrázků\`);
+                window.location.reload();
+            }
+
+            function filterImages(type) {
+                document.querySelectorAll('.filter-tab').forEach(tab => tab.classList.remove('active'));
+                event.target.classList.add('active');
+
+                const items = document.querySelectorAll('.gallery-item');
+                items.forEach(item => {
+                    const isActive = item.dataset.status === 'active';
+                    const isDuplicate = item.dataset.duplicate === 'true';
+                    
+                    switch(type) {
+                        case 'active':
+                            item.style.display = isActive ? '' : 'none';
+                            break;
+                        case 'unused':
+                            item.style.display = !isActive ? '' : 'none';
+                            break;
+                        case 'duplicates':
+                            item.style.display = isDuplicate ? '' : 'none';
+                            break;
+                        default:
+                            item.style.display = '';
+                    }
+                });
+            }
+
+            function openModal(src) {
+                document.getElementById('modalImage').src = src;
+                document.getElementById('modalDelete').href = src.replace('/logoteamu/', '/admin/images/delete/');
+                document.getElementById('modal').classList.add('visible');
+            }
+
+            function closeModal() {
+                document.getElementById('modal').classList.remove('visible');
+            }
+
+            // Keyboard shortcuts
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') closeModal();
+            });
+        </script>
     </body>
     </html>`;
     res.send(html);
 });
+
+// Endpoint pro kontrolu duplicit před uploadem
+router.post('/images/check-duplicates', requireAdmin, upload.any(), async (req, res) => {
+    try {
+        const imagesDir = path.join(__dirname, '..', 'data', 'images');
+        const existingImages = await scanImageHashes(imagesDir);
+        
+        const conflicts = [];
+        
+        for (const file of req.files || []) {
+            const result = await checkNewFileDuplicate(file.path, existingImages, {
+                similarThreshold: 10,
+                checkFilename: true
+            });
+            conflicts.push({
+                filename: file.originalname,
+                conflicts: result.conflicts
+            });
+            // Vyčistíme temp file
+            try { fs.unlinkSync(file.path); } catch (e) {}
+        }
+        
+        res.json({ conflicts });
+    } catch (err) {
+        console.error('Chyba při kontrole duplicit:', err);
+        res.status(500).json({ error: 'Chyba při kontrole duplicit' });
+    }
+});
+
+// Endpoint pro batch upload
+router.post('/images/batch-upload', requireAdmin, upload.any(), async (req, res) => {
+    try {
+        const imagesDir = path.join(__dirname, '..', 'data', 'images');
+        const existingImages = await scanImageHashes(imagesDir);
+        
+        let uploaded = 0;
+        let skipped = 0;
+        const uploadedFiles = [];
+        
+        for (const file of req.files || []) {
+            // Kontrola duplicit
+            const check = await checkNewFileDuplicate(file.path, existingImages, {
+                similarThreshold: 10,
+                checkFilename: true
+            });
+            
+            if (check.isDuplicate && check.conflicts.some(c => c.type === 'exact' || c.type === 'filename')) {
+                // Přeskočíme identické duplicity a konflikty názvů
+                skipped++;
+                try { fs.unlinkSync(file.path); } catch (e) {}
+                continue;
+            }
+            
+            // Soubor je unikátní, ponecháme ho
+            uploaded++;
+            uploadedFiles.push(file.filename);
+            
+            // Přidáme hash do existujících pro další kontrolu
+            existingImages.push({
+                filename: file.filename,
+                fileHash: check.fileHash,
+                perceptualHash: check.perceptualHash
+            });
+        }
+        
+        // Synchronizace hashi do MongoDB
+        try {
+            const { connectToDatabase } = require('../config/database');
+            const db = await connectToDatabase();
+            await syncImageHashesToDatabase(db, imagesDir);
+        } catch (err) {
+            console.error('Chyba při synchronizaci hashi:', err);
+        }
+        
+        await logAdminAction(req.session.user, "BATCH_UPLOAD", `Nahráno ${uploaded} obrázků (přeskočeno ${skipped} duplicit)`);
+        
+        res.json({ success: true, uploaded, skipped, files: uploadedFiles });
+    } catch (err) {
+        console.error('Chyba při batch uploadu:', err);
+        res.status(500).json({ error: 'Chyba při nahrávání souborů' });
+    }
+});
+
 router.get('/images/delete/:filename', requireAdmin, async (req, res) => {
     const filename = req.params.filename;
     const filePath = path.join(__dirname, '..', 'data', 'images', filename);
@@ -3288,8 +3891,204 @@ router.get('/images/delete/:filename', requireAdmin, async (req, res) => {
     } catch (err) {
         console.error(`⚠️ Chyba při záznamu smazaného obrázku:`, err.message);
     }
+
+    // 4. Smazání hash z image_hashes kolekce
+    try {
+        const { connectToDatabase } = require('../config/database');
+        const db = await connectToDatabase();
+        await db.collection('image_hashes').deleteOne({ filename: filename });
+    } catch (err) {
+        console.error(`⚠️ Chyba při mazání hashe:`, err.message);
+    }
     
     res.redirect('/admin/images/manage');
+});
+
+// Endpoint pro modal výběru obrázku (použitelný z formulářů)
+router.get('/images/selector', requireAdmin, async (req, res) => {
+    const availableImages = getAvailableImages();
+    const callbackField = req.query.callback || 'selectedLogo';
+    const previewId = req.query.preview || 'logoPreview';
+    
+    let html = `
+    <!DOCTYPE html>
+    <html lang="cs">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Výběr obrázku</title>
+        <style>
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body { 
+                font-family: Arial, sans-serif; 
+                background: #0d1117; 
+                color: #fff;
+                padding: 20px;
+            }
+            h2 { margin-bottom: 15px; color: #00d4ff; }
+            .gallery { 
+                display: grid; 
+                grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); 
+                gap: 12px; 
+                max-height: 70vh;
+                overflow-y: auto;
+                padding: 10px;
+            }
+            .gallery-item { 
+                position: relative; 
+                cursor: pointer; 
+                border: 3px solid transparent; 
+                border-radius: 8px; 
+                overflow: hidden;
+                transition: all 0.2s;
+                background: #1a1a2e;
+            }
+            .gallery-item:hover { 
+                border-color: #00d4ff; 
+                transform: scale(1.05);
+                box-shadow: 0 4px 15px rgba(0,212,255,0.3);
+            }
+            .gallery-item.selected { 
+                border-color: #00ff00; 
+                box-shadow: 0 0 15px rgba(0,255,0,0.4);
+            }
+            .gallery-item img { 
+                width: 100%; 
+                height: 80px; 
+                object-fit: cover;
+                display: block;
+            }
+            .gallery-item .info {
+                padding: 5px;
+                font-size: 0.7em;
+                color: #888;
+                text-align: center;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            .actions { 
+                display: flex; 
+                gap: 10px; 
+                margin-top: 20px;
+                justify-content: flex-end;
+            }
+            .btn { 
+                padding: 10px 20px; 
+                border: none; 
+                border-radius: 6px; 
+                cursor: pointer;
+                font-weight: bold;
+            }
+            .btn-primary { background: #00d4ff; color: #000; }
+            .btn-secondary { background: #666; color: #fff; }
+            .btn:hover { opacity: 0.9; }
+            .search-box {
+                width: 100%;
+                padding: 10px;
+                margin-bottom: 15px;
+                background: #1a1a2e;
+                border: 1px solid #444;
+                border-radius: 6px;
+                color: #fff;
+            }
+            .empty-state {
+                text-align: center;
+                padding: 40px;
+                color: #888;
+            }
+            .stats {
+                margin-bottom: 10px;
+                color: #888;
+                font-size: 0.9em;
+            }
+        </style>
+    </head>
+    <body>
+        <h2>🖼️ Vyberte obrázek</h2>
+        <div class="stats">Celkem dostupných: ${availableImages.length} obrázků</div>
+        <input type="text" class="search-box" id="searchBox" placeholder="🔍 Hledat obrázek..." onkeyup="filterImages()">
+        
+        ${availableImages.length === 0 ? 
+            `<div class="empty-state">
+                <p>Žádné obrázky nejsou k dispozici.</p>
+                <p style="font-size: 0.85em; margin-top: 10px;">Nejprve nahrajte obrázky do galerie.</p>
+            </div>` :
+            `<div class="gallery" id="gallery">
+                ${availableImages.map(img => `
+                    <div class="gallery-item" data-filename="${img.filename}" data-path="${img.path}" onclick="selectImage('${img.filename}', '${img.path}')">
+                        <img src="${img.path}" alt="${img.filename}">
+                        <div class="info">${img.filename}<br>${img.size} KB</div>
+                    </div>
+                `).join('')}
+            </div>`
+        }
+        
+        <div class="actions">
+            <button class="btn btn-secondary" onclick="closeSelector()">Zrušit</button>
+            <button class="btn btn-primary" onclick="confirmSelection()" id="confirmBtn" style="display: none;">Vybrat</button>
+        </div>
+        
+        <script>
+            let selectedFilename = null;
+            let selectedPath = null;
+            const callbackField = '${callbackField}';
+            const previewId = '${previewId}';
+            
+            function selectImage(filename, path) {
+                document.querySelectorAll('.gallery-item').forEach(item => item.classList.remove('selected'));
+                document.querySelector('[data-filename="' + filename + '"]').classList.add('selected');
+                selectedFilename = filename;
+                selectedPath = path;
+                document.getElementById('confirmBtn').style.display = 'block';
+            }
+            
+            function confirmSelection() {
+                if (!selectedFilename) return;
+                
+                // Odeslat zprávu rodičovskému oknu
+                if (window.opener && !window.opener.closed) {
+                    window.opener.postMessage({
+                        type: 'imageSelected',
+                        filename: selectedFilename,
+                        path: selectedPath,
+                        callbackField: callbackField,
+                        previewId: previewId
+                    }, '*');
+                }
+                
+                // Zavřít okno
+                window.close();
+            }
+            
+            function closeSelector() {
+                window.close();
+            }
+            
+            function filterImages() {
+                const search = document.getElementById('searchBox').value.toLowerCase();
+                document.querySelectorAll('.gallery-item').forEach(item => {
+                    const filename = item.dataset.filename.toLowerCase();
+                    item.style.display = filename.includes(search) ? '' : 'none';
+                });
+            }
+            
+            // Dvojklik pro rychlý výběr
+            document.querySelectorAll('.gallery-item').forEach(item => {
+                item.addEventListener('dblclick', () => {
+                    selectImage(item.dataset.filename, item.dataset.path);
+                    confirmSelection();
+                });
+            });
+            
+            // ESC pro zavření
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') closeSelector();
+            });
+        </script>
+    </body>
+    </html>`;
+    res.send(html);
 });
 
 router.get('/transfers/manage', requireAdmin, async (req, res) => {

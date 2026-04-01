@@ -3492,6 +3492,27 @@ function addPlayoffScript() {
     });
     </script>`;
 }
+function getAvailableImages() {
+    const fs = require('fs');
+    const path = require('path');
+    const imagesDir = path.join(process.cwd(), 'data', 'images');
+    
+    if (!fs.existsSync(imagesDir)) {
+        return [];
+    }
+    
+    return fs.readdirSync(imagesDir)
+        .filter(f => f.match(/\.(jpg|jpeg|png|gif|webp)$/i))
+        .map(f => {
+            const stats = fs.statSync(path.join(imagesDir, f));
+            return {
+                filename: f,
+                path: `/logoteamu/${f}`,
+                size: (stats.size / 1024).toFixed(1)
+            };
+        })
+        .sort((a, b) => a.filename.localeCompare(b.filename));
+}
 
 module.exports = {
     createStandingsImage,
@@ -3521,4 +3542,5 @@ module.exports = {
     getMatches,
     getLeaguesData,
     loadTeams,
+    getAvailableImages,
 }
