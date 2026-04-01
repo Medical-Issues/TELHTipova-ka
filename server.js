@@ -106,18 +106,7 @@ app.use(session({
     store: MongoStore.create({
         mongoUrl: process.env.MONGODB_URI || 'mongodb://localhost:27017/tipovacka',
         touchAfter: 24 * 3600,
-        stringify: true,
-        unserialize: (sessionData) => {
-            try {
-                if (typeof sessionData === 'string') {
-                    return JSON.parse(sessionData);
-                }
-                return sessionData;
-            } catch (error) {
-                console.error('Session unserialization error:', error);
-                return {};
-            }
-        }
+        stringify: true
     }),
     secret: 'tajnyklic',
     resave: false,
