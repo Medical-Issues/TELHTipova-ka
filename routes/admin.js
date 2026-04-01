@@ -68,8 +68,8 @@ router.get('/', requireAdmin, async (req, res) => {
     let clinchMode = 'strict';
     if (settingsData && settingsData.clinchMode) clinchMode = settingsData.clinchMode;
 
-    // Filter teams and matches by chosenSeason - admin sees ALL data from current season
-    const teamsFromCurrentSeason = teams.filter(t => t.season === chosenSeason);
+    // Filter teams and matches by chosenSeason - admin sees only teams from current season
+    const teamsFromCurrentSeason = teams.filter(t => t.active === true && t.season === chosenSeason);
     const matchesFromCurrentSeason = matches.filter(m => m.season === chosenSeason);
 
     const leaguesFromMatches = [...new Set(matchesFromCurrentSeason.map(m => m.liga))];
@@ -1085,7 +1085,8 @@ router.post('/edit/:id', express.urlencoded({ extended: true }), requireAdmin, a
 });
 
 router.get('/new/match', requireAdmin, async (req, res) => {
-    const teams = await Teams.findAll();
+    const chosenSeason = await ChosenSeason.findAll();
+    const teams = (await Teams.findAll()).filter(t => t.active === true && t.season === chosenSeason);
     const matches = await Matches.findAll();
 
     const seasonsFromTeams = teams.map(t => t.season).filter(Boolean);
@@ -1245,7 +1246,7 @@ router.post('/new/match', express.urlencoded({ extended: true }), requireAdmin, 
     const { homeTeamId, awayTeamId, datetime, season, isPlayoff, bo, locked, matchLiga, isBaraz } = req.body;
 
     let matches = await Matches.findAll();
-    const teams = (await Teams.findAll()).filter(t => t.active);
+    const teams = (await Teams.findAll()).filter(t => t.active === true && t.season === season);
     const homeTeam = teams.find(t => t.id === parseInt(homeTeamId));
     const awayTeam = teams.find(t => t.id === parseInt(awayTeamId));
 
@@ -1406,7 +1407,8 @@ router.post('/new/team', express.urlencoded({ extended: true }), requireAdmin, u
 router.get('/edit/:id', requireAdmin, async (req, res) => {
     const matchId = parseInt(req.params.id);
     let matches = await Matches.findAll();
-    const teams = (await Teams.findAll()).filter(t => t.active);
+    const chosenSeason = await ChosenSeason.findAll();
+    const teams = (await Teams.findAll()).filter(t => t.active === true && t.season === chosenSeason);
 
     const match = matches.find(m => m.id === matchId);
     if (!match) return renderErrorHtml(res, "Zápas nebyl nalezen.", 404);
@@ -1900,11 +1902,6 @@ router.post('/season', express.urlencoded({ extended: true }), requireAdmin, asy
     await ChosenSeason.replaceAll(selectedSeason);
     
     // ŽÁDNÉ MAZÁNÍ DAT - pouze změna aktivní sezóny
-    console.log(`🔄 Změna sezóny z "${previousSeason}" na "${selectedSeason}"`);
-    console.log('📚 Všechna data ze všech sezón zůstávají zachována');
-    console.log('🔒 Data se mažou pouze při explicitním požadku (transfer/smazání)');
-    
-    // Logování akce
     await logAdminAction(req.session.user, "ZMENA_SEZONY", 
         `Změna sezóny z "${previousSeason}" na "${selectedSeason}" (data zachována)`);
     
@@ -1928,8 +1925,8 @@ router.get('/playoff', requireAdmin, async (req, res) => {
         Teams.findAll()
     ]);
 
-    // Filter teams by selectedSeason - admin should only see teams from current season
-    const teamsFromCurrentSeason = teams.filter(t => t.season === selectedSeason);
+    // Filter teams by selectedSeason - admin should only see active teams from current season
+    const teamsFromCurrentSeason = teams.filter(t => t.active === true && t.season === selectedSeason);
 
     const playoffMatches = matches.filter(m => m.season === selectedSeason && m.liga === selectedLeague && m.isPlayoff);
 
@@ -2563,8 +2560,8 @@ router.get('/teams/points', requireAdmin, async (req, res) => {
 
     const selectedLiga = req.query.liga || (seasonLeagues.length > 0 ? seasonLeagues[0].name : null);
 
-    // Filter teams by selectedSeason - admin should only see teams from current season
-    const teamsFromCurrentSeason = teams.filter(t => t.season === selectedSeason);
+    // Filter teams by selectedSeason - admin should only see active teams from current season
+    const teamsFromCurrentSeason = teams.filter(t => t.active === true && t.season === selectedSeason);
 
     teamsFromCurrentSeason.forEach(t => realScores[t.id] = { points: 0, gf: 0, ga: 0 });
 
@@ -4515,9 +4512,6 @@ router.post('/verify-stats', express.urlencoded({ extended: true }), requireAdmi
             return res.json({ success: false, message: 'Chybí sezóna nebo liga.' });
         }
         
-        console.log(`Kontroluji statistiky pro ${liga} - ${season}...`);
-        
-        // Spustit přepočet statistik
         await evaluateAndAssignPoints(liga, season);
         
         await logAdminAction(req.session.user, "KONTROLA_STATISTIK", `Kontrola a oprava statistik pro ${liga} - ${season}`);
@@ -4780,9 +4774,6 @@ router.post('/transfer-data', express.urlencoded({ extended: true }), requireAdm
         const currentSeason = await ChosenSeason.findAll();
         const transferResults = [];
         
-        console.log(`🔄 Spouštím převod dat ze sezóny "${sourceSeason}" do "${currentSeason}"`);
-        
-        // 1. Převod zápasů
         if (transferMatches === 'true') {
             try {
                 const sourceMatches = await Matches.findMany({ season: sourceSeason });
@@ -4808,7 +4799,51 @@ router.post('/transfer-data', express.urlencoded({ extended: true }), requireAdm
             }
         }
         
-        // 2. Převod týmů
+        // 2. Převod definic lig (DŮLEŽITÉ!)
+        if (transferMatches === 'true' || transferTeams === 'true') {
+            try {
+                const allSeasonData = await Leagues.findAll();
+                if (allSeasonData[sourceSeason] && allSeasonData[sourceSeason].leagues) {
+                    // Získáme ligy ze zdrojové sezóny
+                    const sourceLeagues = allSeasonData[sourceSeason].leagues;
+                    // Filtrování podle vybraných lig
+                    const leaguesToCopy = sourceLeagues.filter(l => leaguesToTransfer.includes(l.name));
+                    
+                    if (leaguesToCopy.length > 0) {
+                        // Vytvoříme strukturu pro cílovou sezónu
+                        if (!allSeasonData[currentSeason]) {
+                            allSeasonData[currentSeason] = { leagues: [] };
+                        }
+                        if (!allSeasonData[currentSeason].leagues) {
+                            allSeasonData[currentSeason].leagues = [];
+                        }
+                        
+                        // Přidáme/aktualizujeme ligy
+                        for (const league of leaguesToCopy) {
+                            const existingIndex = allSeasonData[currentSeason].leagues.findIndex(
+                                l => l.name === league.name
+                            );
+                            if (existingIndex >= 0) {
+                                // Aktualizujeme existující
+                                allSeasonData[currentSeason].leagues[existingIndex] = { ...league };
+                            } else {
+                                // Přidáme novou
+                                allSeasonData[currentSeason].leagues.push({ ...league });
+                            }
+                        }
+                        
+                        await Leagues.replaceAll(allSeasonData);
+                        transferResults.push(`✅ Přeneseny definice ${leaguesToCopy.length} lig: ${leaguesToCopy.map(l => l.name).join(', ')}`);
+                    }
+                } else {
+                    transferResults.push(`⚠️ V sezóně ${sourceSeason} nebyly nalezeny definic lig`);
+                }
+            } catch (error) {
+                transferResults.push(`❌ Chyba při převodu definic lig: ${error.message}`);
+            }
+        }
+        
+        // 3. Převod týmů
         if (transferTeams === 'true') {
             try {
                 const sourceTeams = await Teams.findMany({ season: sourceSeason });
@@ -4822,12 +4857,9 @@ router.post('/transfer-data', express.urlencoded({ extended: true }), requireAdm
                 
                 if (teamsToTransfer.length > 0) {
                     // Nejprve smažeme existující týmy v aktuální sezóně pro vybrané ligy
-                    console.log(`🗑️ MAZUJI existující týmy pro sezónu ${currentSeason}, ligy: ${leaguesToTransfer.join(', ')}`);
                     const deleteResult = await Teams.deleteMany({ season: currentSeason, liga: { $in: leaguesToTransfer } });
-                    console.log(`🗑️ SMAZÁNO ${deleteResult.deletedCount} týmů`);
                     // Pak vložíme nové
                     await Teams.insertMany(teamsToTransfer);
-                    console.log(`➕ VLOŽENO ${teamsToTransfer.length} nových týmů`);
                     transferResults.push(`✅ Přeneseno ${teamsToTransfer.length} týmů z lig: ${leaguesToTransfer.join(', ')}`);
                 } else {
                     transferResults.push(`⚠️ V sezóně ${sourceSeason} nebyly nalezeny žádné týmy z vybraných lig`);
@@ -4858,11 +4890,6 @@ router.post('/transfer-data', express.urlencoded({ extended: true }), requireAdm
         if (transferPlayoffTemplates === 'true') {
             try {
                 const templatesData = await PlayoffTemplates.findAll();
-                console.log(`🔧 Debug playoff templates: Found keys: ${Object.keys(templatesData)}`);
-                console.log(`🔧 Debug: Looking for season "${sourceSeason}"`);
-                console.log(`🔧 Debug: Selected leagues: ${leaguesToTransfer.join(', ')}`);
-                
-                // Najdi playoff šablony pro vybrané ligy
                 let templatesFound = false;
                 const updatedTemplates = { ...templatesData };
                 
@@ -4962,9 +4989,6 @@ router.post('/transfer-data', express.urlencoded({ extended: true }), requireAdm
             }
         }
         
-        console.log(`🎉 Převod dat dokončen. Výsledky:`, transferResults);
-        
-        // Logování akce
         await logAdminAction(req.session.user, "PREVOD_DAT", 
             `Převod dat ze sezóny "${sourceSeason}" do "${currentSeason}". Výsledky: ${transferResults.join(', ')}`);
         
@@ -5030,13 +5054,124 @@ router.post('/transfer-data', express.urlencoded({ extended: true }), requireAdm
     }
 });
 
+// Jednorázová oprava sezón na 25/26 pro týmy bez sezóny
+router.get('/fix-season-25-26', requireAdmin, async (req, res) => {
+    try {
+        const teams = await Teams.findAll();
+        let fixedCount = 0;
+        let alreadyHasSeason = 0;
+        let errors = [];
+        
+        for (const team of teams) {
+            // Hledej týmy bez season nebo s undefined/empty season
+            if (!team.season || team.season === 'undefined' || team.season === '' || team.season === null) {
+                try {
+                    await Teams.updateOne({ id: team.id }, { season: '25/26' });
+                    fixedCount++;
+                } catch (err) {
+                    errors.push(`${team.name}: ${err.message}`);
+                }
+            } else {
+                alreadyHasSeason++;
+            }
+        }
+        
+        await logAdminAction(req.session.user, "OPRAVA_SEZON", 
+            `Nastaveno ${fixedCount} týmů na sezónu 25/26, ${alreadyHasSeason} již mělo sezónu`);
+        
+        res.send(`
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oprava sezón - Výsledek</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="icon" href="/images/logo.png">
+    <style>
+        body { background-color: #121212; color: white; font-family: Arial, sans-serif; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; background: #1a1a1a; padding: 30px; border-radius: 10px; }
+        h1 { color: orangered; }
+        .stats { background: #222; padding: 15px; border-radius: 5px; margin: 20px 0; }
+        .stat-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #333; }
+        .btn { display: inline-block; background: orangered; color: black; padding: 10px 20px; 
+               text-decoration: none; border-radius: 5px; margin-top: 20px; font-weight: bold; }
+        .btn:hover { background: #ff6633; }
+        .success { color: #28a745; }
+        .info { color: #17a2b8; }
+        .error { color: #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>✅ Oprava sezón dokončena</h1>
+        
+        <div class="stats">
+            <div class="stat-row">
+                <span>Celkem týmů v databázi:</span>
+                <strong>${teams.length}</strong>
+            </div>
+            <div class="stat-row">
+                <span class="success">Nastaveno na 25/26:</span>
+                <strong class="success">${fixedCount}</strong>
+            </div>
+            <div class="stat-row">
+                <span class="info">Již mělo sezónu:</span>
+                <strong class="info">${alreadyHasSeason}</strong>
+            </div>
+            ${errors.length > 0 ? `
+            <div class="stat-row">
+                <span class="error">Chyby:</span>
+                <strong class="error">${errors.length}</strong>
+            </div>
+            ` : ''}
+        </div>
+        
+        ${errors.length > 0 ? `
+        <div style="background: #330000; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <h3 class="error">Chyby při zpracování:</h3>
+            <ul style="color: #ff6666;">
+                ${errors.map(e => `<li>${e}</li>`).join('')}
+            </ul>
+        </div>
+        ` : ''}
+        
+        <p style="color: #aaa; font-size: 0.9em;">
+            Týmy bez sezóny byly nastaveny na <strong>25/26</strong>. 
+            Nyní by se při přepnutí na sezónu 26/27 neměly zobrazovat žádné týmy z minulé sezóny.
+        </p>
+        
+        <a href="/admin" class="btn">← Zpět na admin panel</a>
+    </div>
+</body>
+</html>`);
+        
+        console.log(`🔧 Dokončeno: ${fixedCount} týmů nastaveno na 25/26, ${alreadyHasSeason} již mělo sezónu`);
+        
+    } catch (error) {
+        console.error('Chyba při nastavování sezón:', error);
+        res.status(500).send(`
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <title>Chyba</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body style="background: #121212; color: white; padding: 20px;">
+    <h1 style="color: #dc3545;">❌ Chyba při nastavování sezón</h1>
+    <p>${error.message}</p>
+    <a href="/admin" style="color: orangered;">← Zpět na admin panel</a>
+</body>
+</html>`);
+    }
+});
+
 router.get('/fix-team-seasons', requireAdmin, async (req, res) => {
     try {
         const teams = await Teams.findAll();
         let fixedCount = 0;
         let skippedCount = 0;
-        
-        console.log(`🔧 Kontroluji ${teams.length} týmů`);
         
         for (const team of teams) {
             // Hledej týmy bez season nebo s undefined season
@@ -5045,13 +5180,9 @@ router.get('/fix-team-seasons', requireAdmin, async (req, res) => {
                     // Najdi sezónu z stats klíčů
                     const seasonKeys = Object.keys(team.stats);
                     const latestSeason = seasonKeys.sort().pop();
-                    
-                    console.log(`Opravuji tým ${team.name}: season=${team.season} -> ${latestSeason}`);
-                    
-                    await Teams.updateOne({ _id: team._id }, { season: latestSeason });
+                    await Teams.updateOne({ id: team.id }, { season: latestSeason });
                     fixedCount++;
                 } else {
-                    console.log(`Tým ${team.name} nemá stats data, přeskakuji`);
                     skippedCount++;
                 }
             }
@@ -5064,11 +5195,173 @@ router.get('/fix-team-seasons', requireAdmin, async (req, res) => {
             <a href="/admin">← Zpět na admin panel</a>
         `);
         
-        console.log(`🔧 Dokončeno: Opraveno ${fixedCount} týmů, přeskočeno ${skippedCount}`);
-        
     } catch (error) {
         console.error('Chyba při opravě sezón týmů:', error);
         res.status(500).send('Chyba při opravě sezón týmů');
+    }
+});
+
+// Diagnostická routa pro kontrolu všech kolekcí
+router.get('/diagnose-seasons', requireAdmin, async (req, res) => {
+    try {
+        const results = {
+            teams: { total: 0, withoutSeason: [], bySeason: {} },
+            matches: { total: 0, withoutSeason: [], bySeason: {} },
+            leagues: { total: 0, seasons: [], withoutSeason: 0 },
+            playoff: { total: 0, seasons: [], withoutSeason: 0 },
+            playoffTemplates: { total: 0, seasons: [], withoutSeason: 0 },
+            transfers: { total: 0, seasons: [], withoutSeason: 0 },
+            tableTips: { total: 0, seasons: [], withoutSeason: 0 },
+            teamBonuses: { total: 0, seasons: [], withoutSeason: 0 },
+            leagueStatus: { total: 0, seasons: [], withoutSeason: 0 }
+        };
+        
+        // 1. Kontrola týmů
+        const teams = await Teams.findAll();
+        results.teams.total = teams.length;
+        teams.forEach(t => {
+            if (!t.season || t.season === 'undefined' || t.season === '' || t.season === null) {
+                results.teams.withoutSeason.push({ id: t.id, name: t.name, liga: t.liga });
+            } else {
+                results.teams.bySeason[t.season] = (results.teams.bySeason[t.season] || 0) + 1;
+            }
+        });
+        
+        // 2. Kontrola zápasů
+        const matches = await Matches.findAll();
+        results.matches.total = matches.length;
+        matches.forEach(m => {
+            if (!m.season || m.season === 'undefined' || m.season === '' || m.season === null) {
+                results.matches.withoutSeason.push({ id: m.id, liga: m.liga, homeTeamId: m.homeTeamId, awayTeamId: m.awayTeamId });
+            } else {
+                results.matches.bySeason[m.season] = (results.matches.bySeason[m.season] || 0) + 1;
+            }
+        });
+        
+        // 3. Kontrola lig (objekt se sezónami jako klíči)
+        const leaguesData = await Leagues.findAll();
+        const leagueKeys = Object.keys(leaguesData).filter(k => k !== '_id');
+        results.leagues.total = leagueKeys.length;
+        results.leagues.seasons = leagueKeys;
+        results.leagues.withoutSeason = leagueKeys.filter(k => !k.includes('/')).length;
+        
+        // 4. Kontrola playoff
+        const playoffData = await Playoff.findAll();
+        const playoffKeys = Object.keys(playoffData).filter(k => k !== '_id');
+        results.playoff.total = playoffKeys.length;
+        results.playoff.seasons = playoffKeys;
+        results.playoff.withoutSeason = playoffKeys.filter(k => !k.includes('/')).length;
+        
+        // 5. Kontrola playoffTemplates
+        const templatesData = await PlayoffTemplates.findAll();
+        const templateKeys = Object.keys(templatesData).filter(k => k !== '_id');
+        results.playoffTemplates.total = templateKeys.length;
+        results.playoffTemplates.seasons = templateKeys;
+        
+        // 6. Kontrola transfers
+        const transfersData = await Transfers.findAll();
+        const transferKeys = Object.keys(transfersData).filter(k => k !== '_id');
+        results.transfers.total = transferKeys.length;
+        results.transfers.seasons = transferKeys;
+        results.transfers.withoutSeason = transferKeys.filter(k => !k.includes('/')).length;
+        
+        // 7. Kontrola tableTips
+        const tableTipsData = await TableTips.findAll();
+        const tipsKeys = Object.keys(tableTipsData).filter(k => k !== '_id');
+        results.tableTips.total = tipsKeys.length;
+        results.tableTips.seasons = tipsKeys;
+        results.tableTips.withoutSeason = tipsKeys.filter(k => !k.includes('/')).length;
+        
+        // 8. Kontrola teamBonuses
+        const bonusesData = await TeamBonuses.findAll();
+        const bonusKeys = Object.keys(bonusesData).filter(k => k !== '_id');
+        results.teamBonuses.total = bonusKeys.length;
+        results.teamBonuses.seasons = bonusKeys;
+        results.teamBonuses.withoutSeason = bonusKeys.filter(k => !k.includes('/')).length;
+        
+        // 9. Kontrola leagueStatus
+        const statusData = await LeagueStatus.findAll();
+        const statusKeys = Object.keys(statusData).filter(k => k !== '_id');
+        results.leagueStatus.total = statusKeys.length;
+        results.leagueStatus.seasons = statusKeys;
+        results.leagueStatus.withoutSeason = statusKeys.filter(k => !k.includes('/')).length;
+        
+        // Generování HTML reportu
+        const generateSection = (title, data, isArray = false) => {
+            if (isArray) {
+                return `
+                <div class="section">
+                    <h3>${title} (${data.total})</h3>
+                    <p><strong>Bez sezóny:</strong> ${data.withoutSeason.length} záznamů</p>
+                    ${data.withoutSeason.length > 0 ? `
+                    <div class="details">
+                        <ul>
+                            ${data.withoutSeason.map(item => `<li>${JSON.stringify(item)}</li>`).join('')}
+                        </ul>
+                    </div>
+                    ` : ''}
+                    <p><strong>Podle sezón:</strong></p>
+                    <ul>
+                        ${Object.entries(data.bySeason).map(([season, count]) => `<li>${season}: ${count}</li>`).join('')}
+                    </ul>
+                </div>
+                `;
+            } else {
+                const hasInvalid = data.seasons && data.seasons.some(s => !s.includes('/') && s !== '_id');
+                return `
+                <div class="section">
+                    <h3>${title} (${data.total} klíčů)</h3>
+                    <p><strong>Sezóny:</strong> ${data.seasons ? data.seasons.join(', ') : 'N/A'}</p>
+                    ${data.withoutSeason > 0 || hasInvalid ? `<p class="warning">⚠️ Nalezeny klíče bez formátu sezóny (např. "25/26")</p>` : ''}
+                </div>
+                `;
+            }
+        };
+        
+        res.send(`
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <title>Diagnostika sezón</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <style>
+        body { background: #121212; color: white; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { color: orangered; }
+        .section { background: #1a1a1a; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .section h3 { margin-top: 0; color: #00d4ff; }
+        .warning { color: #ff4444; font-weight: bold; }
+        .details { background: #0d0d0d; padding: 10px; border-radius: 3px; max-height: 200px; overflow-y: auto; }
+        .details ul { margin: 0; padding-left: 20px; }
+        .details li { color: #ff9999; font-size: 0.9em; }
+        .btn { display: inline-block; background: orangered; color: black; padding: 10px 20px; 
+               text-decoration: none; border-radius: 5px; margin-top: 20px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Diagnostika sezón v databázi</h1>
+        
+        ${generateSection('Týmy', results.teams, true)}
+        ${generateSection('Zápasy', results.matches, true)}
+        ${generateSection('Ligy', results.leagues)}
+        ${generateSection('Playoff', results.playoff)}
+        ${generateSection('Playoff šablony', results.playoffTemplates)}
+        ${generateSection('Přestupy', results.transfers)}
+        ${generateSection('Tipy na tabulky', results.tableTips)}
+        ${generateSection('Bonusy týmů', results.teamBonuses)}
+        ${generateSection('Status lig', results.leagueStatus)}
+        
+        <a href="/admin/fix-season-25-26" class="btn">Opravit týmy bez sezóny</a>
+        <a href="/admin" class="btn">← Zpět na admin</a>
+    </div>
+</body>
+</html>`);
+        
+    } catch (error) {
+        console.error('Chyba při diagnostice:', error);
+        res.status(500).send('Chyba při diagnostice: ' + error.message);
     }
 });
 

@@ -1014,10 +1014,23 @@ async function getTableMode(req, isRegularSeasonFinished) {
 }
 // --- POMOCNÉ ČTECÍ FUNKCE (Vlož nahoru do fileUtils.js) ---
 async function getChosenSeason() {
-    try { return await ChosenSeason.findAll(); } catch (e) { return "Neurčeno"; }
+    try { 
+        const season = await ChosenSeason.findAll();
+        return season || "Neurčeno"; 
+    } catch (e) { 
+        console.error('❌ Chyba v getChosenSeason:', e);
+        return "Neurčeno"; 
+    }
 }
 async function loadTeams() {
-    try { return await Teams.findAll(); } catch (e) { return []; }
+    try { 
+        const allTeams = await Teams.findAll();
+        // Vracíme všechny AKTIVNÍ týmy bez ohledu na sezónu
+        return allTeams.filter(t => t.active);
+    } catch (e) { 
+        console.error('❌ Chyba v loadTeams:', e);
+        return []; 
+    }
 }
 async function getMatches() {
     try { return await Matches.findAll(); } catch (e) { return []; }
@@ -1066,13 +1079,20 @@ async function prepareDashboardData(req, isHistory = false, isImageExporter = fa
     if (isHistory && req.query.season) {
         selectedSeason = req.query.season;
     }
-
+    
     // 2. Načtení základních dat a filtrování podle aktuální sezóny
     const allTeams = await loadTeams();
     const allMatches = await getMatches();
     
     // Filtrování týmy a zápasů pouze pro aktuální sezónu
-    const teams = allTeams.filter(t => t.active && (t.season === selectedSeason || (t.stats && t.stats[selectedSeason])));
+    // Změněno: Zobrazíme AKTIVNÍ týmy POUZE z aktuální sezóny (týmy bez sezóny se nezobrazí)
+    const teams = allTeams.filter(t => {
+        // Hlavní podmínka: tým musí být aktivní A patřit do aktuální sezóny
+        const isActive = t.active === true;
+        const isInSelectedSeason = t.season === selectedSeason;
+        
+        return isActive && isInSelectedSeason;
+    });
     const matches = allMatches.filter(m => m.season === selectedSeason);
     
     const allowedLeagues = await getAllowedLeagues();

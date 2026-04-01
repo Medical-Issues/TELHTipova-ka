@@ -88,13 +88,11 @@ function csrfMiddleware(req, res, next) {
         
         // Token je povinný pro všechny modifikující requesty
         if (!token) {
-            console.log('CSRF Debug - Token chybí!');
             return res.status(403).json({ error: 'CSRF token missing' });
         }
         
         // Kontrola validity tokenu
         if (token !== req.session.csrfToken) {
-            console.log('CSRF Debug - Token neplatný!');
             return res.status(403).json({ error: 'CSRF token invalid' });
         }
     }
@@ -108,9 +106,18 @@ app.use(session({
     store: MongoStore.create({
         mongoUrl: process.env.MONGODB_URI || 'mongodb://localhost:27017/tipovacka',
         touchAfter: 24 * 3600,
-        // OPRAVA: Použijeme defaultní hodnoty bez transform funkcí
-        // stringify: true,
-        // unserialize: true
+        stringify: true,
+        unserialize: (sessionData) => {
+            try {
+                if (typeof sessionData === 'string') {
+                    return JSON.parse(sessionData);
+                }
+                return sessionData;
+            } catch (error) {
+                console.error('Session unserialization error:', error);
+                return {};
+            }
+        }
     }),
     secret: 'tajnyklic',
     resave: false,

@@ -736,6 +736,8 @@ router.get('/', requireLogin, async (req, res) => {
     const {
         username, selectedSeason, selectedLiga, uniqueLeagues, teams, currentUserMatchTips
     } = data;
+    // DEBUG PRO MAXA LIGU
+
 // --- HTML START ---
     let html = `
 <!DOCTYPE html>
@@ -2535,11 +2537,13 @@ router.get("/image-exporter", requireLogin, async (req, res) => {
     
     // Načteme všechny ligy v sezóně (ne jen veřejné)
     const matches = await getMatches();
-    const teams = (await loadTeams()).filter(t => t.active);
+    const data = await prepareDashboardData(req, false, true);
+    const { username, selectedSeason } = data;
+    const teams = (await loadTeams()).filter(t => t.active && t.season === selectedSeason); // OPRAVA: Filtrování podle chosenSeason
     const allowedLeagues = await getAllowedLeagues();
     await getLeaguesData();
     const leaguesFromTeams = [...new Set(teams.map(t => t.liga))];
-    const leaguesFromMatches = [...new Set(matches.map(m => m.liga))];
+    const leaguesFromMatches = [...new Set(matches.filter(m => m.season === selectedSeason).map(m => m.liga))]; // OPRAVA: Filtrování zápasů podle sezóny
     // Všechny ligy v sezóně (pro image-exporter zobrazíme všechny)
     const uniqueLeagues = [...new Set([...leaguesFromTeams, ...leaguesFromMatches])];
     
@@ -2550,11 +2554,11 @@ router.get("/image-exporter", requireLogin, async (req, res) => {
     
     const isPublicLeague = allowedLeagues.includes(selectedLiga);
     
-    const data = await prepareDashboardData(req, false, true);
-    const { username } = data;
-    
     const teamsList = teams || [];
-    const leagueTeams = teamsList.filter(t => t.liga === selectedLiga);
+    const leagueTeams = teamsList.filter(t =>
+        t.liga === selectedLiga ||
+        t.liga.toLowerCase() === selectedLiga.toLowerCase()
+    );
     
     // CSS pro disabled tlačítka
     const disabledStyle = "background-color: #555; color: #888; cursor: not-allowed; pointer-events: none;";
