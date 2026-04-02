@@ -2225,7 +2225,7 @@ html += await generateLeftPanel(data);
 // POST routa pro generování obrázků
 router.post("/image-exporter/generate", requireLogin, express.json(), async (req, res) => {
     const { createTransferImage, createWinnerImage, createStandingsImage, createStatisticsImage, createPlayoffBracketImage } = require("../utils/fileUtils");
-    const { createVersusImage } = require("../routes/notificationService.js");
+    const { createVersusImageForExport } = require("../routes/notificationService.js");
 
     try {
         const { type, homeTeamId, awayTeamId, fromTeamId, toTeamId, winnerTeamId, scoreHome, scoreAway, title, winnerTitle, playerName, playerPhoto, watermark, isPlayoff, seriesHomeWins, seriesAwayWins } = req.body;
@@ -2246,7 +2246,7 @@ router.post("/image-exporter/generate", requireLogin, express.json(), async (req
                 const awayTeam = allTeams.find(t => t.id === parseInt(awayTeamId));
                 if (!homeTeam || !awayTeam) return res.status(400).json({ error: 'Týmy nenalezeny' });
 
-                buffer = await createVersusImage(homeTeam, awayTeam, null, null, null, null);
+                buffer = await createVersusImageForExport(homeTeam, awayTeam);
                 filename = `match-${homeTeam.id}-vs-${awayTeam.id}-${timestamp}.png`;
                 break;
             }
