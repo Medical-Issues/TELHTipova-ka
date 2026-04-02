@@ -75,8 +75,8 @@ router.get('/', requireAdmin, async (req, res) => {
     let clinchMode = 'strict';
     if (settingsData && settingsData.clinchMode) clinchMode = settingsData.clinchMode;
 
-    // Filter teams and matches by chosenSeason - admin sees only teams from current season
-    const teamsFromCurrentSeason = teams.filter(t => t.active === true && t.season === chosenSeason);
+    // Filter teams and matches by chosenSeason - admin sees all teams from current season (active and inactive)
+    const teamsFromCurrentSeason = teams.filter(t => t.season === chosenSeason);
     const matchesFromCurrentSeason = matches.filter(m => m.season === chosenSeason);
 
     const leaguesFromMatches = [...new Set(matchesFromCurrentSeason.map(m => m.liga))];
@@ -3295,8 +3295,8 @@ router.get('/images/manage', requireAdmin, async (req, res) => {
             await syncImageHashesToDatabase(db, imagesDir);
         }
         
-        // Najdeme duplicity
-        duplicates = findDuplicates(imageHashes, { similarThreshold: 10 });
+        // Najdeme duplicity - pouze identické soubory (MD5), žádná vizuální podobnost vůbec
+        duplicates = findDuplicates(imageHashes, { similarThreshold: -1 });
     } catch (err) {
         console.log('ℹ️ Hash index není dostupný, pokračuji bez detekce duplicit');
     }
@@ -3390,8 +3390,12 @@ router.get('/images/manage', requireAdmin, async (req, res) => {
                         <div class="label">Celkem obrázků</div>
                     </div>
                     <div class="stat-box">
-                        <div class="number">${usedLogos.size}</div>
+                        <div class="number" style="color: #00ff00;">${[...usedLogos].filter(l => files.includes(l)).length}</div>
                         <div class="label">Používá se</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="number" style="color: ${[...usedLogos].filter(l => !files.includes(l)).length > 0 ? '#ff4444' : '#666'};">${[...usedLogos].filter(l => !files.includes(l)).length}</div>
+                        <div class="label">Chybějící loga</div>
                     </div>
                     <div class="stat-box">
                         <div class="number" style="color: ${duplicates.exact.length + duplicates.similar.length > 0 ? '#ff4444' : '#00ff00'};">${duplicates.exact.length + duplicates.similar.length}</div>
@@ -3416,6 +3420,9 @@ router.get('/images/manage', requireAdmin, async (req, res) => {
                         📂 Vybrat složku
                     </label>
                 </div>
+                <p style="color: #666; font-size: 0.85em; margin-top: 15px;">
+                    <a href="/admin/images/reset-hashes" style="color: #ffaa00;" onclick="return confirm('Přepočítat všechny hashe obrázků? Toto může chvíli trvat.')">🔄 Přepočítat hashe obrázků</a>
+                </p>
                 <div id="duplicateWarning" class="duplicate-warning"></div>
                 <div id="uploadPreview" class="batch-upload-preview"></div>
                 <button id="uploadBtn" class="btn new-btn-admin" style="display: none; margin-top: 20px;" onclick="uploadFiles()">
@@ -3753,7 +3760,7 @@ router.post('/images/check-duplicates', requireAdmin, upload.any(), async (req, 
         
         for (const file of req.files || []) {
             const result = await checkNewFileDuplicate(file.path, existingImages, {
-                similarThreshold: 10,
+                similarThreshold: 0,  // POUZE IDENTICKÉ SOUBORY, žádná vizuální podobnost
                 checkFilename: true
             });
             conflicts.push({
@@ -3782,9 +3789,9 @@ router.post('/images/batch-upload', requireAdmin, upload.any(), async (req, res)
         const uploadedFiles = [];
         
         for (const file of req.files || []) {
-            // Kontrola duplicit
+            // Kontrola duplicit - pouze identické soubory, žádná vizuální podobnost
             const check = await checkNewFileDuplicate(file.path, existingImages, {
-                similarThreshold: 10,
+                similarThreshold: 0,
                 checkFilename: true
             });
             
@@ -3822,6 +3829,23 @@ router.post('/images/batch-upload', requireAdmin, upload.any(), async (req, res)
     } catch (err) {
         console.error('Chyba při batch uploadu:', err);
         res.status(500).json({ error: 'Chyba při nahrávání souborů' });
+    }
+});
+router.get('/images/reset-hashes', requireAdmin, async (req, res) => {
+    try {
+        path.join(__dirname, '..', 'data', 'images');
+        const { connectToDatabase } = require('../config/database');
+        const db = await connectToDatabase();
+        
+        // Smažeme kolekci hashů
+        await db.collection('image_hashes').deleteMany({});
+        console.log('[Reset Hashes] Kolekce image_hashes smazána');
+        
+        // Přesměrujeme zpět do galerie
+        res.redirect('/admin/images/manage');
+    } catch (err) {
+        console.error('Chyba při resetu hashů:', err);
+        res.status(500).send('Chyba při resetu hashů: ' + err.message);
     }
 });
 
@@ -4235,7 +4259,10 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
                         </div>
                         <div style="margin-bottom: 15px;">
                             <label style="color: #aaa; display: block; margin-bottom: 5px;">Fotka hráče (nepovinné):</label>
-                            <input type="file" name="genPlayerPhoto" accept="image/*" style="color: white; width: 100%;">
+                            <input type="file" name="genPlayerPhoto" accept="image/*" id="genPlayerPhoto" style="color: white; width: 100%;">
+                            <input type="hidden" name="selectedGenPlayerPhoto" id="selectedGenPlayerPhoto" value="">
+                            <button type="button" class="btn" style="background: #444; color: white; padding: 5px 10px; font-size: 0.85em; margin-top: 8px; width: 100%;" onclick="openImageSelector('selectedGenPlayerPhoto', 'genPlayerPhotoPreview')">🖼️ Vybrat z galerie</button>
+                            <img id="genPlayerPhotoPreview" src="" style="width: 60px; height: 60px; object-fit: contain; margin-top: 5px; display: none;" alt=""/>
                             <p style="color: #888; font-size: 0.85em; margin: 5px 0 0 0;">Max 2MB, zobrazí se mezi týmy</p>
                         </div>
                         <div style="display: flex; gap: 10px; align-items: center;">
@@ -4251,10 +4278,13 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
                         </div>
                     </div>
                     
-                    <!-- Upload vlastního obrázku (skrytý默认) -->
+                    <!-- Upload vlastního obrázku (skrytý) -->
                     <div id="customImageUpload" style="display: none; margin-bottom: 15px; padding: 15px; background: rgba(0,0,0,0.3);">
                         <label style="color: #00d4ff; display: block; margin-bottom: 10px;">Nahrát obrázek hráče/týmu:</label>
-                        <input type="file" name="customImage" accept="image/*" style="color: white; padding: 10px; background: #111; border: 1px solid #00d4ff; width: 100%; max-width: 400px;">
+                        <input type="file" name="customImage" accept="image/*" id="customImageFile" style="color: white; padding: 10px; background: #111; border: 1px solid #00d4ff; width: 100%; max-width: 400px;">
+                        <input type="hidden" name="selectedCustomImage" id="selectedCustomImage" value="">
+                        <button type="button" class="btn" style="background: #444; color: white; padding: 5px 10px; font-size: 0.85em; margin-top: 8px; width: 100%; max-width: 400px;" onclick="openImageSelector('selectedCustomImage', 'customImagePreview')">🖼️ Vybrat z galerie</button>
+                        <img id="customImagePreview" src="" style="width: 100px; height: 100px; object-fit: contain; margin-top: 5px; display: none; border: 1px solid #00d4ff;" alt=""/>
                         <p style="color: #888; font-size: 0.85em; margin: 5px 0 0 0;">Doporučené rozměry: 800x400px, max 5MB</p>
                     </div>
                     
@@ -4266,6 +4296,50 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
                 </div>
 
                 <script>
+                    // Otevře popup pro výběr obrázku
+                    function openImageSelector(hiddenInputId, previewId) {
+                        const popup = window.open(
+                            '/admin/images/selector?callback=' + hiddenInputId + '&preview=' + previewId,
+                            'imageSelector',
+                            'width=900,height=700,scrollbars=yes,resizable=yes,top=100,left=100'
+                        );
+                        
+                        if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+                            alert('Popup byl zablokován. Povolte popup okna pro tento web.');
+                        }
+                    }
+                    
+                    // Posluchač pro zprávu z popup okna
+                    window.addEventListener('message', function(event) {
+                        if (event.data && event.data.type === 'imageSelected') {
+                            const { filename, path, callbackField, previewId } = event.data;
+                            
+                            // Nastavit hidden input
+                            const hiddenInput = document.getElementById(callbackField);
+                            if (hiddenInput) {
+                                hiddenInput.value = filename;
+                            }
+                            
+                            // Zobrazit náhled
+                            const preview = document.getElementById(previewId);
+                            if (preview) {
+                                preview.src = path;
+                                preview.style.display = 'block';
+                            }
+                            
+                            // Vyčistit file input (pokud je vybrán existující, nový soubor se nepoužije)
+                            let fileInput;
+                            if (callbackField === 'selectedGenPlayerPhoto') {
+                                fileInput = document.querySelector('input[type="file"][name="genPlayerPhoto"]');
+                            } else if (callbackField === 'selectedCustomImage') {
+                                fileInput = document.querySelector('input[type="file"][name="customImage"]');
+                            }
+                            if (fileInput) {
+                                fileInput.value = '';
+                            }
+                        }
+                    });
+
                     function toggleImageSections() {
                         const imageType = document.querySelector('input[name="imageType"]:checked').value;
                         const customUpload = document.getElementById('customImageUpload');
@@ -4455,8 +4529,26 @@ router.post('/transfers/save', express.urlencoded({ extended: true }), requireAd
 
         let hasChanged = false; // Detekce, zda se u tohoto týmu něco změnilo
 
-        getAdded(newConfIn, oldConfIn).forEach(p => { newTransfersNotification.push(`✅ ${p} -> ${teamName}`); hasChanged = true; });
-        getAdded(newConfOut, oldConfOut).forEach(p => { newTransfersNotification.push(`❌ ${p} opouští ${teamName}`); hasChanged = true; });
+        getAdded(newConfIn, oldConfIn).forEach(p => { 
+            const isResolvedSpec = p.includes('(-)');
+            const cleanName = p.replace('(-)', '').trim();
+            if (isResolvedSpec) {
+                newTransfersNotification.push(`🚫 Spekulace o příchodu ${cleanName} ukončena`);
+            } else {
+                newTransfersNotification.push(`✅ ${p} -> ${teamName}`);
+            }
+            hasChanged = true; 
+        });
+        getAdded(newConfOut, oldConfOut).forEach(p => { 
+            const isResolvedSpec = p.includes('(-)');
+            const cleanName = p.replace('(-)', '').trim();
+            if (isResolvedSpec) {
+                newTransfersNotification.push(`🚫 Spekulace o odchodu ${cleanName} ukončena`);
+            } else {
+                newTransfersNotification.push(`❌ ${p} opouští ${teamName}`);
+            }
+            hasChanged = true; 
+        });
         getAdded(newSpecIn, oldSpecIn).forEach(p => { newTransfersNotification.push(`❓ ${p} (spekulace) -> ${teamName}`); hasChanged = true; });
         getAdded(newSpecOut, oldSpecOut).forEach(p => { newTransfersNotification.push(`⚠️ ${p} (možný odchod) -> ${teamName}`); hasChanged = true; });
 
@@ -4500,9 +4592,12 @@ router.post('/transfers/save', express.urlencoded({ extended: true }), requireAd
             let heroImageUrl = null;
             
             if (imageType === 'custom') {
-                // Vlastní nahraný obrázek - najdeme ho v req.files poli
+                // Vlastní obrázek - buď nahraný soubor nebo vybraný z galerie
                 const customImageFile = req.files && req.files.find(f => f.fieldname === 'customImage');
+                const selectedCustomImage = req.body.selectedCustomImage;
+                
                 if (customImageFile) {
+                    // Uživatel nahrál nový soubor
                     const fs = require('fs');
                     const path = require('path');
                     const notifDir = path.join(__dirname, '../public/images/notifications');
@@ -4511,7 +4606,6 @@ router.post('/transfers/save', express.urlencoded({ extended: true }), requireAd
                         fs.mkdirSync(notifDir, { recursive: true });
                     }
                     
-                    // Přesunutí uploadnutého souboru do notifikační složky
                     const timestamp = Date.now();
                     const ext = path.extname(customImageFile.originalname) || '.jpg';
                     const newFilename = `transfer-custom-${timestamp}${ext}`;
@@ -4519,14 +4613,26 @@ router.post('/transfers/save', express.urlencoded({ extended: true }), requireAd
                     
                     fs.renameSync(customImageFile.path, destPath);
                     heroImageUrl = `/images/notifications/${newFilename}`;
-                    console.log(`[Transfer] Vlastní obrázek uložen: ${heroImageUrl}`);
+                    console.log(`[Transfer] Vlastní obrázek (upload) uložen: ${heroImageUrl}`);
+                } else if (selectedCustomImage) {
+                    // Uživatel vybral obrázek z galerie
+                    heroImageUrl = `/logoteamu/${selectedCustomImage}`;
+                    console.log(`[Transfer] Vlastní obrázek (galerie) použit: ${heroImageUrl}`);
                 }
             } else if (imageType === 'generate') {
                 // Semi-auto vygenerovaný obrázek - URL je uložena v hidden inputu
-                const { generatedImageUrl } = req.body;
+                const { generatedImageUrl, selectedGenPlayerPhoto } = req.body;
+                
                 if (generatedImageUrl) {
                     heroImageUrl = generatedImageUrl;
                     console.log(`[Transfer] Vygenerovaný obrázek použit: ${heroImageUrl}`);
+                }
+                
+                // Pokud byla vybrána fotka hráče z galerie, ale ještě nebyl vygenerován náhled,
+                // můžeme ji použít pro notifikaci
+                if (selectedGenPlayerPhoto && !heroImageUrl) {
+                    heroImageUrl = `/logoteamu/${selectedGenPlayerPhoto}`;
+                    console.log(`[Transfer] Fotka hráče z galerie použita: ${heroImageUrl}`);
                 }
                 
             } else if (imageType === 'auto') {

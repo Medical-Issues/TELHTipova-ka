@@ -3,9 +3,29 @@ const path = require('path');
 const crypto = require('crypto');
 const { createCanvas, loadImage } = require('canvas');
 
+// Lazy load sharp pouze pokud je potřeba pro WebP
+let sharp;
+try {
+    sharp = require('sharp');
+} catch (e) {
+    sharp = null;
+}
+
+async function convertIfWebP(imagePath) {
+    const ext = path.extname(imagePath).toLowerCase();
+    if (ext === '.webp') {
+        if (!sharp) {
+            throw new Error('WebP support requires "sharp" package. Install: npm install sharp');
+        }
+        const buffer = await sharp(imagePath).png().toBuffer();
+        return loadImage(buffer);
+    }
+    return loadImage(imagePath);
+}
+
 async function generatePerceptualHash(imagePath) {
     try {
-        const img = await loadImage(imagePath);
+        const img = await convertIfWebP(imagePath);
         
         // Vytvoříme malý grayscale obrázek (32x32 pro DCT)
         const size = 32;
@@ -171,7 +191,7 @@ async function scanImageHashes(imagesDir) {
  */
 function findDuplicates(imageHashes, options = {}) {
     const { 
-        similarThreshold = 10,  // Hamming distance threshold (max 64 pro 16 hex chars)
+        similarThreshold = 1,  // ULTRA STRICT: pouze 98%+ shoda (téměř identické)
         checkFilename = true 
     } = options;
     
@@ -249,7 +269,7 @@ function findDuplicates(imageHashes, options = {}) {
  */
 async function checkNewFileDuplicate(newFilePath, existingImages, options = {}) {
     const { 
-        similarThreshold = 10,
+        similarThreshold = 1,  // ULTRA STRICT - pouze 98%+ shoda (téměř identické)
         checkFilename = true 
     } = options;
     

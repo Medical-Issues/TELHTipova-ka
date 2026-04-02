@@ -4,10 +4,9 @@ const router = express.Router();
 const path = require('path');
 const {
     requireLogin, prepareDashboardData, getGroupDisplayLabel, generateLeftPanel,
-    getLeagueStatusData, getTableTipsData, generateTimeWidget, getAllowedLeagues
+    getLeagueStatusData, getTableTipsData, generateTimeWidget, getAllowedLeagues, createMatchImage
 } = require("../utils/fileUtils");
 const { Users, Matches, Leagues, TableTips } = require('../utils/mongoDataAccess');
-
 // Jednoduchá XSS ochrana - sanitizace HTML tagů
 function sanitizeInput(input) {
     if (typeof input !== 'string') return input;
@@ -2127,17 +2126,22 @@ html += await generateLeftPanel(data);
                 let name = rawName;
 
                 // A. Detekce značek
-                if (name.includes('(X)')) {
+                if (name.includes('(X)')) { // Potvrzený odchod
                     style = 'color: #ff6666; text-decoration: line-through; opacity: 0.7;';
                     icon = '❌ ';
                     name = name.replace('(X)', '');
                 }
-                else if (name.includes('(!)')) {
+                else if (name.includes('(-)')) { // Ukončená spekulace
+                    style = 'color: #888; text-decoration: line-through; opacity: 0.5; font-style: italic;';
+                    icon = '🚫 ';
+                    name = name.replace('(-)', '');
+                }
+                else if (name.includes('(!)')) { // Bomba přechod
                     style = 'color: #ffd700; font-weight: bold; text-shadow: 0 0 8px rgba(255, 215, 0, 0.4);';
                     icon = '🔥 ';
                     name = name.replace('(!)', '');
                 }
-                else if (name.includes('(?)')) {
+                else if (name.includes('(?)')) { //spekulace
                     style = 'color: #00d4ff; font-style: italic;';
                     icon = '❓ ';
                     name = name.replace('(?)', '');
@@ -2220,7 +2224,8 @@ html += await generateLeftPanel(data);
 
 // POST routa pro generování obrázků
 router.post("/image-exporter/generate", requireLogin, express.json(), async (req, res) => {
-    const { createMatchImage, createTransferImage, createWinnerImage, createStandingsImage, createStatisticsImage, createPlayoffBracketImage } = require("../utils/fileUtils");
+    const { createTransferImage, createWinnerImage, createStandingsImage, createStatisticsImage, createPlayoffBracketImage } = require("../utils/fileUtils");
+    const { createVersusImage } = require("../routes/notificationService.js");
 
     try {
         const { type, homeTeamId, awayTeamId, fromTeamId, toTeamId, winnerTeamId, scoreHome, scoreAway, title, winnerTitle, playerName, playerPhoto, watermark, isPlayoff, seriesHomeWins, seriesAwayWins } = req.body;
@@ -2241,7 +2246,7 @@ router.post("/image-exporter/generate", requireLogin, express.json(), async (req
                 const awayTeam = allTeams.find(t => t.id === parseInt(awayTeamId));
                 if (!homeTeam || !awayTeam) return res.status(400).json({ error: 'Týmy nenalezeny' });
 
-                buffer = await createMatchImage(homeTeam, awayTeam, null, null, watermark !== 'false');
+                buffer = await createVersusImage(homeTeam, awayTeam, null, null, null, null);
                 filename = `match-${homeTeam.id}-vs-${awayTeam.id}-${timestamp}.png`;
                 break;
             }
@@ -2250,7 +2255,7 @@ router.post("/image-exporter/generate", requireLogin, express.json(), async (req
                 const awayTeam = allTeams.find(t => t.id === parseInt(awayTeamId));
                 if (!homeTeam || !awayTeam) return res.status(400).json({ error: 'Týmy nenalezeny' });
 
-                const seriesData = (isPlayoff && seriesHomeWins !== undefined && seriesAwayWins !== undefined) 
+                const seriesData = (isPlayoff && seriesHomeWins !== undefined && seriesAwayWins !== undefined)
                     ? { homeWins: parseInt(seriesHomeWins), awayWins: parseInt(seriesAwayWins) }
                     : null;
 
