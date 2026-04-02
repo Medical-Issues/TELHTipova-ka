@@ -990,6 +990,5 @@ module.exports = {
     notifyTransfer,
     notifyLeagueEnd,
     sendToUserDevices,
-    createVersusImage,
     createVersusImageForExport
 };
