@@ -48,19 +48,18 @@ async function createVersusImage(homeTeam, awayTeam, matchId, scoreHome = null, 
     const outPath = path.join(outDir, `match-${matchId}.png`);
     const publicUrl = `/images/notifications/match-${matchId}.png`;
 
-    const width = 800; 
-    const height = 500;
+    const width = 800; const height = 500;
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext('2d');
 
-    // POZADÍ - přesně jako v createMatchImage
+    // 1. POZADÍ - Moderní tmavý gradient
     const grad = ctx.createLinearGradient(0, 0, 0, height);
     grad.addColorStop(0, '#1a1a1a');
     grad.addColorStop(1, '#000000');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, width, height);
 
-    // DEKORACE - oranžové linky
+    // 2. DEKORACE - Oranžové dynamické linky
     ctx.strokeStyle = 'rgba(255, 69, 0, 0.15)';
     ctx.lineWidth = 3;
     for (let i = -100; i < width; i += 40) {
@@ -70,23 +69,23 @@ async function createVersusImage(homeTeam, awayTeam, matchId, scoreHome = null, 
         ctx.stroke();
     }
 
-    // FUNKCE PRO VYKRESLENÍ LOGA - původní styl pro notifikace
+    // 3. FUNKCE PRO VYKRESLENÍ LOGA SE STÍNEM A BAREVNÝM PODSVÍCENÍM
     const drawLogo = async (team, x, teamColor) => {
         const logoName = team?.logo;
         const teamName = team?.name || '???';
-        const size = 260;
+        const size = 200;
         
         // BAREVNÉ PODSVÍCENÍ pod logem
-        ctx.fillStyle = teamColor + '40';
+        ctx.fillStyle = teamColor + '40'; // 40 = 25% průhlednost
         ctx.beginPath();
-        ctx.roundRect(x - 10, 50, size + 20, size + 20, 20);
+        ctx.roundRect(x - 10, 60, size + 20, size + 20, 20);
         ctx.fill();
         
         // BAREVNÝ RÁMEČEK kolem loga
         ctx.strokeStyle = teamColor;
         ctx.lineWidth = 4;
         ctx.beginPath();
-        ctx.roundRect(x - 10, 50, size + 20, size + 20, 20);
+        ctx.roundRect(x - 10, 60, size + 20, size + 20, 20);
         ctx.stroke();
         
         // Stín pod logem
@@ -97,53 +96,54 @@ async function createVersusImage(homeTeam, awayTeam, matchId, scoreHome = null, 
         
         if (logoName) {
             try {
-                const imgPath = path.join(__dirname, '../data/images', logoName);
+                const imgPath = path.join(process.cwd(), 'data/images', logoName);
                 const img = await loadImage(imgPath);
-                // COVER mód
-                const ratio = Math.max(size / img.width, size / img.height);
+                const ratio = Math.min(size / img.width, size / img.height);
                 const nw = img.width * ratio;
                 const nh = img.height * ratio;
-                const sx = (nw - size) / 2;
-                const sy = (nh - size) / 2;
-                ctx.drawImage(img, x + (size - nw) / 2 + sx, 60 + (size - nh) / 2 + sy, nw, nh, x, 60, size, size);
+                ctx.drawImage(img, x + (size - nw) / 2, 70 + (size - nh) / 2, nw, nh);
             } catch (e) {
-                drawFallbackLogo(teamName, x, teamColor);
+                const initials = teamName.split(' ').map(w => w[0]).join('').slice(0, 3).toUpperCase();
+                ctx.fillStyle = teamColor;
+                ctx.beginPath();
+                ctx.arc(x + size / 2, 70 + size / 2, 100, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 80px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(initials, x + size / 2, 70 + size / 2);
             }
         } else {
-            drawFallbackLogo(teamName, x, teamColor);
+            const initials = teamName.split(' ').map(w => w[0]).join('').slice(0, 3).toUpperCase();
+            ctx.fillStyle = teamColor;
+            ctx.beginPath();
+            ctx.arc(x + size / 2, 70 + size / 2, 100, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 80px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(initials, x + size / 2, 70 + size / 2);
         }
         ctx.shadowBlur = 0;
     };
-    
-    // Fallback funkce
-    const drawFallbackLogo = (teamName, x, teamColor) => {
-        const initials = teamName.split(' ').map(w => w[0]).join('').slice(0, 3).toUpperCase();
-        const size = 260;
-        const centerX = x + size / 2;
-        const centerY = 60 + size / 2;
-        
-        ctx.fillStyle = teamColor;
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, 100, 0, Math.PI * 2);
-        ctx.fill();
-        
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 80px Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(initials, centerX, centerY);
-    };
 
+    // Barvy týmů: domácí = oranžová, hosté = modrá
     const homeColor = '#ff4500';
     const awayColor = '#0064ff';
-    
-    // Pozice log - původní styl pro notifikace
-    await drawLogo(homeTeam, 30, homeColor);   // Domácí vlevo
-    await drawLogo(awayTeam, 470, awayColor);  // Hosté vpravo
 
+    await drawLogo(homeTeam, 40, homeColor);   // Domácí vlevo s oranžovým podsvícením
+    await drawLogo(awayTeam, 560, awayColor);  // Hosté vpravo s modrým podsvícením
+
+    // 4. PROSTŘEDNÍ PANEL (Score nebo VS)
+    const isResult = scoreHome !== null && scoreAway !== null;
+    
+    // Vždy nastavíme textAlign a textBaseline před vykreslením
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
+    // Skleněný efekt pod textem
     ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
     ctx.beginPath();
     ctx.roundRect(width/2 - 100, height/2 - 60, 200, 120, 20);
@@ -155,54 +155,63 @@ async function createVersusImage(homeTeam, awayTeam, matchId, scoreHome = null, 
     ctx.shadowColor = 'rgba(255, 69, 0, 0.5)';
     ctx.shadowBlur = 10;
 
-    const isResult = scoreHome !== null && scoreAway !== null;
-
     if (isResult) {
-        // Skóre - jako v createMatchImage
+        // Vykreslení SKÓRE
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 90px Arial';
-        ctx.fillText(`${scoreHome}:${scoreAway}`, width / 2, height / 2 + 5);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`${scoreHome}:${scoreAway}`, width / 2, height / 2 + 5); // +5 pro lepší centrování
+
         ctx.fillStyle = '#ff4500';
         ctx.font = 'bold 20px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
         ctx.fillText('KONEČNÝ VÝSLEDEK', width / 2, height / 2 + 85);
     } else {
-        // VS - přesně jako v createMatchImage
+        // Vykreslení VS - lepší centrování
         ctx.fillStyle = '#ff4500';
         ctx.font = 'bold 100px Arial';
-        ctx.fillText('VS', width / 2, height / 2 + 5);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('VS', width / 2, height / 2 + 5); // +5 pro optické centrování
     }
     
+    // 5. VYKRESLENÍ SÉRIE ZÁPASŮ (pokud jsou předány)
     ctx.shadowBlur = 0;
 
-    // Vykreslení série zápasů (pokud jsou předány)
     if (seriesMatches && Array.isArray(seriesMatches) && seriesMatches.length > 0) {
-        const startY = 430;
-        const boxWidth = 40;
+        const startY = 380;
+        const boxWidth = 45;
         const boxHeight = 35;
         const gap = 10;
         const totalWidth = seriesMatches.length * (boxWidth + gap) - gap;
         let startX = (width - totalWidth) / 2;
-        
+
+        // Nadpis
         ctx.fillStyle = '#888';
         ctx.font = 'bold 14px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('VÝSLEDKY ZÁPASŮ SÉRIE', width / 2, startY - 25);
-        
+
         seriesMatches.forEach((match, idx) => {
             const x = startX + idx * (boxWidth + gap);
-            
+
+            // Barva podle vítěze v TOMTO zápase (ne v sérii)
+            // Domácí vyhraje → oranžová, Hosté vyhráli → modrá
             const homeWonThisMatch = match.scoreHome > match.scoreAway;
             const winnerColor = homeWonThisMatch ? homeColor : awayColor;
-            
-            ctx.fillStyle = winnerColor + '40';
+
+            ctx.fillStyle = winnerColor + '40'; // 40 = 25% průhlednost
             ctx.beginPath();
             ctx.roundRect(x, startY, boxWidth, boxHeight, 8);
             ctx.fill();
             ctx.strokeStyle = winnerColor;
             ctx.lineWidth = 2;
             ctx.stroke();
-            
+
+            // Skóre se zobrazuje tak jak je v databázi - z pohledu domácího týmu v daném zápase
             ctx.fillStyle = '#ffffff';
             ctx.font = 'bold 18px Arial';
             ctx.textAlign = 'center';
@@ -210,7 +219,8 @@ async function createVersusImage(homeTeam, awayTeam, matchId, scoreHome = null, 
             const scoreText = match.ot ? `${match.scoreHome}:${match.scoreAway}p` : `${match.scoreHome}:${match.scoreAway}`;
             ctx.fillText(scoreText, x + boxWidth/2, startY + boxHeight/2);
         });
-        
+
+        // Stav série pod boxy
         const seriesWinsH = seriesMatches.filter(m => m.sideSwap ? m.scoreAway > m.scoreHome : m.scoreHome > m.scoreAway).length;
         const seriesWinsA = seriesMatches.filter(m => m.sideSwap ? m.scoreHome > m.scoreAway : m.scoreAway > m.scoreHome).length;
         ctx.fillStyle = '#ff4500';
