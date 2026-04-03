@@ -4159,7 +4159,10 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
                         <span class="code-tag">(?)</span> = <span style="color: #00d4ff; font-style: italic;">❓ Spekulace</span>
                     </div>
                     <div class="legend-item">
-                        <span class="code-tag">(K)</span> = <span style="color: orange; font-weight: bold;">📄 Konec smlouvy</span>
+                        <span class="code-tag">(K)</span> = <span style="color: orange; font-weight: bold;"></span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="code-tag">(-)</span> = <span style="color: #888; text-decoration: line-through; opacity: 0.5; font-style: italic;">🚫 Konec smlouvy</span>
                     </div>
                      <div class="legend-item">
                         <span class="code-tag">#00ff00</span> = <span style="color: #00ff00;">Vlastní HEX barva</span>
@@ -4529,28 +4532,28 @@ router.post('/transfers/save', express.urlencoded({ extended: true }), requireAd
 
         let hasChanged = false; // Detekce, zda se u tohoto týmu něco změnilo
 
-        getAdded(newConfIn, oldConfIn).forEach(p => { 
+        getAdded(newConfIn, oldConfIn).forEach(p => { newTransfersNotification.push(`✅ ${p} -> ${teamName}`); hasChanged = true; });
+        getAdded(newConfOut, oldConfOut).forEach(p => { newTransfersNotification.push(`❌ ${p} opouští ${teamName}`); hasChanged = true; });
+        getAdded(newSpecIn, oldSpecIn).forEach(p => { 
             const isResolvedSpec = p.includes('(-)');
             const cleanName = p.replace('(-)', '').trim();
             if (isResolvedSpec) {
-                newTransfersNotification.push(`🚫 Spekulace o příchodu ${cleanName} ukončena`);
+                newTransfersNotification.push(`🚫 Spekulace o ${cleanName} ukončena`);
             } else {
-                newTransfersNotification.push(`✅ ${p} -> ${teamName}`);
+                newTransfersNotification.push(`❓ ${p} (spekulace) -> ${teamName}`);
             }
             hasChanged = true; 
         });
-        getAdded(newConfOut, oldConfOut).forEach(p => { 
+        getAdded(newSpecOut, oldSpecOut).forEach(p => { 
             const isResolvedSpec = p.includes('(-)');
             const cleanName = p.replace('(-)', '').trim();
             if (isResolvedSpec) {
                 newTransfersNotification.push(`🚫 Spekulace o odchodu ${cleanName} ukončena`);
             } else {
-                newTransfersNotification.push(`❌ ${p} opouští ${teamName}`);
+                newTransfersNotification.push(`⚠️ ${p} (možný odchod) -> ${teamName}`);
             }
             hasChanged = true; 
         });
-        getAdded(newSpecIn, oldSpecIn).forEach(p => { newTransfersNotification.push(`❓ ${p} (spekulace) -> ${teamName}`); hasChanged = true; });
-        getAdded(newSpecOut, oldSpecOut).forEach(p => { newTransfersNotification.push(`⚠️ ${p} (možný odchod) -> ${teamName}`); hasChanged = true; });
 
         // Pokud se tým změnil, přidáme ho do seznamu pro obrázek v notifikaci
         if (hasChanged) {
