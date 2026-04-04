@@ -2172,9 +2172,8 @@ html += await generateLeftPanel(data);
         </div>
     `).join('');
             };
-
 // 3. VYKRESLENÍ KARET (Zůstává podobné, jen volá vylepšený renderList)
-            teamsInSelectedLiga.forEach(team => {
+            teamsInSelectedLiga.sort((a, b) => a.id - b.id).forEach(team => {
                 const tId = String(team.id);
                 const tData = currentTransfers[tId] || { specIn: [], specOut: [], confIn: [], confOut: [] }; // Zde už používáme sjednocené názvy confIn/confOut
                 const logoUrl = team.logo ? `/logoteamu/${team.logo}` : '/images/logo.png';
