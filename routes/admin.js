@@ -4182,7 +4182,7 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
                 <input type="hidden" name="liga" value="${selectedLiga}">
                 <input type="hidden" name="season" value="${selectedSeason}">
                 
-                ${teamsInLiga.map(team => {
+                ${teamsInLiga.sort((a, b) => a.id - b.id).map(team => {
         const tId = String(team.id);
         const data = currentTransfers[tId] || { specIn: [], specOut: [], confIn: [], confOut: [] };
         const logoUrl = team.logo ? `/logoteamu/${team.logo}` : '/images/logo.png';
@@ -4245,14 +4245,14 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
                                 <label style="color: #aaa; display: block; margin-bottom: 5px;">Z týmu:</label>
                                 <select name="genFromTeam" style="width: 100%; padding: 8px; background: #111; border: 1px solid #444; color: white;">
                                     <option value="">Vyber tým</option>
-                                    ${teamsInLiga.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+                                    ${teamsInLiga.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
                                 </select>
                             </div>
                             <div>
                                 <label style="color: #aaa; display: block; margin-bottom: 5px;">Do týmu:</label>
                                 <select name="genToTeam" style="width: 100%; padding: 8px; background: #111; border: 1px solid #444; color: white;">
                                     <option value="">Vyber tým</option>
-                                    ${teamsInLiga.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+                                    ${teamsInLiga.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
                                 </select>
                             </div>
                         </div>
