@@ -1163,22 +1163,103 @@ async function prepareDashboardData(req, isHistory = false, isImageExporter = fa
         teamBonusData = await getTeamBonusesData(); 
     } catch (e) {}
 
+    // OPRAVA: Přepočet statistik týmů z aktuálních zápasů pro levý panel
+    // Týmům se nastaví wins, otWins, otLosses, losses podle zápasů v sezóně/lize
+    const teamStatsFromMatches = {};
+    teamsInSelectedLiga.forEach(t => {
+        teamStatsFromMatches[t.id] = { points: 0, wins: 0, otWins: 0, otLosses: 0, losses: 0, gf: 0, ga: 0 };
+    });
+    
+    // Projít všechny zápasy a spočítat statistiky
+    matches.filter(m => m.season === selectedSeason && m.liga === selectedLiga && !m.isPlayoff && m.result).forEach(m => {
+        const homeId = m.homeTeamId;
+        const awayId = m.awayTeamId;
+        if (!teamStatsFromMatches[homeId] || !teamStatsFromMatches[awayId]) return;
+        
+        const r = m.result;
+        const sH = parseInt(r.scoreHome);
+        const sA = parseInt(r.scoreAway);
+        const ot = !!r.ot;
+        
+        // Góly
+        teamStatsFromMatches[homeId].gf += sH;
+        teamStatsFromMatches[homeId].ga += sA;
+        teamStatsFromMatches[awayId].gf += sA;
+        teamStatsFromMatches[awayId].ga += sH;
+        
+        // Určit vítěze
+        let winner;
+        if (sH === sA) {
+            if (ot && (r.overtimeWinner === 'home' || r.overtimeWinner === 'away')) {
+                winner = r.overtimeWinner;
+            } else {
+                // Remíza bez OT - oba dostanou 1 bod
+                teamStatsFromMatches[homeId].points += 1;
+                teamStatsFromMatches[awayId].points += 1;
+                return;
+            }
+        } else {
+            winner = sH > sA ? 'home' : 'away';
+        }
+        
+        // Přidělit body a statistiky
+        if (winner === 'home') {
+            if (ot) {
+                teamStatsFromMatches[homeId].points += 2;
+                teamStatsFromMatches[homeId].otWins++;
+                teamStatsFromMatches[awayId].points += 1;
+                teamStatsFromMatches[awayId].otLosses++;
+            } else {
+                teamStatsFromMatches[homeId].points += 3;
+                teamStatsFromMatches[homeId].wins++;
+                teamStatsFromMatches[awayId].losses++;
+            }
+        } else {
+            if (ot) {
+                teamStatsFromMatches[awayId].points += 2;
+                teamStatsFromMatches[awayId].otWins++;
+                teamStatsFromMatches[homeId].points += 1;
+                teamStatsFromMatches[homeId].otLosses++;
+            } else {
+                teamStatsFromMatches[awayId].points += 3;
+                teamStatsFromMatches[awayId].wins++;
+                teamStatsFromMatches[homeId].losses++;
+            }
+        }
+    });
+
     teamsInSelectedLiga.forEach(t => {
         if (!t.stats) t.stats = {};
         if (!t.stats[selectedSeason]) t.stats[selectedSeason] = { points: 0, wins: 0, otWins: 0, otLosses: 0, losses: 0 };
 
-        let naturalPoints = t.stats[selectedSeason].points || 0;
+        // Použít statistiky vypočtené ze zápasů
+        const calculatedStats = teamStatsFromMatches[t.id] || { points: 0, wins: 0, otWins: 0, otLosses: 0, losses: 0, gf: 0, ga: 0 };
         let bonusEntry = teamBonusData[selectedSeason]?.[selectedLiga]?.[t.id] || { points: 0, games: 0 };
         if (typeof bonusEntry === 'number') bonusEntry = { points: bonusEntry, games: 0 };
 
-        // Původní logika - jen pro plně zamčené ligy
-        if (!Array.isArray(isTipsLocked)) {
-            t.stats[selectedSeason].points = naturalPoints + (bonusEntry.points || 0);
-        }
-        // Pro částečně zamčené - zachováme původní body (pro tipování)
+        // Nastavit vypočtené statistiky + bonusy
+        t.stats[selectedSeason].points = calculatedStats.points + (bonusEntry.points || 0);
+        t.stats[selectedSeason].wins = calculatedStats.wins;
+        t.stats[selectedSeason].otWins = calculatedStats.otWins;
+        t.stats[selectedSeason].otLosses = calculatedStats.otLosses;
+        t.stats[selectedSeason].losses = calculatedStats.losses;
+        
+        // Uložit gf/ga pro zobrazení v tabulce
+        t.stats[selectedSeason].gf = calculatedStats.gf + (bonusEntry.gf || 0);
+        t.stats[selectedSeason].ga = calculatedStats.ga + (bonusEntry.ga || 0);
+        
+        // Pro částečně zamčené ligy zachovat body z databáze pro tipování
+        // Ale pro levý panel vždy zobrazit aktuální stav
         
         t.stats[selectedSeason].manualGames = bonusEntry.games || 0;
         t.stats[selectedSeason].tiebreaker = bonusEntry.tiebreaker || 0;
+    });
+
+    // Aktualizace scores objektu pro generateLeftPanel
+    teamsInSelectedLiga.forEach(t => {
+        if (!scores[t.id]) scores[t.id] = { gf: 0, ga: 0 };
+        scores[t.id].gf = t.stats[selectedSeason].gf || 0;
+        scores[t.id].ga = t.stats[selectedSeason].ga || 0;
     });
 
     // 5. Rozdělení do skupin
@@ -1186,7 +1267,9 @@ async function prepareDashboardData(req, isHistory = false, isImageExporter = fa
     const groupedTeams = {};
 
     teamsInSelectedLiga.forEach((team) => {
-        const groupLetter = team.group ? String.fromCharCode(team.group + 64) : 'X';
+        // OPRAVA: Pro jednoskupinové ligy ignorujeme hodnotu team.group z databáze
+        // Jinak by tým z multigroup ligy (např. TELH skupina B) mohl být v samostatné skupině v jednoskupinové lize
+        const groupLetter = leagueObj.isMultigroup && team.group ? String.fromCharCode(team.group + 64) : 'X';
         if (!teamsByGroup[groupLetter]) teamsByGroup[groupLetter] = [];
         teamsByGroup[groupLetter].push(team);
 
@@ -1208,7 +1291,10 @@ async function prepareDashboardData(req, isHistory = false, isImageExporter = fa
         // Levý panel vždy seřadí pro přehled reálného stavu
         // ŽÁDNÁ PODMÍNKA - vždy seřadíme
         
-        teamsByGroup[group].sort((a, b) => {
+        // OPRAVA: Vytvoříme kopii týmů před sortováním pro konzistentní minitabulku
+        const teamsToSort = [...teamsByGroup[group]];
+        
+        teamsToSort.sort((a, b) => {
             const aStats = a.stats?.[selectedSeason] || {};
             const bStats = b.stats?.[selectedSeason] || {};
             const pA = aStats.points || 0;
@@ -1219,7 +1305,8 @@ async function prepareDashboardData(req, isHistory = false, isImageExporter = fa
             const tieB = bStats.tiebreaker || 0;
             if (tieB !== tieA) return tieA - tieB;
 
-            const tiedTeamIds = teamsByGroup[group].filter(t => (t.stats?.[selectedSeason]?.points || 0) === pA).map(t => Number(t.id));
+            // OPRAVA: Používáme teamsToSort (kopie) místo teamsByGroup[group] pro konzistentní filter
+            const tiedTeamIds = teamsToSort.filter(t => (t.stats?.[selectedSeason]?.points || 0) === pA).map(t => Number(t.id));
 
             const getMiniStats = (teamId) => {
                 let mPts = 0, mDiff = 0, mGF = 0;
@@ -1272,6 +1359,9 @@ async function prepareDashboardData(req, isHistory = false, isImageExporter = fa
 
             return 0;
         });
+
+        // OPRAVA: Nahradíme původní pole seřazenou kopií
+        teamsByGroup[group] = teamsToSort;
 
         // Uložení pořadí pro křížové tabulky
         teamsByGroup[group].forEach((t, i) => globalRealRankMap[t.id] = i + 1);
