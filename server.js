@@ -40,6 +40,17 @@ app.use('/images', (req, res, next) => {
     next();
 });
 
+// Service Worker file - musí být dostupný na kořenové cestě pro push notifikace
+app.get('/sw.js', (req, res) => {
+    const swPath = path.join(__dirname, 'public', 'sw.js');
+    if (fs.existsSync(swPath)) {
+        res.setHeader('Content-Type', 'application/javascript');
+        res.sendFile(swPath);
+    } else {
+        res.status(404).send('Service Worker not found');
+    }
+});
+
 // Also serve from /logoteamu/ for backward compatibility
 app.use('/logoteamu', (req, res, next) => {
     const filename = req.path.replace(/^\//, '');
