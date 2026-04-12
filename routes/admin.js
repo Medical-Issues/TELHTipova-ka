@@ -52,7 +52,15 @@ const storage = multer.diskStorage({
     }
 });
 
-const upload = multer({ storage: storage });
+const fileFilter = (req, file, cb) => {
+    // Zakázat WebP - canvas nepodporuje WebP a notifikace by se nezobrazovaly správně
+    if (file.originalname.toLowerCase().endsWith('.webp')) {
+        return cb(new Error('WebP formát není podporován. Použijte prosím PNG nebo JPEG.'), false);
+    }
+    cb(null, true);
+};
+
+const upload = multer({ storage: storage, fileFilter: fileFilter });
 router.get('/', requireAdmin, async (req, res) => {
     // Načtení všech dat z MongoDB
     const [matches, teams, transferLeagues, allowedLeagues, allSeasonData, chosenSeason, settingsData] = await Promise.all([
@@ -5335,7 +5343,14 @@ router.get('/playoff/templates/edit/:key', requireAdmin, async (req, res) => {
     if (!template) return res.status(404).send("Formát nenalezen.");
 
     // Převedeme zpět na text, aby šel editovat
+    // DŮLEŽITÉ: Escapovat pro HTML, aby se nezničil obsah textarea
     const jsonString = JSON.stringify(template.columns, null, 2);
+    const escapedJsonString = jsonString
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
 
     res.send(`
         <!DOCTYPE html>
@@ -5353,7 +5368,7 @@ router.get('/playoff/templates/edit/:key', requireAdmin, async (req, res) => {
                     <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
                     <label>Název (pro lidi): <br><input type="text" name="label" value="${template.label}" required class="league-select" style="width: 300px; margin-top: 5px;"></label><br><br>
                     <label>JSON struktura sloupců:<br>
-                        <textarea name="structure" style="width:100%; height:300px; background:#000; color:lime; font-family:monospace; padding: 10px; margin-top: 5px;">${jsonString}</textarea>
+                        <textarea name="structure" style="width:100%; height:300px; background:#000; color:lime; font-family:monospace; padding: 10px; margin-top: 5px;">${escapedJsonString}</textarea>
                     </label><br>
                     <button type="submit" class="action-btn edit-btn" style="margin-top: 15px;">Uložit změny</button>
                 </form>
@@ -5363,12 +5378,12 @@ router.get('/playoff/templates/edit/:key', requireAdmin, async (req, res) => {
     `);
 });
 
-router.post('/playoff/templates/edit/:key', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+router.post('/playoff/templates/edit/:key', express.urlencoded({ extended: true, limit: '5mb' }), requireAdmin, async (req, res) => {
     // CSRF kontrola
     if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
         return res.status(403).send('Neplatný CSRF token');
     }
-    
+
     const key = req.params.key;
     const { label, structure } = req.body;
     let templates = await PlayoffTemplates.findAll() || {};
@@ -5376,12 +5391,22 @@ router.post('/playoff/templates/edit/:key', express.urlencoded({ extended: true 
     if (!templates[key]) return res.status(404).send("Formát nenalezen.");
 
     try {
+        console.log('[Playoff Edit] Parsing JSON structure...');
+        // Dekódovat HTML entity zpět na původní znaky (protože textarea escapuje speciální znaky)
+        const decodedStructure = structure
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&#039;/g, "'");
         templates[key].label = label;
-        templates[key].columns = JSON.parse(structure);
+        templates[key].columns = JSON.parse(decodedStructure);
         await PlayoffTemplates.replaceAll(templates);
         res.redirect('/admin/playoff/templates');
     } catch (e) {
-        res.status(400).send("Chyba v JSON struktuře!");
+        console.error('[Playoff Edit] JSON parse error:', e.message);
+        console.error('[Playoff Edit] Structure received:', structure?.substring(0, 200));
+        res.status(400).send(`Chyba v JSON struktuře: ${e.message}`);
     }
 });
 

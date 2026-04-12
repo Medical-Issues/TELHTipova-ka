@@ -2032,14 +2032,14 @@ async function generateLeftPanel(data, isHistory = false) {
         };
     }
 
-    async function renderBox(slotKey) {
+    async function renderBox(slotKey, extraStyle = '') {
         const info = await getSeriesInfo(slotKey);
         const seriesId = `series-${slotKey}`;
 
         // Zcela prázdný slot (TBD vs TBD)
         if (!info) {
             return `
-            <div class="playoff-series waiting">
+            <div class="playoff-series waiting" ${extraStyle}>
                 <div class="playoff-series-header">
                     <div class="playoff-series-info">
                         <div class="playoff-status-icon waiting">⏸️</div>
@@ -2066,7 +2066,7 @@ async function generateLeftPanel(data, isHistory = false) {
         // Čekající mezistav (např. Sparta vs TBD)
         if (info.isWaiting) {
             return `
-            <div class="playoff-series waiting" onclick="togglePlayoffDropdown('${seriesId}')">
+            <div class="playoff-series waiting" onclick="togglePlayoffDropdown('${seriesId}')" ${extraStyle}>
                 <div class="playoff-series-header">
                     <div class="playoff-series-info">
                         <div class="playoff-status-icon waiting">⏸️</div>
@@ -2109,7 +2109,7 @@ async function generateLeftPanel(data, isHistory = false) {
         const progressPercent = info.winsNeeded > 0 ? (currentWins / info.winsNeeded) * 100 : 0;
 
         return `
-        <div class="playoff-series ${statusClass}" onclick="togglePlayoffDropdown('${seriesId}')">
+        <div class="playoff-series ${statusClass}" onclick="togglePlayoffDropdown('${seriesId}')" ${extraStyle}>
             <div class="playoff-series-header">
                 <div class="playoff-series-info">
                     <div class="playoff-status-icon ${statusClass}">${statusIcon}</div>
@@ -2213,16 +2213,33 @@ async function generateLeftPanel(data, isHistory = false) {
     if (currentTemplate && currentTemplate.columns) {
         html += `<h2 style="text-align:center; color:white; margin-bottom: 30px;">Playoff - ${selectedLiga} ${selectedSeason}</h2>`;
 
-        // Flex container pro všechny sloupce - horizontální scroll, vertikálně na střed
+        // Flex container - zarovnáno nahoru aby všechny sloupce začínaly stejně
         html += `<div style="display: flex; gap: 15px; justify-content: flex-start; align-items: center; overflow-x: auto; padding-bottom: 10px; scrollbar-width: thin; scrollbar-color: orangered #1a1a1a;">`;
-        
+
         for (const col of currentTemplate.columns) {
-            const boxes = await Promise.all(col.slots.map(slotId => renderBox(slotId)));
+            // Podpora pro title2 (druhý titul pro sloupce s více zápasy)
+            const hasTitle2 = col.title2 && col.slots.length === 2;
+            const normalGap = col.gap || '20px';
+
+            // Pro title2: první box na úroveň druhého boxu v jiných sloupcích
+            // Transform posune celý sloupec dolů aby se zarovnání počítalo od prvního boxu
+            const boxes = await Promise.all(col.slots.map((slotId, index) => {
+                if (hasTitle2 && index === 1) {
+                    // Druhý box 60px pod prvním
+                    return renderBox(slotId, 'style="margin-top: 70px;"');
+                }
+                return renderBox(slotId, '');
+            }));
+
+            // Pro title2 sloupce přidáme data-atribut pro JavaScript identifikaci
+            // Transform bude nastaven automaticky JS místo pevné hodnoty
+            const dataAttr = hasTitle2 ? 'data-title2="true"' : '';
+
             html += `
-            <div class="playoff-column">
+            <div class="playoff-column" style="gap: ${normalGap};" ${dataAttr}>
                 <div class="playoff-column-title">${col.title}</div>
                 ${boxes.join('')}
-                <div class="playoff-column-title">${col.title}</div>
+                ${hasTitle2 ? `<div class="playoff-column-title" style="margin-top: auto;">${col.title2}</div>` : `<div class="playoff-column-title">${col.title}</div>`}
             </div>`;
         }
         
@@ -2472,7 +2489,7 @@ async function createMatchImage(homeTeam, awayTeam, scoreHome = null, scoreAway 
 async function createTransferImage(team1, team2, playerName = null, withWatermark = true, playerPhotoPath = null) {
     const { createCanvas, loadImage } = require('canvas');
     const path = require('path');
-    const width = 800; 
+    const width = 800;
     const height = 400;
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext('2d');
@@ -2492,7 +2509,7 @@ async function createTransferImage(team1, team2, playerName = null, withWatermar
     const drawLogo = async (team, x) => {
         const logoName = team?.logo;
         const teamName = team?.name || '???';
-        
+
         if (logoName) {
             try {
                 const img = await loadImage(path.join(process.cwd(), 'data/images', logoName));
@@ -2553,21 +2570,21 @@ async function createTransferImage(team1, team2, playerName = null, withWatermar
             const photoSize = 120;
             const photoX = (width - photoSize) / 2;
             const photoY = height - 160;
-            
+
             // Circular mask for player photo
             ctx.save();
             ctx.beginPath();
             ctx.arc(photoX + photoSize/2, photoY + photoSize/2, photoSize/2, 0, Math.PI * 2);
             ctx.closePath();
             ctx.clip();
-            
+
             // Draw photo maintaining aspect ratio
             const ratio = Math.max(photoSize / playerImg.width, photoSize / playerImg.height);
             const nw = playerImg.width * ratio;
             const nh = playerImg.height * ratio;
             ctx.drawImage(playerImg, photoX + (photoSize - nw)/2, photoY + (photoSize - nh)/2, nw, nh);
             ctx.restore();
-            
+
             // Border around photo
             ctx.strokeStyle = '#00d4ff';
             ctx.lineWidth = 4;
@@ -3558,6 +3575,42 @@ async function createPlayoffBracketImage(data, withWatermark = true) {
 function addPlayoffScript() {
     return `
     <script>
+    // Automatický výpočet offsetu pro title2 sloupce
+    (function() {
+        function calculateTitle2Offset() {
+            const allColumns = document.querySelectorAll('.playoff-column');
+            const title2Columns = document.querySelectorAll('.playoff-column[data-title2="true"]');
+            
+            if (title2Columns.length === 0) return;
+            
+            // Najít nejvyšší normální sloupec (s nejvíce boxy)
+            let maxColumnHeight = 0;
+            allColumns.forEach(col => {
+                if (!col.dataset.title2 && col.offsetHeight > maxColumnHeight) {
+                    maxColumnHeight = col.offsetHeight;
+                }
+            });
+            
+            // Pro každý title2 sloupec vypočítat offset
+            // (aby se první box zarovnal s druhým boxem v jiných sloupcích)
+            title2Columns.forEach(col => {
+                const colHeight = col.offsetHeight;
+                const offset = (maxColumnHeight - colHeight) / 2;
+                if (offset > 0) {
+                    col.style.transform = 'translateY(' + offset + 'px)';
+                }
+            });
+        }
+        
+        // Spustit po načtení všeho včetně obrázků
+        window.addEventListener('load', function() {
+            setTimeout(calculateTitle2Offset, 100);
+        });
+        
+        // Přepočítat při změně velikosti okna
+        window.addEventListener('resize', calculateTitle2Offset);
+    })();
+
     function togglePlayoffDropdown(seriesId) {
         const dropdown = document.getElementById(seriesId + '-dropdown');
         if (dropdown) {
