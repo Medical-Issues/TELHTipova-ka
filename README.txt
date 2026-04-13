@@ -44,4 +44,6 @@ Dodělání oznámení u přestupů ✅
 
 v exportéru udělat chytřeji ten VS image ✅
 
+Oprava overflowu playoff tabulky, když mám title2
+
 Novinkovač (Otvírání tweetů atd.) ?
