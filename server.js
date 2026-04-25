@@ -24,7 +24,18 @@ const app = express();
 // CSS a JS z public
 app.use('/css', express.static(path.join(__dirname, 'public', 'css')));
 app.use('/js', express.static(path.join(__dirname, 'public', 'js')));
+// Google Search Console ověření (přidej pod statické složky)
+app.get('/google*.html', (req, res) => {
+    // req.path získá název souboru z URL (např. /google123.html)
+    const fileName = req.path.replace(/^\//, '');
+    const filePath = path.join(__dirname, 'public', fileName);
 
+    if (fs.existsSync(filePath)) {
+        res.sendFile(filePath);
+    } else {
+        res.status(404).send('Verification file not found');
+    }
+});
 // Obrázky - zkusíme nejprve public/images, pak data/images
 app.use('/images', (req, res, next) => {
     const filename = req.path.replace(/^\//, '');
