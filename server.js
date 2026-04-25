@@ -25,8 +25,8 @@ const app = express();
 app.use('/css', express.static(path.join(__dirname, 'public', 'css')));
 app.use('/js', express.static(path.join(__dirname, 'public', 'js')));
 // Google Search Console ověření (přidej pod statické složky)
-app.get('/google*.html', (req, res) => {
-    // req.path získá název souboru z URL (např. /google123.html)
+app.get(/\/google.*\.html$/, (req, res) => {
+    // Získáme název souboru přímo z URL
     const fileName = req.path.replace(/^\//, '');
     const filePath = path.join(__dirname, 'public', fileName);
 
