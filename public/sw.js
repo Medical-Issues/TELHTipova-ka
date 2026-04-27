@@ -1,12 +1,37 @@
-console.log("Service Worker Loaded...");
+﻿console.log("[SW] Service Worker Loaded...");
+const SW_VERSION = '1.1.0';
+
 // Force update - okamžitá aktivace nové verze
-self.addEventListener('install', () => {
+self.addEventListener('install', (event) => {
+    console.log('[SW] Installing version:', SW_VERSION);
     self.skipWaiting();
 });
 
 self.addEventListener('activate', event => {
+    console.log('[SW] Activated version:', SW_VERSION);
     event.waitUntil(clients.claim());
 });
+
+// DŮLEŽITÉ: Zachycení změny push subscription (prohlížeč mění endpoint)
+self.addEventListener('pushsubscriptionchange', event => {
+    console.log('[SW] Push subscription changed, re-subscribing...');
+    event.waitUntil(
+        self.registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: event.oldSubscription.options.applicationServerKey
+        }).then(newSubscription => {
+            // Odeslat nový subscription na server
+            return fetch('/api/subscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newSubscription)
+            });
+        }).catch(err => {
+            console.error('[SW] Failed to re-subscribe:', err);
+        })
+    );
+});
+
 // 1. PŘÍJEM NOTIFIKACE
 self.addEventListener('push', e => {
     const payload = e.data.json();
@@ -18,22 +43,34 @@ self.addEventListener('push', e => {
         return;
     }
 
+    // Zajistit aby notifikace byla vzdy zobrazena i kdyz ma stejny tag
+    const notificationOptions = {
+        body: payload.body,
+        icon: '/images/logo.png',
+        badge: '/images/logo.png',
+        image: payload.image || null,
+        // --------------------------------
+        vibrate: payload.vibrate || [100, 100, 250, 500, 100, 100, 250],
+        tag: payload.tag || 'obecne-upozorneni-' + Date.now(), // Unikatni tag pro kazdou notifikaci
+        // renotify odstraneno - zpusobovalo problemy na nekterych zarizenich
+        requireInteraction: payload.requireInteraction || false,
+        actions: payload.actions || [],
+        data: {
+            url: payload.url || '/',
+            timestamp: Date.now()
+        },
+        // Priorita pro Android
+        silent: false
+    };
+
     e.waitUntil(
-        self.registration.showNotification(payload.title, {
-            body: payload.body,
-            icon: '/images/logo.png',
-            badge: '/images/logo.png',
-            image: payload.image || null,
-            // --------------------------------
-            vibrate: payload.vibrate || [100, 100, 250, 500, 100, 100, 250],
-            tag: payload.tag || 'obecne-upozorneni',
-            renotify: true,
-            requireInteraction: payload.requireInteraction || false,
-            actions: payload.actions || [],
-            data: {
-                url: payload.url || '/'
-            }
-        })
+        self.registration.showNotification(payload.title, notificationOptions)
+            .then(() => {
+                console.log('[SW] Notification shown:', payload.title);
+            })
+            .catch(err => {
+                console.error('[SW] Failed to show notification:', err);
+            })
     );
 });
 
