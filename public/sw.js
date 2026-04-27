@@ -2,7 +2,7 @@
 const SW_VERSION = '1.1.0';
 
 // Force update - okamžitá aktivace nové verze
-self.addEventListener('install', (event) => {
+self.addEventListener('install', () => {
     console.log('[SW] Installing version:', SW_VERSION);
     self.skipWaiting();
 });
