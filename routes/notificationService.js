@@ -649,7 +649,9 @@ const sendToUserDevices = (user, payload) => {
     if (!user.subscriptions || user.subscriptions.length === 0) return;
     const options = {
         // Pokud payload obsahuje ttl (v sekundách), použijeme ho. Jinak dáme default 24 hodin (86400)
-        TTL: payload.ttl || 86400
+        TTL: payload.ttl || 86400,
+        // Urgency 'high' zajistí okamzite doruceni i pri uspornem rezimu na Androidu
+        urgency: 'high'
     };
     // 2. Projdeme všechna zařízení uživatele a odešleme notifikaci
     const promises = user.subscriptions.map(sub => {
