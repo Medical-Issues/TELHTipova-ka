@@ -48,7 +48,7 @@ Oprava overflowu playoff tabulky, když mám title2
 
 Opravit ten převod ročníků + přidání nových týmů a zneaktivovávín týmu pouze pro daný ročník ne pro všechny aby se nezníčili statistiky předchozího ročníku
 
-Historie přestupů (zobrazit tlačítko pokud nějaký přestup vůbec v dané sezóně dané ligy byl)
+Historie přestupů (zobrazit tlačítko pokud máme je zvěřejněný přestup + zrušit podmínku že přestup se zobrazí jen když je liga veřejná) + Možnost viditelnosti přestupu i když není 
 
 Dropdown menu pro ročníky v adminu abych nemusel přepínat ročník a tím pádem zobrazovat to v user stránce
 
