@@ -58,4 +58,6 @@ Opravit exportér
 
 Srovna tabulku vybrané sezóny a registrace nových uživatelů (height)
 
-Novinkovač (Otvírání tweetů atd.) ?
+Špatný vypočítávání tipů po změně strany když už má tým natipováno / nebo přídám skóre a otočím týmy
+
+Špatný srovnávání dropdown menu vše podle ID pokud to jde a co není
