@@ -52,4 +52,10 @@ Historie přestupů (zobrazit tlačítko pokud nějaký přestup vůbec v dané 
 
 Dropdown menu pro ročníky v adminu abych nemusel přepínat ročník a tím pádem zobrazovat to v user stránce
 
+v adminu tlačítko smazat nevyhodnocené má margin-left
+
+Opravit exportér
+
+Srovna tabulku vybrané sezóny a registrace nových uživatelů (height)
+
 Novinkovač (Otvírání tweetů atd.) ?
