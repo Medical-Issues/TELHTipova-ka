@@ -1300,9 +1300,8 @@ router.get('/history/prestupy', requireLogin, async (req, res) => {
     const { Transfers, Teams, Matches } = require('../utils/mongoDataAccess');
     const transfersData = await Transfers.findAll();
     const allTeams = await Teams.findAll();
-    const allMatches = await Matches.findAll();
-    
-    // Získání parametrů z URL
+    await Matches.findAll();
+// Získání parametrů z URL
     const selectedLiga = req.query.liga;
     const selectedSeason = req.query.season;
     
