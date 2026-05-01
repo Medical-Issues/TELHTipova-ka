@@ -371,7 +371,11 @@ app.use('/admin', csrfMiddleware, adminRoutes);
 
 // API endpoint pro CSRF token
 app.get('/api/csrf-token', (req, res) => {
-    res.json({ csrfToken: req.session.csrfToken || '' });
+    // Vygenerovat token pokud neexistuje (např. po odhlášení)
+    if (!req.session.csrfToken) {
+        req.session.csrfToken = generateCsrfToken();
+    }
+    res.json({ csrfToken: req.session.csrfToken });
 });
 
 app.get('/api/vapid-public-key', (req, res) => {

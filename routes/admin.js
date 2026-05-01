@@ -1118,11 +1118,14 @@ router.post('/edit/:id', express.urlencoded({ extended: true }), requireAdmin, a
         if (scoreHome !== '' && scoreAway !== '' && scoreHome !== undefined && scoreAway !== undefined) {
             // PŘIDÁNO: Načtení sideSwap pro BO1 zápasy (pro správné vyhodnocení tipů)
             const sideSwap = req.body.sideSwap === 'true' || req.body.sideSwap === 'on';
+            const scoreH = parseInt(scoreHome);
+            const scoreA = parseInt(scoreAway);
             match.result = {
-                scoreHome: parseInt(scoreHome),
-                scoreAway: parseInt(scoreAway),
+                scoreHome: scoreH,
+                scoreAway: scoreA,
                 ot: req.body.ot === 'on',
-                sideSwap: sideSwap
+                sideSwap: sideSwap,
+                winner: scoreH > scoreA ? 'home' : 'away'
             };
         } else {
             delete match.result;
