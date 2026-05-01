@@ -5052,7 +5052,7 @@ router.post('/matches/bulk-lock', express.urlencoded({ extended: true }), requir
         return res.status(403).send('Neplatný CSRF token');
     }
     
-    const { liga, season, action, redirectUrl } = req.body;
+    const { liga, season, action} = req.body;
     
     if (!liga || !season || !action) {
         return renderErrorHtml(res, "Chybí povinné parametry (liga, sezóna nebo akce).", 400);
@@ -5114,7 +5114,7 @@ router.post('/matches/bulk-delete', express.urlencoded({ extended: true }), requ
         return res.status(403).send('Neplatný CSRF token');
     }
     
-    const { liga, season, redirectUrl } = req.body;
+    const { liga, season} = req.body;
     
     if (!liga || !season) {
         return renderErrorHtml(res, "Chybí povinné parametry (liga nebo sezóna).", 400);
