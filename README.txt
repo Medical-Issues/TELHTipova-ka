@@ -44,8 +44,6 @@ Dodělání oznámení u přestupů ✅
 
 v exportéru udělat chytřeji ten VS image ✅
 
-Oprava overflowu playoff tabulky, když mám title2
-
 Opravit ten převod ročníků + přidání nových týmů a zneaktivovávín týmu pouze pro daný ročník ne pro všechny aby se nezníčili statistiky předchozího ročníku
 
 Historie přestupů (zobrazit tlačítko pokud máme je zvěřejněný přestup + zrušit podmínku že přestup se zobrazí jen když je liga veřejná) + Možnost viditelnosti přestupu i když není 

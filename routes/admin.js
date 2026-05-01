@@ -73,7 +73,9 @@ router.get('/', requireAdmin, async (req, res) => {
         Settings.findAll()
     ]);
     
-    const selectedSeason = chosenSeason;
+    // NOVÉ: Admin může mít vlastní sezónu v session pro prohlížení dat
+    const adminSeason = req.session.adminSeason || chosenSeason;
+    const selectedSeason = adminSeason;
     const leagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues)
         ? allSeasonData[selectedSeason].leagues
         : [];
@@ -83,9 +85,9 @@ router.get('/', requireAdmin, async (req, res) => {
     let clinchMode = 'strict';
     if (settingsData && settingsData.clinchMode) clinchMode = settingsData.clinchMode;
 
-    // Filter teams and matches by chosenSeason - admin sees all teams from current season (active and inactive)
-    const teamsFromCurrentSeason = teams.filter(t => t.season === chosenSeason);
-    const matchesFromCurrentSeason = matches.filter(m => m.season === chosenSeason);
+    // OPRAVA: Filter teams and matches by selectedSeason (admin sezóna) - admin sees all teams from selected season (active and inactive)
+    const teamsFromCurrentSeason = teams.filter(t => t.season === selectedSeason);
+    const matchesFromCurrentSeason = matches.filter(m => m.season === selectedSeason);
 
     const leaguesFromMatches = [...new Set(matchesFromCurrentSeason.map(m => m.liga))];
     const leaguesFromTeams = [...new Set(teamsFromCurrentSeason.map(t => t.liga))];
@@ -165,7 +167,7 @@ router.get('/', requireAdmin, async (req, res) => {
       <div class="card-body">
         <div class="settings-grid">
           <!-- Registrace -->
-          <div class="setting-item">
+          <div class="setting-item" style="min-height: 140px;">
             <div class="setting-info">
               <label id="registrationLabel" class="setting-label">Registrace nových uživatelů</label>
               <span id="registrationStatus" class="setting-description">
@@ -178,7 +180,7 @@ router.get('/', requireAdmin, async (req, res) => {
           </div>
           
           <!-- Vybraná sezóna -->
-          <div class="setting-item">
+          <div class="setting-item" style="min-height: 140px;">
             <div class="setting-info">
               <label id="seasonLabel" class="setting-label">📅 Vybraná sezóna</label>
               <span class="setting-description">Aktuální sezóna pro celou aplikaci</span>
@@ -192,11 +194,30 @@ router.get('/', requireAdmin, async (req, res) => {
             </form>
           </div>
           
+          <!-- Admin sezóna (prohlížení) -->
+          <div class="setting-item" style="min-height: 140px; background: rgba(0, 212, 255, 0.1);">
+            <div class="setting-info">
+              <label class="setting-label">👁️ Admin prohlížení</label>
+              <span class="setting-description">Sezóna pro prohlížení dat v adminu (neovlivní uživatel stránku)<br>
+                <strong>Aktuálně:</strong> ${adminSeason} ${req.session.adminSeason ? '(vlastní výběr)' : '(= vybraná sezóna)'}
+              </span>
+            </div>
+            <form method="POST" action="/admin/admin-season" style="display: flex; align-items: center; gap: 10px;">
+              <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
+              <select class="modern-select" name="adminSeason" style="width: 150px;">
+                <option value="">= Vybraná sezóna</option>
+                ${allSeasons.map(s => `<option value="${s}" ${s === adminSeason ? 'selected' : ''}>${s}</option>`).join('')}
+              </select>
+              <button type="submit" class="btn btn-secondary">👁️ Prohlížet</button>
+            </form>
+          </div>
+          
           <!-- Veřejné ligy -->
           <div class="setting-item">
             <div class="setting-info">
               <label id="publicLeaguesLabel" class="setting-label">🏆 Veřejné ligy</label>
-              <span class="setting-description">Ligy viditelné pro uživatele</span>
+              <span class="setting-description">Ligy viditelné pro uživatele (globální nastavení)<br>
+                <strong>Aktuálně zobrazeno pro sezónu:</strong> ${selectedSeason}</span>
             </div>
             <form method="POST" action="/admin/leagues/visibility" style="display: flex; flex-direction: column; gap: 10px;">
               <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
@@ -216,7 +237,8 @@ router.get('/', requireAdmin, async (req, res) => {
           <div class="setting-item">
             <div class="setting-info">
               <label id="transfersLeaguesLabel" class="setting-label">💰 Ligy s přestupy</label>
-              <span class="setting-description">Ligy s aktivním přestupovým oknem</span>
+              <span class="setting-description">Ligy s aktivním přestupovým oknem (globální nastavení)<br>
+                <strong>Aktuálně zobrazeno pro sezónu:</strong> ${selectedSeason}</span>
             </div>
             <form method="POST" action="/admin/leagues/transfers" style="display: flex; flex-direction: column; gap: 10px;">
               <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
@@ -299,7 +321,7 @@ router.get('/', requireAdmin, async (req, res) => {
           <a href="/admin/broadcast-ping" class="btn btn-secondary">📢 Test notifikace</a>
           <a href="/api/versions/manage" class="btn btn-secondary">📋 Správa verzí</a>
           <a href="/admin/transfer-data" class="btn btn-warning">🔄 Převod dat z minulého roku</a>
-          <a href="/admin/fix-team-seasons" class="btn btn-info">🔧 Opravit sezóny týmů</a>
+          <a href="/admin/fix-teams-season" class="btn btn-info">🔧 Opravit sezóny týmů</a>
           <a id="backupBtn" class="btn btn-warning">💾 Záloha dat do JSONů</a>
           <a id="verifyStatsBtn" class="btn btn-danger">🔍 Kontrola statistik</a>
         </div>
@@ -325,7 +347,7 @@ router.get('/', requireAdmin, async (req, res) => {
       <a href="/admin/matches/bulk-lock" class="btn btn-secondary">
         🔒 Lock/Unlock zápasů
       </a>
-      <a href="/admin/matches/bulk-lock" class="btn btn-danger" style="background: #8B0000; border-color: #ff0000; margin-left: 5px;">
+      <a href="/admin/matches/bulk-lock" class="btn btn-danger" style="background: #8B0000; border-color: #ff0000;">
         🗑️ Smazat nevyhodnocené
       </a>
     </div>
@@ -583,12 +605,15 @@ async function verifyStats() {
     btn.textContent = '🔄 Kontroluji...';
     
     try {
+        // NOVÉ: Získání CSRF tokenu z hidden inputu
+        const csrfToken = document.querySelector('input[name="_csrf"]')?.value || '';
+        
         const response = await fetch('/admin/verify-stats', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
             },
-            body: \`season=\${encodeURIComponent(selectedSeason)}&liga=\${encodeURIComponent(selectedLiga)}\`
+            body: \`season=\${encodeURIComponent(selectedSeason)}&liga=\${encodeURIComponent(selectedLiga)}&_csrf=\${encodeURIComponent(csrfToken)}\`
         });
         
         const result = await response.json();
@@ -872,16 +897,18 @@ router.post('/leagues/visibility', express.urlencoded({ extended: true }), requi
 router.get('/teams/edit/:id', requireAdmin, async (req, res) => {
     const teamId = parseInt(req.params.id);
     const teams = await Teams.findAll();
-
-    const team = teams.find(t => t.id === teamId);
-    if (!team) return renderErrorHtml(res, "Tým s tímto ID nebyl nalezen.", 404);
     
     const [chosenSeason, allSeasonData] = await Promise.all([
         ChosenSeason.findAll(),
         Leagues.findAll()
     ]);
     
-    const selectedSeason = chosenSeason;
+    // NOVÉ: Použij admin sezónu pokud je nastavena, jinak chosenSeason
+    const selectedSeason = req.session.adminSeason || chosenSeason;
+    
+    // OPRAVA: Najdi tým s daným ID v rámci aktuální sezóny
+    const team = teams.find(t => t.id === teamId && t.season === selectedSeason);
+    if (!team) return renderErrorHtml(res, "Tým s tímto ID nebyl nalezen v aktuální sezóně.", 404);
     const leagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues)
         ? allSeasonData[selectedSeason].leagues
         : [];
@@ -1089,10 +1116,13 @@ router.post('/edit/:id', express.urlencoded({ extended: true }), requireAdmin, a
     } else {
         // --- OPRAVA: ZDE CHYBĚLO ULOŽENÍ VÝSLEDKU BĚŽNÉHO ZÁPASU ---
         if (scoreHome !== '' && scoreAway !== '' && scoreHome !== undefined && scoreAway !== undefined) {
+            // PŘIDÁNO: Načtení sideSwap pro BO1 zápasy (pro správné vyhodnocení tipů)
+            const sideSwap = req.body.sideSwap === 'true' || req.body.sideSwap === 'on';
             match.result = {
                 scoreHome: parseInt(scoreHome),
                 scoreAway: parseInt(scoreAway),
-                ot: req.body.ot === 'on'
+                ot: req.body.ot === 'on',
+                sideSwap: sideSwap
             };
         } else {
             delete match.result;
@@ -1235,12 +1265,12 @@ router.get('/new/match', requireAdmin, async (req, res) => {
                 <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
                 <label style="display: flex; flex-direction: column" for="homeTeamId">Domácí tým
                     <select class="league-select" style="width: 220px" id="homeTeamId" name="homeTeamId" required>
-                        ${teams.map(t => `<option value="${t.id}">${t.liga} - ${t.name}</option>`).join('')}
+                        ${teams.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.liga} - ${t.name}</option>`).join('')}
                     </select>
                 </label>
                 <label style="display: flex; flex-direction: column" for="awayTeamId">Hostující tým
                     <select class="league-select" style="width: 220px" id="awayTeamId" name="awayTeamId" required>
-                        ${teams.map(t => `<option value="${t.id}">${t.liga} - ${t.name}</option>`).join('')}
+                        ${teams.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.liga} - ${t.name}</option>`).join('')}
                     </select>
                 </label>
                 <label style="display: flex; flex-direction: column" for="datetime">Datum a čas
@@ -1489,11 +1519,16 @@ router.post('/new/team', express.urlencoded({ extended: true }), requireAdmin, u
         return renderErrorHtml(res, `Tým <strong>${name}</strong> už v lize <strong>${liga}</strong> existuje.`, 400);
     }
 
+    // NOVÉ: Použij admin sezónu pokud je nastavena, jinak chosenSeason
+    const chosenSeason = await ChosenSeason.findAll();
+    const selectedSeason = req.session.adminSeason || chosenSeason;
+    
     const newTeam = {
         id: teams.length > 0 ? Math.max(...teams.map(t => t.id)) + 1 : 1,
         name: name.trim(),
         liga: liga.trim(),
         active,
+        season: selectedSeason,
         group: parseInt(req.body.group),
         stats: {},
         logo: logoFilename // Uložíme název souboru do JSONu
@@ -1667,13 +1702,13 @@ router.get('/edit/:id', requireAdmin, async (req, res) => {
     <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
     <label for="homeTeamId">Domácí tým
       <select class="league-select" style="width: 220px" id="homeTeamId" name="homeTeamId" required>
-        ${teams.map(t => `<option value="${t.id}" ${t.id === match.homeTeamId ? 'selected' : ''}>${t.name}</option>`).join('')}
+        ${teams.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}" ${t.id === match.homeTeamId ? 'selected' : ''}>${t.name}</option>`).join('')}
       </select>
     </label>
-    
+
     <label for="awayTeamId">Hostující tým
       <select class="league-select" style="width: 220px" id="awayTeamId" name="awayTeamId" required>
-        ${teams.map(t => `<option value="${t.id}" ${t.id === match.awayTeamId ? 'selected' : ''}>${t.name}</option>`).join('')}
+        ${teams.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}" ${t.id === match.awayTeamId ? 'selected' : ''}>${t.name}</option>`).join('')}
       </select>
     </label>
     
@@ -1734,6 +1769,10 @@ router.get('/edit/:id', requireAdmin, async (req, res) => {
           <label style="display: flex; flex-direction: row; align-items: center" for="overtime">
             <input type="checkbox" id="overtime" name="overtime" ${match.result?.ot ? 'checked' : ''} />
             Rozhodnuto v prodloužení?
+          </label>
+          <label style="display: flex; flex-direction: row; align-items: center; margin-top: 10px; color: orangered;" for="sideSwap">
+            <input type="checkbox" id="sideSwap" name="sideSwap" ${match.result?.sideSwap ? 'checked' : ''} />
+            🔄 Prohozené strany (domácí/hosté oproti původnímu nastavení)
           </label>
       </div>
       
@@ -1906,8 +1945,13 @@ router.post('/teams/edit/:id', express.urlencoded({ extended: true }), requireAd
     const teamId = parseInt(req.params.id);
     const teams = await Teams.findAll();
     
-    const teamIndex = teams.findIndex(t => t.id === teamId);
-    if (teamIndex === -1) return renderErrorHtml(res, "Tým s tímto ID nebyl nalezen.", 404);
+    // NOVÉ: Získej aktuální sezónu (admin nebo chosen)
+    const chosenSeason = await ChosenSeason.findAll();
+    const selectedSeason = req.session.adminSeason || chosenSeason;
+    
+    // OPRAVA: Najdi index týmu s daným ID v rámci aktuální sezóny
+    const teamIndex = teams.findIndex(t => t.id === teamId && t.season === selectedSeason);
+    if (teamIndex === -1) return renderErrorHtml(res, "Tým s tímto ID nebyl nalezen v aktuální sezóně.", 404);
     
     const team = teams[teamIndex];
     const { name, liga, active } = req.body;
@@ -1940,13 +1984,23 @@ router.post('/teams/delete/:id', express.urlencoded({ extended: true }), require
     
     const teamsId = parseInt(req.params.id);
     let teams = await Teams.findAll();
-
-    teams = teams.filter(t => t.id !== teamsId);
+    
+    // NOVÉ: Získej aktuální sezónu (admin nebo chosen)
+    const chosenSeason = await ChosenSeason.findAll();
+    const selectedSeason = req.session.adminSeason || chosenSeason;
+    
+    // OPRAVA: Smaž pouze tým s daným ID z aktuální sezóny
+    const teamToDelete = teams.find(t => t.id === teamsId && t.season === selectedSeason);
+    if (!teamToDelete) {
+        return renderErrorHtml(res, "Tým s tímto ID nebyl nalezen v aktuální sezóně.", 404);
+    }
+    
+    teams = teams.filter(t => !(t.id === teamsId && t.season === selectedSeason));
 
     // Uložení do MongoDB
     await Teams.replaceAll(teams);
     
-    await logAdminAction(req.session.user, "SMAZÁNÍ_TÝMU", `Smazán tým s ID: ${teamsId}`);
+    await logAdminAction(req.session.user, "SMAZÁNÍ_TÝMU", `Smazán tým ${teamToDelete.name} (ID: ${teamsId}, sezóna: ${selectedSeason})`);
     res.redirect('/admin');
 });
 
@@ -2010,6 +2064,29 @@ router.post('/season', express.urlencoded({ extended: true }), requireAdmin, asy
     // ŽÁDNÉ MAZÁNÍ DAT - pouze změna aktivní sezóny
     await logAdminAction(req.session.user, "ZMENA_SEZONY", 
         `Změna sezóny z "${previousSeason}" na "${selectedSeason}" (data zachována)`);
+    
+    res.redirect('/admin');
+});
+
+// NOVÁ ROUTA: Nastavení admin sezóny (pouze pro prohlížení, neovlivní uživatele)
+router.post('/admin-season', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    
+    const adminSeason = req.body.adminSeason || '';
+    const previousAdminSeason = req.session.adminSeason || '(vybraná sezóna)';
+    
+    if (adminSeason) {
+        req.session.adminSeason = adminSeason;
+        await logAdminAction(req.session.user, "ADMIN_SEZONA", 
+            `Nastavena admin sezóna pro prohlížení: "${adminSeason}" (předtím: "${previousAdminSeason}")`);
+    } else {
+        delete req.session.adminSeason;
+        await logAdminAction(req.session.user, "ADMIN_SEZONA", 
+            `Smazána vlastní admin sezóna, nyní se používá vybraná sezóna`);
+    }
     
     res.redirect('/admin');
 });
@@ -6295,6 +6372,70 @@ router.get('/diagnose-seasons', requireAdmin, async (req, res) => {
     } catch (error) {
         console.error('Chyba při diagnostice:', error);
         res.status(500).send('Chyba při diagnostice: ' + error.message);
+    }
+});
+
+// NOVÁ ROUTA: Oprava týmů bez season - nastaví aktuální chosenSeason
+router.get('/fix-teams-season', requireAdmin, async (req, res) => {
+    try {
+        const teams = await Teams.findAll();
+        const currentSeason = await ChosenSeason.findAll();
+        let fixedCount = 0;
+        let alreadyHasSeason = 0;
+        
+        for (const team of teams) {
+            if (!team.season) {
+                team.season = currentSeason;
+                fixedCount++;
+            } else {
+                alreadyHasSeason++;
+            }
+        }
+        
+        if (fixedCount > 0) {
+            await Teams.replaceAll(teams);
+        }
+        
+        await logAdminAction(req.session.user, "OPRAVA_SEZON", 
+            `Nastaveno ${fixedCount} týmů na sezónu ${currentSeason}, ${alreadyHasSeason} již mělo sezónu`);
+        
+        res.send(`
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <title>Oprava sezón týmů</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <style>
+        body { background: #121212; color: white; padding: 20px; font-family: Arial, sans-serif; }
+        .container { max-width: 800px; margin: 50px auto; background: #1a1a1a; padding: 30px; border-radius: 10px; }
+        h1 { color: orangered; }
+        .success { color: #00d4ff; font-size: 1.2em; }
+        .stats { margin: 20px 0; padding: 15px; background: #0d0d0d; border-radius: 5px; }
+        .btn { display: inline-block; background: orangered; color: black; padding: 10px 20px; 
+               text-decoration: none; border-radius: 5px; margin-top: 20px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Oprava sezón týmů</h1>
+        <p class="success">✅ Dokončeno!</p>
+        <div class="stats">
+            <p><strong>Aktuální sezóna:</strong> ${currentSeason}</p>
+            <p><strong>Opravených týmů:</strong> ${fixedCount}</p>
+            <p><strong>Týmů již se sezónou:</strong> ${alreadyHasSeason}</p>
+            <p><strong>Celkem týmů:</strong> ${teams.length}</p>
+        </div>
+        <a href="/admin" class="btn">← Zpět na admin</a>
+    </div>
+</body>
+</html>`);
+        
+        console.log(`🔧 Dokončeno: ${fixedCount} týmů nastaveno na ${currentSeason}, ${alreadyHasSeason} již mělo sezónu`);
+        
+    } catch (error) {
+        console.error('Chyba při nastavování sezón:', error);
+        res.status(500).send('Chyba: ' + error.message);
     }
 });
 

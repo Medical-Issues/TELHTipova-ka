@@ -1294,6 +1294,169 @@ router.get('/history', requireLogin, async (req, res) => {
 
     res.send(html);
 });
+
+// NOVÁ ROUTA: Historie přestupů - zobrazí přestupy pro danou ligu a sezónu (stejný layout jako aktuální)
+router.get('/history/prestupy', requireLogin, async (req, res) => {
+    const { Transfers, Teams, Matches } = require('../utils/mongoDataAccess');
+    const transfersData = await Transfers.findAll();
+    const allTeams = await Teams.findAll();
+    const allMatches = await Matches.findAll();
+    
+    // Získání parametrů z URL
+    const selectedLiga = req.query.liga;
+    const selectedSeason = req.query.season;
+    
+    // Pokud chybí parametry, přesměruj na výběr historie
+    if (!selectedLiga || !selectedSeason) {
+        return res.redirect('/history');
+    }
+    
+    // Filtrování týmů podle sezóny a ligy (podobně jako v aktuálních přestupech)
+    const teamsInSelectedLiga = allTeams.filter(t => 
+        t.liga === selectedLiga && t.season === selectedSeason && t.active
+    );
+    
+    // Načtení přestupů pro danou ligu a sezónu
+    const currentTransfers = transfersData?.[selectedSeason]?.[selectedLiga] || {};
+    
+    // Generování HTML s přestupy pro danou sezónu/ligu
+    let html = `
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Přestupy - ${selectedLiga} ${selectedSeason}</title>
+<link rel="stylesheet" href="/css/styles.css" />
+<script src="/js/version-notification.js"></script>
+<link rel="icon" href="/images/logo.png">
+</head>
+<body class="usersite">
+<header class="header">
+<div class="league-dropdown">
+<div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1>Přestupy - ${selectedLiga} ${selectedSeason}</h1></div>
+<a class="history-btn" href="/">Aktuální</a>
+<a class="history-btn" href="/history">Zpět na výběr</a>
+<a class="history-btn" href="/history/a/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy zápasů</a>
+<a class="history-btn" href="/history/table/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy tabulky</a>
+</div>
+<p id="logged_user">${req.session?.user ? `Přihlášený jako: <strong>${req.session.user}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
+</header>
+<header class="time-header">${await generateTimeWidget()}</header>
+<main class="main_page">
+
+<h2 style="margin-top: 0; text-align: center; border-bottom: 2px solid orangered; padding-bottom: 10px;">Přestupy a Spekulace - ${selectedLiga} (${selectedSeason})</h2>
+
+<div style="display: grid; gap: 15px; margin-top: 15px;">
+`;
+
+    // FUNKCE PRO OBARVOVÁNÍ (stejné jako v aktuálních přestupech)
+    const formatPlayerName = (rawName) => {
+        let style = 'color: white;';
+        let icon = '';
+        let name = rawName;
+
+        if (name.includes('(X)')) {
+            style = 'color: #ff6666; text-decoration: line-through; opacity: 0.7;';
+            icon = '❌ ';
+            name = name.replace('(X)', '');
+        }
+        else if (name.includes('(-)')) {
+            style = 'color: #888; text-decoration: line-through; opacity: 0.5; font-style: italic;';
+            icon = '🚫 ';
+            name = name.replace('(-)', '');
+        }
+        else if (name.includes('(!)')) {
+            style = 'color: #ffd700; font-weight: bold; text-shadow: 0 0 8px rgba(255, 215, 0, 0.4);';
+            icon = '🔥 ';
+            name = name.replace('(!)', '');
+        }
+        else if (name.includes('(?)')) {
+            style = 'color: #00d4ff; font-style: italic;';
+            icon = '❓ ';
+            name = name.replace('(?)', '');
+        }
+        else if (name.includes('(K)')) {
+            style = 'color: #ffaa00; font-weight: bold;';
+            icon = '📄 ';
+            name = name.replace('(K)', '');
+        }
+
+        const colorMatch = name.match(/#([0-9a-fA-F]{3,6})/);
+        if (colorMatch) {
+            style = `color: ${colorMatch[0]}; font-weight: bold;`;
+            name = name.replace(colorMatch[0], '');
+        }
+
+        return `<span style="${style}">${icon}${name.trim()}</span>`;
+    };
+
+    const renderList = (arr) => {
+        if (!arr || arr.length === 0) return '<div style="color: gray; font-size: 0.8em; font-style: italic;">-</div>';
+
+        return arr.map(player => `
+        <div style="font-size: 0.95em; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+            ${formatPlayerName(player)}
+        </div>
+    `).join('');
+    };
+
+    // VYKRESLENÍ KARET TÝMŮ
+    if (teamsInSelectedLiga.length === 0) {
+        html += `<div style="text-align: center; padding: 40px; color: #888;">Žádné týmy v lize ${selectedLiga} pro sezónu ${selectedSeason}</div>`;
+    } else {
+        teamsInSelectedLiga.sort((a, b) => a.id - b.id).forEach(team => {
+            const tId = String(team.id);
+            const tData = currentTransfers[tId] || { specIn: [], specOut: [], confIn: [], confOut: [] };
+            const logoUrl = team.logo ? `/logoteamu/${team.logo}` : '/images/logo.png';
+
+            html += `
+    <div style="position: relative; background-color: #000; border: 2px solid #ff4500; overflow: hidden; display: flex; flex-direction: column; min-height: 250px; box-shadow: 0 4px 15px rgba(0,0,0,0.8);">
+        
+        <div style="position: relative; z-index: 1; background: linear-gradient(to bottom, #222, #111); border-bottom: 3px solid #ff4500; display: flex; align-items: center; padding: 10px;">
+            <img src="${logoUrl}" alt="${team.name}" style="height: 45px; width: 45px; object-fit: contain; margin-right: 12px; filter: drop-shadow(0 0 5px rgba(255,255,255,0.2));">
+            <strong style="color: white; font-size: 1.3em; text-transform: uppercase; letter-spacing: 1px;">${team.name}</strong>
+        </div>
+
+        <div style="position: relative; z-index: 1; display: flex; flex-direction: row; flex: 1;">
+            
+            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-10deg); width: 80%; height: 80%; background-image: url('${logoUrl}'); background-size: contain; background-repeat: no-repeat; background-position: center; opacity: 0.30; filter: grayscale(50%); z-index: -50; pointer-events: none;"></div>
+            
+            <div style="flex: 1; padding: 8px; border-right: 1px solid #333; background-color: rgba(0, 50, 80, 0.3);">
+                <div style="color: #00d4ff; font-size: 0.7em; font-weight: 900; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;">Spekulace IN</div>
+                ${renderList(tData.specIn)}
+            </div>
+
+            <div style="flex: 1; padding: 8px; border-right: 1px solid #333; background-color: rgba(0, 50, 80, 0.3);">
+                <div style="color: #00d4ff; font-size: 0.7em; font-weight: 900; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;">Spekulace OUT</div>
+                ${renderList(tData.specOut)}
+            </div>
+
+            <div style="flex: 1; padding: 8px; border-right: 1px solid #333; background-color: rgba(0, 100, 0, 0.2);">
+                <div style="color: #00ff00; font-size: 0.7em; font-weight: 900; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;">Příchody</div>
+                ${renderList(tData.confIn)}
+            </div>
+
+            <div style="flex: 1; padding: 8px; background-color: rgba(100, 0, 0, 0.2);">
+                <div style="color: #ff4444; font-size: 0.7em; font-weight: 900; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;">Odchody</div>
+                ${renderList(tData.confOut)}
+            </div>
+        </div>
+    </div>
+    `;
+        });
+    }
+
+    html += `
+</div>
+</main>
+</body>
+</html>
+`;
+
+    res.send(html);
+});
+
 router.get('/history/a', requireLogin, async (req, res) => {
     // 0. Bezpečnostní kontrola adresy
     if (!req.query.liga || !req.query.season) return res.redirect('/history');
@@ -1307,7 +1470,13 @@ router.get('/history/a', requireLogin, async (req, res) => {
         matches, allUsers, userStats,
     } = data;
 
-    // 3. DATA SPECIFICKÁ PRO HISTORII (Výběr uživatele z rolovacího menu vpravo)
+    // 3. NAČTENÍ PŘESTUPŮ PRO KONTROLU ZDA EXISTUJÍ
+    const { Transfers } = require('../utils/mongoDataAccess');
+    const transfersData = await Transfers.findAll();
+    const seasonTransfers = transfersData?.[selectedSeason]?.[selectedLiga] || {};
+    const hasTransfers = Object.keys(seasonTransfers).length > 0;
+
+    // 4. DATA SPECIFICKÁ PRO HISTORII (Výběr uživatele z rolovacího menu vpravo)
     const usersWithTips = allUsers.filter(u => u.tips?.[selectedSeason]?.[selectedLiga]?.length > 0).sort((a, b) => a.username.localeCompare(b.username));
     const initialUser = usersWithTips.find(u => u.username === username) ? username : (usersWithTips[0]?.username || "");
 
@@ -1338,6 +1507,10 @@ p.style.display = which === 'playoff' ? 'block' : 'none';
 <a class="history-btn" href="/history">Zpět na výběr</a>
 <a class="history-btn" style="background:orangered; color:black;" href="/history/a/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy zápasů</a>
 <a class="history-btn" href="/history/table/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy tabulky</a>
+${hasTransfers 
+    ? `<a class="history-btn" style="background:#00d4ff; color:black;" href="/history/prestupy?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">📜 Přestupy</a>`
+    : `<span class="history-btn" style="background:#333; color:#666; cursor:not-allowed;" title="Pro tuto sezónu/ligu nejsou dostupné přestupy">📜 Přestupy</span>`
+}
 </div>
 <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
@@ -1661,6 +1834,12 @@ router.get('/history/table', requireLogin, async (req, res) => {
     } = data;
     isTipsLocked = data.isTipsLocked;
 
+    // 3. NAČTENÍ PŘESTUPŮ PRO KONTROLU ZDA EXISTUJÍ
+    const { Transfers } = require('../utils/mongoDataAccess');
+    const transfersData = await Transfers.findAll();
+    const seasonTransfers = transfersData?.[selectedSeason]?.[selectedLiga] || {};
+    const hasTransfers = Object.keys(seasonTransfers).length > 0;
+
     const usersWithTableTips = allUsers.filter(u => tableTips?.[selectedSeason]?.[selectedLiga]?.[u.username]).sort((a, b) => a.username.localeCompare(b.username));
     const initialUser = usersWithTableTips.find(u => u.username === username) ? username : (usersWithTableTips[0]?.username || "");
 
@@ -1690,6 +1869,10 @@ function showTable(which) {
             <a class="history-btn" href="/history">Zpět na výběr</a>
             <a class="history-btn" href="/history/a/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy zápasů</a>
             <a class="history-btn" style="background:orangered; color:black;" href="/history/table/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy tabulky</a>
+            ${hasTransfers 
+                ? `<a class="history-btn" style="background:#00d4ff; color:black;" href="/history/prestupy?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">📜 Přestupy</a>`
+                : `<span class="history-btn" style="background:#333; color:#666; cursor:not-allowed;" title="Pro tuto sezónu/ligu nejsou dostupné přestupy">📜 Přestupy</span>`
+            }
         </div>
         <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
     </header>
@@ -1867,14 +2050,7 @@ html += await generateLeftPanel(data, true);
 });
 
 router.get("/prestupy", requireLogin, async (req, res) => {
-    // Kontrola jest je liga veřejná
-    const allowedLeagues = await getAllowedLeagues();
-    const requestedLiga = req.query.liga;
-    if (requestedLiga && !allowedLeagues.includes(requestedLiga)) {
-        // Přesměruj na první veřejnou ligu
-        const firstPublic = allowedLeagues[0] || 'Neurčeno';
-        return res.redirect(`/prestupy?liga=${encodeURIComponent(firstPublic)}`);
-    }
+    // Odstraněna podmínka kontroly veřejné ligy - přestupy jsou viditelné vždy
     
     // 1. ZAVOLÁME MOZEK, KTERÝ VŠE VYPOČÍTÁ BĚHEM MILISEKUNDY
     const data = await prepareDashboardData(req);
@@ -2113,7 +2289,10 @@ html += await generateLeftPanel(data);
         </section></main></body>`; // Ukončení HTML
         } else {
             // --- SEKCE PŘESTUPŮ ---
-            html += `<h2 style="margin-top: 0; text-align: center; border-bottom: 2px solid orangered; padding-bottom: 10px;">Přestupy a Spekulace - ${selectedLiga}</h2>
+            html += `<div style="text-align: center; margin-bottom: 10px;">
+                <a href="/history/prestupy" style="color: #00d4ff; text-decoration: none; font-size: 0.9em;">📜 Historie přestupů</a>
+            </div>
+            <h2 style="margin-top: 0; text-align: center; border-bottom: 2px solid orangered; padding-bottom: 10px;">Přestupy a Spekulace - ${selectedLiga}</h2>
             
             <div style="display: grid; gap: 15px; margin-top: 15px;">`;
 
@@ -2222,15 +2401,21 @@ html += await generateLeftPanel(data);
 
 
 // POST routa pro generování obrázků
-router.post("/image-exporter/generate", requireLogin, express.json(), async (req, res) => {
+router.post("/image-exporter/generate", requireLogin, express.json({ limit: '50mb' }), async (req, res) => {
     const { createTransferImage, createWinnerImage, createStandingsImage, createStatisticsImage, createPlayoffBracketImage } = require("../utils/fileUtils");
     const { createVersusImageForExport } = require("../routes/notificationService.js");
+    const { getChosenSeason } = require('../utils/fileUtils');
 
     try {
-        const { type, homeTeamId, awayTeamId, fromTeamId, toTeamId, winnerTeamId, scoreHome, scoreAway, title, winnerTitle, playerName, playerPhoto, watermark, isPlayoff, seriesHomeWins, seriesAwayWins } = req.body;
+        const { type, homeTeamId, awayTeamId, fromTeamId, toTeamId, winnerTeamId, scoreHome, scoreAway, title, winnerTitle, playerName, playerPhoto, watermark, isPlayoff, seriesHomeWins, seriesAwayWins, season: exportSeason } = req.body;
 
         const { Teams } = require('../utils/mongoDataAccess');
+        const currentSeason = await getChosenSeason();
+        // NOVÉ: Použij exportovanou sezónu pokud je specifikována, jinak aktuální
+        const selectedSeason = exportSeason || currentSeason;
         const allTeams = await Teams.findAll();
+        // OPRAVA: Filtrovat týmy podle zvolené sezóny (ne pouze aktuální)
+        const seasonTeams = allTeams.filter(t => t.active && t.season === selectedSeason);
 
         const outDir = path.join(__dirname, '../public/images/exports');
         if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
@@ -2241,8 +2426,8 @@ router.post("/image-exporter/generate", requireLogin, express.json(), async (req
 
         switch (type) {
             case 'match': {
-                const homeTeam = allTeams.find(t => t.id === parseInt(homeTeamId));
-                const awayTeam = allTeams.find(t => t.id === parseInt(awayTeamId));
+                const homeTeam = seasonTeams.find(t => t.id === parseInt(homeTeamId));
+                const awayTeam = seasonTeams.find(t => t.id === parseInt(awayTeamId));
                 if (!homeTeam || !awayTeam) return res.status(400).json({ error: 'Týmy nenalezeny' });
 
                 buffer = await createVersusImageForExport(homeTeam, awayTeam);
@@ -2250,8 +2435,8 @@ router.post("/image-exporter/generate", requireLogin, express.json(), async (req
                 break;
             }
             case 'result': {
-                const homeTeam = allTeams.find(t => t.id === parseInt(homeTeamId));
-                const awayTeam = allTeams.find(t => t.id === parseInt(awayTeamId));
+                const homeTeam = seasonTeams.find(t => t.id === parseInt(homeTeamId));
+                const awayTeam = seasonTeams.find(t => t.id === parseInt(awayTeamId));
                 if (!homeTeam || !awayTeam) return res.status(400).json({ error: 'Týmy nenalezeny' });
 
                 const seriesData = (isPlayoff && seriesHomeWins !== undefined && seriesAwayWins !== undefined)
@@ -2263,8 +2448,8 @@ router.post("/image-exporter/generate", requireLogin, express.json(), async (req
                 break;
             }
             case 'transfer': {
-                const fromTeam = allTeams.find(t => t.id === parseInt(fromTeamId));
-                const toTeam = allTeams.find(t => t.id === parseInt(toTeamId));
+                const fromTeam = seasonTeams.find(t => t.id === parseInt(fromTeamId));
+                const toTeam = seasonTeams.find(t => t.id === parseInt(toTeamId));
                 if (!fromTeam || !toTeam) return res.status(400).json({ error: 'Týmy nenalezeny' });
 
                 let playerPhotoPath = null;
@@ -2287,7 +2472,7 @@ router.post("/image-exporter/generate", requireLogin, express.json(), async (req
             }
             case 'winner': {
                 const { winnerColor, showTrophy } = req.body;
-                const winnerTeam = allTeams.find(t => t.id === parseInt(winnerTeamId));
+                const winnerTeam = seasonTeams.find(t => t.id === parseInt(winnerTeamId));
                 if (!winnerTeam) return res.status(400).json({ error: 'Tým nenalezen' });
 
                 const titleText = winnerTitle || `VÍTĚZ`;
@@ -2656,7 +2841,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <a class="history-btn" href="/history">Historie</a>
 <a class="history-btn changed" ${!isPublicLeague ? `style="${disabledStyle}" onclick="return false;"` : `href="/?liga=${encodeURIComponent(selectedLiga)}"`}>Tipovačka</a>
 <a class="history-btn changed" ${!isPublicLeague ? `style="${disabledStyle}" onclick="return false;"` : `href="/table-tip?liga=${encodeURIComponent(selectedLiga)}"`}>Základní část</a>
-<a class="history-btn changed" ${!isPublicLeague ? `style="${disabledStyle}" onclick="return false;"` : `href="/prestupy?liga=${encodeURIComponent(selectedLiga)}"`}>Přestupy</a>
+<a class="history-btn changed" href="/prestupy?liga=${encodeURIComponent(selectedLiga)}">Přestupy</a>
 </form>
 <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
@@ -2690,14 +2875,14 @@ html += `<section class="matches-container" style="flex: 1; padding: 20px;">
                         <label>Domácí tým</label>
                         <select name="homeTeamId" required>
                             <option value="">Vyber tým</option>
-                            ${leagueTeams.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+                            ${leagueTeams.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
                         </select>
                     </div>
                     <div class="form-group">
                         <label>Hostující tým</label>
                         <select name="awayTeamId" required>
                             <option value="">Vyber tým</option>
-                            ${leagueTeams.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+                            ${leagueTeams.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
                         </select>
                     </div>
                 </div>
@@ -2717,14 +2902,14 @@ html += `<section class="matches-container" style="flex: 1; padding: 20px;">
                         <label>Domácí tým</label>
                         <select name="homeTeamId" required>
                             <option value="">Vyber tým</option>
-                            ${leagueTeams.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+                            ${leagueTeams.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
                         </select>
                     </div>
                     <div class="form-group">
                         <label>Hostující tým</label>
                         <select name="awayTeamId" required>
                             <option value="">Vyber tým</option>
-                            ${leagueTeams.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+                            ${leagueTeams.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
                         </select>
                     </div>
                 </div>
@@ -2772,14 +2957,14 @@ html += `<section class="matches-container" style="flex: 1; padding: 20px;">
                         <label>Z týmu</label>
                         <select name="fromTeamId" required>
                             <option value="">Vyber tým</option>
-                            ${leagueTeams.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+                            ${leagueTeams.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
                         </select>
                     </div>
                     <div class="form-group">
                         <label>Do týmu</label>
                         <select name="toTeamId" required>
                             <option value="">Vyber tým</option>
-                            ${leagueTeams.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+                            ${leagueTeams.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
                         </select>
                     </div>
                 </div>
@@ -2808,7 +2993,7 @@ html += `<section class="matches-container" style="flex: 1; padding: 20px;">
                     <label>Vítězný tým</label>
                     <select name="winnerTeamId" required>
                         <option value="">Vyber tým</option>
-                        ${leagueTeams.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+                        ${leagueTeams.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
                     </select>
                 </div>
                 <div class="form-group">

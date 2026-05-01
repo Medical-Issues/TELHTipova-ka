@@ -175,8 +175,16 @@ async function evaluateAndAssignPoints(liga, season) {
                 const realAway = Number(match.result.scoreAway ?? 0);
 
                 // Ošetření různých názvů proměnných v datech
-                const tipHome = Number(tip.scoreHome ?? tip.scoreH ?? tip.homeGoals ?? 0);
-                const tipAway = Number(tip.scoreAway ?? tip.scoreA ?? tip.awayGoals ?? 0);
+                let tipHome = Number(tip.scoreHome ?? tip.scoreH ?? tip.homeGoals ?? 0);
+                let tipAway = Number(tip.scoreAway ?? tip.scoreA ?? tip.awayGoals ?? 0);
+
+                // OPRAVA: Pokud je zápas s prohozenými stranami, prohodíme tipy uživatele
+                // (protože tipoval před prohozením, ale výsledek je uložen po prohození)
+                if (match.result?.sideSwap === true) {
+                    const temp = tipHome;
+                    tipHome = tipAway;
+                    tipAway = temp;
+                }
 
                 if (Number.isNaN(tipHome) || Number.isNaN(tipAway)) {
                     continue;
@@ -240,7 +248,12 @@ async function evaluateAndAssignPoints(liga, season) {
             // ---------------------------------------------------------
             if (!match.isPlayoff) {
                 totalRegular++;
-                if (tip.winner === match.result.winner) {
+                // OPRAVA: Pokud je zápas s prohozenými stranami, invertujeme vítěze tipu před porovnáním
+                let evaluatedWinner = tip.winner;
+                if (match.result?.sideSwap === true) {
+                    evaluatedWinner = tip.winner === 'home' ? 'away' : 'home';
+                }
+                if (evaluatedWinner === match.result.winner) {
                     correctPoints += 1;
                 }
             }
@@ -3672,6 +3685,7 @@ module.exports = {
     renderErrorHtml,
     prepareDashboardData,
     getGroupDisplayLabel,
+    getChosenSeason,
     generateLeftPanel,
     logAdminAction,
     getLeagueStatusData,
