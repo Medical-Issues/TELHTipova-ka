@@ -1344,9 +1344,8 @@ router.get('/history/prestupy', requireLogin, async (req, res) => {
 <header class="time-header">${await generateTimeWidget()}</header>
 <main class="main_page">
 
+<div style="display: grid; gap: 15px; margin-top: 15px; width: 100%;">
 <h2 style="margin-top: 0; text-align: center; border-bottom: 2px solid orangered; padding-bottom: 10px;">Přestupy a Spekulace - ${selectedLiga} (${selectedSeason})</h2>
-
-<div style="display: grid; gap: 15px; margin-top: 15px;">
 `;
 
     // FUNKCE PRO OBARVOVÁNÍ (stejné jako v aktuálních přestupech)

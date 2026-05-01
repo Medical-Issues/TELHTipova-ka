@@ -43,19 +43,19 @@ U rout kde je možné přidat obrázek přidat možnost pracovat s galerií ✅
 Dodělání oznámení u přestupů ✅
 
 v exportéru udělat chytřeji ten VS image ✅
+___
+Opravit ten převod ročníků + přidání nových týmů a zneaktivovávín týmu pouze pro daný ročník ne pro všechny aby se nezníčili statistiky předchozího ročníku ✅
 
-Opravit ten převod ročníků + přidání nových týmů a zneaktivovávín týmu pouze pro daný ročník ne pro všechny aby se nezníčili statistiky předchozího ročníku
+Historie přestupů (zobrazit tlačítko pokud máme je zvěřejněný přestup + zrušit podmínku že přestup se zobrazí jen když je liga veřejná) + Možnost viditelnosti přestupu i když není ✅
 
-Historie přestupů (zobrazit tlačítko pokud máme je zvěřejněný přestup + zrušit podmínku že přestup se zobrazí jen když je liga veřejná) + Možnost viditelnosti přestupu i když není 
+Dropdown menu pro ročníky v adminu abych nemusel přepínat ročník a tím pádem zobrazovat to v user stránce ✅
 
-Dropdown menu pro ročníky v adminu abych nemusel přepínat ročník a tím pádem zobrazovat to v user stránce
-
-v adminu tlačítko smazat nevyhodnocené má margin-left
+v adminu tlačítko smazat nevyhodnocené má margin-left ✅
 
 Opravit exportér
 
 Srovna tabulku vybrané sezóny a registrace nových uživatelů (height)
 
-Špatný vypočítávání tipů po změně strany když už má tým natipováno / nebo přídám skóre a otočím týmy
+Špatný vypočítávání tipů po změně strany když už má tým natipováno / nebo přídám skóre a otočím týmy ✅
 
-Špatný srovnávání dropdown menu vše podle ID pokud to jde a co není
+Špatný srovnávání dropdown menu vše podle ID pokud to jde a co není ✅

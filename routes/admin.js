@@ -1174,7 +1174,7 @@ router.post('/edit/:id', express.urlencoded({ extended: true }), requireAdmin, a
     }
 
     await logAdminAction(req.session.user, "ÚPRAVA_ZÁPASU", `Upraven zápas ID: ${matchId} (Liga: ${match.liga})`);
-    res.redirect('/admin');
+    res.redirect(`/admin?liga=${encodeURIComponent(match.liga)}&season=${encodeURIComponent(match.season)}`);
 });
 
 router.get('/new/match', requireAdmin, async (req, res) => {
@@ -1378,7 +1378,7 @@ router.post('/new/match', express.urlencoded({ extended: true }), requireAdmin, 
     await Matches.replaceAll(matches);
     
     await logAdminAction(req.session.user, "NOVÝ_ZÁPAS", `Vytvořen nový zápas: ${homeTeam.name} vs ${awayTeam.name} (${finalLiga})`);
-    res.redirect('/admin');
+    res.redirect(`/admin?liga=${encodeURIComponent(finalLiga)}&season=${encodeURIComponent(season)}`);
 });
 
 
@@ -1550,15 +1550,18 @@ router.get('/edit/:id', requireAdmin, async (req, res) => {
     const matchId = parseInt(req.params.id);
     let matches = await Matches.findAll();
     const chosenSeason = await ChosenSeason.findAll();
-    const teams = (await Teams.findAll()).filter(t => t.active === true && t.season === chosenSeason);
+    const allTeams = (await Teams.findAll()).filter(t => t.active === true && t.season === chosenSeason);
 
     const match = matches.find(m => m.id === matchId);
     if (!match) return renderErrorHtml(res, "Zápas nebyl nalezen.", 404);
 
-    const seasonsFromTeams = teams.map(t => t.season).filter(Boolean);
+    // Filtrujeme týmy podle ligy zápasu (pro baráž zobrazíme všechny)
+    const teams = match.isBaraz ? allTeams : allTeams.filter(t => t.liga === match.liga);
+
+    const seasonsFromTeams = allTeams.map(t => t.season).filter(Boolean);
     const seasonsFromMatches = matches.map(m => m.season).filter(Boolean);
     const allSeasons = [...new Set([...seasonsFromTeams, ...seasonsFromMatches])];
-    const uniqueLeagues = [...new Set(teams.map(t => t.liga))].sort();
+    const uniqueLeagues = [...new Set(allTeams.map(t => t.liga))].sort();
     allSeasons.sort();
 
     const resultHome = match.result?.scoreHome ?? '';
@@ -1936,7 +1939,7 @@ router.post('/edit/:id', express.urlencoded({ extended: true }), requireAdmin, a
         console.error("Chyba při přepočtech, nebyla odeslána sezóna nebo liga", err);
     }
     await logAdminAction(req.session.user, "ÚPRAVA_ZÁPASU", `Upraven zápas ID: ${matchId} (Liga: ${match.liga})`);
-    res.redirect('/admin');
+    res.redirect(`/admin?liga=${encodeURIComponent(match.liga)}&season=${encodeURIComponent(match.season)}`);
 });
 
 router.post('/teams/edit/:id', express.urlencoded({ extended: true }), requireAdmin, upload.single('logo'), async (req, res) => {
@@ -2041,7 +2044,7 @@ router.post('/delete/:id', express.urlencoded({ extended: true }), requireAdmin,
 
     await evaluateAndAssignPoints(matchLiga, matchSeason);
     await logAdminAction(req.session.user, "SMAZÁNÍ_ZÁPASU", `Smazán zápas ID: ${matchId} (Liga: ${matchLiga})`);
-    res.redirect('/admin');
+    res.redirect(`/admin?liga=${encodeURIComponent(matchLiga)}&season=${encodeURIComponent(matchSeason)}`);
 });
 
 const {getAllSeasons} = require('../utils/fileUtils');
@@ -2312,7 +2315,7 @@ router.get('/togglePostponed/:id', requireAdmin, async (req, res) => {
     await Matches.replaceAll(matches);
     
     await logAdminAction(req.session.user, "ODLOŽENÍ_ZÁPASU", `Zápas ID ${matchId} byl ${match.postponed ? 'ODLOŽEN' : 'VRÁCEN DO BĚŽNÉHO STAVU'}`);
-    res.redirect('/admin');
+    res.redirect(`/admin?liga=${encodeURIComponent(match.liga)}&season=${encodeURIComponent(match.season)}`);
 });
 
 router.get('/leagues/manage', requireAdmin, async (req, res) => {
@@ -5037,7 +5040,7 @@ router.get('/toggleLocked/:id', requireAdmin, async (req, res) => {
 
     await Matches.replaceAll(matches);
     await logAdminAction(req.session.user, "ZÁMEK_ZÁPASU", `Zápas ID ${matchId} byl manuálně ${match.locked ? 'UZAMČEN' : 'ODEMČEN'}`);
-    res.redirect('/admin');
+    res.redirect(`/admin?liga=${encodeURIComponent(match.liga)}&season=${encodeURIComponent(match.season)}`);
 });
 
 // ==========================================
@@ -5093,9 +5096,8 @@ router.post('/matches/bulk-lock', express.urlencoded({ extended: true }), requir
         const actionText = shouldLock ? 'UZAMČENY' : 'ODEMČENY';
         await logAdminAction(req.session.user, "HROMADNÝ_ZÁMEK", `${affectedCount} zápasů v lize ${liga} (${season}) bylo ${actionText}`);
         
-        // Přesměrování zpět (buď na redirectUrl nebo na /admin)
-        const redirect = redirectUrl || '/admin';
-        res.redirect(redirect);
+        // Přesměrování zpět s ligou a sezónou
+        res.redirect(`/admin?liga=${encodeURIComponent(liga)}&season=${encodeURIComponent(season)}`);
         
     } catch (error) {
         console.error('Chyba při hromadném zamknutí/odemknutí:', error);
@@ -5148,9 +5150,8 @@ router.post('/matches/bulk-delete', express.urlencoded({ extended: true }), requ
                 `Smazeno ${deletedCount} nevyhodnocených zápasů v lize ${liga} (${season}), zachováno ${preservedCount} vyhodnocených`);
         }
         
-        // Přesměrování zpět
-        const redirect = redirectUrl || '/admin';
-        res.redirect(redirect);
+        // Přesměrování zpět s ligou a sezónou
+        res.redirect(`/admin?liga=${encodeURIComponent(liga)}&season=${encodeURIComponent(season)}`);
         
     } catch (error) {
         console.error('Chyba při hromadném mazání:', error);
