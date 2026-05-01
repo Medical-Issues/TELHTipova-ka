@@ -1689,18 +1689,18 @@ textarea { width: 100%; height: 120px; background: rgba(0, 0, 0, 0.6); color: #f
     box-shadow: 0 4px 20px rgba(255, 69, 0, 0.1) !important;
 }
 
-/* Grid kontejner - KLÍČOVÝ STYL */
+/* Grid kontejner - CSS Grid 2x3 */
 .settings-card .settings-grid {
-    display: flex !important;
-    flex-wrap: wrap !important;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    grid-auto-rows: 1fr !important;
     gap: 25px !important;
-    align-items: start !important;
     width: 100% !important;
     padding: 0 !important;
     margin: 0 !important;
 }
 
-/* Jednotlivé položky pro flex layout */
+/* Jednotlivé položky v gridu */
 .settings-card .setting-item {
     display: flex !important;
     flex-direction: column !important;
@@ -1708,17 +1708,14 @@ textarea { width: 100%; height: 120px; background: rgba(0, 0, 0, 0.6); color: #f
     padding: 20px !important;
     background: #222 !important;
     border: 1px solid #444 !important;
-     !important;
     transition: all 0.3s ease !important;
-    margin: 0 !important;
-    flex: 1 1 calc(50% - 25px) !important;
-    min-width: 280px !important;
+    width: 100% !important;
 }
 
-/* Poslední položka (logika zamykání) - plná šířka */
+/* Poslední dva bloky se chovají stejně jako ostatní v gridu */
+.settings-card .setting-item:nth-last-child(2),
 .settings-card .setting-item:last-child {
-    flex: 1 1 100% !important;
-    min-width: 100% !important;
+    width: 100% !important;
 }
 
 .settings-card .setting-item:hover {
@@ -1860,17 +1857,12 @@ textarea { width: 100%; height: 120px; background: rgba(0, 0, 0, 0.6); color: #f
     }
 
     .settings-card .settings-grid {
-        flex-direction: column !important;
+        grid-template-columns: 1fr !important;
         gap: 15px !important;
-        width: 100% !important;
     }
 
     .settings-card .setting-item {
-        flex: 1 1 100% !important;
-        min-width: 100% !important;
         padding: 15px !important;
-        width: 100%;
-        box-sizing: border-box;
     }
 
     .settings-card .setting-label {
@@ -2345,8 +2337,9 @@ textarea { width: 100%; height: 120px; background: rgba(0, 0, 0, 0.6); color: #f
         grid-template-columns: repeat(2, 1fr) !important;
     }
 
-    .settings-card .setting-item {
-        flex: 1 1 calc(50% - 13px) !important;
+    /* Grid je již 2 sloupce, není potřeba upravovat */
+    .settings-card .settings-grid {
+        grid-template-columns: 1fr 1fr !important;
     }
 
     .main_page {

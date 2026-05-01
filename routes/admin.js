@@ -167,7 +167,7 @@ router.get('/', requireAdmin, async (req, res) => {
       <div class="card-body">
         <div class="settings-grid">
           <!-- Registrace -->
-          <div class="setting-item" style="min-height: 140px;">
+          <div class="setting-item">
             <div class="setting-info">
               <label id="registrationLabel" class="setting-label">Registrace nových uživatelů</label>
               <span id="registrationStatus" class="setting-description">
@@ -180,7 +180,7 @@ router.get('/', requireAdmin, async (req, res) => {
           </div>
           
           <!-- Vybraná sezóna -->
-          <div class="setting-item" style="min-height: 140px;">
+          <div class="setting-item">
             <div class="setting-info">
               <label id="seasonLabel" class="setting-label">📅 Vybraná sezóna</label>
               <span class="setting-description">Aktuální sezóna pro celou aplikaci</span>
@@ -195,7 +195,7 @@ router.get('/', requireAdmin, async (req, res) => {
           </div>
           
           <!-- Admin sezóna (prohlížení) -->
-          <div class="setting-item" style="min-height: 140px; background: rgba(0, 212, 255, 0.1);">
+          <div class="setting-item" style="background: rgba(0, 212, 255, 0.1);">
             <div class="setting-info">
               <label class="setting-label">👁️ Admin prohlížení</label>
               <span class="setting-description">Sezóna pro prohlížení dat v adminu (neovlivní uživatel stránku)<br>
