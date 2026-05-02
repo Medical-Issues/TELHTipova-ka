@@ -91,8 +91,9 @@ router.get('/', requireAdmin, async (req, res) => {
 
     const leaguesFromMatches = [...new Set(matchesFromCurrentSeason.map(m => m.liga))];
     const leaguesFromTeams = [...new Set(teamsFromCurrentSeason.map(t => t.liga))];
-    const leaguesFromLeagues = [... new Set(leagues.map(t => t.name))];
-    const allLeagues = [...new Set([...leaguesFromTeams, ...leaguesFromMatches, ...leaguesFromLeagues])];
+    const leaguesFromLeagues = [...new Set(leagues.map(t => t.name))];
+    // OPRAVA: Prioritizovat pořadí z definice lig - nejprve definice, pak doplnit z týmů a zápasů
+    const allLeagues = [...new Set([...leaguesFromLeagues, ...leaguesFromTeams, ...leaguesFromMatches])];
     const currentYear = new Date().getFullYear();
     const seasonsFromTeams = teams.map(t => t.season).filter(Boolean);
     const seasonsFromMatches = matches.map(m => m.season).filter(Boolean);

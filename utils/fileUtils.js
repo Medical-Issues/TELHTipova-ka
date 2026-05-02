@@ -1114,7 +1114,9 @@ async function prepareDashboardData(req, isHistory = false, isImageExporter = fa
 
     const leaguesFromTeams = [...new Set(teams.map(t => t.liga))];
     const leaguesFromMatches = [...new Set(matches.map(m => m.liga))];
-    const allLeagues = [...new Set([...leaguesFromTeams, ...leaguesFromMatches])];
+    const leaguesFromLeagues = [...new Set(leagues.map(l => l.name))];
+    // OPRAVA: Prioritizovat pořadí z definice lig - nejprve definice, pak doplnit z týmů a zápasů
+    const allLeagues = [...new Set([...leaguesFromLeagues, ...leaguesFromTeams, ...leaguesFromMatches])];
 
     const uniqueLeagues = isHistory || isImageExporter
         ? allLeagues

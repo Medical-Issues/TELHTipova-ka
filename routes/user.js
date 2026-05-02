@@ -2728,11 +2728,13 @@ router.get("/image-exporter", requireLogin, async (req, res) => {
     const { username, selectedSeason } = data;
     const teams = (await loadTeams()).filter(t => t.active && t.season === selectedSeason); // OPRAVA: Filtrování podle chosenSeason
     const allowedLeagues = await getAllowedLeagues();
-    await getLeaguesData();
+    const allSeasonData = await getLeaguesData();
+    const leagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues) ? allSeasonData[selectedSeason].leagues : [];
     const leaguesFromTeams = [...new Set(teams.map(t => t.liga))];
     const leaguesFromMatches = [...new Set(matches.filter(m => m.season === selectedSeason).map(m => m.liga))]; // OPRAVA: Filtrování zápasů podle sezóny
-    // Všechny ligy v sezóně (pro image-exporter zobrazíme všechny)
-    const uniqueLeagues = [...new Set([...leaguesFromTeams, ...leaguesFromMatches])];
+    const leaguesFromLeagues = [...new Set(leagues.map(l => l.name))];
+    // OPRAVA: Prioritizovat pořadí z definice lig - nejprve definice, pak doplnit z týmů a zápasů
+    const uniqueLeagues = [...new Set([...leaguesFromLeagues, ...leaguesFromTeams, ...leaguesFromMatches])];
     
     // Zjistíme jest je vybraná liga veřejná
     const selectedLiga = req.query.liga && uniqueLeagues.includes(req.query.liga)
