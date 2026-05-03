@@ -1038,6 +1038,8 @@ router.post('/edit/:id', express.urlencoded({ extended: true }), requireAdmin, a
 
     const {homeTeamId, awayTeamId, datetime, season, scoreHome, scoreAway} = req.body;
 
+    console.log(`🔥 DEBUG EDIT: matchId=${matchId}, overtime=${req.body.overtime}, rawBody=${JSON.stringify(req.body.overtime)}`);
+
     const matchIndex = matches.findIndex(m => m.id === matchId);
     if (matchIndex === -1) return renderErrorHtml(res, "Zápas nebyl nalezen.", 404);
 
@@ -1072,6 +1074,7 @@ router.post('/edit/:id', express.urlencoded({ extended: true }), requireAdmin, a
     }
 
     const isSeries = match.isPlayoff && match.bo > 1;
+    console.log(`🔥 DEBUG isSeries=${isSeries}, isPlayoff=${match.isPlayoff}, bo=${match.bo}`);
 
     // --- ULOŽÍME SI STARÝ POČET ODEHRANÝCH ZÁPASŮ ---
     const oldPlayedCount = (match.isPlayoff && match.playedMatches) ? match.playedMatches.length : 0;
@@ -1124,7 +1127,7 @@ router.post('/edit/:id', express.urlencoded({ extended: true }), requireAdmin, a
             match.result = {
                 scoreHome: scoreH,
                 scoreAway: scoreA,
-                ot: req.body.ot === 'on',
+                ot: req.body.overtime === 'on',
                 sideSwap: sideSwap,
                 winner: scoreH > scoreA ? 'home' : 'away'
             };
@@ -1570,6 +1573,7 @@ router.get('/edit/:id', requireAdmin, async (req, res) => {
     const selectedSeason = match.season ?? allSeasons[0] ?? '';
 
     const isSeries = match.isPlayoff && match.bo > 1;
+    console.log(`🔥 DEBUG isSeries=${isSeries}, isPlayoff=${match.isPlayoff}, bo=${match.bo}`);
 
     // Úprava v admin.js (router.get('/edit/:id'))
     let matchInputs = `<fieldset id="series-score-fields" style="display: ${isSeries ? 'block' : 'none'}; margin-top: 1rem;"><legend>Jednotlivé zápasy série</legend>`;
@@ -1811,6 +1815,8 @@ router.post('/edit/:id', express.urlencoded({ extended: true }), requireAdmin, a
 
     const {homeTeamId, awayTeamId, datetime, season, scoreHome, scoreAway} = req.body;
 
+    console.log(`🔥 DEBUG EDIT: matchId=${matchId}, overtime=${req.body.overtime}, rawBody=${JSON.stringify(req.body.overtime)}`);
+
     const matchIndex = matches.findIndex(m => m.id === matchId);
     if (matchIndex === -1) return renderErrorHtml(res, "Zápas nebyl nalezen.", 404);
 
@@ -1845,6 +1851,7 @@ router.post('/edit/:id', express.urlencoded({ extended: true }), requireAdmin, a
     }
 
     const isSeries = match.isPlayoff && match.bo > 1;
+    console.log(`🔥 DEBUG isSeries=${isSeries}, isPlayoff=${match.isPlayoff}, bo=${match.bo}`);
 
     // --- ULOŽÍME SI STARÝ POČET ODEHRANÝCH ZÁPASŮ ---
     const oldPlayedCount = (match.isPlayoff && match.playedMatches) ? match.playedMatches.length : 0;
@@ -1890,17 +1897,21 @@ router.post('/edit/:id', express.urlencoded({ extended: true }), requireAdmin, a
         }
     } else {
         // --- ULOŽENÍ VÝSLEDKU BO1 ZÁPASU ---
+        console.log(`🔥 DEBUG BO1 BRANCH: scoreHome="${scoreHome}", scoreAway="${scoreAway}"`);
         if (scoreHome !== '' && scoreAway !== '' && scoreHome !== undefined && scoreAway !== undefined) {
             const sideSwap = req.body.sideSwap === 'true' || req.body.sideSwap === 'on';
             const scoreH = parseInt(scoreHome);
             const scoreA = parseInt(scoreAway);
+            const isOvertime = req.body.overtime === 'on';
+            console.log(`📝 DEBUG BO1: scoreHome=${scoreH}, scoreAway=${scoreA}, overtime=${isOvertime}, raw=${req.body.overtime}`);
             match.result = {
                 scoreHome: scoreH,
                 scoreAway: scoreA,
-                ot: req.body.overtime === 'on',
+                ot: isOvertime,
                 sideSwap: sideSwap,
                 winner: scoreH > scoreA ? 'home' : 'away'
             };
+            console.log(`📝 DEBUG match.result:`, JSON.stringify(match.result));
         } else {
             delete match.result;
         }
