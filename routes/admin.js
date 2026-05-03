@@ -1809,7 +1809,7 @@ router.post('/edit/:id', express.urlencoded({ extended: true }), requireAdmin, a
     const matchId = parseInt(req.params.id);
     const matches = await Matches.findAll();
 
-    const {homeTeamId, awayTeamId, datetime, season} = req.body;
+    const {homeTeamId, awayTeamId, datetime, season, scoreHome, scoreAway} = req.body;
 
     const matchIndex = matches.findIndex(m => m.id === matchId);
     if (matchIndex === -1) return renderErrorHtml(res, "Zápas nebyl nalezen.", 404);
@@ -1889,7 +1889,21 @@ router.post('/edit/:id', express.urlencoded({ extended: true }), requireAdmin, a
             }
         }
     } else {
-        delete match.result;
+        // --- ULOŽENÍ VÝSLEDKU BO1 ZÁPASU ---
+        if (scoreHome !== '' && scoreAway !== '' && scoreHome !== undefined && scoreAway !== undefined) {
+            const sideSwap = req.body.sideSwap === 'true' || req.body.sideSwap === 'on';
+            const scoreH = parseInt(scoreHome);
+            const scoreA = parseInt(scoreAway);
+            match.result = {
+                scoreHome: scoreH,
+                scoreAway: scoreA,
+                ot: req.body.overtime === 'on',
+                sideSwap: sideSwap,
+                winner: scoreH > scoreA ? 'home' : 'away'
+            };
+        } else {
+            delete match.result;
+        }
     }
 
     try {
