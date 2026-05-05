@@ -227,7 +227,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 </div>
 <input type="hidden" id="globalCsrfToken" value="${req.session.csrfToken || ''}">
 </form>
-<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; top: 10px; right: 10px; font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a>
+<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; bottom: 10px; right: 10px; font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a>
 <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
 <header class="time-header">${await generateTimeWidget()}</header>
@@ -917,7 +917,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 </div>
 <input type="hidden" id="globalCsrfToken" value="${req.session.csrfToken || ''}">
 </form>
-<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; top: 10px; right: 10px; font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a>
+<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; bottom: 10px; right: 10px; font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a>
 <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
 <header class="time-header">${await generateTimeWidget()}</header>
@@ -1283,7 +1283,7 @@ router.get('/history', requireLogin, async (req, res) => {
         <header class="header">
             <div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1>Historie sezón a lig</h1></div>
             <a href="/">Zpět na hlavní stránku</a>
-            <a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; top: 10px; right: 10px; font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a>
+            <a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; bottom: 10px; right: 10px; font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a>
         </header>
         <header class="time-header">${await generateTimeWidget()}</header>
         <main class="main_page">
@@ -1378,6 +1378,7 @@ router.get('/history/prestupy', requireLogin, async (req, res) => {
 <a class="history-btn" href="/history/a/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy zápasů</a>
 <a class="history-btn" href="/history/table/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy tabulky</a>
 </div>
+<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; bottom: 10px; right: 10px; font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a>
 <p id="logged_user">${req.session?.user ? `Přihlášený jako: <strong>${req.session.user}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
 <header class="time-header">${await generateTimeWidget()}</header>
@@ -1487,6 +1488,19 @@ router.get('/history/prestupy', requireLogin, async (req, res) => {
     html += `
 </div>
 </main>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        fetch('/api/version')
+            .then(res => res.json())
+            .then(data => {
+                const versionBadge = document.getElementById('current-version');
+                if (versionBadge) {
+                    versionBadge.textContent = data.version;
+                }
+            })
+            .catch(err => console.log('Nepodařilo se načíst verzi', err));
+    });
+</script>
 </body>
 </html>
 `;
@@ -1549,7 +1563,7 @@ ${hasTransfers
     : `<span class="history-btn" style="background:#333; color:#666; cursor:not-allowed;" title="Pro tuto sezónu/ligu nejsou dostupné přestupy">📜 Přestupy</span>`
 }
 </div>
-<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; top: 10px; right: 10px; font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a>
+<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; bottom: 10px; right: 10px; font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a>
 <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
 <header class="time-header">${await generateTimeWidget()}</header>
@@ -1923,7 +1937,7 @@ function showTable(which) {
                 : `<span class="history-btn" style="background:#333; color:#666; cursor:not-allowed;" title="Pro tuto sezónu/ligu nejsou dostupné přestupy">📜 Přestupy</span>`
             }
         </div>
-        <a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; top: 10px; right: 10px; font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a>
+        <a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; bottom: 10px; right: 10px; font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a>
         <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
     </header>
     <header class="time-header">${await generateTimeWidget()}</header>
@@ -2288,7 +2302,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 </div>
 <input type="hidden" id="globalCsrfToken" value="${req.session.csrfToken || ''}">
 </form>
-<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; top: 10px; right: 10px; font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a>
+<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; bottom: 10px; right: 10px; font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a>
 <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
 <header class="time-header">${await generateTimeWidget()}</header>
@@ -2918,7 +2932,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <a class="history-btn changed" ${!isPublicLeague ? `style="${disabledStyle}" onclick="return false;"` : `href="/table-tip?liga=${encodeURIComponent(selectedLiga)}"`}>Základní část</a>
 <a class="history-btn changed" href="/prestupy?liga=${encodeURIComponent(selectedLiga)}">Přestupy</a>
 </form>
-<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; top: 10px; right: 10px; font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a>
+<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; bottom: 10px; right: 10px; font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a>
 <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
 <input type="hidden" id="globalCsrfToken" value="${req.session.csrfToken || ''}">
