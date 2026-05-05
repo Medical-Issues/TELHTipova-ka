@@ -124,19 +124,31 @@ function csrfMiddleware(req, res, next) {
 // Důvěřovat proxy hlavičkám (X-Forwarded-For) pro získání reálné IP klienta
 app.set('trust proxy', true);
 
+// Detekce jestli běžíme na produkčním serveru (Render) nebo lokálně
+// RENDER env var je nastaveno automaticky na Render.com, nikdy lokálně
+const isProductionServer = process.env.RENDER === 'true';
+
+const sessionStore = MongoStore.create({
+    mongoUrl: process.env.MONGODB_URI || 'mongodb://localhost:27017/tipovacka',
+    touchAfter: 24 * 3600,
+    stringify: true,
+    autoCreate: true
+});
+
+// Logování chyb session store pro debugování
+sessionStore.on('error', (err) => {
+    console.error('❌ MongoDB Session Store Error:', err.message);
+});
+
 app.use(session({
-    store: MongoStore.create({
-        mongoUrl: process.env.MONGODB_URI || 'mongodb://localhost:27017/tipovacka',
-        touchAfter: 24 * 3600,
-        stringify: true
-    }),
+    store: sessionStore,
     secret: 'tajnyklic',
     resave: false,
     saveUninitialized: true,
     cookie: {
         maxAge: 1000 * 60 * 60 * 24 * 30,
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: isProductionServer,
         sameSite: 'lax'
     }
 }));

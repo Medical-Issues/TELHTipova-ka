@@ -1048,8 +1048,17 @@ async function loadTeams() {
 async function getMatches() {
     try { return await Matches.findAll(); } catch (e) { return []; }
 }
-async function getAllowedLeagues() {
-    try { return await AllowedLeagues.findAll(); } catch (e) { return []; }
+async function getAllowedLeagues(season = null) {
+    try {
+        const data = await AllowedLeagues.findAll();
+        // Pokud je zadána sezóna, vrátíme ligy pro tu sezónu
+        if (season && data[season]) {
+            return data[season] || [];
+        }
+        // Pokud není zadána sezóna, vrátíme všechny ligy ze všech sezón (pro zpětnou kompatibilitu)
+        // nebo prázdné pole, pokud chceme striktní sezónní chování
+        return [];
+    } catch (e) { return []; }
 }
 async function getLeaguesData() {
     try { return await Leagues.findAll(); } catch (e) { return {}; }
@@ -1108,7 +1117,7 @@ async function prepareDashboardData(req, isHistory = false, isImageExporter = fa
     });
     const matches = allMatches.filter(m => m.season === selectedSeason);
     
-    const allowedLeagues = await getAllowedLeagues();
+    const allowedLeagues = await getAllowedLeagues(selectedSeason);
     const allSeasonData = await getLeaguesData();
     const leagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues) ? allSeasonData[selectedSeason].leagues : [];
 

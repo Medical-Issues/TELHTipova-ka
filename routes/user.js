@@ -6,7 +6,7 @@ const {
     requireLogin, prepareDashboardData, getGroupDisplayLabel, generateLeftPanel,
     getLeagueStatusData, getTableTipsData, generateTimeWidget, getAllowedLeagues, createMatchImage
 } = require("../utils/fileUtils");
-const { Users, Matches, Leagues, TableTips } = require('../utils/mongoDataAccess');
+const { Users, Matches, Leagues, TableTips, ChosenSeason } = require('../utils/mongoDataAccess');
 // Jednoduchá XSS ochrana - sanitizace HTML tagů
 function sanitizeInput(input) {
     if (typeof input !== 'string') return input;
@@ -720,7 +720,8 @@ router.post("/tip", requireLogin, async (req, res) => {
 
 router.get('/', requireLogin, async (req, res) => {
     // Kontrola jest je liga veřejná
-    const allowedLeagues = await getAllowedLeagues();
+    const chosenSeason = await ChosenSeason.findAll();
+    const allowedLeagues = await getAllowedLeagues(chosenSeason);
     const requestedLiga = req.query.liga;
     if (requestedLiga && !allowedLeagues.includes(requestedLiga)) {
         // Přesměruj na první veřejnou ligu
@@ -2727,7 +2728,7 @@ router.get("/image-exporter", requireLogin, async (req, res) => {
     const data = await prepareDashboardData(req, false, true);
     const { username, selectedSeason } = data;
     const teams = (await loadTeams()).filter(t => t.active && t.season === selectedSeason); // OPRAVA: Filtrování podle chosenSeason
-    const allowedLeagues = await getAllowedLeagues();
+    const allowedLeagues = await getAllowedLeagues(selectedSeason);
     const allSeasonData = await getLeaguesData();
     const leagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues) ? allSeasonData[selectedSeason].leagues : [];
     const leaguesFromTeams = [...new Set(teams.map(t => t.liga))];

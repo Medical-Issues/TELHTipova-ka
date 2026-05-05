@@ -17,10 +17,18 @@ class MongoDataAccess {
             const data = await collection.find({}).toArray();
             
             // Speciální případy pro různé datové typy
-            if (this.collectionName === 'allowedLeagues' || this.collectionName === 'transferLeagues') {
+            if (this.collectionName === 'transferLeagues') {
                 // Pole stringů - vrátíme pole hodnot
                 const doc = data[0];
                 return doc ? doc.values || [] : [];
+            } else if (this.collectionName === 'allowedLeagues') {
+                // Sezónní struktura - stejně jako Leagues/Transfers
+                const doc = data[0];
+                if (doc && doc._id) {
+                    const { _id, ...cleanDoc } = doc;
+                    return cleanDoc || {};
+                }
+                return doc || {};
             } else if (this.collectionName === 'chosenSeason') {
                 // String - vrátíme hodnotu
                 const doc = data[0];
@@ -176,8 +184,11 @@ class MongoDataAccess {
             await collection.deleteMany({});
             
             // Speciální případy
-            if (this.collectionName === 'allowedLeagues' || this.collectionName === 'transferLeagues') {
+            if (this.collectionName === 'transferLeagues') {
                 await collection.insertOne({ values: data });
+            } else if (this.collectionName === 'allowedLeagues') {
+                // Sezónní struktura - vkládáme celý objekt
+                await collection.insertOne(data);
             } else if (this.collectionName === 'chosenSeason') {
                 await collection.insertOne({ value: data });
             } else if (this.collectionName === 'leagues' || this.collectionName === 'playoffTemplates') {

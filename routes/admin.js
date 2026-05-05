@@ -79,6 +79,9 @@ router.get('/', requireAdmin, async (req, res) => {
     const leagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues)
         ? allSeasonData[selectedSeason].leagues
         : [];
+
+    // Získání zveřejněných lig pro vybranou admin sezónu
+    const allowedLeaguesForSeason = allowedLeagues[selectedSeason] || [];
     
     const chosenSeasonValue = chosenSeason;
 
@@ -217,7 +220,7 @@ router.get('/', requireAdmin, async (req, res) => {
           <div class="setting-item">
             <div class="setting-info">
               <label id="publicLeaguesLabel" class="setting-label">🏆 Veřejné ligy</label>
-              <span class="setting-description">Ligy viditelné pro uživatele (globální nastavení)<br>
+              <span class="setting-description">Ligy viditelné pro uživatele (nastavení pro každou sezónu zvlášť)<br>
                 <strong>Aktuálně zobrazeno pro sezónu:</strong> ${selectedSeason}</span>
             </div>
             <form method="POST" action="/admin/leagues/visibility" style="display: flex; flex-direction: column; gap: 10px;">
@@ -225,7 +228,7 @@ router.get('/', requireAdmin, async (req, res) => {
               <div class="leagues-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px;">
                 ${allLeagues.map(l => `
                   <label style="display: flex; align-items: center; gap: 6px; font-size: 0.9em;">
-                    <input type="checkbox" name="allowedLeagues" value="${l}" ${allowedLeagues.includes(l) ? 'checked' : ''}/>
+                    <input type="checkbox" name="allowedLeagues" value="${l}" ${allowedLeaguesForSeason.includes(l) ? 'checked' : ''}/>
                     <span>${l}</span>
                   </label>
                 `).join('')}
@@ -885,13 +888,35 @@ router.post('/leagues/visibility', express.urlencoded({ extended: true }), requi
     if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
         return res.status(403).send('Neplatný CSRF token');
     }
-    
+
+    const chosenSeason = await ChosenSeason.findAll();
+    const selectedSeason = req.session.adminSeason || chosenSeason;
+
     let ligaNames = req.body.allowedLeagues || [];
     if (!Array.isArray(ligaNames)) ligaNames = [ligaNames];
 
-    // Uložení POUZE zaškrtnutých lig (ne přidávání ke stávajícím)
-    await AllowedLeagues.replaceAll(ligaNames);
+    // Načtení existujících dat
+    const existingData = await AllowedLeagues.findAll() || {};
 
+    // MIGRACE: Pokud stará data jsou ve formátu { values: [...] }, převedeme je
+    if (existingData.values && Array.isArray(existingData.values)) {
+        console.log('🔄 Migrace AllowedLeagues ze starého formátu na sezónní...');
+        const oldLeagues = existingData.values;
+        const migratedData = {};
+        migratedData[chosenSeason] = oldLeagues; // Staré ligy přiřadíme k aktuální sezóně
+        await AllowedLeagues.replaceAll(migratedData);
+        console.log('✅ Migrace dokončena');
+        // Použijeme nová data
+        const newData = await AllowedLeagues.findAll() || {};
+        newData[selectedSeason] = ligaNames;
+        await AllowedLeagues.replaceAll(newData);
+    } else {
+        // Aktualizace pouze pro vybranou sezónu
+        existingData[selectedSeason] = ligaNames;
+        await AllowedLeagues.replaceAll(existingData);
+    }
+
+    await logAdminAction(req.session.user, "ZVEŘEJNĚNÍ_LIG", `Zveřejněny ligy pro sezónu ${selectedSeason}: ${ligaNames.join(', ')}`);
     res.redirect('/admin');
 })
 
@@ -4234,7 +4259,9 @@ router.get('/images/selector', requireAdmin, async (req, res) => {
 
 router.get('/transfers/manage', requireAdmin, async (req, res) => {
     const teams = await Teams.findAll();
-    const selectedSeason = await ChosenSeason.findAll();
+    const chosenSeason = await ChosenSeason.findAll();
+    // Použít admin sezónu pro prohlížení pokud je nastavena
+    const selectedSeason = req.session.adminSeason || chosenSeason;
     const allowedLeagues = await AllowedLeagues.findAll();
 
     const selectedLiga = req.query.liga || allowedLeagues[0];
