@@ -54,7 +54,7 @@ v adminu tlačítko smazat nevyhodnocené má margin-left ✅
 
 Opravit exportér
 
-Srovna tabulku vybrané sezóny a registrace nových uživatelů (height)
+Srovna tabulku vybrané sezóny a registrace nových uživatelů (height) ✅
 
 Špatný vypočítávání tipů po změně strany když už má tým natipováno / nebo přídám skóre a otočím týmy ✅
 
