@@ -206,7 +206,7 @@ async function checkSubscriptionStatus() {
 document.addEventListener('DOMContentLoaded', checkSubscriptionStatus);
 </script>
 <body class="usersite">
-<header class="header">
+<header class="header" style="position: relative;">
 <form class="league-dropdown" method="GET">
 <div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
 <label class="league-select-name">
@@ -227,10 +227,9 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 </div>
 <input type="hidden" id="globalCsrfToken" value="${req.session.csrfToken || ''}">
 </form>
-<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; bottom: 10px; right: 10px; font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a>
 <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
-<header class="time-header">${await generateTimeWidget()}</header>
+<header class="time-header" style="position: relative;">${await generateTimeWidget()}<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a></header>
 <main class="main_page">`;
 
 html += await generateLeftPanel(data);
@@ -896,7 +895,7 @@ async function checkSubscriptionStatus() {
 document.addEventListener('DOMContentLoaded', checkSubscriptionStatus);
 </script>
 <body class="usersite">
-<header class="header">
+<header class="header" style="position: relative;">
 <form class="league-dropdown" method="GET">
 <div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
 <label class="league-select-name">
@@ -917,10 +916,9 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 </div>
 <input type="hidden" id="globalCsrfToken" value="${req.session.csrfToken || ''}">
 </form>
-<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; bottom: 10px; right: 10px; font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a>
 <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
-<header class="time-header">${await generateTimeWidget()}</header>
+<header class="time-header" style="position: relative;">${await generateTimeWidget()}<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a></header>
 <main class="main_page">`;
 
     html += await generateLeftPanel(data);
@@ -1280,12 +1278,11 @@ router.get('/history', requireLogin, async (req, res) => {
         <link rel="icon" href="/images/logo.png">
     </head>
     <body class="usersite">
-        <header class="header">
+        <header class="header" style="position: relative;">
             <div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1>Historie sezón a lig</h1></div>
             <a href="/">Zpět na hlavní stránku</a>
-            <a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; bottom: 10px; right: 10px; font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a>
         </header>
-        <header class="time-header">${await generateTimeWidget()}</header>
+        <header class="time-header" style="position: relative;">${await generateTimeWidget()}<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a></header>
         <main class="main_page">
             <table class="points-table">
                 <thead class="points-table-history">
@@ -1370,7 +1367,7 @@ router.get('/history/prestupy', requireLogin, async (req, res) => {
 <link rel="icon" href="/images/logo.png">
 </head>
 <body class="usersite">
-<header class="header">
+<header class="header" style="position: relative;">
 <div class="league-dropdown">
 <div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1>Přestupy - ${selectedLiga} ${selectedSeason}</h1></div>
 <a class="history-btn" href="/">Aktuální</a>
@@ -1378,10 +1375,9 @@ router.get('/history/prestupy', requireLogin, async (req, res) => {
 <a class="history-btn" href="/history/a/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy zápasů</a>
 <a class="history-btn" href="/history/table/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy tabulky</a>
 </div>
-<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; bottom: 10px; right: 10px; font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a>
 <p id="logged_user">${req.session?.user ? `Přihlášený jako: <strong>${req.session.user}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
-<header class="time-header">${await generateTimeWidget()}</header>
+<header class="time-header" style="position: relative;">${await generateTimeWidget()}<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a></header>
 <main class="main_page">
 
 <div style="display: grid; gap: 15px; margin-top: 15px; width: 100%;">
@@ -1551,7 +1547,7 @@ p.style.display = which === 'playoff' ? 'block' : 'none';
 }
 </script>
 <body class="usersite">
-<header class="header">
+<header class="header" style="position: relative;">
 <div class="league-dropdown">
 <div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
 <a class="history-btn" href="/">Aktuální</a>
@@ -1563,10 +1559,9 @@ ${hasTransfers
     : `<span class="history-btn" style="background:#333; color:#666; cursor:not-allowed;" title="Pro tuto sezónu/ligu nejsou dostupné přestupy">📜 Přestupy</span>`
 }
 </div>
-<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; bottom: 10px; right: 10px; font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a>
 <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
-<header class="time-header">${await generateTimeWidget()}</header>
+<header class="time-header" style="position: relative;">${await generateTimeWidget()}<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a></header>
 <main class="main_page">`
 html += await generateLeftPanel(data, true);
     html += `<script>
@@ -1925,7 +1920,7 @@ function showTable(which) {
 }
 </script>
 <body class="usersite">
-<header class="header">
+<header class="header" style="position: relative;">
         <div class="league-dropdown">
             <div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
             <a class="history-btn" href="/">Aktuální</a>
@@ -1937,10 +1932,9 @@ function showTable(which) {
                 : `<span class="history-btn" style="background:#333; color:#666; cursor:not-allowed;" title="Pro tuto sezónu/ligu nejsou dostupné přestupy">📜 Přestupy</span>`
             }
         </div>
-        <a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; bottom: 10px; right: 10px; font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a>
         <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
     </header>
-    <header class="time-header">${await generateTimeWidget()}</header>
+    <header class="time-header" style="position: relative;">${await generateTimeWidget()}<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a></header>
 <main class="main_page">`
 html += await generateLeftPanel(data, true);
     html += `
@@ -2281,7 +2275,7 @@ async function checkSubscriptionStatus() {
 document.addEventListener('DOMContentLoaded', checkSubscriptionStatus);
 </script>
 <body class="usersite">
-<header class="header">
+<header class="header" style="position: relative;">
 <form class="league-dropdown" method="GET">
 <div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
 <label class="league-select-name">
@@ -2302,10 +2296,9 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 </div>
 <input type="hidden" id="globalCsrfToken" value="${req.session.csrfToken || ''}">
 </form>
-<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; bottom: 10px; right: 10px; font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a>
 <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
-<header class="time-header">${await generateTimeWidget()}</header>
+<header class="time-header" style="position: relative;">${await generateTimeWidget()}<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a></header>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     const sidebar = document.querySelector('.left-panel');
@@ -2918,7 +2911,7 @@ async function generateImage(type) {
 }
 </script>
 <body class="usersite">
-<header class="header">
+<header class="header" style="position: relative;">
 <form class="league-dropdown" method="GET">
 <div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
 <label class="league-select-name">
@@ -2932,11 +2925,10 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <a class="history-btn changed" ${!isPublicLeague ? `style="${disabledStyle}" onclick="return false;"` : `href="/table-tip?liga=${encodeURIComponent(selectedLiga)}"`}>Základní část</a>
 <a class="history-btn changed" href="/prestupy?liga=${encodeURIComponent(selectedLiga)}">Přestupy</a>
 </form>
-<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; bottom: 10px; right: 10px; font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a>
 <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
 <input type="hidden" id="globalCsrfToken" value="${req.session.csrfToken || ''}">
-<header class="time-header">${await generateTimeWidget()}</header>
+<header class="time-header" style="position: relative;">${await generateTimeWidget()}<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a></header>
 <main class="main_page">`;
 
 html += await generateLeftPanel(data);

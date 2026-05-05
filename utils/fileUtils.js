@@ -2327,7 +2327,13 @@ async function generateTimeWidget() {
     <script>
         function updateTime() {
             const now = new Date();
-            const timeString = now.toLocaleString('cs-CZ', { 
+            const dateString = now.toLocaleString('cs-CZ', {
+                timeZone: 'Europe/Prague',
+                day: 'numeric',
+                month: 'numeric',
+                year: 'numeric'
+            });
+            const timeString = now.toLocaleString('cs-CZ', {
                 timeZone: 'Europe/Prague',
                 hour: '2-digit',
                 minute: '2-digit',
@@ -2336,7 +2342,9 @@ async function generateTimeWidget() {
             const timeElement = document.getElementById('current-time');
             if (timeElement) {
                 const [hours, minutes, seconds] = timeString.split(':');
-                timeElement.innerHTML = 
+                timeElement.innerHTML =
+                    '<span class="date">' + dateString + '</span>' +
+                    '<span class="separator">&nbsp;&nbsp;|&nbsp;&nbsp;</span>' +
                     '<span class="digit">' + hours + '</span>' +
                     '<span class="colon">:</span>' +
                     '<span class="digit">' + minutes + '</span>' +
