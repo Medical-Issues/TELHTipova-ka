@@ -6,11 +6,17 @@
     const API_URL = '/api/version';
 
     // Vytvořit a zobrazit notifikaci
-    function showVersionNotification(versionData) {
-        // Kontrola - nezobrazovat pokud uživatel již viděl tuto verzi
+    function showVersionNotification(versionData, forceShow = false) {
+        // Kontrola - nezobrazovat pokud uživatel již viděl tuto verzi (pokud není forceShow)
         const lastSeen = localStorage.getItem(STORAGE_KEY);
-        if (lastSeen === versionData.version) {
+        if (!forceShow && lastSeen === versionData.version) {
             return;
+        }
+
+        // Odstranit existující notifikaci pokud existuje
+        const existing = document.getElementById('version-notification');
+        if (existing) {
+            existing.remove();
         }
 
         // Vytvořit element notifikace
@@ -42,11 +48,6 @@
         `;
 
         document.body.appendChild(notification);
-
-        // Auto-hide po 10 sekundách
-        setTimeout(() => {
-            dismissVersionNotification();
-        }, 10000);
     }
 
     // Funkce pro zavření notifikace
@@ -97,6 +98,22 @@
             console.log('Verze oznámení: Nepodařilo se načíst verzi', error);
         }
     }
+
+    // Globální funkce pro manuální zobrazení notifikace (při kliknutí na version badge)
+    window.showVersionNotificationManual = async function() {
+        try {
+            const response = await fetch(API_URL);
+            if (!response.ok) {
+                console.log('Verze: Response not OK, skipping');
+                return;
+            }
+
+            const data = await response.json();
+            showVersionNotification(data, true); // forceShow = true
+        } catch (error) {
+            console.log('Verze oznámení: Nepodařilo se načíst verzi', error);
+        }
+    };
 
     // Spustit po načtení stránky
     if (document.readyState === 'loading') {

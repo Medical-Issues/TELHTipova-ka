@@ -220,13 +220,14 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <a class="history-btn changed" href="/prestupy?liga=${encodeURIComponent(selectedLiga)}">Přestupy</a>
 <a class="history-btn changed" href="/image-exporter?liga=${encodeURIComponent(selectedLiga)}">Exportér</a>
 <div style="text-align: center; margin: 20px;">
-    <button type="button" id="notify-toggle-btn" onclick="toggleNotifications()" 
+    <button type="button" id="notify-toggle-btn" onclick="toggleNotifications()"
         style="width: 220px; height: 38px; cursor: pointer; font-weight: bold; border: none; color: white; background-color: #444;">
         Zjišťuji stav...
     </button>
 </div>
 <input type="hidden" id="globalCsrfToken" value="${req.session.csrfToken || ''}">
 </form>
+<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; top: 10px; right: 10px; font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a>
 <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
 <header class="time-header">${await generateTimeWidget()}</header>
@@ -515,6 +516,17 @@ html += await generateLeftPanel(data);
                     sidebar.style.top = topOffset + 'px';
                     lastScrollY = currentScrollY;
                 });
+
+                // Načíst verzi a zobrazit v badge
+                fetch('/api/version')
+                    .then(res => res.json())
+                    .then(data => {
+                        const versionBadge = document.getElementById('current-version');
+                        if (versionBadge) {
+                            versionBadge.textContent = data.version;
+                        }
+                    })
+                    .catch(err => console.log('Nepodařilo se načíst verzi', err));
             });
         </script>
         <script src="/js/version-notification.js"></script>
@@ -898,13 +910,14 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <a class="history-btn changed" href="/prestupy?liga=${encodeURIComponent(selectedLiga)}">Přestupy</a>
 <a class="history-btn changed" href="/image-exporter?liga=${encodeURIComponent(selectedLiga)}">Exportér</a>
 <div style="text-align: center; margin: 20px;">
-    <button type="button" id="notify-toggle-btn" onclick="toggleNotifications()" 
+    <button type="button" id="notify-toggle-btn" onclick="toggleNotifications()"
         style="width: 220px; height: 38px; cursor: pointer; font-weight: bold; border: none; color: white; background-color: #444;">
         Zjišťuji stav...
     </button>
 </div>
 <input type="hidden" id="globalCsrfToken" value="${req.session.csrfToken || ''}">
 </form>
+<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; top: 10px; right: 10px; font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a>
 <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
 <header class="time-header">${await generateTimeWidget()}</header>
@@ -1168,7 +1181,7 @@ sendTip(formData, null, null, null); }); }
 document.addEventListener('DOMContentLoaded', () => {
     const sidebar = document.querySelector('.left-panel');
     const container = document.querySelector('.stats-container');
-    
+
     if (!sidebar || !container) return;
 
     let lastScrollY = window.scrollY;
@@ -1186,7 +1199,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const scrollDelta = currentScrollY - lastScrollY;
         const viewportHeight = window.innerHeight;
         const sidebarHeight = sidebar.offsetHeight;
-        
+
         // Minimální hodnota 'top', aby se ukázal spodek panelu (bude to záporné číslo)
         const minTop = viewportHeight - sidebarHeight - margin;
 
@@ -1207,6 +1220,17 @@ document.addEventListener('DOMContentLoaded', () => {
         sidebar.style.top = topOffset + 'px';
         lastScrollY = currentScrollY;
     });
+
+    // Načíst verzi a zobrazit v badge
+    fetch('/api/version')
+        .then(res => res.json())
+        .then(data => {
+            const versionBadge = document.getElementById('current-version');
+            if (versionBadge) {
+                versionBadge.textContent = data.version;
+            }
+        })
+        .catch(err => console.log('Nepodařilo se načíst verzi', err));
 });
 </script></html>`;
         res.send(html);
@@ -1259,6 +1283,7 @@ router.get('/history', requireLogin, async (req, res) => {
         <header class="header">
             <div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1>Historie sezón a lig</h1></div>
             <a href="/">Zpět na hlavní stránku</a>
+            <a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; top: 10px; right: 10px; font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a>
         </header>
         <header class="time-header">${await generateTimeWidget()}</header>
         <main class="main_page">
@@ -1289,6 +1314,19 @@ router.get('/history', requireLogin, async (req, res) => {
                 </tbody>
             </table>
         </main>
+        <script>
+            document.addEventListener('DOMContentLoaded', () => {
+                fetch('/api/version')
+                    .then(res => res.json())
+                    .then(data => {
+                        const versionBadge = document.getElementById('current-version');
+                        if (versionBadge) {
+                            versionBadge.textContent = data.version;
+                        }
+                    })
+                    .catch(err => console.log('Nepodařilo se načíst verzi', err));
+            });
+        </script>
     </body>
     </html>
     `;
@@ -1506,11 +1544,12 @@ p.style.display = which === 'playoff' ? 'block' : 'none';
 <a class="history-btn" href="/history">Zpět na výběr</a>
 <a class="history-btn" style="background:orangered; color:black;" href="/history/a/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy zápasů</a>
 <a class="history-btn" href="/history/table/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy tabulky</a>
-${hasTransfers 
+${hasTransfers
     ? `<a class="history-btn" style="background:#00d4ff; color:black;" href="/history/prestupy?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">📜 Přestupy</a>`
     : `<span class="history-btn" style="background:#333; color:#666; cursor:not-allowed;" title="Pro tuto sezónu/ligu nejsou dostupné přestupy">📜 Přestupy</span>`
 }
 </div>
+<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; top: 10px; right: 10px; font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a>
 <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
 <header class="time-header">${await generateTimeWidget()}</header>
@@ -1518,6 +1557,17 @@ ${hasTransfers
 html += await generateLeftPanel(data, true);
     html += `<script>
         const globalStatsData = ${JSON.stringify(userStats)};
+
+        // Načíst verzi a zobrazit v badge
+        fetch('/api/version')
+            .then(res => res.json())
+            .then(data => {
+                const versionBadge = document.getElementById('current-version');
+                if (versionBadge) {
+                    versionBadge.textContent = data.version;
+                }
+            })
+            .catch(err => console.log('Nepodařilo se načíst verzi', err));
 
         // Funkce pro zobrazení historie a dynamické barvení políček
         function showUserHistory(username) {
@@ -1868,11 +1918,12 @@ function showTable(which) {
             <a class="history-btn" href="/history">Zpět na výběr</a>
             <a class="history-btn" href="/history/a/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy zápasů</a>
             <a class="history-btn" style="background:orangered; color:black;" href="/history/table/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy tabulky</a>
-            ${hasTransfers 
+            ${hasTransfers
                 ? `<a class="history-btn" style="background:#00d4ff; color:black;" href="/history/prestupy?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">📜 Přestupy</a>`
                 : `<span class="history-btn" style="background:#333; color:#666; cursor:not-allowed;" title="Pro tuto sezónu/ligu nejsou dostupné přestupy">📜 Přestupy</span>`
             }
         </div>
+        <a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; top: 10px; right: 10px; font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a>
         <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
     </header>
     <header class="time-header">${await generateTimeWidget()}</header>
@@ -1885,6 +1936,17 @@ html += await generateLeftPanel(data, true);
             const safeName = username.replace(/[^a-zA-Z0-9]/g, '_');
             document.querySelectorAll('.user-table-' + safeName).forEach(el => el.style.display = 'block');
         }
+
+        // Načíst verzi a zobrazit v badge
+        fetch('/api/version')
+            .then(res => res.json())
+            .then(data => {
+                const versionBadge = document.getElementById('current-version');
+                if (versionBadge) {
+                    versionBadge.textContent = data.version;
+                }
+            })
+            .catch(err => console.log('Nepodařilo se načíst verzi', err));
         </script>
         </section>
         <section class="matches-container">
@@ -2219,13 +2281,14 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <a class="history-btn changed" href="/table-tip?liga=${encodeURIComponent(selectedLiga)}">Základní část</a>
 <a class="history-btn changed" href="/image-exporter?liga=${encodeURIComponent(selectedLiga)}">Exportér</a>
 <div style="text-align: center; margin: 20px;">
-    <button type="button" id="notify-toggle-btn" onclick="toggleNotifications()" 
+    <button type="button" id="notify-toggle-btn" onclick="toggleNotifications()"
         style="width: 220px; height: 38px; cursor: pointer; font-weight: bold; border: none; color: white; background-color: #444;">
         Zjišťuji stav...
     </button>
 </div>
 <input type="hidden" id="globalCsrfToken" value="${req.session.csrfToken || ''}">
 </form>
+<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; top: 10px; right: 10px; font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a>
 <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
 <header class="time-header">${await generateTimeWidget()}</header>
@@ -2272,6 +2335,17 @@ document.addEventListener('DOMContentLoaded', () => {
         sidebar.style.top = topOffset + 'px';
         lastScrollY = currentScrollY;
     });
+
+    // Načíst verzi a zobrazit v badge
+    fetch('/api/version')
+        .then(res => res.json())
+        .then(data => {
+            const versionBadge = document.getElementById('current-version');
+            if (versionBadge) {
+                versionBadge.textContent = data.version;
+            }
+        })
+        .catch(err => console.log('Nepodařilo se načíst verzi', err));
 });
 </script>
 <main class="main_page">
@@ -2844,6 +2918,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 <a class="history-btn changed" ${!isPublicLeague ? `style="${disabledStyle}" onclick="return false;"` : `href="/table-tip?liga=${encodeURIComponent(selectedLiga)}"`}>Základní část</a>
 <a class="history-btn changed" href="/prestupy?liga=${encodeURIComponent(selectedLiga)}">Přestupy</a>
 </form>
+<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; top: 10px; right: 10px; font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a>
 <p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
 </header>
 <input type="hidden" id="globalCsrfToken" value="${req.session.csrfToken || ''}">
@@ -3076,6 +3151,19 @@ html += `<section class="matches-container" style="flex: 1; padding: 20px;">
     </div>
 </section>
 </main>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        fetch('/api/version')
+            .then(res => res.json())
+            .then(data => {
+                const versionBadge = document.getElementById('current-version');
+                if (versionBadge) {
+                    versionBadge.textContent = data.version;
+                }
+            })
+            .catch(err => console.log('Nepodařilo se načíst verzi', err));
+    });
+</script>
 </body>
 <script src="/js/version-notification.js"></script>
 </html>`;
