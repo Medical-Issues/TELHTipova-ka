@@ -3410,6 +3410,44 @@ router.get('/images/manage', requireAdmin, async (req, res) => {
     const teams = await Teams.findAll();
     const selectedSeason = await ChosenSeason.findAll();
     
+    // AUTOMATICKÁ SYNCHRONIZACE - zkontroluj chybějící obrázky a stáhni je
+    try {
+        const neededLogos = new Set(teams.map(t => t.logo).filter(Boolean));
+        const localFiles = fs.existsSync(imagesDir) ? 
+            fs.readdirSync(imagesDir).filter(f => f.match(/\.(jpg|jpeg|png|gif|webp)$/i)) : [];
+        const missingLogos = [...neededLogos].filter(logo => !localFiles.includes(logo));
+        
+        if (missingLogos.length > 0) {
+            console.log(`🔄 Auto-sync: Stahuji ${missingLogos.length} chybějících obrázků z produkce...`);
+            
+            const axios = require('axios');
+            const PRODUCTION_URL = 'https://telhtipova-ka.onrender.com';
+            let downloadedCount = 0;
+            
+            for (const logo of missingLogos) {
+                try {
+                    const response = await axios.get(`${PRODUCTION_URL}/logoteamu/${logo}`, {
+                        responseType: 'arraybuffer',
+                        timeout: 5000
+                    });
+                    
+                    const localPath = path.join(imagesDir, logo);
+                    fs.writeFileSync(localPath, response.data);
+                    downloadedCount++;
+                    
+                } catch (error) {
+                    console.log(`❌ Auto-sync failed: ${logo} - ${error.message}`);
+                }
+            }
+            
+            if (downloadedCount > 0) {
+                console.log(`✅ Auto-sync dokončen: Staženo ${downloadedCount}/${missingLogos.length} obrázků`);
+            }
+        }
+    } catch (error) {
+        console.log('⚠️ Auto-sync selhal:', error.message);
+    }
+    
     // Pojistka, kdyby složka neexistovala
     if (!fs.existsSync(imagesDir)) {
         fs.mkdirSync(imagesDir, { recursive: true });
@@ -3620,6 +3658,7 @@ router.get('/images/manage', requireAdmin, async (req, res) => {
                 <p style="color: #666; font-size: 0.85em; margin-top: 15px;">
                     <a href="/admin/images/reset-hashes" style="color: #ffaa00;" onclick="return confirm('Přepočítat všechny hashe obrázků? Toto může chvíli trvat.')">🔄 Přepočítat hashe obrázků</a>
                     <a href="/admin/images/diagnose" style="color: #00d4ff; margin-left: 15px;" onclick="return confirm('Spustit diagnostiku obrázků?')">🔍 Diagnostika rozdílů</a>
+                    <span style="color: #00ff00; margin-left: 15px;">🔄 Auto-sync zapnut</span>
                 </p>
                 <div id="duplicateWarning" class="duplicate-warning"></div>
                 <div id="uploadPreview" class="batch-upload-preview"></div>
@@ -4178,6 +4217,92 @@ router.get('/images/reset-hashes', requireAdmin, async (req, res) => {
     } catch (err) {
         console.error('Chyba při resetu hashů:', err);
         res.status(500).send('Chyba při resetu hashů: ' + err.message);
+    }
+});
+
+router.get('/images/sync', requireAdmin, async (req, res) => {
+    try {
+        const { Octokit } = require("@octokit/rest");
+        const teams = await Teams.findAll();
+        const imagesDir = path.join(__dirname, '..', 'data', 'images');
+        
+        // Získání všech potřebných log
+        const neededLogos = new Set(teams.map(t => t.logo).filter(Boolean));
+        
+        // Kontrola lokálních souborů
+        const localFiles = fs.existsSync(imagesDir) ? 
+            fs.readdirSync(imagesDir).filter(f => f.match(/\.(jpg|jpeg|png|gif|webp)$/i)) : [];
+        
+        const missingLogos = [...neededLogos].filter(logo => !localFiles.includes(logo));
+        
+        if (missingLogos.length === 0) {
+            res.send(`
+                <head><title>Sync - Hotovo</title><link rel="stylesheet" href="/css/styles.css"></head>
+                <body class="usersite"><div style="padding: 40px; text-align: center;">
+                    <h2 style="color: #00ff00;">✅ Všechny obrázky jsou synchronizované</h2>
+                    <p>Žádné chybějící soubory nenalezeny.</p>
+                    <a href="/admin/images/manage" style="color: #00d4ff;">← Zpět do galerie</a>
+                </div></body>
+            `);
+            return;
+        }
+        
+        // Cílené stažení chybějících obrázků
+        console.log(`🔄 Sync: Stahuji ${missingLogos.length} chybějících obrázků z GitHubu...`);
+        
+        const octokit = new Octokit({
+            auth: process.env.GITHUB_TOKEN,
+        });
+        
+        const REPO_OWNER = 'Medical-Issues';
+        const REPO_NAME = 'TELHTipovackaZaloha';
+        const BRANCH = 'main';
+        
+        // Vytvoř images složku pokud neexistuje
+        if (!fs.existsSync(imagesDir)) {
+            fs.mkdirSync(imagesDir, { recursive: true });
+            console.log('📁 Vytvořena složka: images');
+        }
+        
+        let downloadedCount = 0;
+        
+        for (const logo of missingLogos) {
+            try {
+                console.log(`🖼️ Stahuji obrázek: ${logo}`);
+                
+                const { data: fileContent } = await octokit.repos.getContent({
+                    owner: REPO_OWNER,
+                    repo: REPO_NAME,
+                    path: `data/images/${logo}`,
+                    ref: BRANCH
+                });
+                
+                const content = Buffer.from(fileContent.content, 'base64');
+                const localPath = path.join(imagesDir, logo);
+                
+                fs.writeFileSync(localPath, content);
+                console.log(`✅ Uložen obrázek: ${localPath}`);
+                downloadedCount++;
+                
+            } catch (error) {
+                console.error(`❌ Chyba při stahování ${logo}:`, error.message);
+            }
+        }
+        
+        res.send(`
+            <head><title>Sync - Dokončeno</title><link rel="stylesheet" href="/css/styles.css"></head>
+            <body class="usersite"><div style="padding: 40px; text-align: center;">
+                <h2 style="color: #00ff00;">🎉 Synchronizace dokončena</h2>
+                <p>Úspěšně staženo ${downloadedCount} z ${missingLogos.length} chybějících obrázků.</p>
+                <p style="color: #888;">Počkám 3 vteřiny na refresh...</p>
+                <script>setTimeout(() => window.location.href='/admin/images/manage', 3000);</script>
+                <a href="/admin/images/manage" style="color: #00d4ff;">← Zpět do galerie</a>
+            </div></body>
+        `);
+        
+    } catch (err) {
+        console.error('Chyba při sync:', err);
+        res.status(500).send('Chyba synchronizace: ' + err.message);
     }
 });
 
