@@ -3410,10 +3410,6 @@ router.get('/images/manage', requireAdmin, async (req, res) => {
     const teams = await Teams.findAll();
     const selectedSeason = await ChosenSeason.findAll();
     
-    // Filter teams by selectedSeason - admin should only see logos from current season
-    const teamsFromCurrentSeason = teams.filter(t => t.season === selectedSeason);
-    const usedLogos = new Set(teamsFromCurrentSeason.map(t => t.logo).filter(Boolean));
-
     // Pojistka, kdyby složka neexistovala
     if (!fs.existsSync(imagesDir)) {
         fs.mkdirSync(imagesDir, { recursive: true });
@@ -3421,6 +3417,37 @@ router.get('/images/manage', requireAdmin, async (req, res) => {
 
     // Načteme všechny soubory, které jsou obrázky
     const files = fs.readdirSync(imagesDir).filter(f => f.match(/\.(jpg|jpeg|png|gif|webp)$/i));
+
+    // Filter teams by selectedSeason - admin should only see logos from current season
+    const teamsFromCurrentSeason = teams.filter(t => t.season === selectedSeason);
+    const usedLogos = new Set(teamsFromCurrentSeason.map(t => t.logo).filter(Boolean));
+
+    // Mapování: logo -> týmy které ho používají
+    const logoToTeams = {};
+    teamsFromCurrentSeason.forEach(t => {
+        if (t.logo && files.includes(t.logo)) {
+            if (!logoToTeams[t.logo]) logoToTeams[t.logo] = [];
+            logoToTeams[t.logo].push({ name: t.name, id: t.id, liga: t.liga });
+        }
+    });
+
+    // Týmy bez loga (nebo s chybějícím souborem)
+    const teamsWithoutLogo = teamsFromCurrentSeason
+        .filter(t => !t.logo || !files.includes(t.logo))
+        .map(t => ({ name: t.name, id: t.id, liga: t.liga, missingFile: t.logo && !files.includes(t.logo) }));
+
+    // Loga používaná v jiných sezónách (ale ne v aktuální)
+    const teamsFromOtherSeasons = teams.filter(t => t.season !== selectedSeason);
+    const logosUsedInOtherSeasons = new Set(teamsFromOtherSeasons.map(t => t.logo).filter(Boolean));
+
+    // Mapování: logo -> týmy v jiných sezónách
+    const logoToTeamsOtherSeasons = {};
+    teamsFromOtherSeasons.forEach(t => {
+        if (t.logo && files.includes(t.logo) && !usedLogos.has(t.logo)) {
+            if (!logoToTeamsOtherSeasons[t.logo]) logoToTeamsOtherSeasons[t.logo] = [];
+            logoToTeamsOtherSeasons[t.logo].push({ name: t.name, id: t.id, liga: t.liga, season: t.season });
+        }
+    });
 
     // Získáme hashe pro detekci duplicit (načteme z MongoDB pokud existují)
     let imageHashes = [];
@@ -3467,6 +3494,24 @@ router.get('/images/manage', requireAdmin, async (req, res) => {
             .stat-box { background: #1a1a2e; padding: 10px 20px; border-radius: 8px; border: 1px solid #333; }
             .stat-box .number { font-size: 1.5em; font-weight: bold; color: #00d4ff; }
             .stat-box .label { font-size: 0.85em; color: #888; }
+            .stat-box.clickable { cursor: pointer; transition: all 0.2s; border-color: #00d4ff; }
+            .stat-box.clickable:hover { background: #252540; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,212,255,0.3); }
+            .modal-detail { max-width: 800px; width: 90vw; }
+            .modal-detail h3 { margin-top: 0; color: #00d4ff; }
+            .detail-section { margin: 15px 0; }
+            .detail-section h4 { color: #888; margin-bottom: 10px; font-size: 0.9em; text-transform: uppercase; }
+            .team-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; max-height: 400px; overflow-y: auto; }
+            .team-item { background: #252540; padding: 8px 12px; border-radius: 6px; display: flex; align-items: center; gap: 8px; }
+            .team-item .team-logo-preview { width: 24px; height: 24px; object-fit: contain; border-radius: 4px; background: #1a1a2e; }
+            .team-item .team-name { font-size: 0.9em; color: #fff; }
+            .team-item .team-liga { font-size: 0.75em; color: #666; margin-left: auto; }
+            .team-item.missing-file { border-left: 3px solid #ffaa00; }
+            .empty-state { text-align: center; padding: 40px; color: #666; }
+            .logo-team-group { margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 10px; }
+            .logo-team-group:last-child { border-bottom: none; }
+            .logo-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+            .logo-header img { width: 40px; height: 40px; object-fit: contain; border-radius: 6px; background: #1a1a2e; }
+            .logo-header .logo-name { font-weight: bold; color: #fff; }
             .upload-section { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 2px dashed #00d4ff; padding: 30px; margin-bottom: 30px; border-radius: 12px; text-align: center; }
             .upload-section.dragover { background: rgba(0, 212, 255, 0.1); border-color: #00ff00; }
             .file-input-wrapper { position: relative; display: inline-block; margin: 10px; }
@@ -3500,6 +3545,8 @@ router.get('/images/manage', requireAdmin, async (req, res) => {
             .gallery-item .status-badge { position: absolute; top: 10px; right: 10px; padding: 4px 10px; border-radius: 12px; font-size: 0.7em; font-weight: bold; }
             .gallery-item .status-badge.active { background: #00ff00; color: #000; }
             .gallery-item .status-badge.unused { background: #666; color: #fff; }
+            .gallery-item .status-badge.other-season { background: #ffaa00; color: #000; }
+            .gallery-item.other-season { border-color: #ffaa00; }
             .gallery-item .duplicate-badge { position: absolute; bottom: 60px; left: 10px; right: 10px; background: rgba(255, 68, 68, 0.9); color: white; padding: 5px; border-radius: 6px; font-size: 0.75em; text-align: center; }
             .gallery-item .similar-badge { position: absolute; bottom: 60px; left: 10px; right: 10px; background: rgba(255, 170, 0, 0.9); color: #000; padding: 5px; border-radius: 6px; font-size: 0.75em; text-align: center; }
             .gallery-item .actions { display: flex; gap: 5px; padding: 10px; }
@@ -3531,17 +3578,25 @@ router.get('/images/manage', requireAdmin, async (req, res) => {
                         <div class="number">${files.length}</div>
                         <div class="label">Celkem obrázků</div>
                     </div>
-                    <div class="stat-box">
+                    <div class="stat-box clickable" onclick="openUsedLogosModal()">
                         <div class="number" style="color: #00ff00;">${[...usedLogos].filter(l => files.includes(l)).length}</div>
-                        <div class="label">Používá se</div>
+                        <div class="label">Používá se ↗</div>
+                    </div>
+                    <div class="stat-box clickable" onclick="openOtherSeasonModal()">
+                        <div class="number" style="color: #ffaa00;">${[...logosUsedInOtherSeasons].filter(l => files.includes(l) && !usedLogos.has(l)).length}</div>
+                        <div class="label">Jiná sezóna ↗</div>
                     </div>
                     <div class="stat-box">
-                        <div class="number" style="color: ${[...usedLogos].filter(l => !files.includes(l)).length > 0 ? '#ff4444' : '#666'};">${[...usedLogos].filter(l => !files.includes(l)).length}</div>
-                        <div class="label">Chybějící loga</div>
+                        <div class="number" style="color: ${files.filter(f => !usedLogos.has(f) && !logosUsedInOtherSeasons.has(f)).length > 0 ? '#ffaa00' : '#666'};">${files.filter(f => !usedLogos.has(f) && !logosUsedInOtherSeasons.has(f)).length}</div>
+                        <div class="label">Přebytečné</div>
                     </div>
                     <div class="stat-box">
                         <div class="number" style="color: ${duplicates.exact.length + duplicates.similar.length > 0 ? '#ff4444' : '#00ff00'};">${duplicates.exact.length + duplicates.similar.length}</div>
                         <div class="label">Duplicity</div>
+                    </div>
+                    <div class="stat-box clickable" onclick="openMissingLogosModal()" style="color: ${teamsWithoutLogo.length > 0 ? '#ff4444' : '#666'};">
+                        <div class="number">${teamsWithoutLogo.length}</div>
+                        <div class="label">Chybějící loga ↗</div>
                     </div>
                 </div>
             </div>
@@ -3564,6 +3619,7 @@ router.get('/images/manage', requireAdmin, async (req, res) => {
                 </div>
                 <p style="color: #666; font-size: 0.85em; margin-top: 15px;">
                     <a href="/admin/images/reset-hashes" style="color: #ffaa00;" onclick="return confirm('Přepočítat všechny hashe obrázků? Toto může chvíli trvat.')">🔄 Přepočítat hashe obrázků</a>
+                    <a href="/admin/images/diagnose" style="color: #00d4ff; margin-left: 15px;" onclick="return confirm('Spustit diagnostiku obrázků?')">🔍 Diagnostika rozdílů</a>
                 </p>
                 <div id="duplicateWarning" class="duplicate-warning"></div>
                 <div id="uploadPreview" class="batch-upload-preview"></div>
@@ -3612,6 +3668,7 @@ router.get('/images/manage', requireAdmin, async (req, res) => {
             <div class="filter-tabs">
                 <div class="filter-tab active" onclick="filterImages('all')">Všechny</div>
                 <div class="filter-tab" onclick="filterImages('active')">Používané</div>
+                <div class="filter-tab" onclick="filterImages('other-season')">Jiná sezóna</div>
                 <div class="filter-tab" onclick="filterImages('unused')">Nepoužité</div>
                 <div class="filter-tab" onclick="filterImages('duplicates')">Duplicity</div>
             </div>
@@ -3622,17 +3679,18 @@ router.get('/images/manage', requireAdmin, async (req, res) => {
         const isActive = usedLogos.has(file);
         const isDuplicate = duplicateGroups[file] || duplicates.exact.some(d => d.duplicate === file);
         const isSimilar = duplicates.similar.some(d => d.image1 === file || d.image2 === file);
+        const isUsedInOtherSeason = !isActive && logosUsedInOtherSeasons.has(file);
         const fileData = imageHashes.find(h => h.filename === file);
         const size = fileData ? (fileData.size / 1024).toFixed(1) : '?';
 
         return `
-                    <div class="gallery-item ${isActive ? '' : 'unused'} ${isDuplicate ? 'duplicate' : ''} ${isSimilar ? 'similar' : ''}" 
+                    <div class="gallery-item ${isActive ? '' : 'unused'} ${isDuplicate ? 'duplicate' : ''} ${isSimilar ? 'similar' : ''} ${isUsedInOtherSeason ? 'other-season' : ''}" 
                          data-filename="${file}" 
-                         data-status="${isActive ? 'active' : 'unused'}"
+                         data-status="${isActive ? 'active' : isUsedInOtherSeason ? 'other-season' : 'unused'}"
                          data-duplicate="${isDuplicate || isSimilar}">
                         <input type="checkbox" class="checkbox" onchange="toggleSelection('${file}')">
-                        <span class="status-badge ${isActive ? 'active' : 'unused'}">
-                            ${isActive ? 'POUŽÍVÁ SE' : 'NEVYUŽITO'}
+                        <span class="status-badge ${isActive ? 'active' : isUsedInOtherSeason ? 'other-season' : 'unused'}">
+                            ${isActive ? 'POUŽÍVÁ SE' : isUsedInOtherSeason ? 'JINÁ SEZÓNA' : 'NEVYUŽITO'}
                         </span>
                         ${isDuplicate ? `<div class="duplicate-badge">⚠️ Duplicitní</div>` : ''}
                         ${isSimilar && !isDuplicate ? `<div class="similar-badge">~ Podobný</div>` : ''}
@@ -3642,9 +3700,9 @@ router.get('/images/manage', requireAdmin, async (req, res) => {
                             <div class="meta">${size} KB</div>
                         </div>
                         <div class="actions">
-                            ${!isActive
+                            ${!isActive && !isUsedInOtherSeason
             ? `<a href="/admin/images/delete/${file}" class="delete" onclick="return confirm('Opravdu smazat tento obrázek?')">Smazat</a>`
-            : `<button class="delete" disabled title="Nelze smazat používané logo">Smazat</button>`
+            : `<button class="delete" disabled title="${isActive ? 'Nelze smazat používané logo' : 'Nelze smazat - používá se v jiné sezóně'}">Smazat</button>`
         }
                         </div>
                     </div>
@@ -3661,13 +3719,107 @@ router.get('/images/manage', requireAdmin, async (req, res) => {
                 <button class="btn" onclick="clearSelection()" style="background: #666;">Zrušit výběr</button>
             </div>
 
-            <!-- Modal -->
+            <!-- Modal pro zobrazení obrázku -->
             <div class="modal-overlay" id="modal" onclick="closeModal()">
                 <div class="modal-content" onclick="event.stopPropagation()">
                     <img id="modalImage" src="" alt="">
                     <div style="display: flex; justify-content: center; gap: 10px; margin-top: 20px;">
                         <a id="modalDelete" class="btn" style="background: #ff4444; color: white;" href="#">Smazat</a>
                         <button class="btn" onclick="closeModal()" style="background: #666;">Zavřít</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal: Používaná loga -->
+            <div class="modal-overlay" id="usedLogosModal" onclick="closeUsedLogosModal()">
+                <div class="modal-content modal-detail" onclick="event.stopPropagation()">
+                    <h3>📊 Používaná loga (${Object.keys(logoToTeams).length})</h3>
+                    <div class="detail-content">
+                        ${Object.keys(logoToTeams).length === 0 ?
+                            '<div class="empty-state">Žádná používaná loga</div>' :
+                            Object.entries(logoToTeams).map(([logo, teams]) => `
+                                <div class="logo-team-group">
+                                    <div class="logo-header">
+                                        <img src="/logoteamu/${logo}" alt="${logo}">
+                                        <span class="logo-name">${logo}</span>
+                                        <span style="color: #888; font-size: 0.85em;">(${teams.length} týmů)</span>
+                                    </div>
+                                    <div class="team-list">
+                                        ${teams.map(t => `
+                                            <div class="team-item">
+                                                <span class="team-name">${t.name}</span>
+                                                <span class="team-liga">${t.liga || '-'}</span>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            `).join('')
+                        }
+                    </div>
+                    <div style="display: flex; justify-content: center; margin-top: 20px;">
+                        <button class="btn" onclick="closeUsedLogosModal()" style="background: #666;">Zavřít</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal: Chybějící loga -->
+            <div class="modal-overlay" id="missingLogosModal" onclick="closeMissingLogosModal()">
+                <div class="modal-content modal-detail" onclick="event.stopPropagation()">
+                    <h3 style="color: #ff4444;">⚠️ Týmy bez loga (${teamsWithoutLogo.length})</h3>
+                    <div class="detail-content">
+                        ${teamsWithoutLogo.length === 0 ?
+                            '<div class="empty-state" style="color: #00ff00;">✅ Všechny týmy mají logo!</div>' :
+                            `
+                            <div class="detail-section">
+                                <h4>Seznam týmů (${teamsWithoutLogo.length})</h4>
+                                <div class="team-list">
+                                    ${teamsWithoutLogo.map(t => `
+                                        <div class="team-item ${t.missingFile ? 'missing-file' : ''}">
+                                            <span class="team-name">${t.name}</span>
+                                            <span class="team-liga">${t.liga || '-'}</span>
+                                            ${t.missingFile ? '<span style="color: #ffaa00; font-size: 0.75em;">⚠️ Soubor chybí</span>' : ''}
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                            `
+                        }
+                    </div>
+                    <div style="display: flex; justify-content: center; margin-top: 20px;">
+                        <button class="btn" onclick="closeMissingLogosModal()" style="background: #666;">Zavřít</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal: Jiná sezóna -->
+            <div class="modal-overlay" id="otherSeasonModal" onclick="closeOtherSeasonModal()">
+                <div class="modal-content modal-detail" onclick="event.stopPropagation()">
+                    <h3 style="color: #ffaa00;">📅 Loga z jiných sezón (${Object.keys(logoToTeamsOtherSeasons).length})</h3>
+                    <div class="detail-content">
+                        ${Object.keys(logoToTeamsOtherSeasons).length === 0 ?
+                            '<div class="empty-state">Žádná loga z jiných sezón</div>' :
+                            Object.entries(logoToTeamsOtherSeasons).map(([logo, teams]) => `
+                                <div class="logo-team-group">
+                                    <div class="logo-header">
+                                        <img src="/logoteamu/${logo}" alt="${logo}">
+                                        <span class="logo-name">${logo}</span>
+                                        <span style="color: #888; font-size: 0.85em;">(${teams.length} týmů)</span>
+                                    </div>
+                                    <div class="team-list">
+                                        ${teams.map(t => `
+                                            <div class="team-item">
+                                                <span class="team-name">${t.name}</span>
+                                                <span class="team-liga">${t.liga || '-'}</span>
+                                                <span style="color: #ffaa00; font-size: 0.75em; margin-left: 8px;">${t.season}</span>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            `).join('')
+                        }
+                    </div>
+                    <div style="display: flex; justify-content: center; margin-top: 20px;">
+                        <button class="btn" onclick="closeOtherSeasonModal()" style="background: #666;">Zavřít</button>
                     </div>
                 </div>
             </div>
@@ -3853,15 +4005,21 @@ for (const file of filesToUpload) {
 
                 const items = document.querySelectorAll('.gallery-item');
                 items.forEach(item => {
-                    const isActive = item.dataset.status === 'active';
+                    const status = item.dataset.status;
+                    const isActive = status === 'active';
+                    const isOtherSeason = status === 'other-season';
+                    const isUnused = status === 'unused';
                     const isDuplicate = item.dataset.duplicate === 'true';
                     
                     switch(type) {
                         case 'active':
                             item.style.display = isActive ? '' : 'none';
                             break;
+                        case 'other-season':
+                            item.style.display = isOtherSeason ? '' : 'none';
+                            break;
                         case 'unused':
-                            item.style.display = !isActive ? '' : 'none';
+                            item.style.display = isUnused ? '' : 'none';
                             break;
                         case 'duplicates':
                             item.style.display = isDuplicate ? '' : 'none';
@@ -3882,9 +4040,41 @@ for (const file of filesToUpload) {
                 document.getElementById('modal').classList.remove('visible');
             }
 
+            // Funkce pro modál "Používaná loga"
+            function openUsedLogosModal() {
+                document.getElementById('usedLogosModal').classList.add('visible');
+            }
+
+            function closeUsedLogosModal() {
+                document.getElementById('usedLogosModal').classList.remove('visible');
+            }
+
+            // Funkce pro modál "Chybějící loga"
+            function openMissingLogosModal() {
+                document.getElementById('missingLogosModal').classList.add('visible');
+            }
+
+            function closeMissingLogosModal() {
+                document.getElementById('missingLogosModal').classList.remove('visible');
+            }
+
+            // Funkce pro modál "Jiná sezóna"
+            function openOtherSeasonModal() {
+                document.getElementById('otherSeasonModal').classList.add('visible');
+            }
+
+            function closeOtherSeasonModal() {
+                document.getElementById('otherSeasonModal').classList.remove('visible');
+            }
+
             // Keyboard shortcuts
             document.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape') closeModal();
+                if (e.key === 'Escape') {
+                    closeModal();
+                    closeUsedLogosModal();
+                    closeMissingLogosModal();
+                    closeOtherSeasonModal();
+                }
             });
         </script>
     </body>
@@ -3988,6 +4178,144 @@ router.get('/images/reset-hashes', requireAdmin, async (req, res) => {
     } catch (err) {
         console.error('Chyba při resetu hashů:', err);
         res.status(500).send('Chyba při resetu hashů: ' + err.message);
+    }
+});
+
+router.get('/images/diagnose', requireAdmin, async (req, res) => {
+    try {
+        const teams = await Teams.findAll();
+        const imagesDir = path.join(__dirname, '..', 'data', 'images');
+        const files = fs.existsSync(imagesDir) ? fs.readdirSync(imagesDir).filter(f => f.match(/\.(jpg|jpeg|png|gif|webp)$/i)) : [];
+        
+        // Analýza stavu
+        const allLogos = new Set(teams.map(t => t.logo).filter(Boolean));
+        const existingLogos = new Set(files);
+        const missingLogos = [...allLogos].filter(logo => !existingLogos.has(logo));
+        const unusedFiles = files.filter(file => !allLogos.has(file));
+        
+        // Rozdělení podle sezón
+        const seasonStats = {};
+        teams.forEach(t => {
+            if (!seasonStats[t.season]) seasonStats[t.season] = { teams: 0, logos: new Set(), missing: [] };
+            seasonStats[t.season].teams++;
+            if (t.logo) {
+                if (existingLogos.has(t.logo)) {
+                    seasonStats[t.season].logos.add(t.logo);
+                } else {
+                    seasonStats[t.season].missing.push({ name: t.name, logo: t.logo });
+                }
+            }
+        });
+        
+        let html = `
+        <!DOCTYPE html>
+        <html lang="cs">
+        <head>
+            <meta charset="UTF-8">
+            <title>Diagnostika obrázků</title>
+            <link rel="stylesheet" href="/css/styles.css">
+            <style>
+                .diagnostic-container { padding: 20px; max-width: 1200px; margin: 0 auto; }
+                .diagnostic-section { background: #1a1a2e; padding: 20px; margin: 20px 0; border-radius: 12px; border: 1px solid #333; }
+                .diagnostic-section h3 { margin-top: 0; color: #00d4ff; }
+                .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 15px 0; }
+                .stat-item { background: #252540; padding: 15px; border-radius: 8px; text-align: center; }
+                .stat-number { font-size: 2em; font-weight: bold; color: #00d4ff; }
+                .stat-label { color: #888; margin-top: 5px; }
+                .problem { color: #ff4444; }
+                .warning { color: #ffaa00; }
+                .success { color: #00ff00; }
+                .file-list { max-height: 300px; overflow-y: auto; background: #0a0a0a; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 0.85em; }
+                .file-item { padding: 4px 8px; margin: 2px 0; background: #1a1a2e; border-radius: 4px; }
+                .file-item.missing { background: rgba(255, 68, 68, 0.2); border-left: 3px solid #ff4444; }
+                .file-item.unused { background: rgba(255, 170, 0, 0.2); border-left: 3px solid #ffaa00; }
+                .season-section { margin: 10px 0; padding: 15px; background: #0a0a0a; border-radius: 6px; }
+            </style>
+        </head>
+        <body class="usersite">
+            <div class="diagnostic-container">
+                <h1>🔍 Diagnostika stavu obrázků</h1>
+                <p><a href="/admin/images/manage" style="color: orangered;">← Zpět do galerie</a></p>
+                
+                <div class="diagnostic-section">
+                    <h3>📊 Celkový přehled</h3>
+                    <div class="stat-grid">
+                        <div class="stat-item">
+                            <div class="stat-number">${teams.length}</div>
+                            <div class="stat-label">Týmů celkem</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number">${files.length}</div>
+                            <div class="stat-label">Souborů v /data/images</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number ${missingLogos.length > 0 ? 'problem' : 'success'}">${missingLogos.length}</div>
+                            <div class="stat-label">Chybějících log</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number ${unusedFiles.length > 0 ? 'warning' : 'success'}">${unusedFiles.length}</div>
+                            <div class="stat-label">Nepoužitých souborů</div>
+                        </div>
+                    </div>
+                </div>
+                
+                ${missingLogos.length > 0 ? `
+                <div class="diagnostic-section">
+                    <h3 class="problem">⚠️ Chybějící loga (${missingLogos.length})</h3>
+                    <p class="problem">Tyto soubory jsou přiřazeny týmům, ale neexistují na disku:</p>
+                    <div class="file-list">
+                        ${missingLogos.map(logo => {
+                            const team = teams.find(t => t.logo === logo);
+                            return `<div class="file-item missing">
+                                ${logo} → ${team ? `${team.name} (${team.season})` : 'Neznámý tým'}
+                            </div>`;
+                        }).join('')}
+                    </div>
+                </div>
+                ` : ''}
+                
+                ${unusedFiles.length > 0 ? `
+                <div class="diagnostic-section">
+                    <h3 class="warning">📦 Nepoužité soubory (${unusedFiles.length})</h3>
+                    <p class="warning">Tyto soubory existují, ale žádný tým je nepoužívá:</p>
+                    <div class="file-list">
+                        ${unusedFiles.map(file => `<div class="file-item unused">${file}</div>`).join('')}
+                    </div>
+                </div>
+                ` : ''}
+                
+                <div class="diagnostic-section">
+                    <h3>📅 Rozdělení podle sezón</h3>
+                    ${Object.entries(seasonStats).map(([season, stats]) => `
+                        <div class="season-section">
+                            <h4>Sezóna ${season} (${stats.teams} týmů, ${stats.logos.size} log, ${stats.missing.length} chybí)</h4>
+                            ${stats.missing.length > 0 ? `
+                                <div class="file-list">
+                                    ${stats.missing.map(t => `<div class="file-item missing">${t.name} → ${t.logo}</div>`).join('')}
+                                </div>
+                            ` : '<p style="color: #00ff00;">✅ Všechna loga existují</p>'}
+                        </div>
+                    `).join('')}
+                </div>
+                
+                <div class="diagnostic-section">
+                    <h3>💡 Doporučení</h3>
+                    <ul style="color: #fff; line-height: 1.6;">
+                        ${missingLogos.length > 0 ? `<li class="problem">Doplňte ${missingLogos.length} chybějících log nebo odstraňte přiřazení</li>` : ''}
+                        ${unusedFiles.length > 0 ? `<li class="warning">Zvažte smazání ${unusedFiles.length} nepoužitých souborů</li>` : ''}
+                        ${missingLogos.length === 0 && unusedFiles.length === 0 ? '<li class="success">✅ Vše je v pořádku!</li>' : ''}
+                        <li>Pro synchronizaci z produkce zkopírujte chybějící soubory do /data/images</li>
+                        <li>Pro vyčištění použijte <a href="/admin/images/manage" style="color: #00d4ff;">správce obrázků</a></li>
+                    </ul>
+                </div>
+            </div>
+        </body>
+        </html>`;
+        
+        res.send(html);
+    } catch (err) {
+        console.error('Chyba v diagnostice:', err);
+        res.status(500).send('Chyba diagnostiky: ' + err.message);
     }
 });
 
@@ -4263,8 +4591,9 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
     // Použít admin sezónu pro prohlížení pokud je nastavena
     const selectedSeason = req.session.adminSeason || chosenSeason;
     const allowedLeagues = await AllowedLeagues.findAll();
+    const leaguesForSeason = allowedLeagues[selectedSeason] || [];
 
-    const selectedLiga = req.query.liga || allowedLeagues[0];
+    const selectedLiga = req.query.liga || leaguesForSeason[0];
 
     let transfersData = await Transfers.findAll();
     if (!transfersData || Object.keys(transfersData).length === 0) transfersData = {};
@@ -4317,7 +4646,7 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
             <form method="GET" style="margin-bottom: 20px;">
                 Změnit ligu: 
                 <select id="league-select" name="liga" onchange="this.form.submit()" style="padding: 5px;">
-                    ${allowedLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected' : ''}>${l}</option>`).join('')}
+                    ${leaguesForSeason.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected' : ''}>${l}</option>`).join('')}
                 </select>
             </form>
 
