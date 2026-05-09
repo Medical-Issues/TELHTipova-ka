@@ -2687,6 +2687,10 @@ async function createWinnerImage(winnerTeam, title, withWatermark = true, option
     ctx.textBaseline = 'middle';
     ctx.shadowColor = hexToRgba(accentColor, 0.8);
     ctx.shadowBlur = 20;
+    
+    // Nastavit font který podporuje emoji pro lepší kompatibilitu v produkci
+    ctx.font = 'bold 36px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", Arial, sans-serif';
+    
     const titleText = showTrophy ? `🏆 ${title}` : title;
     ctx.fillText(titleText, width / 2, 50);
     ctx.shadowBlur = 0;
