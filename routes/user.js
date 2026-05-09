@@ -3090,7 +3090,7 @@ html += `<section class="matches-container" style="flex: 1; padding: 20px;">
                     </div>
                     <div class="form-group watermark-option" style="align-items: flex-start; margin-top: 20px;">
                         <input type="checkbox" name="showTrophy" id="show-trophy" checked value="true">
-                        <label for="show-trophy" style="margin: 0;">Zobrazit pohár 🏆</label>
+                        <label for="show-trophy" style="margin: 0;">Zobrazit hvězdičku ⭐</label>
                     </div>
                 </div>
                 <div class="form-group watermark-option">
