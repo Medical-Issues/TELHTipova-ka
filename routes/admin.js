@@ -61,6 +61,12 @@ const fileFilter = (req, file, cb) => {
 };
 
 const upload = multer({ storage: storage, fileFilter: fileFilter });
+
+// Speciální multer pro FormData s lepším zpracováním textových polí
+const uploadMemory = multer({ 
+    storage: multer.memoryStorage(),
+    fileFilter: fileFilter
+});
 router.get('/', requireAdmin, async (req, res) => {
     // Načtení všech dat z MongoDB
     const [matches, teams, transferLeagues, allowedLeagues, allSeasonData, chosenSeason, settingsData] = await Promise.all([
@@ -4975,6 +4981,7 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
                             formData.append('toTeamId', toTeam);
                             formData.append('playerName', playerName);
                             formData.append('watermark', 'true');
+                            formData.append('_csrf', document.querySelector('input[name="_csrf"]').value);
                             if (playerPhotoInput.files[0]) {
                                 formData.append('playerPhoto', playerPhotoInput.files[0]);
                             }
@@ -5014,15 +5021,31 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
     res.send(html);
 });
 
-// Endpoint pro generování náhledu obrázku přestupu
-router.post('/transfers/generate-preview', express.urlencoded({ extended: true }), requireAdmin, upload.single('playerPhoto'), async (req, res) => {
-    // CSRF kontrola
-    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
-        return res.status(403).send('Neplatný CSRF token');
+
+// Middleware pro zpracování FormData před CSRF kontrolou
+const handleFormDataBeforeCSRF = (req, res, next) => {
+    if (req.headers['content-type'] && req.headers['content-type'].includes('multipart/form-data')) {
+        // Pro FormData použijeme uploadMemory middleware
+        uploadMemory.single('playerPhoto')(req, res, next);
+    } else {
+        // Pro normální requesty pokračuj
+        next();
     }
+};
+
+// Endpoint pro generování náhledu obrázku přestupu
+router.post('/transfers/generate-preview', handleFormDataBeforeCSRF, requireAdmin, (req, res, next) => {
+    // CSRF kontrola (po zpracování FormData)
+    const csrfMiddleware = require('../server').csrfMiddleware;
+    csrfMiddleware(req, res, next);
+}, async (req, res) => {
     
     try {
-        const { fromTeamId, toTeamId, playerName, watermark } = req.body;
+        // Zpracování dat z FormData - multer je uloží do req.body
+        const fromTeamId = req.body.fromTeamId;
+        const toTeamId = req.body.toTeamId;
+        const playerName = req.body.playerName;
+        const watermark = req.body.watermark;
         
         const teams = await Teams.findAll();
         const fromTeam = teams.find(t => t.id === parseInt(fromTeamId));
@@ -5037,7 +5060,16 @@ router.post('/transfers/generate-preview', express.urlencoded({ extended: true }
         
         let playerPhotoPath = null;
         if (req.file) {
-            playerPhotoPath = req.file.path;
+            // Uložit soubor z paměti do temp adresáře
+            const fs = require('fs');
+            const path = require('path');
+            const tempDir = path.join(__dirname, '../temp');
+            if (!fs.existsSync(tempDir)) {
+                fs.mkdirSync(tempDir, { recursive: true });
+            }
+            const timestamp = Date.now();
+            playerPhotoPath = path.join(tempDir, `player-${timestamp}.png`);
+            fs.writeFileSync(playerPhotoPath, req.file.buffer);
         }
         
         const buffer = await createTransferImage(
@@ -5048,18 +5080,19 @@ router.post('/transfers/generate-preview', express.urlencoded({ extended: true }
             playerPhotoPath
         );
         
-        // Uložit obrázek do public/images/notifications
+        // Uložit obrázek do public/images/exports
         const fs = require('fs');
         const path = require('path');
-        const notifDir = path.join(__dirname, '../public/images/notifications');
+        const exportsDir = path.join(__dirname, '../public/images/exports');
         
-        if (!fs.existsSync(notifDir)) {
-            fs.mkdirSync(notifDir, { recursive: true });
+        if (!fs.existsSync(exportsDir)) {
+            fs.mkdirSync(exportsDir, { recursive: true });
         }
         
         const timestamp = Date.now();
-        const filename = `transfer-generated-${timestamp}.png`;
-        const outPath = path.join(notifDir, filename);
+        const playerSuffix = playerName ? `-${playerName.replace(/\s+/g, '-')}` : '';
+        const filename = `transfer-${fromTeam.id}-to-${toTeam.id}${playerSuffix}-${timestamp}.png`;
+        const outPath = path.join(exportsDir, filename);
         
         fs.writeFileSync(outPath, buffer);
         
@@ -5068,7 +5101,7 @@ router.post('/transfers/generate-preview', express.urlencoded({ extended: true }
             try { fs.unlinkSync(playerPhotoPath); } catch (e) {}
         }
         
-        const publicUrl = `/images/notifications/${filename}`;
+        const publicUrl = `/images/exports/${filename}`;
         res.json({ url: publicUrl, filename });
         
     } catch (err) {

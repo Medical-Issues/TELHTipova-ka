@@ -41,7 +41,20 @@ const getTeams = async () => {
 async function processCustomImageForNotification(imageUrl) {
     try {
         // Získat cestu k souboru z URL
-        const urlPath = imageUrl.replace('/logoteamu/', 'data/images/').replace('/images/notifications/', 'public/images/notifications/');
+        let urlPath;
+        if (imageUrl.startsWith('/images/exports/')) {
+            // Exportované obrázky (např. přestupy)
+            urlPath = 'public' + imageUrl;
+        } else if (imageUrl.startsWith('/logoteamu/')) {
+            // Loga týmů
+            urlPath = imageUrl.replace('/logoteamu/', 'data/images/');
+        } else if (imageUrl.startsWith('/images/notifications/')) {
+            // Notifikační obrázky
+            urlPath = imageUrl.replace('/images/notifications/', 'public/images/notifications/');
+        } else {
+            // Výchozí fallback
+            urlPath = imageUrl;
+        }
         const fullPath = path.join(process.cwd(), urlPath);
         
         // Kontrola WebP - canvas nepodporuje WebP, vrátit původní URL
@@ -111,8 +124,8 @@ async function processCustomImageForNotification(imageUrl) {
 }
 
 // --- FUNKCE PRO VYTVOŘENÍ "VERSUS" OBRÁZKU ---
-async function createVersusImage(homeTeam, awayTeam, matchId, scoreHome = null, scoreAway = null, seriesMatches = null) {
-    console.log(`[createVersusImage] START - matchId=${matchId}, teams=${homeTeam?.name} vs ${awayTeam?.name}`);
+async function createVersusImage(homeTeam, awayTeam, matchId, scoreHome = null, scoreAway = null, seriesMatches = null, ot = false) {
+    console.log(`[createVersusImage] START - matchId=${matchId}, teams=${homeTeam?.name} vs ${awayTeam?.name}, ot=${ot}`);
     if (!homeTeam || !awayTeam) {
         console.log('[createVersusImage] ERROR: Missing teams');
         return null;
@@ -236,7 +249,8 @@ async function createVersusImage(homeTeam, awayTeam, matchId, scoreHome = null, 
         ctx.font = 'bold 90px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(`${scoreHome}:${scoreAway}`, width / 2, height / 2 + 5); // +5 pro lepší centrování
+        const scoreText = ot ? `${scoreHome}:${scoreAway} pp/sn` : `${scoreHome}:${scoreAway}`;
+        ctx.fillText(scoreText, width / 2, height / 2 + 5); // +5 pro lepší centrování
 
         ctx.fillStyle = '#ff4500';
         ctx.font = 'bold 20px Arial';
@@ -735,7 +749,8 @@ const notifyResult = async (matchId, scoreHome, scoreAway) => {
         if (isSeries && match.playedMatches) {
             seriesMatches = match.playedMatches;
         }
-        heroImageUrl = await createVersusImage(homeTeam, awayTeam, match.id, scoreHome, scoreAway, seriesMatches);
+        const isOt = match.result && match.result.ot;
+        heroImageUrl = await createVersusImage(homeTeam, awayTeam, match.id, scoreHome, scoreAway, seriesMatches, isOt);
         console.log(`[notifyResult] Generated heroImageUrl: ${heroImageUrl}`);
     } catch (err) {
         console.error("Chyba při generování Versus obrázku:", err);
@@ -787,7 +802,7 @@ const notifySeriesProgress = async (matchOrId, matchIndex, scoreHome, scoreAway,
     // VYGENEROVÁNÍ DYNAMICKÉHO OBRÁZKU
     let heroImageUrl = null;
     try {
-        heroImageUrl = await createVersusImage(homeTeam, awayTeam, match.id, scoreHome, scoreAway, seriesMatches);
+        heroImageUrl = await createVersusImage(homeTeam, awayTeam, match.id, scoreHome, scoreAway, seriesMatches, ot);
     } catch (err) {
         console.error("Chyba při generování Versus obrázku:", err);
     }

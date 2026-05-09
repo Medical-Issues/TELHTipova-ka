@@ -154,8 +154,8 @@ app.use(session({
 }));
 
 // Body parser middleware
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
+app.use(bodyParser.json({ limit: '10mb' }));
 
 // Health check endpoint pro monitoring služby (bez autentizace) - MUSÍ BÝT PŘED ROUTES!
 app.get('/health', (req, res) => {
@@ -377,9 +377,12 @@ app.post('/admin/full-restore-from-github', (req, res) => {
 app.use('/auth', authRoutes);
 app.use('/health', healthRoutes);
 app.use('/security', securityRoutes);
+
+// Admin routy bez CSRF middleware (bude aplikováno v endpointu)
+app.use('/admin', express.json({ limit: '50mb' }), express.urlencoded({ extended: true, limit: '50mb' }), adminRoutes);
+
 app.use('/api', csrfMiddleware, versionRoutes);
 app.use('/', csrfMiddleware, userRoutes)
-app.use('/admin', csrfMiddleware, adminRoutes);
 
 // API endpoint pro CSRF token
 app.get('/api/csrf-token', (req, res) => {
@@ -565,6 +568,16 @@ async function startServer() {
         }, 10000);
     });
 
+    // Záloha každých 24 hodin
+    setInterval(() => {
+        console.log('⏰ Spouštím automatickou zálohu...');
+        backupJsonFilesToGitHub();
+    }, 60*60*1000*24);
+}
+
+// Export middleware pro použití v jiných souborech
+module.exports.csrfMiddleware = csrfMiddleware;
+
     // JEDNOTNÝ KEEP-ALIVE SYSTÉM - kombinuje všechny mechanismy
     function startUnifiedKeepAlive() {
         const WAKE_URL = process.env.WAKE_URL || 'https://telhtipova-ka.onrender.com/wake';
@@ -611,11 +624,8 @@ async function startServer() {
         }, 45 * 1000); // Každých 45 sekund
     }
 
-    // Záloha každých 24 hodin
-    setInterval(() => {
-        console.log('⏰ Spouštím automatickou zálohu...');
-        backupJsonFilesToGitHub();
-    }, 60*60*1000*24);
-}
 
 startServer().then(() => {});
+
+// Export middleware pro použití v jiných souborech
+module.exports.csrfMiddleware = csrfMiddleware;

@@ -2546,7 +2546,7 @@ router.post("/image-exporter/generate", requireLogin, express.json({ limit: '50m
                 if (playerPhotoPath && fs.existsSync(playerPhotoPath)) {
                     try { fs.unlinkSync(playerPhotoPath); } catch (e) {}
                 }
-                const playerSuffix = playerName ? `-${playerName.replace(/\\s+/g, '-')}` : '';
+                const playerSuffix = playerName ? `-${playerName.replace(/\s+/g, '-')}` : '';
                 filename = `transfer-${fromTeam.id}-to-${toTeam.id}${playerSuffix}-${timestamp}.png`;
                 break;
             }
