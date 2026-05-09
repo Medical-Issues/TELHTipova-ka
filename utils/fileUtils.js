@@ -2689,14 +2689,13 @@ async function createWinnerImage(winnerTeam, title, withWatermark = true, option
     ctx.shadowBlur = 20;
     
     // Pro pohár použijeme spolehlivý textový symbol místo emoji
-    let titleText = title;
     if (showTrophy) {
         // Použijeme textový symbol který funguje všude
         ctx.font = 'bold 30px Arial';
         ctx.fillText(`⭐ ${title}`, width / 2, 50);
     } else {
         ctx.font = 'bold 30px Arial';
-        ctx.fillText(titleText, width / 2, 50);
+        ctx.fillText(title, width / 2, 50);
     }
     ctx.shadowBlur = 0;
 
