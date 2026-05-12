@@ -1016,13 +1016,19 @@ async function renderErrorHtml(res, message, code = 500) {
     `);
 }
 
-async function getTableMode(req, isRegularSeasonFinished, leagueObj, playoffData) {
+async function getTableMode(req, isRegularSeasonFinished, leagueObj, playoffData, isHistory = false) {
     // 1. Priorita: Co je v URL (pokud uživatel klikne na tlačítko)
     if (req.query.tableMode === 'regular' || req.query.tableMode === 'playoff') {
         return req.query.tableMode;
     }
 
-    // 2. Default: Pokud v URL nic není, rozhodne stav ligy (hotovo -> playoff, probíhá -> regular)
+    // 2. Default: Pokud v URL nic není, rozhodne stav ligy
+    // V historii vždy defaultujeme na regular (uživatel si může kliknout na playoff)
+    if (isHistory) {
+        return 'regular';
+    }
+
+    // V aktuálním režimu: hotovo -> playoff, probíhá -> regular
     // Ale POUZE pokud liga má přiřazenou playoff tabulku v databázi
     const hasPlayoffTable = playoffData && Object.keys(playoffData).length > 0;
     if (isRegularSeasonFinished && hasPlayoffTable) {
@@ -1510,7 +1516,7 @@ async function prepareDashboardData(req, isHistory = false, isImageExporter = fa
         if (allPlayoffs[selectedSeason] && allPlayoffs[selectedSeason][selectedLiga]) playoffData = allPlayoffs[selectedSeason][selectedLiga];
     } catch (e) {}
 
-    const tableMode = await getTableMode(req, isRegularSeasonFinished, leagueObj, playoffData);
+    const tableMode = await getTableMode(req, isRegularSeasonFinished, leagueObj, playoffData, isHistory);
 
     // --- PŘIDÁNO: Načtení dat pro PŘESTUPY ---
     let activeTransferLeagues = [];

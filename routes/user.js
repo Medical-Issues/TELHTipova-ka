@@ -45,7 +45,8 @@ router.use((req, res, next) => {
 
 router.get("/table-tip", requireLogin, async (req, res) => {
     // Kontrola jest je liga veřejná
-    const allowedLeagues = await getAllowedLeagues();
+    const chosenSeason = await ChosenSeason.findAll();
+    const allowedLeagues = await getAllowedLeagues(chosenSeason);
     const requestedLiga = req.query.liga;
     if (requestedLiga && !allowedLeagues.includes(requestedLiga)) {
         // Přesměruj na první veřejnou ligu
