@@ -60,6 +60,8 @@ Srovna tabulku vybrané sezóny a registrace nových uživatelů (height) ✅
 
 Špatný srovnávání dropdown menu vše podle ID pokud to jde a co není ✅
 
-Oprava routy tipovačky pořadí zákl. části
+Oprava routy tipovačky pořadí zákl. části ✅
 
-Oprava logiky otevírání playoff tabulky vs tabulky zákl. části v levé části v historii pouze...
+Oprava logiky otevírání tabulek v levém panelu v historii kdy se všechny ligy/turnaje otevřou na zákl. části ✅
+
+Oprava logiky otevírání tabulek v levém panelu pro ligy bez playoff tabulek kdy se playoff tabulka nemůže sama otevřít ✅
