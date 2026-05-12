@@ -1016,14 +1016,19 @@ async function renderErrorHtml(res, message, code = 500) {
     `);
 }
 
-async function getTableMode(req, isRegularSeasonFinished) {
+async function getTableMode(req, isRegularSeasonFinished, leagueObj, playoffData) {
     // 1. Priorita: Co je v URL (pokud uživatel klikne na tlačítko)
     if (req.query.tableMode === 'regular' || req.query.tableMode === 'playoff') {
         return req.query.tableMode;
     }
 
     // 2. Default: Pokud v URL nic není, rozhodne stav ligy (hotovo -> playoff, probíhá -> regular)
-    return isRegularSeasonFinished ? 'playoff' : 'regular';
+    // Ale POUZE pokud liga má přiřazenou playoff tabulku v databázi
+    const hasPlayoffTable = playoffData && Object.keys(playoffData).length > 0;
+    if (isRegularSeasonFinished && hasPlayoffTable) {
+        return 'playoff';
+    }
+    return 'regular';
 }
 // --- POMOCNÉ ČTECÍ FUNKCE (Vlož nahoru do fileUtils.js) ---
 async function getChosenSeason() {
@@ -1165,8 +1170,6 @@ async function prepareDashboardData(req, isHistory = false, isImageExporter = fa
         isRegularSeasonFinished = statusData?.[selectedSeason]?.[selectedLiga]?.regularSeasonFinished || false;
         isTipsLocked = statusData?.[selectedSeason]?.[selectedLiga]?.tableTipsLocked || false;
     } catch (e) {}
-
-    const tableMode = await getTableMode(req, isRegularSeasonFinished);
 
     // 4. Výpočet bodů a bonusů
     // Původní logika - výpočet jen pro plně zamčené ligy
@@ -1506,6 +1509,8 @@ async function prepareDashboardData(req, isHistory = false, isImageExporter = fa
         const allPlayoffs = await getPlayoffData();
         if (allPlayoffs[selectedSeason] && allPlayoffs[selectedSeason][selectedLiga]) playoffData = allPlayoffs[selectedSeason][selectedLiga];
     } catch (e) {}
+
+    const tableMode = await getTableMode(req, isRegularSeasonFinished, leagueObj, playoffData);
 
     // --- PŘIDÁNO: Načtení dat pro PŘESTUPY ---
     let activeTransferLeagues = [];
