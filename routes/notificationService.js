@@ -249,8 +249,20 @@ async function createVersusImage(homeTeam, awayTeam, matchId, scoreHome = null, 
         ctx.font = 'bold 90px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        const scoreText = ot ? `${scoreHome}:${scoreAway} pp/sn` : `${scoreHome}:${scoreAway}`;
+
+        // Text skóre bude obsahovat pouze čísla
+        const scoreText = `${scoreHome}:${scoreAway}`;
         ctx.fillText(scoreText, width / 2, height / 2 + 5); // +5 pro lepší centrování
+
+        // Pokud je zápas po prodloužení/nájezdech, vykreslíme "pp/sn" menším písmem vpravo
+        if (ot) {
+            ctx.fillStyle = '#ff4500'; // Oranžová barva pro dodatečný text
+            ctx.font = 'bold 24px Arial'; // Menší velikost písma
+            ctx.textAlign = 'left'; // Zarovnání vlevo, aby se text rozšiřoval doprava
+            ctx.textBaseline = 'middle';
+            // Umístění: width / 2 + 105 (trochu vpravo od středu boxu) a vertikálně uprostřed skóre
+            ctx.fillText('pp/sn', width / 2 + 105, height / 2 + 5);
+        }
 
         ctx.fillStyle = '#ff4500';
         ctx.font = 'bold 20px Arial';

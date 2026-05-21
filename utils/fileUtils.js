@@ -3250,7 +3250,6 @@ async function createPlayoffBracketImage(data, withWatermark = true) {
                     playedMatches: match.playedMatches || []
                 };
             }
-            // Match not found but series assigned - show as waiting
             return {
                 isWaiting: true,
                 home: 'TBD',
