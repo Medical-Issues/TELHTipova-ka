@@ -551,9 +551,15 @@ function calculateClinchStatusesForGroup(
                 else clinchedNeutral = true;
             } else {
                 if (qfLimit > 0 && myPoints > thresholdQF) clinchedQF = true;
-                if (totalAdvancing > 0 && (myPoints > thresholdPlayin || totalAdvancing >= sorted.length)) clinchedPlayin = true;
-                if (relegationLimit > 0 && myPoints > thresholdRelegation) clinchedNeutral = true;
-                else if (relegationLimit === 0) clinchedNeutral = true;
+                // Kaskádový mód: playin POUZE pokud není již clinched QF
+                if (!clinchedQF && totalAdvancing > 0 && (myPoints > thresholdPlayin || totalAdvancing >= sorted.length)) {
+                    clinchedPlayin = true;
+                }
+                // Kaskádový mód: obarví neutral POUZE pokud už není clinched QF nebo playin
+                if (!clinchedQF && !clinchedPlayin) {
+                    if (relegationLimit > 0 && myPoints > thresholdRelegation) clinchedNeutral = true;
+                    else if (relegationLimit === 0) clinchedNeutral = true;
+                }
                 if (relegationLimit > 0 && index > safeZoneIndex && myMaxPoints < safetyPoints) clinchedRelegation = true;
             }
         }
@@ -1793,9 +1799,15 @@ async function generateLeftPanel(data, isHistory = false) {
                     else clinchedNeutral = true;
                 } else {
                     if (qfLimit > 0 && myPoints > thresholdQF) clinchedQF = true;
-                    if (totalAdvancing > 0 && myPoints > thresholdPlayin || totalAdvancing >= sorted.length) clinchedPlayin = true;
-                    if (relegationLimit > 0 && myPoints > thresholdRelegation) clinchedNeutral = true;
-                    else if (relegationLimit === 0) clinchedNeutral = true;
+                    // Kaskádový mód: playin POUZE pokud není již clinched QF
+                    if (!clinchedQF && totalAdvancing > 0 && (myPoints > thresholdPlayin || totalAdvancing >= sorted.length)) {
+                        clinchedPlayin = true;
+                    }
+                    // Kaskádový mód: obarví neutral POUZE pokud už není clinched QF nebo playin
+                    if (!clinchedQF && !clinchedPlayin) {
+                        if (relegationLimit > 0 && myPoints > thresholdRelegation) clinchedNeutral = true;
+                        else if (relegationLimit === 0) clinchedNeutral = true;
+                    }
                     if (relegationLimit > 0 && index > safeZoneIndex && myMaxPoints < safetyPoints) clinchedRelegation = true;
                 }
             }
@@ -1959,9 +1971,15 @@ async function generateLeftPanel(data, isHistory = false) {
                     else cNeutralLocked = true;
                 } else {
                     if (cQfLimit > 0 && myPoints > cThresholdQF) cSafeQF = true;
-                    if (cTotalAdvancing > 0 && myPoints > cThresholdPlayin) cSafePlayin = true;
-                    if (cRelLimit > 0 && myPoints > cThresholdRelegation) cNeutralLocked = true;
-                    else if (cRelLimit === 0) cNeutralLocked = true;
+                    // Kaskádový mód: playin POUZE pokud není již clinched QF
+                    if (!cSafeQF && cTotalAdvancing > 0 && (myPoints > cThresholdPlayin || cTotalAdvancing >= crossGroupTeams.length)) {
+                        cSafePlayin = true;
+                    }
+                    // Kaskádový mód: obarví neutral POUZE pokud už není clinched QF nebo playin
+                    if (!cSafeQF && !cSafePlayin) {
+                        if (cRelLimit > 0 && myPoints > cThresholdRelegation) cNeutralLocked = true;
+                        else if (cRelLimit === 0) cNeutralLocked = true;
+                    }
                     if (cRelLimit > 0 && index > cSafeZoneIndex) {
                         const safetyTarget = crossGroupTeams[cSafeZoneIndex]?.stats?.[selectedSeason]?.points || 0;
                         if (myMaxPoints < safetyTarget) cRelegated = true;
