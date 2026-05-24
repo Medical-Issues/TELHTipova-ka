@@ -2602,7 +2602,62 @@ router.post('/playoff/auto-generate', express.urlencoded({ extended: true }), re
                 if (pB !== pA) return pB - pA;
                 const tieA = aStats.tiebreaker || 0;
                 const tieB = bStats.tiebreaker || 0;
-                return tieA - tieB;
+                if (tieB !== tieA) return tieA - tieB;
+
+                // Podle priority tiebreaker určíme pořadí kritérií
+                if (leagueObj?.tiebreakerPriority === 'goalDiff') {
+                    // Priorita: Celkové skóre před H2H
+                    const aScores = scores[a.id] || { gf: 0, ga: 0 };
+                    const bScores = scores[b.id] || { gf: 0, ga: 0 };
+                    const aTotalGF = aStats.gf || aScores.gf || 0;
+                    const bTotalGF = bStats.gf || bScores.gf || 0;
+                    const aTotalGA = aStats.ga || aScores.ga || 0;
+                    const bTotalGA = bStats.ga || bScores.ga || 0;
+                    const aDiff = aTotalGF - aTotalGA;
+                    const bDiff = bTotalGF - bTotalGA;
+                    if (bDiff !== aDiff) return bDiff - aDiff;
+                    if (bTotalGF !== aTotalGF) return bTotalGF - aTotalGF;
+
+                    // H2H kontrola (jen pokud není goalDiff priority)
+                    const directMatch = matches.find(m =>
+                        m.season === season && m.liga === league && m.result && !m.isPlayoff &&
+                        ((Number(m.homeTeamId) === Number(a.id) && Number(m.awayTeamId) === Number(b.id)) ||
+                            (Number(m.homeTeamId) === Number(b.id) && Number(m.awayTeamId) === Number(a.id)))
+                    );
+                    if (directMatch) {
+                        const isAHome = Number(directMatch.homeTeamId) === Number(a.id);
+                        let sH = directMatch.result?.scoreHome ?? directMatch.scoreHome ?? 0;
+                        let sA = directMatch.result?.scoreAway ?? directMatch.scoreAway ?? 0;
+                        if (isAHome) { if (sH > sA) return -1; if (sA > sH) return 1; }
+                        else { if (sA > sH) return -1; if (sH > sA) return 1; }
+                    }
+                } else {
+                    // Priorita: H2H před celkovým skórem (výchozí)
+                    const aScores = scores[a.id] || { gf: 0, ga: 0 };
+                    const bScores = scores[b.id] || { gf: 0, ga: 0 };
+                    const aTotalGF = aStats.gf || aScores.gf || 0;
+                    const bTotalGF = bStats.gf || bScores.gf || 0;
+                    const aTotalGA = aStats.ga || aScores.ga || 0;
+                    const bTotalGA = bStats.ga || bScores.ga || 0;
+                    const aDiff = aTotalGF - aTotalGA;
+                    const bDiff = bTotalGF - bTotalGA;
+                    if (bDiff !== aDiff) return bDiff - aDiff;
+                    if (bTotalGF !== aTotalGF) return bTotalGF - aTotalGF;
+
+                    const directMatch = matches.find(m =>
+                        m.season === season && m.liga === league && m.result && !m.isPlayoff &&
+                        ((Number(m.homeTeamId) === Number(a.id) && Number(m.awayTeamId) === Number(b.id)) ||
+                            (Number(m.homeTeamId) === Number(b.id) && Number(m.awayTeamId) === Number(a.id)))
+                    );
+                    if (directMatch) {
+                        const isAHome = Number(directMatch.homeTeamId) === Number(a.id);
+                        let sH = directMatch.result?.scoreHome ?? directMatch.scoreHome ?? 0;
+                        let sA = directMatch.result?.scoreAway ?? directMatch.scoreAway ?? 0;
+                        if (isAHome) { if (sH > sA) return -1; if (sA > sH) return 1; }
+                        else { if (sA > sH) return -1; if (sH > sA) return 1; }
+                    }
+                }
+                return 0;
             });
         }
 
@@ -2886,7 +2941,9 @@ router.post('/playoff/auto-generate-locked', express.urlencoded({ extended: true
                 leagueObj,
                 season,
                 'cascade',
-                scores
+                scores,
+                allMatches,
+                league
             );
         }
 
@@ -3172,6 +3229,36 @@ async function checkAndCreatePlayoffMatches(season, league) {
             scores[t.id].ga = teamStats.ga || 0;
         });
 
+        // Helper function to check head-to-head result between two teams
+        const getHeadToHeadResult = (teamId1, teamId2, matches, liga, season) => {
+            // Pokud je priority goalDiff, nepoužíváme H2H
+            if (leagueObj?.tiebreakerPriority === 'goalDiff') return null;
+            if (!matches || !liga) return null;
+            const directMatch = matches.find(m =>
+                m.season === season && 
+                m.liga === liga && 
+                m.result && 
+                !m.isPlayoff &&
+                ((Number(m.homeTeamId) === Number(teamId1) && Number(m.awayTeamId) === Number(teamId2)) ||
+                    (Number(m.homeTeamId) === Number(teamId2) && Number(m.awayTeamId) === Number(teamId1)))
+            );
+            if (!directMatch) return null;
+            
+            const isTeam1Home = Number(directMatch.homeTeamId) === Number(teamId1);
+            let sH = directMatch.result?.scoreHome ?? directMatch.scoreHome ?? 0;
+            let sA = directMatch.result?.scoreAway ?? directMatch.scoreAway ?? 0;
+            
+            if (isTeam1Home) {
+                if (sH > sA) return 1; // team1 won
+                if (sA > sH) return -1; // team1 lost
+                return 0; // draw
+            } else {
+                if (sA > sH) return 1; // team1 won (as away)
+                if (sH > sA) return -1; // team1 lost (as away)
+                return 0; // draw
+            }
+        };
+
         for (const group of Object.keys(teamsByGroup)) {
             teamsByGroup[group].sort((a, b) => {
                 const aStats = a.stats?.[season] || {};
@@ -3243,7 +3330,15 @@ async function checkAndCreatePlayoffMatches(season, league) {
                     if (myMaxPoints > leaderPoints) canRise = true;
                     else if (myMaxPoints === leaderPoints) {
                         if (myTie > 0 && leadTie > 0 && myTie > leadTie) canRise = false;
-                        else if (remaining > 0) canRise = true;
+                        else if (remaining > 0) {
+                            // Check head-to-head if points would be equal (only if tiebreakerPriority is h2h)
+                            if (leagueObj?.tiebreakerPriority !== 'goalDiff') {
+                                const h2hResult = getHeadToHeadResult(team.id, sorted[index - 1].id, allMatches, leagueObj.name, season);
+                                canRise = h2hResult !== -1;
+                            } else {
+                                canRise = true;
+                            }
+                        }
                     }
                 }
 
@@ -3260,14 +3355,80 @@ async function checkAndCreatePlayoffMatches(season, league) {
                     else clinchedNeutral = true;
                 } else {
                     if (qfLimit > 0 && myPoints > thresholdQF) clinchedQF = true;
+                    // Pokud máme stejně bodů jako tým na QF hranici, ale vyhráli jsme head-to-head, máme jistotu QF
+                    if (leagueObj?.tiebreakerPriority !== 'goalDiff' && qfLimit > 0 && index >= qfLimit && myPoints === thresholdQF) {
+                        const qfGatekeeperTeam = sorted[qfLimit - 1];
+                        if (qfGatekeeperTeam) {
+                            const h2hResult = getHeadToHeadResult(team.id, qfGatekeeperTeam.id, allMatches, leagueObj.name, season);
+                            if (h2hResult === 1) {
+                                // Vyhráli jsme head-to-head proti týmu na QF hranici
+                                clinchedQF = true;
+                            }
+                        }
+                    }
                     if (!clinchedQF && totalAdvancing > 0 && (myPoints > thresholdPlayin || totalAdvancing >= sorted.length)) {
                         clinchedPlayin = true;
+                    }
+                    // Pokud máme stejně bodů jako tým na playin hranici, ale vyhráli jsme head-to-head, máme jistotu playin
+                    if (leagueObj?.tiebreakerPriority !== 'goalDiff' && totalAdvancing > 0 && index >= totalAdvancing && myPoints === thresholdPlayin) {
+                        const playinGatekeeperTeam = sorted[totalAdvancing - 1];
+                        if (playinGatekeeperTeam) {
+                            const h2hResult = getHeadToHeadResult(team.id, playinGatekeeperTeam.id, allMatches, leagueObj.name, season);
+                            if (h2hResult === 1) {
+                                // Vyhráli jsme head-to-head proti týmu na playin hranici
+                                clinchedPlayin = true;
+                            }
+                        }
                     }
                     if (!clinchedQF && !clinchedPlayin) {
                         if (relegationLimit > 0 && myPoints > thresholdRelegation) clinchedNeutral = true;
                         else if (relegationLimit === 0) clinchedNeutral = true;
+                        // Pokud máme stejně bodů jako tým v relegation zóně, ale vyhráli jsme head-to-head, máme jistotu neutralu
+                        if (leagueObj?.tiebreakerPriority !== 'goalDiff' && relegationLimit > 0 && index <= safeZoneIndex && myPoints === thresholdRelegation) {
+                            const relegationZoneTeam = sorted[safeZoneIndex + 1];
+                            if (relegationZoneTeam) {
+                                const h2hResult = getHeadToHeadResult(team.id, relegationZoneTeam.id, allMatches, leagueObj.name, season);
+                                if (h2hResult === 1) {
+                                    // Vyhráli jsme head-to-head proti týmu v relegation zóně
+                                    clinchedNeutral = true;
+                                }
+                            }
+                        }
                     }
                     if (relegationLimit > 0 && index > safeZoneIndex && myMaxPoints < safetyPoints) clinchedRelegation = true;
+                    // Pokud máme stejně bodů jako tým na safe zone, ale prohráli jsme head-to-head, tak je sestup jistý
+                    if (leagueObj?.tiebreakerPriority !== 'goalDiff' && relegationLimit > 0 && index > safeZoneIndex && myMaxPoints === safetyPoints) {
+                        const safeZoneTeam = sorted[safeZoneIndex];
+                        if (safeZoneTeam) {
+                            const h2hResult = getHeadToHeadResult(team.id, safeZoneTeam.id, allMatches, leagueObj.name, season);
+                            if (h2hResult === -1) {
+                                // Prohráli jsme head-to-head proti týmu na safe zone
+                                clinchedRelegation = true;
+                            }
+                        }
+                    }
+                    // Pokud máme stejně bodů jako tým na QF hranici, ale prohráli jsme head-to-head, nemůžeme postoupit do QF
+                    if (leagueObj?.tiebreakerPriority !== 'goalDiff' && qfLimit > 0 && index >= qfLimit && myMaxPoints === thresholdQF) {
+                        const qfGatekeeperTeam = sorted[qfLimit - 1];
+                        if (qfGatekeeperTeam) {
+                            const h2hResult = getHeadToHeadResult(team.id, qfGatekeeperTeam.id, allMatches, leagueObj.name, season);
+                            if (h2hResult === -1) {
+                                // Prohráli jsme head-to-head proti týmu na QF hranici
+                                clinchedQF = false;
+                            }
+                        }
+                    }
+                    // Pokud máme stejně bodů jako tým na playin hranici, ale prohráli jsme head-to-head, nemůžeme postoupit do playin
+                    if (leagueObj?.tiebreakerPriority !== 'goalDiff' && totalAdvancing > 0 && index >= totalAdvancing && myMaxPoints === thresholdPlayin) {
+                        const playinGatekeeperTeam = sorted[totalAdvancing - 1];
+                        if (playinGatekeeperTeam) {
+                            const h2hResult = getHeadToHeadResult(team.id, playinGatekeeperTeam.id, allMatches, leagueObj.name, season);
+                            if (h2hResult === -1) {
+                                // Prohráli jsme head-to-head proti týmu na playin hranici
+                                clinchedPlayin = false;
+                            }
+                        }
+                    }
                 }
 
                 const teamStats = scores[team.id] || { gf: 0, ga: 0 };
@@ -3570,6 +3731,13 @@ router.get('/leagues/manage', requireAdmin, async (req, res) => {
              <label>Čtvrtfinále: <input type="number" min="0" class="league-select" name="newLeague[quarterfinal]" value="4"></label>
              <label>Play-in: <input type="number" min="0" class="league-select" name="newLeague[playin]" value="12"></label>
              <label>Baráž: <input type="number" min="0" class="league-select" name="newLeague[relegation]" value="1"></label>
+             <label title="Priorita při rozhodování při shodě bodů">
+                 Tiebreaker: 
+                 <select name="newLeague[tiebreakerPriority]" class="league-select">
+                     <option value="h2h">Vzájemné zápasy (H2H)</option>
+                     <option value="goalDiff">Celkové skóre</option>
+                 </select>
+             </label>
              <button class="action-btn edit-btn" type="submit">Přidat</button>
         </form>
 
@@ -3632,6 +3800,13 @@ router.get('/leagues/manage', requireAdmin, async (req, res) => {
                             <label>ČF: <input type="number" name="quarterfinal" value="${l.quarterfinal || 0}" min="0" style="width:40px;"></label>
                             <label>P-in: <input type="number" name="playin" value="${l.playin || 0}" min="0" style="width:40px;"></label>
                             <label>Bar: <input type="number" name="relegation" value="${l.relegation || 0}" min="0" style="width:40px;"></label>
+                            <label title="Priorita při rozhodování při shodě bodů">
+                                Tiebreaker: 
+                                <select name="tiebreakerPriority" style="width: 140px; padding: 2px;">
+                                    <option value="h2h" ${l.tiebreakerPriority === 'h2h' || !l.tiebreakerPriority ? 'selected' : ''}>Vzájemné zápasy (H2H)</option>
+                                    <option value="goalDiff" ${l.tiebreakerPriority === 'goalDiff' ? 'selected' : ''}>Celkové skóre</option>
+                                </select>
+                            </label>
                             <label>Playoff formát: 
                                 <select name="playoffFormat" style="width: 120px; padding: 2px;">
                                     <option value="none">Žádný</option>
@@ -3726,7 +3901,7 @@ router.post('/leagues/manage', express.urlencoded({ extended: true }), requireAd
         return res.status(403).send('Neplatný CSRF token');
     }
     
-    const { ligaName, multigroup, groupCount, maxMatches, quarterfinal, playin, relegation } = req.body.newLeague;
+    const { ligaName, multigroup, groupCount, maxMatches, quarterfinal, playin, relegation, tiebreakerPriority } = req.body.newLeague;
     const allSeasonData = await Leagues.findAll();
     const selectedSeason = await ChosenSeason.findAll();
 
@@ -3747,7 +3922,8 @@ router.post('/leagues/manage', express.urlencoded({ extended: true }), requireAd
             maxMatches: Number(maxMatches) || 0,
             quarterfinal: Number(quarterfinal) || 0,
             playin: Number(playin) || 0,
-            relegation: Number(relegation) || 0
+            relegation: Number(relegation) || 0,
+            tiebreakerPriority: tiebreakerPriority || 'h2h'
         });
         await Leagues.replaceAll(allSeasonData);
     }
@@ -3761,7 +3937,7 @@ router.post('/leagues/update', express.urlencoded({ extended: true }), requireAd
     }
     
     const {
-        originalLeagueName, leagueName, maxMatches, quarterfinal, playin, relegation,
+        originalLeagueName, leagueName, maxMatches, quarterfinal, playin, relegation, tiebreakerPriority,
         // Nová pole z formuláře
         crossGroupEnabled, crossGroupPosition, crossQuarterfinal, crossPlayin, crossRelegation, playoffFormat
     } = req.body;
@@ -3786,6 +3962,7 @@ router.post('/leagues/update', express.urlencoded({ extended: true }), requireAd
             allSeasonData[selectedSeason].leagues[index].playin = Number(playin) || 0;
             allSeasonData[selectedSeason].leagues[index].relegation = Number(relegation) || 0;
             allSeasonData[selectedSeason].leagues[index].playoffFormat = playoffFormat || 'none';
+            allSeasonData[selectedSeason].leagues[index].tiebreakerPriority = tiebreakerPriority || 'h2h';
 
             // 3. Nastavení X-tých týmů
             allSeasonData[selectedSeason].leagues[index].crossGroupTable = (crossGroupEnabled === 'on');
@@ -3991,6 +4168,9 @@ router.get('/teams/points', requireAdmin, async (req, res) => {
     // Filtrujeme týmy
     const leagueTeams = teamsFromCurrentSeason.filter(t => t.liga === selectedLiga && t.active);
 
+    // Získáme leagueObj pro kontrolu tiebreakerPriority
+    const leagueObj = seasonLeagues.find(l => l.name === selectedLiga) || {};
+
     // PŘIDÁNO: Ultimátní seřazení (Body -> Rozdíl skóre -> Vstřelené góly)
     leagueTeams.sort((a, b) => {
         const getData = (team) => {
@@ -4020,15 +4200,54 @@ router.get('/teams/points', requireAdmin, async (req, res) => {
             return tieA - tieB;
         }
 
-        // 2. Kritérium: CELKOVÝ ROZDÍL SKÓRE (GF - GA)
-        const diffA = ((realScores[a.id]?.gf || 0) + (dataA.gf || 0)) - ((realScores[a.id]?.ga || 0) + (dataA.ga || 0));
-        const diffB = ((realScores[b.id]?.gf || 0) + (dataB.gf || 0)) - ((realScores[b.id]?.ga || 0) + (dataB.ga || 0));
-        if (diffB !== diffA) return diffB - diffA;
+        // Podle priority tiebreaker určíme pořadí kritérií
+        if (leagueObj?.tiebreakerPriority === 'goalDiff') {
+            // Priorita: Celkové skóre před H2H
+            const diffA = ((realScores[a.id]?.gf || 0) + (dataA.gf || 0)) - ((realScores[a.id]?.ga || 0) + (dataA.ga || 0));
+            const diffB = ((realScores[b.id]?.gf || 0) + (dataB.gf || 0)) - ((realScores[b.id]?.ga || 0) + (dataB.ga || 0));
+            if (diffB !== diffA) return diffB - diffA;
 
-        // 3. Kritérium: CELKOVÉ VSTŘELENÉ GÓLY (GF)
-        const gfA = (realScores[a.id]?.gf || 0) + (dataA.gf || 0);
-        const gfB = (realScores[b.id]?.gf || 0) + (dataB.gf || 0);
-        return gfB - gfA;
+            const gfA = (realScores[a.id]?.gf || 0) + (dataA.gf || 0);
+            const gfB = (realScores[b.id]?.gf || 0) + (dataB.gf || 0);
+            if (gfB !== gfA) return gfB - gfA;
+
+            // H2H kontrola (jen pokud není goalDiff priority)
+            const directMatch = matches.find(m =>
+                m.season === selectedSeason && m.liga === selectedLiga && m.result && !m.isPlayoff &&
+                ((Number(m.homeTeamId) === Number(a.id) && Number(m.awayTeamId) === Number(b.id)) ||
+                    (Number(m.homeTeamId) === Number(b.id) && Number(m.awayTeamId) === Number(a.id)))
+            );
+            if (directMatch) {
+                const isAHome = Number(directMatch.homeTeamId) === Number(a.id);
+                let sH = directMatch.result?.scoreHome ?? directMatch.scoreHome ?? 0;
+                let sA = directMatch.result?.scoreAway ?? directMatch.scoreAway ?? 0;
+                if (isAHome) { if (sH > sA) return -1; if (sA > sH) return 1; }
+                else { if (sA > sH) return -1; if (sH > sA) return 1; }
+            }
+        } else {
+            // Priorita: H2H před celkovým skórem (výchozí)
+            const diffA = ((realScores[a.id]?.gf || 0) + (dataA.gf || 0)) - ((realScores[a.id]?.ga || 0) + (dataA.ga || 0));
+            const diffB = ((realScores[b.id]?.gf || 0) + (dataB.gf || 0)) - ((realScores[b.id]?.ga || 0) + (dataB.ga || 0));
+            if (diffB !== diffA) return diffB - diffA;
+
+            const gfA = (realScores[a.id]?.gf || 0) + (dataA.gf || 0);
+            const gfB = (realScores[b.id]?.gf || 0) + (dataB.gf || 0);
+            if (gfB !== gfA) return gfB - gfA;
+
+            const directMatch = matches.find(m =>
+                m.season === selectedSeason && m.liga === selectedLiga && m.result && !m.isPlayoff &&
+                ((Number(m.homeTeamId) === Number(a.id) && Number(m.awayTeamId) === Number(b.id)) ||
+                    (Number(m.homeTeamId) === Number(b.id) && Number(m.awayTeamId) === Number(a.id)))
+            );
+            if (directMatch) {
+                const isAHome = Number(directMatch.homeTeamId) === Number(a.id);
+                let sH = directMatch.result?.scoreHome ?? directMatch.scoreHome ?? 0;
+                let sA = directMatch.result?.scoreAway ?? directMatch.scoreAway ?? 0;
+                if (isAHome) { if (sH > sA) return -1; if (sA > sH) return 1; }
+                else { if (sA > sH) return -1; if (sH > sA) return 1; }
+            }
+        }
+        return 0;
     });
 
     const pointsCount = {};

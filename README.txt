@@ -65,3 +65,7 @@ Oprava routy tipovačky pořadí zákl. části ✅
 Oprava logiky otevírání tabulek v levém panelu v historii kdy se všechny ligy/turnaje otevřou na zákl. části ✅
 
 Oprava logiky otevírání tabulek v levém panelu pro ligy bez playoff tabulek kdy se playoff tabulka nemůže sama otevřít ✅
+
+Chytřejší Playoff generování
+
+Chytřejší obarvování tabulek základní části a oprava pro kaskádový mód

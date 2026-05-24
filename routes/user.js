@@ -2613,16 +2613,60 @@ router.post("/image-exporter/generate", requireLogin, express.json({ limit: '50m
                                 return aTiebreaker - bTiebreaker;
                             }
                             
-                            const aScores = scores[a.id] || { gf: 0, ga: 0 };
-                            const bScores = scores[b.id] || { gf: 0, ga: 0 };
-                            const aTotalGF = aStats.gf || aScores.gf || 0;
-                            const bTotalGF = bStats.gf || bScores.gf || 0;
-                            const aTotalGA = aStats.ga || aScores.ga || 0;
-                            const bTotalGA = bStats.ga || bScores.ga || 0;
-                            const aDiff = aTotalGF - aTotalGA;
-                            const bDiff = bTotalGF - bTotalGA;
-                            if (bDiff !== aDiff) return bDiff - aDiff;
-                            return bTotalGF - aTotalGF;
+                            // Podle priority tiebreaker určíme pořadí kritérií
+                            if (leagueObj?.tiebreakerPriority === 'goalDiff') {
+                                // Priorita: Celkové skóre před H2H
+                                const aScores = scores[a.id] || { gf: 0, ga: 0 };
+                                const bScores = scores[b.id] || { gf: 0, ga: 0 };
+                                const aTotalGF = aStats.gf || aScores.gf || 0;
+                                const bTotalGF = bStats.gf || bScores.gf || 0;
+                                const aTotalGA = aStats.ga || aScores.ga || 0;
+                                const bTotalGA = bStats.ga || bScores.ga || 0;
+                                const aDiff = aTotalGF - aTotalGA;
+                                const bDiff = bTotalGF - bTotalGA;
+                                if (bDiff !== aDiff) return bDiff - aDiff;
+                                if (bTotalGF !== aTotalGF) return bTotalGF - aTotalGF;
+
+                                // H2H kontrola (jen pokud není goalDiff priority)
+                                const directMatch = matches.find(m =>
+                                    m.season === selectedSeason && m.liga === selectedLiga && m.result && !m.isPlayoff &&
+                                    ((Number(m.homeTeamId) === Number(a.id) && Number(m.awayTeamId) === Number(b.id)) ||
+                                        (Number(m.homeTeamId) === Number(b.id) && Number(m.awayTeamId) === Number(a.id)))
+                                );
+                                if (directMatch) {
+                                    const isAHome = Number(directMatch.homeTeamId) === Number(a.id);
+                                    let sH = directMatch.result?.scoreHome ?? directMatch.scoreHome ?? 0;
+                                    let sA = directMatch.result?.scoreAway ?? directMatch.scoreAway ?? 0;
+                                    if (isAHome) { if (sH > sA) return -1; if (sA > sH) return 1; }
+                                    else { if (sA > sH) return -1; if (sH > sA) return 1; }
+                                }
+                            } else {
+                                // Priorita: H2H před celkovým skórem (výchozí)
+                                const aScores = scores[a.id] || { gf: 0, ga: 0 };
+                                const bScores = scores[b.id] || { gf: 0, ga: 0 };
+                                const aTotalGF = aStats.gf || aScores.gf || 0;
+                                const bTotalGF = bStats.gf || bScores.gf || 0;
+                                const aTotalGA = aStats.ga || aScores.ga || 0;
+                                const bTotalGA = bStats.ga || bScores.ga || 0;
+                                const aDiff = aTotalGF - aTotalGA;
+                                const bDiff = bTotalGF - bTotalGA;
+                                if (bDiff !== aDiff) return bDiff - aDiff;
+                                if (bTotalGF !== aTotalGF) return bTotalGF - aTotalGF;
+
+                                const directMatch = matches.find(m =>
+                                    m.season === selectedSeason && m.liga === selectedLiga && m.result && !m.isPlayoff &&
+                                    ((Number(m.homeTeamId) === Number(a.id) && Number(m.awayTeamId) === Number(b.id)) ||
+                                        (Number(m.homeTeamId) === Number(b.id) && Number(m.awayTeamId) === Number(a.id)))
+                                );
+                                if (directMatch) {
+                                    const isAHome = Number(directMatch.homeTeamId) === Number(a.id);
+                                    let sH = directMatch.result?.scoreHome ?? directMatch.scoreHome ?? 0;
+                                    let sA = directMatch.result?.scoreAway ?? directMatch.scoreAway ?? 0;
+                                    if (isAHome) { if (sH > sA) return -1; if (sA > sH) return 1; }
+                                    else { if (sA > sH) return -1; if (sH > sA) return 1; }
+                                }
+                            }
+                            return 0;
                         });
                         
                         teamsInGroup.forEach((team, index) => {
@@ -2702,7 +2746,9 @@ router.post("/image-exporter/generate", requireLogin, express.json({ limit: '50m
                             leagueObj,
                             selectedSeason,
                             mode,
-                            scores
+                            scores,
+                            matches,
+                            selectedLiga
                         );
                         
                         // Pro každý tým vytvoříme záznam s daty - manuální body už jsou v stats.points

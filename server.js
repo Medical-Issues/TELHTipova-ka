@@ -157,7 +157,6 @@ app.use(session({
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 app.use(bodyParser.json({ limit: '10mb' }));
 
-// Health check endpoint pro monitoring služby (bez autentizace) - MUSÍ BÝT PŘED ROUTES!
 app.get('/health', (req, res) => {
     Date.now();
     const uptime = process.uptime();
