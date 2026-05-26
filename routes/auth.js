@@ -1,4 +1,5 @@
 const path = require('path');
+const fs = require('fs');
 const bcrypt = require("bcrypt");
 const express = require("express");
 const router = express.Router();
@@ -48,7 +49,17 @@ function checkBruteForce(req, res, next) {
     next();
 }
 router.get("/register", (req, res) => {
-    res.sendFile(path.join(__dirname, "../views/register.html"));
+    // Generate CSRF token if it doesn't exist
+    if (!req.session.csrfToken) {
+        req.session.csrfToken = require('crypto').randomBytes(32).toString('hex');
+    }
+    
+    // Read the HTML file and inject the CSRF token
+    const htmlPath = path.join(__dirname, "../views/register.html");
+    const html = fs.readFileSync(htmlPath, 'utf8');
+    const htmlWithToken = html.replace('<input type="hidden" name="_csrf" id="csrfToken" value="">', 
+        `<input type="hidden" name="_csrf" id="csrfToken" value="${req.session.csrfToken}">`);
+    res.send(htmlWithToken);
 });
 router.post("/register", express.urlencoded({ extended: true }), async (req, res) => {
     // Pro localhost vývoj úplně vynecháme CSRF kontrolu
@@ -109,7 +120,17 @@ router.post("/register", express.urlencoded({ extended: true }), async (req, res
 });
 
 router.get("/login", (req, res) => {
-    res.sendFile(path.join(__dirname, "../views/login.html"));
+    // Generate CSRF token if it doesn't exist
+    if (!req.session.csrfToken) {
+        req.session.csrfToken = require('crypto').randomBytes(32).toString('hex');
+    }
+    
+    // Read the HTML file and inject the CSRF token
+    const htmlPath = path.join(__dirname, "../views/login.html");
+    const html = fs.readFileSync(htmlPath, 'utf8');
+    const htmlWithToken = html.replace('<input type="hidden" name="_csrf" id="csrfToken" value="">', 
+        `<input type="hidden" name="_csrf" id="csrfToken" value="${req.session.csrfToken}">`);
+    res.send(htmlWithToken);
 });
 
 router.post('/login', express.urlencoded({ extended: true }), checkBruteForce, async (req, res) => {

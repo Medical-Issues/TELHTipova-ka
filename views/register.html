@@ -28,17 +28,6 @@
     if (params.get('error') === '1') {
         document.getElementById('error-msg').style.display = 'block';
     }
-    
-    // Fetch CSRF token from server
-    fetch('/api/csrf-token')
-        .then(res => res.json())
-        .then(data => {
-            const tokenInput = document.getElementById('csrfToken');
-            if (tokenInput && data.csrfToken) {
-                tokenInput.value = data.csrfToken;
-            }
-        })
-        .catch(err => console.error('Failed to load CSRF token:', err));
 </script>
 </body>
 </html>
