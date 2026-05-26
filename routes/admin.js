@@ -2214,6 +2214,38 @@ router.get('/playoff', requireAdmin, async (req, res) => {
 
     const playoffMatches = matches.filter(m => m.season === selectedSeason && m.liga === selectedLeague && m.isPlayoff);
 
+    // AUTOMATICKÁ GENERACE Z LOCKED POZIC PŘI NAČTENÍ STRÁNKY
+    try {
+        const statusData = await LeagueStatus.findAll();
+        const positionConfig = statusData?.[selectedSeason]?.[selectedLeague]?.playoffPositionConfig;
+        
+        // Zjistíme, zda template má barážové sloty
+        const allTemplates = await PlayoffTemplates.findAll() || {};
+        const template = allTemplates[playoffFormat];
+        let hasBarazSlot = false;
+        if (template && template.columns) {
+            for (const column of template.columns) {
+                for (const slotId of column.slots) {
+                    if (slotId.toLowerCase().includes('bar') || slotId.toLowerCase().includes('relegation')) {
+                        hasBarazSlot = true;
+                        break;
+                    }
+                }
+                if (hasBarazSlot) break;
+            }
+        }
+        
+        // Pokud má barážové sloty, použijeme baraz režim
+        if (hasBarazSlot) {
+            await autoGenerateMatchesFromLockedPositions(selectedSeason, selectedLeague, 'baraz', null);
+        } else if (positionConfig) {
+            // Použijeme 'manual' režim s uloženou konfigurací
+            await autoGenerateMatchesFromLockedPositions(selectedSeason, selectedLeague, 'manual', positionConfig);
+        }
+    } catch (error) {
+        console.error('Chyba při automatické generaci playoff při načtení stránky:', error);
+    }
+
     // Vytvoříme seznam sérií do roletky
     // (Toto už tam máš)
     const seriesOptionsHTML = playoffMatches.map(m => {
@@ -2901,20 +2933,9 @@ router.post('/playoff/auto-generate', express.urlencoded({ extended: true }), re
 });
 
 // ==========================================
-// AUTOMATICKÉ GENEROVÁNÍ PLAYOFF PODLE LOCKED POZIC
+// POMOCNÁ FUNKCE PRO AUTOMATICKOU GENERACI Z LOCKED POZIC
 // ==========================================
-router.post('/playoff/auto-generate-locked', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
-    // CSRF kontrola
-    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
-        return res.status(403).send('Neplatný CSRF token');
-    }
-    
-    const { season, league, positionMode, positionAssignments } = req.body;
-
-    if (!season || !league || !positionMode) {
-        return res.status(400).send('Chybí sezóna, liga nebo režim pozic.');
-    }
-
+async function autoGenerateMatchesFromLockedPositions(season, league, positionMode, positionAssignments) {
     try {
         // Načtení dat
         const [allSeasonData, allTemplates, allMatches, allTeams] = await Promise.all([
@@ -2926,18 +2947,18 @@ router.post('/playoff/auto-generate-locked', express.urlencoded({ extended: true
 
         const selectedSeasonData = allSeasonData[season];
         if (!selectedSeasonData || !selectedSeasonData.leagues) {
-            return res.status(400).send('Neplatná sezóna.');
+            return { success: false, message: 'Neplatná sezóna.' };
         }
 
         const leagueObj = selectedSeasonData.leagues.find(l => l.name === league);
         if (!leagueObj) {
-            return res.status(400).send('Liga nebyla nalezena v této sezóně.');
+            return { success: false, message: 'Liga nebyla nalezena v této sezóně.' };
         }
 
         const playoffFormat = leagueObj.playoffFormat || 'none';
         const template = allTemplates[playoffFormat];
         if (!template) {
-            return res.status(400).send('Liga nemá definovaný formát playoff.');
+            return { success: false, message: 'Liga nemá definovaný formát playoff.' };
         }
 
         // Načtení tabulky ligy s clinch status
@@ -3050,6 +3071,92 @@ router.post('/playoff/auto-generate-locked', express.urlencoded({ extended: true
                     }
                 }
             }
+        } else if (positionMode === 'baraz') {
+            // Baráž - automaticky vezmeme poslední 2 týmy
+            const allTeams = [];
+            for (const group of Object.keys(teamsByGroup).sort()) {
+                allTeams.push(...teamsByGroup[group]);
+            }
+            
+            if (allTeams.length >= 2) {
+                // Najdeme slot pro baráž (hledáme sloty obsahující "bar")
+                let barazSlot = null;
+                for (const column of template.columns) {
+                    for (const slotId of column.slots) {
+                        if (slotId.toLowerCase().includes('bar') || slotId.toLowerCase().includes('relegation')) {
+                            barazSlot = slotId;
+                            break;
+                        }
+                    }
+                    if (barazSlot) break;
+                }
+                
+                if (barazSlot) {
+                    // Poslední 2 týmy
+                    const lastTeam = allTeams[allTeams.length - 1];
+                    const secondLastTeam = allTeams[allTeams.length - 2];
+                    
+                    const lastLocked = isTeamLocked(lastTeam);
+                    const secondLastLocked = isTeamLocked(secondLastTeam);
+                    
+                    // Pokud jsou oba locked, vytvoříme zápas
+                    if (lastLocked && secondLastLocked) {
+                        const maxId = allMatches.length > 0 ? Math.max(...allMatches.map(m => m.id || 0)) : 0;
+                        const newMatch = {
+                            id: maxId + 1,
+                            homeTeamId: lastTeam.id,
+                            awayTeamId: secondLastTeam.id,
+                            datetime: '',
+                            season: season,
+                            liga: league,
+                            isPlayoff: true,
+                            bo: null,
+                            locked: false,
+                            postponed: false,
+                            result: null
+                        };
+                        
+                        allMatches.push(newMatch);
+                        await Matches.replaceAll(allMatches);
+
+                        // Uložení přiřazení slotů
+                        let playoffData = await Playoff.findAll() || {};
+                        if (!playoffData[season]) playoffData[season] = {};
+                        
+                        const existingAssignments = playoffData[season][league] || {};
+                        playoffData[season][league] = {
+                            ...existingAssignments,
+                            [barazSlot]: `series-${newMatch.id}`,
+                            [`${barazSlot}_t1`]: lastTeam.name,
+                            [`${barazSlot}_t2`]: secondLastTeam.name
+                        };
+                        
+                        await Playoff.replaceAll(playoffData);
+
+                        return { success: true, generated: 1 };
+                    } else if (lastLocked || secondLastLocked) {
+                        // Pokud je locked jen jeden, uložíme ho jako čekající tým
+                        let playoffData = await Playoff.findAll() || {};
+                        if (!playoffData[season]) playoffData[season] = {};
+                        
+                        const existingAssignments = playoffData[season][league] || {};
+                        
+                        if (lastLocked) {
+                            existingAssignments[`${barazSlot}_t1`] = lastTeam.name;
+                        }
+                        if (secondLastLocked) {
+                            existingAssignments[`${barazSlot}_t2`] = secondLastTeam.name;
+                        }
+                        
+                        playoffData[season][league] = existingAssignments;
+                        await Playoff.replaceAll(playoffData);
+
+                        return { success: true, generated: 0 };
+                    }
+                }
+            }
+            
+            return { success: true, generated: 0 };
         }
 
         // Generování playoff zápasů pro locked týmy
@@ -3084,10 +3191,13 @@ router.post('/playoff/auto-generate-locked', express.urlencoded({ extended: true
                 }
 
                 const teamA = getTeamAtPosition(posInfo.position, posInfo.group);
-                const teamB = getTeamAtPosition(posInfo.position + 1, posInfo.group); // Předpoklad: páry jsou vedle sebe
+                const teamB = getTeamAtPosition(posInfo.position + 1, posInfo.group);
+
+                const teamALocked = teamA && isTeamLocked(teamA);
+                const teamBLocked = teamB && isTeamLocked(teamB);
 
                 // Pokud jsou oba týmy locked, vytvoříme zápas
-                if (teamA && teamB && isTeamLocked(teamA) && isTeamLocked(teamB)) {
+                if (teamA && teamB && teamALocked && teamBLocked) {
                     const maxId = allMatches.length > 0 ? Math.max(...allMatches.map(m => m.id || 0)) : 0;
                     const newMatch = {
                         id: maxId + 1,
@@ -3113,15 +3223,20 @@ router.post('/playoff/auto-generate-locked', express.urlencoded({ extended: true
                     // Kontrola, zda můžeme automaticky vytvořit zápas v další fázi
                     const parentSlots = slotToChildren[slotId];
                     if (parentSlots) {
-                        // Zjistíme, zda jsou oba rodiče locked
                         const parent1Locked = slotAssignments[parentSlots[0]] !== undefined;
                         const parent2Locked = slotAssignments[parentSlots[1]] !== undefined;
                         
                         if (parent1Locked && parent2Locked) {
-                            // Můžeme vytvořit zápas v další fázi
-                            // Zatím jen označíme, že tento slot je připraven pro další fázi
                             slotAssignments[`${slotId}_readyForNext`] = true;
                         }
+                    }
+                } else if (teamALocked || teamBLocked) {
+                    // Pokud je locked jen jeden, uložíme ho jako čekající tým
+                    if (teamALocked) {
+                        slotAssignments[`${slotId}_t1`] = teamA.name;
+                    }
+                    if (teamBLocked) {
+                        slotAssignments[`${slotId}_t2`] = teamB.name;
                     }
                 }
 
@@ -3129,27 +3244,53 @@ router.post('/playoff/auto-generate-locked', express.urlencoded({ extended: true
             }
         }
 
-        // Uložení zápasů
-        if (newMatches.length > 0) {
-            await Matches.replaceAll(allMatches);
+        // Uložení zápasů a přiřazení slotů
+        if (newMatches.length > 0 || Object.keys(slotAssignments).length > 0) {
+            if (newMatches.length > 0) {
+                await Matches.replaceAll(allMatches);
+            }
 
-            // Uložení přiřazení slotů
+            // Uložení přiřazení slotů (i když nebyly vytvořeny zápasy, ale jsou čekající týmy)
             let playoffData = await Playoff.findAll() || {};
             if (!playoffData[season]) playoffData[season] = {};
             
-            // Sloučení s existujícími daty
             const existingAssignments = playoffData[season][league] || {};
             playoffData[season][league] = { ...existingAssignments, ...slotAssignments };
             
             await Playoff.replaceAll(playoffData);
 
-            await logAdminAction(req.session.user, "PLAYOFF_AUTO_GENERATE_LOCKED", `Automaticky generováno ${newMatches.length} playoff zápasů pro ${league} (${season}) podle locked pozic`);
+            return { success: true, generated: newMatches.length };
         }
 
-        res.redirect(`/admin/playoff?league=${encodeURIComponent(league)}`);
+        return { success: true, generated: 0 };
     } catch (error) {
         console.error('Chyba při automatickém generování playoff podle locked pozic:', error);
-        return res.status(500).send('Nepodařilo se vygenerovat playoff: ' + error.message);
+        return { success: false, message: error.message };
+    }
+}
+
+// ==========================================
+// AUTOMATICKÉ GENEROVÁNÍ PLAYOFF PODLE LOCKED POZIC
+// ==========================================
+router.post('/playoff/auto-generate-locked', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    
+    const { season, league, positionMode, positionAssignments } = req.body;
+
+    if (!season || !league || !positionMode) {
+        return res.status(400).send('Chybí sezóna, liga nebo režim pozic.');
+    }
+
+    const result = await autoGenerateMatchesFromLockedPositions(season, league, positionMode, positionAssignments);
+    
+    if (result.success) {
+        await logAdminAction(req.session.user, "PLAYOFF_AUTO_GENERATE_LOCKED", `Automaticky generováno ${result.generated} playoff zápasů pro ${league} (${season}) podle locked pozic`);
+        res.redirect(`/admin/playoff?league=${encodeURIComponent(league)}`);
+    } else {
+        return res.status(500).send('Nepodařilo se vygenerovat playoff: ' + result.message);
     }
 });
 
