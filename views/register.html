@@ -7,11 +7,12 @@
     <link rel="stylesheet" href="/css/styles.css" />
     <link rel="icon" href="/images/logo.png">
 </head>
+<body class="login_body">
 <header class="header">
     <div class="logo_title"><img class="image_logo" src="/images/logo.png" alt="Logo"><h1 id="title">Tipovačka</h1></div>
 </header>
-<body class="login_body">
-<h1>Registrace</h1>
+<div class="login-container">
+    <h1>Registrace</h1>
 <form class="login_form" method="POST" action="/auth/register">
     <input type="hidden" name="_csrf" id="csrfToken" value="">
     <label><input class="login_input" type="text" name="username" placeholder="Uživatelské jméno" required></label>
@@ -20,6 +21,7 @@
 </form>
 <p id="error-msg">Uživatel už existuje.</p>
 <a href="/auth/login">Už mám účet</a>
+</div>
 
 <script>
     const params = new URLSearchParams(window.location.search);

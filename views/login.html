@@ -11,7 +11,8 @@
 <header class="header">
     <div class="logo_title"><img class="image_logo" src="/images/logo.png" alt="Logo"><h1 id="title">Tipovačka</h1></div>
 </header>
-<h1>Přihlášení</h1>
+<div class="login-container">
+    <h1>Přihlášení</h1>
 <form class="login_form" method="POST" action="/auth/login">
     <input type="hidden" name="_csrf" id="csrfToken" value="">
     <label><input class="login_input" name="username" placeholder="Uživatelské jméno" required /></label>
@@ -20,6 +21,7 @@
 </form>
 <p id="error-msg">Špatné přihlašovací údaje.</p>
 <a href="/auth/register">Ještě nemám účet</a>
+</div>
 
 <script src="/js/version-notification.js"></script>
 <script>

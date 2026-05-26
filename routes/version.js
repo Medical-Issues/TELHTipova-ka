@@ -130,7 +130,6 @@ router.get('/versions/manage', requireAdmin, async (req, res) => {
                 .version-form {
                     background: #1e1e1e;
                     padding: 20px;
-                    border-radius: 10px;
                     margin-bottom: 30px;
                 }
                 .version-form input, .version-form textarea {
@@ -140,14 +139,12 @@ router.get('/versions/manage', requireAdmin, async (req, res) => {
                     background: #2a2a2a;
                     border: 1px solid #444;
                     color: white;
-                    border-radius: 5px;
                 }
                 .version-form button {
                     background: orangered;
                     color: white;
                     border: none;
                     padding: 12px 30px;
-                    border-radius: 5px;
                     cursor: pointer;
                     font-weight: bold;
                     margin-top: 10px;
@@ -156,7 +153,6 @@ router.get('/versions/manage', requireAdmin, async (req, res) => {
                     background: #1e1e1e;
                     padding: 15px;
                     margin: 10px 0;
-                    border-radius: 8px;
                     border-left: 4px solid orangered;
                 }
                 .version-number {

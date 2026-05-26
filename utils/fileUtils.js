@@ -159,6 +159,11 @@ async function evaluateAndAssignPoints(liga, season) {
         let correctPoints = 0;
         let totalRegular = 0;
         let totalPlayoff = 0;
+        let correctRegular = 0;
+        let playoffBO1Correct = 0;
+        let playoffBO1Tips = 0;
+        let playoffBOSeriesCorrect = 0;
+        let playoffBOSeriesTips = 0;
 
         for (const tip of tipsInSeason) {
             const match = matches.find(m => m.id === tip.matchId);
@@ -170,6 +175,7 @@ async function evaluateAndAssignPoints(liga, season) {
             // ---------------------------------------------------------
             if (match.isPlayoff && Number(match.bo) === 1) {
                 totalPlayoff++;
+                playoffBO1Tips++;
 
                 const realHome = Number(match.result.scoreHome ?? 0);
                 const realAway = Number(match.result.scoreAway ?? 0);
@@ -202,12 +208,14 @@ async function evaluateAndAssignPoints(liga, season) {
                 // Pokud trefil vítěze, počítáme přesnost skóre
                 if (tipHome === realHome && tipAway === realAway) {
                     correctPoints += 5; // Přesný výsledek
+                    playoffBO1Correct++;
                 } else {
                     const delta = Math.abs(tipHome - realHome) + Math.abs(tipAway - realAway);
 
                     if (delta === 1) correctPoints += 4;
                     else if (delta === 2) correctPoints += 3;
                     else correctPoints += 1; // Delta 3 a více
+                    playoffBO1Correct++;
                 }
 
                 continue;
@@ -218,6 +226,7 @@ async function evaluateAndAssignPoints(liga, season) {
             // ---------------------------------------------------------
             if (match.isPlayoff && Number(match.bo) > 1) {
                 totalPlayoff++;
+                playoffBOSeriesTips++;
 
                 const realWinner = match.result.winner;
                 const tipWinner = tip.winner;
@@ -239,6 +248,7 @@ async function evaluateAndAssignPoints(liga, season) {
                 } else {
                     correctPoints += 1; // Správný vítěz, ale špatné skóre
                 }
+                playoffBOSeriesCorrect++;
 
                 continue;
             }
@@ -255,6 +265,7 @@ async function evaluateAndAssignPoints(liga, season) {
                 }
                 if (evaluatedWinner === match.result.winner) {
                     correctPoints += 1;
+                    correctRegular++;
                 }
             }
         }
@@ -267,6 +278,11 @@ async function evaluateAndAssignPoints(liga, season) {
         user.stats[season][liga].correct = correctPoints;
         user.stats[season][liga].totalRegular = totalRegular;
         user.stats[season][liga].totalPlayoff = totalPlayoff;
+        user.stats[season][liga].correctRegular = correctRegular;
+        user.stats[season][liga].playoffBO1Correct = playoffBO1Correct;
+        user.stats[season][liga].playoffBO1Tips = playoffBO1Tips;
+        user.stats[season][liga].playoffBOSeriesCorrect = playoffBOSeriesCorrect;
+        user.stats[season][liga].playoffBOSeriesTips = playoffBOSeriesTips;
     }
 
     // Zápis do MongoDB
@@ -522,10 +538,29 @@ function calculateClinchStatusesForGroup(
             const chaserMax = (s.points || 0) + (rem * 3);
             const chaserTie = s.tiebreaker || 0;
 
-            if (chaserMax > myPoints) { canDrop = true; break; }
+            if (chaserMax > myPoints) { 
+                // Check head-to-head if chaser can potentially catch up
+                const h2hResult = getHeadToHeadResult(team.id, sorted[i].id);
+                if (h2hResult === -1) {
+                    // Prohráli jsme head-to-head, takže nás mohou dohnat
+                    canDrop = true; break;
+                }
+                // Pokud jsme vyhráli nebo remízovali, nemohou nás dohnat (pokud mají výrazně více bodů)
+                if (chaserMax > myPoints + 3) {
+                    canDrop = true; break;
+                }
+                continue;
+            }
             if (chaserMax === myPoints) {
                 if (myTie > 0 && chaserTie > 0 && myTie < chaserTie) continue;
-                if (rem > 0 || remaining > 0) { canDrop = true; break; }
+                if (rem > 0 || remaining > 0) {
+                    // Check head-to-head if points would be equal
+                    const h2hResult = getHeadToHeadResult(team.id, sorted[i].id);
+                    if (h2hResult === -1) {
+                        // Prohráli jsme head-to-head, takže nás mohou dohnat
+                        canDrop = true; break;
+                    }
+                }
             }
         }
 
@@ -535,7 +570,14 @@ function calculateClinchStatusesForGroup(
             const leaderPoints = leaderStats.points || 0;
             const leadTie = leaderStats.tiebreaker || 0;
 
-            if (myMaxPoints > leaderPoints) canRise = true;
+            if (myMaxPoints > leaderPoints) {
+                // Check head-to-head if we can potentially catch up
+                const h2hResult = getHeadToHeadResult(team.id, sorted[index - 1].id);
+                if (h2hResult === 1) {
+                    // Vyhráli jsme head-to-head, takže je můžeme dohnat
+                    canRise = true;
+                } else canRise = h2hResult !== -1;
+            }
             else if (myMaxPoints === leaderPoints) {
                 if (myTie > 0 && leadTie > 0 && myTie > leadTie) canRise = false;
                 else if (remaining > 0) {
@@ -571,13 +613,57 @@ function calculateClinchStatusesForGroup(
                 else clinchedNeutral = true;
             } else {
                 if (qfLimit > 0 && myPoints > thresholdQF) clinchedQF = true;
+                // Pokud máme stejně bodů jako tým na QF hranici, ale vyhráli jsme head-to-head, máme jistotu QF
+                if (qfLimit > 0 && index >= qfLimit && myPoints === thresholdQF) {
+                    const qfGatekeeperTeam = sorted[qfLimit - 1];
+                    if (qfGatekeeperTeam) {
+                        const h2hResult = getHeadToHeadResult(team.id, qfGatekeeperTeam.id);
+                        if (h2hResult === 1) {
+                            // Vyhráli jsme head-to-head proti týmu na QF hranici
+                            clinchedQF = true;
+                        }
+                    }
+                }
                 if (totalAdvancing > 0 && (myPoints > thresholdPlayin || totalAdvancing >= sorted.length)) {
                     if (qfLimit === 0 || myMaxPoints < ptsGatekeeperQF) clinchedPlayin = true;
+                }
+                // Pokud máme stejně bodů jako tým na playin hranici, ale vyhráli jsme head-to-head, máme jistotu playin
+                if (totalAdvancing > 0 && index >= totalAdvancing && myPoints === thresholdPlayin) {
+                    const playinGatekeeperTeam = sorted[totalAdvancing - 1];
+                    if (playinGatekeeperTeam) {
+                        const h2hResult = getHeadToHeadResult(team.id, playinGatekeeperTeam.id);
+                        if (h2hResult === 1) {
+                            // Vyhráli jsme head-to-head proti týmu na playin hranici
+                            clinchedPlayin = true;
+                        }
+                    }
                 }
                 if (relegationLimit === 0 || myPoints > thresholdRelegation) {
                     if (totalAdvancing === 0 || myMaxPoints < ptsGatekeeperPlayin) clinchedNeutral = true;
                 }
+                // Pokud máme stejně bodů jako tým v relegation zóně, ale vyhráli jsme head-to-head, máme jistotu neutralu
+                if (relegationLimit > 0 && index <= safeZoneIndex && myPoints === thresholdRelegation) {
+                    const relegationZoneTeam = sorted[safeZoneIndex + 1];
+                    if (relegationZoneTeam) {
+                        const h2hResult = getHeadToHeadResult(team.id, relegationZoneTeam.id);
+                        if (h2hResult === 1) {
+                            // Vyhráli jsme head-to-head proti týmu v relegation zóně
+                            clinchedNeutral = true;
+                        }
+                    }
+                }
                 if (relegationLimit > 0 && myMaxPoints < ptsGatekeeperSafe) clinchedRelegation = true;
+                // Pokud máme stejně bodů jako tým na safe zone, ale prohráli jsme head-to-head, tak je sestup jistý
+                if (relegationLimit > 0 && index > safeZoneIndex && myMaxPoints === safetyPoints) {
+                    const safeZoneTeam = sorted[safeZoneIndex];
+                    if (safeZoneTeam) {
+                        const h2hResult = getHeadToHeadResult(team.id, safeZoneTeam.id);
+                        if (h2hResult === -1) {
+                            // Prohráli jsme head-to-head proti týmu na safe zone
+                            clinchedRelegation = true;
+                        }
+                    }
+                }
             }
         } else {
             if (locked) {

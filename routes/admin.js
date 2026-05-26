@@ -158,8 +158,12 @@ router.get('/', requireAdmin, async (req, res) => {
   <link rel="icon" href="/images/logo.png">
 </head>
 <header class="header">
-  <div class="logo_title"><img class="image_logo" src="/images/logo.png" alt="Logo"><h1 id="title">Tipovačka</h1></div>
-  <a href="/">← Zpět na hlavní stránku</a>
+  <div class="header-main">
+    <div class="logo_title"><img class="image_logo" src="/images/logo.png" alt="Logo"><h1 id="title">Tipovačka</h1></div>
+    <div class="header-user">
+      <a href="/" class="history-btn">← Zpět na hlavní stránku</a>
+    </div>
+  </div>
 </header>
 <body class="usersite">
 <main class="admin_site">
@@ -966,9 +970,16 @@ router.get('/teams/edit/:id', requireAdmin, async (req, res) => {
 </head>
 <body>
 <header class="header">
-  <div class="logo_title">
-    <img height="50" src="/images/logo.png" alt="Logo" />
-    <h1 id="title">Tipovačka</h1>
+  <div class="header-main">
+    <div class="logo_title">
+      <img height="50" src="/images/logo.png" alt="Logo" />
+      <h1 id="title">Tipovačka</h1>
+    </div>
+    <div class="header-user">
+      <a href="/" class="history-btn">← Zpět na hlavní stránku</a>
+    </div>
+  </div>
+</header>
   </div>
 </header>
 <main>
@@ -1290,7 +1301,12 @@ router.get('/new/match', requireAdmin, async (req, res) => {
         </head>
         <body>
         <header class="header">
-            <div class="logo_title"><img height="50" src="/images/logo.png" alt="Logo"><h1 id="title">Tipovačka</h1></div>
+            <div class="header-main">
+                <div class="logo_title"><img height="50" src="/images/logo.png" alt="Logo"><h1 id="title">Tipovačka</h1></div>
+                <div class="header-user">
+                    <a href="/" class="history-btn">← Zpět na hlavní stránku</a>
+                </div>
+            </div>
         </header>
         <main>
             <h1>Vytvořit nový zápas</h1>
@@ -1447,7 +1463,12 @@ router.get('/new/team', requireAdmin, async (req, res) => {
     </head>
     <body>
     <header class="header">
-        <div class="logo_title"><img class="image_logo" src="/images/logo.png" alt="Logo"><h1 id="title">Tipovačka</h1></div>
+        <div class="header-main">
+            <div class="logo_title"><img class="image_logo" src="/images/logo.png" alt="Logo"><h1 id="title">Tipovačka</h1></div>
+            <div class="header-user">
+                <a href="/" class="history-btn">← Zpět na hlavní stránku</a>
+            </div>
+        </div>
     </header>
     <main>
     <h1>Vytvořit nový tým</h1>
@@ -1744,7 +1765,12 @@ router.get('/edit/:id', requireAdmin, async (req, res) => {
 </head>
 <body>
 <header class="header">
-  <div class="logo_title"><img height="50" src="/images/logo.png" alt="Logo"><h1 id="title">Tipovačka</h1></div>
+  <div class="header-main">
+    <div class="logo_title"><img height="50" src="/images/logo.png" alt="Logo"><h1 id="title">Tipovačka</h1></div>
+    <div class="header-user">
+      <a href="/" class="history-btn">← Zpět na hlavní stránku</a>
+    </div>
+  </div>
 </header>
 <main>
   <h1>Upravit zápas ID ${match.id}</h1>
@@ -2269,9 +2295,14 @@ router.get('/playoff', requireAdmin, async (req, res) => {
 </head>
 <body class="admin_site">
 <header class="header">
-  <div class="logo_title"><img class="image_logo" src="/images/logo.png" alt="Logo"><h1>Tipovačka</h1></div>
-  <h1>Přiřazení sérií do pavouka (${selectedSeason})</h1>
-  <form id="leagueForm" method="GET" action="/admin/playoff" style="padding: 10px;">
+  <div class="header-main">
+    <div class="logo_title"><img class="image_logo" src="/images/logo.png" alt="Logo"><h1 id="title">Přiřazení sérií do pavouka (${selectedSeason})</h1></div>
+    <div class="header-user">
+      <a href="/admin" class="history-btn">← Zpět na admin</a>
+    </div>
+  </div>
+  <div class="header-controls">
+    <form id="leagueForm" method="GET" action="/admin/playoff" style="padding: 10px;">
     <select name="league" class="league-select" onchange="this.form.submit()">
       ${leagueOptions}
     </select>
@@ -4497,9 +4528,15 @@ router.get('/matches/import', requireAdmin, async (req, res) => {
     <body class="admin_site">
         
         <header class="header">
-            <div class="logo_title">
-                <img alt="Logo" class="image_logo" src="/images/logo.png">
-                <h1 id="title">Import zápasů</h1>
+            <div class="header-main">
+                <div class="logo_title">
+                    <img alt="Logo" class="image_logo" src="/images/logo.png">
+                    <h1 id="title">Import zápasů</h1>
+                </div>
+                <div class="header-user">
+                    <a href="/admin" class="history-btn">← Zpět na admin</a>
+                </div>
+            </div>
             </div>
             <div style="display:flex; gap:10px;">
                 <a href="/admin" style="color: orangered">Zpět do menu</a>
@@ -4515,7 +4552,7 @@ router.get('/matches/import', requireAdmin, async (req, res) => {
                     <small>Podporuje <strong>jakoukoliv</strong> ligu - stačí mít vytvořené týmy v databázi</small>
                 </p>
 
-                <div style="background: rgba(255, 69, 0, 0.1); border: 1px dashed orangered; padding: 15px; margin-bottom: 15px; border-radius: 5px;">
+                <div style="background: rgba(255, 69, 0, 0.1); border: 1px dashed orangered; padding: 15px; margin-bottom: 15px; ">
                     <p style="margin: 0; color: white; font-size: 14px;">
                         <strong>Příklady URL (záložka "Zápasy"):</strong><br>
                         <code style="color: #00ff00;">https://www.livesport.cz/zapasy/2025-2026/telh-UCEL8Q9b/</code><br>
@@ -4690,9 +4727,15 @@ router.post('/matches/import-run', express.urlencoded({ extended: true }), requi
         </head>
         <body class="admin_site">
             <header class="header">
-                <div class="logo_title">
-                    <img alt="Logo" class="image_logo" src="/images/logo.png">
-                    <h1 id="title">Výsledek importu</h1>
+                <div class="header-main">
+                    <div class="logo_title">
+                        <img alt="Logo" class="image_logo" src="/images/logo.png">
+                        <h1 id="title">Výsledek importu</h1>
+                    </div>
+                    <div class="header-user">
+                        <a href="/admin" class="history-btn">← Zpět na admin</a>
+                    </div>
+                </div>
                 </div>
             </header>
 
@@ -4753,7 +4796,7 @@ router.post('/matches/import-run', express.urlencoded({ extended: true }), requi
                 <div class="stats-container" style="border: 2px solid red; background: #330000;">
                     <h2 style="color: red;">❌ Chyba při importu</h2>
                     <p style="color: white;">${error.message}</p>
-                    <pre style="color: #ff9999; background: #220000; padding: 10px; border-radius: 5px; overflow-x: auto;">${error.stack}</pre>
+                    <pre style="color: #ff9999; background: #220000; padding: 10px;  overflow-x: auto;">${error.stack}</pre>
                     <div style="margin-top: 20px;">
                         <a href="/admin/matches/import" class="action-btn" style="background-color: #333; border: 1px solid orangered;">← Zpět na import</a>
                     </div>
@@ -4910,7 +4953,7 @@ router.get('/images/manage', requireAdmin, async (req, res) => {
             .gallery-container { padding: 20px; }
             .gallery-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 20px; }
             .gallery-stats { display: flex; gap: 20px; flex-wrap: wrap; }
-            .stat-box { background: #1a1a2e; padding: 10px 20px; border-radius: 8px; border: 1px solid #333; }
+            .stat-box { background: #1a1a2e; padding: 10px 20px;  border: 1px solid #333; }
             .stat-box .number { font-size: 1.5em; font-weight: bold; color: #00d4ff; }
             .stat-box .label { font-size: 0.85em; color: #888; }
             .stat-box.clickable { cursor: pointer; transition: all 0.2s; border-color: #00d4ff; }
@@ -4920,8 +4963,8 @@ router.get('/images/manage', requireAdmin, async (req, res) => {
             .detail-section { margin: 15px 0; }
             .detail-section h4 { color: #888; margin-bottom: 10px; font-size: 0.9em; text-transform: uppercase; }
             .team-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; max-height: 400px; overflow-y: auto; }
-            .team-item { background: #252540; padding: 8px 12px; border-radius: 6px; display: flex; align-items: center; gap: 8px; }
-            .team-item .team-logo-preview { width: 24px; height: 24px; object-fit: contain; border-radius: 4px; background: #1a1a2e; }
+            .team-item { background: #252540; padding: 8px 12px;  display: flex; align-items: center; gap: 8px; }
+            .team-item .team-logo-preview { width: 24px; height: 24px; object-fit: contain;  background: #1a1a2e; }
             .team-item .team-name { font-size: 0.9em; color: #fff; }
             .team-item .team-liga { font-size: 0.75em; color: #666; margin-left: auto; }
             .team-item.missing-file { border-left: 3px solid #ffaa00; }
@@ -4929,29 +4972,29 @@ router.get('/images/manage', requireAdmin, async (req, res) => {
             .logo-team-group { margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 10px; }
             .logo-team-group:last-child { border-bottom: none; }
             .logo-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-            .logo-header img { width: 40px; height: 40px; object-fit: contain; border-radius: 6px; background: #1a1a2e; }
+            .logo-header img { width: 40px; height: 40px; object-fit: contain;  background: #1a1a2e; }
             .logo-header .logo-name { font-weight: bold; color: #fff; }
-            .upload-section { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 2px dashed #00d4ff; padding: 30px; margin-bottom: 30px; border-radius: 12px; text-align: center; }
+            .upload-section { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 2px dashed #00d4ff; padding: 30px; margin-bottom: 30px;  text-align: center; }
             .upload-section.dragover { background: rgba(0, 212, 255, 0.1); border-color: #00ff00; }
             .file-input-wrapper { position: relative; display: inline-block; margin: 10px; }
             .file-input-wrapper input[type="file"] { display: none; }
-            .file-input-label { background: #00d4ff; color: #000; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-weight: bold; display: inline-flex; align-items: center; gap: 8px; }
+            .file-input-label { background: #00d4ff; color: #000; padding: 12px 24px;  cursor: pointer; font-weight: bold; display: inline-flex; align-items: center; gap: 8px; }
             .file-input-label:hover { background: #00b4d8; }
-            .duplicate-warning { background: #ff4444; color: white; padding: 15px; border-radius: 8px; margin: 10px 0; display: none; }
+            .duplicate-warning { background: #ff4444; color: white; padding: 15px;  margin: 10px 0; display: none; }
             .duplicate-warning.visible { display: block; }
-            .duplicate-group { background: rgba(255, 68, 68, 0.1); border: 1px solid #ff4444; padding: 10px; margin: 5px 0; border-radius: 6px; }
+            .duplicate-group { background: rgba(255, 68, 68, 0.1); border: 1px solid #ff4444; padding: 10px; margin: 5px 0;  }
             .batch-upload-preview { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px; margin-top: 20px; }
-            .preview-item { position: relative; background: #1a1a2e; padding: 10px; border-radius: 8px; text-align: center; }
-            .preview-item img { max-width: 100%; height: 100px; object-fit: cover; border-radius: 4px; }
+            .preview-item { position: relative; background: #1a1a2e; padding: 10px;  text-align: center; }
+            .preview-item img { max-width: 100%; height: 100px; object-fit: cover;  }
             .preview-item .filename { font-size: 0.75em; color: #888; margin-top: 5px; word-break: break-all; }
-            .preview-item .duplicate-badge { position: absolute; top: 5px; right: 5px; background: #ff4444; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75em; }
-            .preview-item .similar-badge { position: absolute; top: 5px; right: 5px; background: #ffaa00; color: #000; padding: 2px 8px; border-radius: 12px; font-size: 0.75em; }
+            .preview-item .duplicate-badge { position: absolute; top: 5px; right: 5px; background: #ff4444; color: white; padding: 2px 8px;  font-size: 0.75em; }
+            .preview-item .similar-badge { position: absolute; top: 5px; right: 5px; background: #ffaa00; color: #000; padding: 2px 8px;  font-size: 0.75em; }
             .filter-tabs { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
-            .filter-tab { background: #1a1a2e; border: 1px solid #444; padding: 10px 20px; border-radius: 8px; cursor: pointer; color: #888; }
+            .filter-tab { background: #1a1a2e; border: 1px solid #444; padding: 10px 20px;  cursor: pointer; color: #888; }
             .filter-tab.active { background: #00d4ff; color: #000; border-color: #00d4ff; }
             .filter-tab:hover:not(.active) { border-color: #00d4ff; color: #00d4ff; }
             .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; }
-            .gallery-item { position: relative; background: #1a1a2e; border-radius: 12px; overflow: hidden; border: 2px solid transparent; transition: all 0.3s ease; }
+            .gallery-item { position: relative; background: #1a1a2e;  overflow: hidden; border: 2px solid transparent; transition: all 0.3s ease; }
             .gallery-item:hover { border-color: #00d4ff; transform: translateY(-2px); }
             .gallery-item.selected { border-color: #00ff00; box-shadow: 0 0 20px rgba(0, 255, 0, 0.3); }
             .gallery-item.duplicate { border-color: #ff4444; }
@@ -4961,27 +5004,27 @@ router.get('/images/manage', requireAdmin, async (req, res) => {
             .gallery-item .name { font-size: 0.85em; color: #fff; word-break: break-all; }
             .gallery-item .meta { font-size: 0.75em; color: #666; margin-top: 5px; }
             .gallery-item .checkbox { position: absolute; top: 10px; left: 10px; width: 24px; height: 24px; cursor: pointer; }
-            .gallery-item .status-badge { position: absolute; top: 10px; right: 10px; padding: 4px 10px; border-radius: 12px; font-size: 0.7em; font-weight: bold; }
+            .gallery-item .status-badge { position: absolute; top: 10px; right: 10px; padding: 4px 10px;  font-size: 0.7em; font-weight: bold; }
             .gallery-item .status-badge.active { background: #00ff00; color: #000; }
             .gallery-item .status-badge.unused { background: #666; color: #fff; }
             .gallery-item .status-badge.other-season { background: #ffaa00; color: #000; }
             .gallery-item.other-season { border-color: #ffaa00; }
-            .gallery-item .duplicate-badge { position: absolute; bottom: 60px; left: 10px; right: 10px; background: rgba(255, 68, 68, 0.9); color: white; padding: 5px; border-radius: 6px; font-size: 0.75em; text-align: center; }
-            .gallery-item .similar-badge { position: absolute; bottom: 60px; left: 10px; right: 10px; background: rgba(255, 170, 0, 0.9); color: #000; padding: 5px; border-radius: 6px; font-size: 0.75em; text-align: center; }
+            .gallery-item .duplicate-badge { position: absolute; bottom: 60px; left: 10px; right: 10px; background: rgba(255, 68, 68, 0.9); color: white; padding: 5px;  font-size: 0.75em; text-align: center; }
+            .gallery-item .similar-badge { position: absolute; bottom: 60px; left: 10px; right: 10px; background: rgba(255, 170, 0, 0.9); color: #000; padding: 5px;  font-size: 0.75em; text-align: center; }
             .gallery-item .actions { display: flex; gap: 5px; padding: 10px; }
-            .gallery-item .actions a, .gallery-item .actions button { flex: 1; text-align: center; padding: 8px; border-radius: 6px; font-size: 0.8em; text-decoration: none; border: none; cursor: pointer; }
+            .gallery-item .actions a, .gallery-item .actions button { flex: 1; text-align: center; padding: 8px;  font-size: 0.8em; text-decoration: none; border: none; cursor: pointer; }
             .gallery-item .actions .delete { background: #ff4444; color: white; }
             .gallery-item .actions .delete:disabled { background: #444; cursor: not-allowed; }
-            .bulk-actions { display: none; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1a1a2e; border: 2px solid #00d4ff; padding: 15px 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); z-index: 100; }
+            .bulk-actions { display: none; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1a1a2e; border: 2px solid #00d4ff; padding: 15px 30px;  box-shadow: 0 4px 20px rgba(0,0,0,0.5); z-index: 100; }
             .bulk-actions.visible { display: flex; gap: 10px; align-items: center; }
             .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center; }
             .modal-overlay.visible { display: flex; }
-            .modal-content { background: #1a1a2e; padding: 30px; border-radius: 16px; max-width: 90vw; max-height: 90vh; overflow: auto; border: 2px solid #00d4ff; }
+            .modal-content { background: #1a1a2e; padding: 30px;  max-width: 90vw; max-height: 90vh; overflow: auto; border: 2px solid #00d4ff; }
             .modal-content img { max-width: 100%; max-height: 70vh; }
-            .duplicates-section { background: rgba(255, 68, 68, 0.1); border: 1px solid #ff4444; padding: 20px; margin-bottom: 30px; border-radius: 12px; }
+            .duplicates-section { background: rgba(255, 68, 68, 0.1); border: 1px solid #ff4444; padding: 20px; margin-bottom: 30px;  }
             .duplicates-section h3 { color: #ff4444; margin-top: 0; }
-            .duplicate-comparison { display: flex; gap: 20px; flex-wrap: wrap; margin: 15px 0; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 8px; }
-            .duplicate-comparison img { width: 150px; height: 150px; object-fit: cover; border-radius: 8px; }
+            .duplicate-comparison { display: flex; gap: 20px; flex-wrap: wrap; margin: 15px 0; padding: 15px; background: rgba(0,0,0,0.3);  }
+            .duplicate-comparison img { width: 150px; height: 150px; object-fit: cover;  }
             .duplicate-info { flex: 1; min-width: 200px; }
         </style>
     </head>
@@ -5722,20 +5765,20 @@ router.get('/images/diagnose', requireAdmin, async (req, res) => {
             <link rel="stylesheet" href="/css/styles.css">
             <style>
                 .diagnostic-container { padding: 20px; max-width: 1200px; margin: 0 auto; }
-                .diagnostic-section { background: #1a1a2e; padding: 20px; margin: 20px 0; border-radius: 12px; border: 1px solid #333; }
+                .diagnostic-section { background: #1a1a2e; padding: 20px; margin: 20px 0;  border: 1px solid #333; }
                 .diagnostic-section h3 { margin-top: 0; color: #00d4ff; }
                 .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 15px 0; }
-                .stat-item { background: #252540; padding: 15px; border-radius: 8px; text-align: center; }
+                .stat-item { background: #252540; padding: 15px;  text-align: center; }
                 .stat-number { font-size: 2em; font-weight: bold; color: #00d4ff; }
                 .stat-label { color: #888; margin-top: 5px; }
                 .problem { color: #ff4444; }
                 .warning { color: #ffaa00; }
                 .success { color: #00ff00; }
-                .file-list { max-height: 300px; overflow-y: auto; background: #0a0a0a; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 0.85em; }
-                .file-item { padding: 4px 8px; margin: 2px 0; background: #1a1a2e; border-radius: 4px; }
+                .file-list { max-height: 300px; overflow-y: auto; background: #0a0a0a; padding: 10px;  font-family: monospace; font-size: 0.85em; }
+                .file-item { padding: 4px 8px; margin: 2px 0; background: #1a1a2e;  }
                 .file-item.missing { background: rgba(255, 68, 68, 0.2); border-left: 3px solid #ff4444; }
                 .file-item.unused { background: rgba(255, 170, 0, 0.2); border-left: 3px solid #ffaa00; }
-                .season-section { margin: 10px 0; padding: 15px; background: #0a0a0a; border-radius: 6px; }
+                .season-section { margin: 10px 0; padding: 15px; background: #0a0a0a;  }
             </style>
         </head>
         <body class="usersite">
@@ -5938,7 +5981,7 @@ router.get('/images/selector', requireAdmin, async (req, res) => {
                 position: relative; 
                 cursor: pointer; 
                 border: 3px solid transparent; 
-                border-radius: 8px; 
+                 
                 overflow: hidden;
                 transition: all 0.2s;
                 background: #1a1a2e;
@@ -5976,7 +6019,7 @@ router.get('/images/selector', requireAdmin, async (req, res) => {
             .btn { 
                 padding: 10px 20px; 
                 border: none; 
-                border-radius: 6px; 
+                 
                 cursor: pointer;
                 font-weight: bold;
             }
@@ -5989,8 +6032,7 @@ router.get('/images/selector', requireAdmin, async (req, res) => {
                 margin-bottom: 15px;
                 background: #1a1a2e;
                 border: 1px solid #444;
-                border-radius: 6px;
-                color: #fff;
+                                color: #fff;
             }
             .empty-state {
                 text-align: center;
@@ -7099,9 +7141,15 @@ router.get('/matches/bulk-lock', requireAdmin, async (req, res) => {
         </head>
         <body class="admin_site">
             <header class="header">
-                <div class="logo_title">
-                    <img alt="Logo" class="image_logo" src="/images/logo.png">
-                    <h1 id="title">Hromadné zamknutí/odemknutí</h1>
+                <div class="header-main">
+                    <div class="logo_title">
+                        <img alt="Logo" class="image_logo" src="/images/logo.png">
+                        <h1 id="title">Hromadné zamknutí/odemknutí</h1>
+                    </div>
+                    <div class="header-user">
+                        <a href="/admin" class="history-btn">← Zpět na admin</a>
+                    </div>
+                </div>
                 </div>
                 <div style="display:flex; gap:10px;">
                     <a href="/admin" style="color: orangered">Zpět do menu</a>
@@ -7161,12 +7209,14 @@ router.get('/matches/bulk-lock', requireAdmin, async (req, res) => {
     </head>
     <body class="admin_site">
         <header class="header">
-            <div class="logo_title">
-                <img alt="Logo" class="image_logo" src="/images/logo.png">
-                <h1 id="title">Hromadné zamknutí/odemknutí</h1>
-            </div>
-            <div style="display:flex; gap:10px;">
-                <a href="/admin" style="color: orangered">Zpět do menu</a>
+            <div class="header-main">
+                <div class="logo_title">
+                    <img alt="Logo" class="image_logo" src="/images/logo.png">
+                    <h1 id="title">Hromadné zamknutí/odemknutí</h1>
+                </div>
+                <div class="header-user">
+                    <a href="/admin" class="history-btn">← Zpět na admin</a>
+                </div>
             </div>
         </header>
 
@@ -7175,15 +7225,15 @@ router.get('/matches/bulk-lock', requireAdmin, async (req, res) => {
                 <h2 style="color: orangered;">${liga} - ${season}</h2>
                 
                 <div style="display: flex; gap: 20px; margin: 20px 0; justify-content: center;">
-                    <div style="background: rgba(0,255,0,0.1); border: 1px solid #00ff00; padding: 15px; border-radius: 5px; text-align: center;">
+                    <div style="background: rgba(0,255,0,0.1); border: 1px solid #00ff00; padding: 15px;  text-align: center;">
                         <div style="font-size: 24px; color: #00ff00; font-weight: bold;">${unlockedCount}</div>
                         <div style="color: lightgrey;">Odemčených</div>
                     </div>
-                    <div style="background: rgba(255,0,0,0.1); border: 1px solid #ff0000; padding: 15px; border-radius: 5px; text-align: center;">
+                    <div style="background: rgba(255,0,0,0.1); border: 1px solid #ff0000; padding: 15px;  text-align: center;">
                         <div style="font-size: 24px; color: #ff0000; font-weight: bold;">${lockedCount}</div>
                         <div style="color: lightgrey;">Zamčených</div>
                     </div>
-                    <div style="background: rgba(255,165,0,0.1); border: 1px solid orange; padding: 15px; border-radius: 5px; text-align: center;">
+                    <div style="background: rgba(255,165,0,0.1); border: 1px solid orange; padding: 15px;  text-align: center;">
                         <div style="font-size: 24px; color: orange; font-weight: bold;">${filteredMatches.length}</div>
                         <div style="color: lightgrey;">Celkem</div>
                     </div>
@@ -7227,7 +7277,7 @@ router.get('/matches/bulk-lock', requireAdmin, async (req, res) => {
                     </form>
                 </div>
                 
-                <div style="margin-top: 30px; padding: 15px; background: rgba(255,69,0,0.1); border: 1px dashed orangered; border-radius: 5px;">
+                <div style="margin-top: 30px; padding: 15px; background: rgba(255,69,0,0.1); border: 1px dashed orangered; ">
                     <h4 style="color: orangered; margin: 0 0 10px 0;">⚠️ Upozornění</h4>
                     <p style="color: lightgrey; font-size: 14px; margin: 0;">
                         Zamknutí zápasů způsobí, že uživatelé nebudou moci zadávat ani měnit tipy.
@@ -7568,11 +7618,15 @@ router.get('/transfer-data', requireAdmin, async (req, res) => {
 </head>
 <body class="usersite">
     <header class="header">
-        <div class="logo_title">
-            <img class="image_logo" src="/images/logo.png" alt="Logo">
-            <h1 id="title">Tipovačka</h1>
+        <div class="header-main">
+            <div class="logo_title">
+                <img class="image_logo" src="/images/logo.png" alt="Logo">
+                <h1 id="title">Tipovačka</h1>
+            </div>
+            <div class="header-user">
+                <a href="/admin" class="history-btn">← Zpět na admin panel</a>
+            </div>
         </div>
-        <a href="/admin">← Zpět na admin panel</a>
     </header>
     
     <main class="admin_site">
@@ -8011,11 +8065,15 @@ router.post('/transfer-data', express.urlencoded({ extended: true }), requireAdm
 </head>
 <body class="usersite">
     <header class="header">
-        <div class="logo_title">
-            <img class="image_logo" src="/images/logo.png" alt="Logo">
-            <h1 id="title">Tipovačka</h1>
+        <div class="header-main">
+            <div class="logo_title">
+                <img class="image_logo" src="/images/logo.png" alt="Logo">
+                <h1 id="title">Tipovačka</h1>
+            </div>
+            <div class="header-user">
+                <a href="/admin" class="history-btn">← Zpět na admin panel</a>
+            </div>
         </div>
-        <a href="/admin">← Zpět na admin panel</a>
     </header>
     
     <main class="admin_site">
@@ -8096,12 +8154,12 @@ router.get('/fix-season-25-26', requireAdmin, async (req, res) => {
     <link rel="icon" href="/images/logo.png">
     <style>
         body { background-color: #121212; color: white; font-family: Arial, sans-serif; padding: 20px; }
-        .container { max-width: 800px; margin: 0 auto; background: #1a1a1a; padding: 30px; border-radius: 10px; }
+        .container { max-width: 800px; margin: 0 auto; background: #1a1a1a; padding: 30px;  }
         h1 { color: orangered; }
-        .stats { background: #222; padding: 15px; border-radius: 5px; margin: 20px 0; }
+        .stats { background: #222; padding: 15px;  margin: 20px 0; }
         .stat-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #333; }
         .btn { display: inline-block; background: orangered; color: black; padding: 10px 20px; 
-               text-decoration: none; border-radius: 5px; margin-top: 20px; font-weight: bold; }
+               text-decoration: none;  margin-top: 20px; font-weight: bold; }
         .btn:hover { background: #ff6633; }
         .success { color: #28a745; }
         .info { color: #17a2b8; }
@@ -8134,7 +8192,7 @@ router.get('/fix-season-25-26', requireAdmin, async (req, res) => {
         </div>
         
         ${errors.length > 0 ? `
-        <div style="background: #330000; padding: 15px; border-radius: 5px; margin: 20px 0;">
+        <div style="background: #330000; padding: 15px;  margin: 20px 0;">
             <h3 class="error">Chyby při zpracování:</h3>
             <ul style="color: #ff6666;">
                 ${errors.map(e => `<li>${e}</li>`).join('')}
@@ -8335,14 +8393,14 @@ router.get('/diagnose-seasons', requireAdmin, async (req, res) => {
         body { background: #121212; color: white; padding: 20px; }
         .container { max-width: 1200px; margin: 0 auto; }
         h1 { color: orangered; }
-        .section { background: #1a1a1a; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .section { background: #1a1a1a; padding: 15px; margin: 10px 0;  }
         .section h3 { margin-top: 0; color: #00d4ff; }
         .warning { color: #ff4444; font-weight: bold; }
-        .details { background: #0d0d0d; padding: 10px; border-radius: 3px; max-height: 200px; overflow-y: auto; }
+        .details { background: #0d0d0d; padding: 10px;  max-height: 200px; overflow-y: auto; }
         .details ul { margin: 0; padding-left: 20px; }
         .details li { color: #ff9999; font-size: 0.9em; }
         .btn { display: inline-block; background: orangered; color: black; padding: 10px 20px; 
-               text-decoration: none; border-radius: 5px; margin-top: 20px; font-weight: bold; }
+               text-decoration: none;  margin-top: 20px; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -8404,12 +8462,12 @@ router.get('/fix-teams-season', requireAdmin, async (req, res) => {
     <link rel="stylesheet" href="/css/styles.css">
     <style>
         body { background: #121212; color: white; padding: 20px; font-family: Arial, sans-serif; }
-        .container { max-width: 800px; margin: 50px auto; background: #1a1a1a; padding: 30px; border-radius: 10px; }
+        .container { max-width: 800px; margin: 50px auto; background: #1a1a1a; padding: 30px;  }
         h1 { color: orangered; }
         .success { color: #00d4ff; font-size: 1.2em; }
-        .stats { margin: 20px 0; padding: 15px; background: #0d0d0d; border-radius: 5px; }
+        .stats { margin: 20px 0; padding: 15px; background: #0d0d0d;  }
         .btn { display: inline-block; background: orangered; color: black; padding: 10px 20px; 
-               text-decoration: none; border-radius: 5px; margin-top: 20px; font-weight: bold; }
+               text-decoration: none;  margin-top: 20px; font-weight: bold; }
     </style>
 </head>
 <body>
