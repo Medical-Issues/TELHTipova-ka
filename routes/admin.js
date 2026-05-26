@@ -3010,7 +3010,7 @@ async function autoGenerateMatchesFromLockedPositions(season, league, positionMo
         // Funkce pro kontrolu, zda je tým locked
         const isTeamLocked = (team) => {
             if (!team || !team._clinchStatus) return false;
-            return team._clinchStatus.locked === true;
+            return !team._clinchStatus.canDrop && !team._clinchStatus.canRise;
         };
 
         // Parsování přiřazení pozic
@@ -3077,9 +3077,9 @@ async function autoGenerateMatchesFromLockedPositions(season, league, positionMo
             for (const group of Object.keys(teamsByGroup).sort()) {
                 allTeams.push(...teamsByGroup[group]);
             }
-            
+
             if (allTeams.length >= 2) {
-                // Najdeme slot pro baráž (hledáme sloty obsahující "bar")
+                // Najdeme slot pro baráž
                 let barazSlot = null;
                 for (const column of template.columns) {
                     for (const slotId of column.slots) {
@@ -3090,72 +3090,72 @@ async function autoGenerateMatchesFromLockedPositions(season, league, positionMo
                     }
                     if (barazSlot) break;
                 }
-                
+
                 if (barazSlot) {
-                    // Poslední 2 týmy
                     const lastTeam = allTeams[allTeams.length - 1];
                     const secondLastTeam = allTeams[allTeams.length - 2];
-                    
+
+                    // Používáme tvou definici isTeamLocked
                     const lastLocked = isTeamLocked(lastTeam);
                     const secondLastLocked = isTeamLocked(secondLastTeam);
-                    
-                    // Pokud jsou oba locked, vytvoříme zápas
+
                     if (lastLocked && secondLastLocked) {
-                        const maxId = allMatches.length > 0 ? Math.max(...allMatches.map(m => m.id || 0)) : 0;
-                        const newMatch = {
-                            id: maxId + 1,
-                            homeTeamId: lastTeam.id,
-                            awayTeamId: secondLastTeam.id,
-                            datetime: '',
-                            season: season,
-                            liga: league,
-                            isPlayoff: true,
-                            bo: null,
-                            locked: false,
-                            postponed: false,
-                            result: null
-                        };
-                        
-                        allMatches.push(newMatch);
-                        await Matches.replaceAll(allMatches);
+                        // Kontrola duplicity
+                        const matchExists = allMatches.some(m =>
+                            m.season === season &&
+                            m.liga === league &&
+                            ((m.homeTeamId === lastTeam.id && m.awayTeamId === secondLastTeam.id) ||
+                                (m.homeTeamId === secondLastTeam.id && m.awayTeamId === lastTeam.id))
+                        );
 
-                        // Uložení přiřazení slotů
-                        let playoffData = await Playoff.findAll() || {};
-                        if (!playoffData[season]) playoffData[season] = {};
-                        
-                        const existingAssignments = playoffData[season][league] || {};
-                        playoffData[season][league] = {
-                            ...existingAssignments,
-                            [barazSlot]: `series-${newMatch.id}`,
-                            [`${barazSlot}_t1`]: lastTeam.name,
-                            [`${barazSlot}_t2`]: secondLastTeam.name
-                        };
-                        
-                        await Playoff.replaceAll(playoffData);
+                        if (!matchExists) {
+                            const maxId = allMatches.length > 0 ? Math.max(...allMatches.map(m => m.id || 0)) : 0;
+                            const newMatch = {
+                                id: maxId + 1,
+                                homeTeamId: lastTeam.id,
+                                awayTeamId: secondLastTeam.id,
+                                datetime: '',
+                                season: season,
+                                liga: league,
+                                isPlayoff: true,
+                                bo: null,
+                                locked: false,
+                                postponed: false,
+                                result: null
+                            };
 
-                        return { success: true, generated: 1 };
+                            allMatches.push(newMatch);
+                            await Matches.replaceAll(allMatches);
+
+                            let playoffData = await Playoff.findAll() || {};
+                            if (!playoffData[season]) playoffData[season] = {};
+
+                            const existingAssignments = playoffData[season][league] || {};
+                            playoffData[season][league] = {
+                                ...existingAssignments,
+                                [barazSlot]: `series-${newMatch.id}`,
+                                [`${barazSlot}_t1`]: lastTeam.name,
+                                [`${barazSlot}_t2`]: secondLastTeam.name
+                            };
+
+                            await Playoff.replaceAll(playoffData);
+                            return { success: true, generated: 1 };
+                        }
                     } else if (lastLocked || secondLastLocked) {
-                        // Pokud je locked jen jeden, uložíme ho jako čekající tým
+                        // Čekající týmy
                         let playoffData = await Playoff.findAll() || {};
                         if (!playoffData[season]) playoffData[season] = {};
-                        
                         const existingAssignments = playoffData[season][league] || {};
-                        
-                        if (lastLocked) {
-                            existingAssignments[`${barazSlot}_t1`] = lastTeam.name;
-                        }
-                        if (secondLastLocked) {
-                            existingAssignments[`${barazSlot}_t2`] = secondLastTeam.name;
-                        }
-                        
+
+                        if (lastLocked) existingAssignments[`${barazSlot}_t1`] = lastTeam.name;
+                        if (secondLastLocked) existingAssignments[`${barazSlot}_t2`] = secondLastTeam.name;
+
                         playoffData[season][league] = existingAssignments;
                         await Playoff.replaceAll(playoffData);
-
                         return { success: true, generated: 0 };
                     }
                 }
             }
-            
             return { success: true, generated: 0 };
         }
 
@@ -3196,29 +3196,43 @@ async function autoGenerateMatchesFromLockedPositions(season, league, positionMo
                 const teamALocked = teamA && isTeamLocked(teamA);
                 const teamBLocked = teamB && isTeamLocked(teamB);
 
-                // Pokud jsou oba týmy locked, vytvoříme zápas
-                if (teamA && teamB && teamALocked && teamBLocked) {
-                    const maxId = allMatches.length > 0 ? Math.max(...allMatches.map(m => m.id || 0)) : 0;
-                    const newMatch = {
-                        id: maxId + 1,
-                        homeTeamId: teamA.id,
-                        awayTeamId: teamB.id,
-                        datetime: '',
-                        season: season,
-                        liga: league,
-                        isPlayoff: true,
-                        bo: null,
-                        locked: false,
-                        postponed: false,
-                        result: null
-                    };
-                    
-                    newMatches.push(newMatch);
-                    allMatches.push(newMatch);
+                // Najdi místo, kde začíná: if (teamA && teamB && teamALocked && teamBLocked) {
+// A uprav to takto:
 
-                    slotAssignments[slotId] = `series-${newMatch.id}`;
-                    slotAssignments[`${slotId}_t1`] = teamA.name;
-                    slotAssignments[`${slotId}_t2`] = teamB.name;
+                if (teamA && teamB && teamALocked && teamBLocked) {
+                    // ... KONTROLA DUPLICITY:
+                    console.log(`Slot ${slotId}: teamA=${teamA?.name} (locked=${teamALocked}), teamB=${teamB?.name} (locked=${teamBLocked})`);
+                    const matchExists = allMatches.some(m =>
+                        m.season === season &&
+                        m.liga === league &&
+                        ((m.homeTeamId === teamA.id && m.awayTeamId === teamB.id) ||
+                            (m.homeTeamId === teamB.id && m.awayTeamId === teamA.id))
+                    );
+
+                    if (!matchExists) {
+                        const maxId = allMatches.length > 0 ? Math.max(...allMatches.map(m => m.id || 0)) : 0;
+                        const newMatch = {
+                            id: maxId + 1,
+                            homeTeamId: teamA.id,
+                            awayTeamId: teamB.id,
+                            datetime: '',
+                            season: season,
+                            liga: league,
+                            isPlayoff: true,
+                            bo: null,
+                            locked: false,
+                            postponed: false,
+                            result: null
+                        };
+
+                        newMatches.push(newMatch);
+                        allMatches.push(newMatch);
+
+                        // TADY musí být přiřazení slotů, aby se proměnná newMatch "viděla"
+                        slotAssignments[slotId] = `series-${newMatch.id}`;
+                        slotAssignments[`${slotId}_t1`] = teamA.name;
+                        slotAssignments[`${slotId}_t2`] = teamB.name;
+                    }
 
                     // Kontrola, zda můžeme automaticky vytvořit zápas v další fázi
                     const parentSlots = slotToChildren[slotId];
@@ -3677,58 +3691,52 @@ async function checkAndCreatePlayoffMatches(season, league) {
         const newMatches = [];
         const slotAssignments = {};
 
-        // Zpracujeme jen první sloupec šablony (první fázi playoff)
-        const firstColumn = template.columns[0];
-        if (!firstColumn) return;
+        for (const column of template.columns) {
+            for (const slotId of column.slots) {
+                const posInfo = positionMap[slotId];
 
-        for (const slotId of firstColumn.slots) {
-            const posInfo = positionMap[slotId];
-            if (!posInfo) continue;
+                // Pokud pro tento slot nemáme přiřazené týmy, přeskakujeme
+                if (!posInfo) continue;
 
-            const teamA = posInfo.t1 ? getTeamAtPosition(posInfo.t1.position, posInfo.t1.group) : null;
-            const teamB = posInfo.t2 ? getTeamAtPosition(posInfo.t2.position, posInfo.t2.group) : null;
+                const teamA = posInfo.t1 ? getTeamAtPosition(posInfo.t1.position, posInfo.t1.group) : null;
+                const teamB = posInfo.t2 ? getTeamAtPosition(posInfo.t2.position, posInfo.t2.group) : null;
 
-            const teamALocked = teamA && isTeamLocked(teamA);
-            const teamBLocked = teamB && isTeamLocked(teamB);
+                const teamALocked = teamA && isTeamLocked(teamA);
+                const teamBLocked = teamB && isTeamLocked(teamB);
 
-            // Pokud je alespoň jeden tým locked, aktualizujeme čekající týmy
-            if (teamALocked || teamBLocked) {
-                if (teamALocked) {
-                    slotAssignments[`${slotId}_t1`] = teamA.name;
+                // 1. Aktualizace čekajících týmů v pavouku
+                if (teamALocked || teamBLocked) {
+                    if (teamALocked) slotAssignments[`${slotId}_t1`] = teamA.name;
+                    if (teamBLocked) slotAssignments[`${slotId}_t2`] = teamB.name;
                 }
-                if (teamBLocked) {
-                    slotAssignments[`${slotId}_t2`] = teamB.name;
-                }
-            }
 
-            // Pokud jsou oba týmy locked a zápas ještě neexistuje, vytvoříme ho
-            if (teamALocked && teamBLocked) {
-                // Zkontrolujeme, zda už zápas existuje
-                const matchExists = existingPlayoffMatches.some(m =>
-                    (m.homeTeamId === teamA.id && m.awayTeamId === teamB.id) ||
-                    (m.homeTeamId === teamB.id && m.awayTeamId === teamA.id)
-                );
+                // 2. Vytvoření zápasu, pokud jsou oba locked
+                if (teamALocked && teamBLocked) {
+                    const matchExists = existingPlayoffMatches.some(m =>
+                        (m.homeTeamId === teamA.id && m.awayTeamId === teamB.id) ||
+                        (m.homeTeamId === teamB.id && m.awayTeamId === teamA.id)
+                    );
 
-                if (!matchExists) {
-                    const maxId = allMatches.length > 0 ? Math.max(...allMatches.map(m => m.id || 0)) : 0;
-                    const newMatch = {
-                        id: maxId + 1,
-                        homeTeamId: teamA.id,
-                        awayTeamId: teamB.id,
-                        datetime: '',
-                        season: season,
-                        liga: league,
-                        isPlayoff: true,
-                        bo: null,
-                        locked: false,
-                        postponed: false,
-                        result: null
-                    };
+                    if (!matchExists) {
+                        const maxId = allMatches.length > 0 ? Math.max(...allMatches.map(m => m.id || 0)) : 0;
+                        const newMatch = {
+                            id: maxId + 1,
+                            homeTeamId: teamA.id,
+                            awayTeamId: teamB.id,
+                            datetime: '',
+                            season: season,
+                            liga: league,
+                            isPlayoff: true,
+                            bo: null,
+                            locked: false,
+                            postponed: false,
+                            result: null
+                        };
 
-                    newMatches.push(newMatch);
-                    allMatches.push(newMatch);
-
-                    slotAssignments[slotId] = `series-${newMatch.id}`;
+                        newMatches.push(newMatch);
+                        allMatches.push(newMatch);
+                        slotAssignments[slotId] = `series-${newMatch.id}`;
+                    }
                 }
             }
         }

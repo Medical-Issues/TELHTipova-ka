@@ -2434,10 +2434,11 @@ async function generateLeftPanel(data, isHistory = false) {
         const match = matches.find(m => m.id === mId);
         if (!match) return null;
 
-        const homeTeam = teams.find(t => t.id === match.homeTeamId) || { name: 'Neznámý' };
-        const awayTeam = teams.find(t => t.id === match.awayTeamId) || { name: 'Neznámý' };
+        const homeTeam = teams.find(t => t.id === match.homeTeamId) || {name: 'Neznámý'};
+        const awayTeam = teams.find(t => t.id === match.awayTeamId) || {name: 'Neznámý'};
 
-        let scoreH = 0; let scoreA = 0;
+        let scoreH = 0;
+        let scoreA = 0;
         if (match.result) {
             scoreH = match.result.scoreHome;
             scoreA = match.result.scoreAway;
@@ -2453,9 +2454,16 @@ async function generateLeftPanel(data, isHistory = false) {
         const aWinner = scoreA >= winsNeeded;
 
         // Výpočet seedingu (pořadí z tabulky základní části)
+        // Výpočet seedingu (pořadí z tabulky základní části - nyní v rámci skupiny)
         const getTeamSeed = (teamId) => {
-            const allTeamsInLiga = teams.filter(t => t.liga === selectedLiga);
-            const sortedTeams = allTeamsInLiga.sort((a, b) => {
+            // 1. Najdeme aktuální tým, abychom znali jeho skupinu
+            const currentTeam = teams.find(t => t.id === teamId);
+            if (!currentTeam) return null;
+
+            // 2. Filtrujeme týmy ze stejné ligy A STEJNÉ SKUPINY
+            const allTeamsInGroup = teams.filter(t => t.liga === selectedLiga && t.group === currentTeam.group);
+
+            const sortedTeams = allTeamsInGroup.sort((a, b) => {
                 const aStats = a.stats?.[selectedSeason] || {};
                 const bStats = b.stats?.[selectedSeason] || {};
                 const pA = aStats.points || 0;
@@ -2468,15 +2476,13 @@ async function generateLeftPanel(data, isHistory = false) {
 
                 // Podle priority tiebreaker určíme pořadí kritérií
                 if (leagueObj?.tiebreakerPriority === 'goalDiff') {
-                    // Priorita: Celkové skóre před H2H
-                    const sA = scores[a.id] || {gf:0, ga:0};
-                    const sB = scores[b.id] || {gf:0, ga:0};
+                    const sA = scores[a.id] || {gf: 0, ga: 0};
+                    const sB = scores[b.id] || {gf: 0, ga: 0};
                     const diffA = sA.gf - sA.ga;
                     const diffB = sB.gf - sB.ga;
                     if (diffA !== diffB) return diffB - diffA;
                     if (sA.gf !== sB.gf) return sB.gf - sA.gf;
 
-                    // H2H kontrola (jen pokud není goalDiff priority)
                     const directMatch = matches.find(m =>
                         m.season === selectedSeason && m.liga === selectedLiga && m.result && !m.isPlayoff &&
                         ((Number(m.homeTeamId) === Number(a.id) && Number(m.awayTeamId) === Number(b.id)) ||
@@ -2486,13 +2492,17 @@ async function generateLeftPanel(data, isHistory = false) {
                         const isAHome = Number(directMatch.homeTeamId) === Number(a.id);
                         let sH = directMatch.result?.scoreHome ?? directMatch.scoreHome ?? 0;
                         let sA = directMatch.result?.scoreAway ?? directMatch.scoreAway ?? 0;
-                        if (isAHome) { if (sH > sA) return -1; if (sA > sH) return 1; }
-                        else { if (sA > sH) return -1; if (sH > sA) return 1; }
+                        if (isAHome) {
+                            if (sH > sA) return -1;
+                            if (sA > sH) return 1;
+                        } else {
+                            if (sA > sH) return -1;
+                            if (sH > sA) return 1;
+                        }
                     }
                 } else {
-                    // Priorita: H2H před celkovým skórem (výchozí)
-                    const sA = scores[a.id] || {gf:0, ga:0};
-                    const sB = scores[b.id] || {gf:0, ga:0};
+                    const sA = scores[a.id] || {gf: 0, ga: 0};
+                    const sB = scores[b.id] || {gf: 0, ga: 0};
                     const diffA = sA.gf - sA.ga;
                     const diffB = sB.gf - sB.ga;
                     if (diffA !== diffB) return diffB - diffA;
@@ -2507,8 +2517,13 @@ async function generateLeftPanel(data, isHistory = false) {
                         const isAHome = Number(directMatch.homeTeamId) === Number(a.id);
                         let sH = directMatch.result?.scoreHome ?? directMatch.scoreHome ?? 0;
                         let sA = directMatch.result?.scoreAway ?? directMatch.scoreAway ?? 0;
-                        if (isAHome) { if (sH > sA) return -1; if (sA > sH) return 1; }
-                        else { if (sA > sH) return -1; if (sH > sA) return 1; }
+                        if (isAHome) {
+                            if (sH > sA) return -1;
+                            if (sA > sH) return 1;
+                        } else {
+                            if (sA > sH) return -1;
+                            if (sH > sA) return 1;
+                        }
                     }
                 }
                 return 0;
