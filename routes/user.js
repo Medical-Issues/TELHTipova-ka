@@ -5153,6 +5153,17 @@ document.addEventListener('DOMContentLoaded', checkSubscriptionStatus);
             }
         }
     });
+
+    // Fetch and display version
+    fetch('/api/version')
+        .then(res => res.json())
+        .then(data => {
+            const versionBadge = document.getElementById('current-version');
+            if (versionBadge) {
+                versionBadge.textContent = data.version;
+            }
+        })
+        .catch(err => console.error('Failed to fetch version:', err));
 </script>
 <script src="/js/version-notification.js"></script>
 </body>
