@@ -2450,10 +2450,21 @@ async function generateLeftPanel(data, isHistory = false) {
         }
 
         const winsNeeded = match.bo > 1 ? Math.ceil(match.bo / 2) : 1;
-        const hWinner = scoreH >= winsNeeded;
-        const aWinner = scoreA >= winsNeeded;
 
-        // Výpočet seedingu (pořadí z tabulky základní části)
+        let homeWins = false;
+        let awayWins = false;
+
+        if (Number(match.bo) === 1) {
+            if (scoreH > scoreA) homeWins = true;
+            else if (scoreA > scoreH) awayWins = true;
+        } else {
+            homeWins = scoreH >= winsNeeded;
+            awayWins = scoreA >= winsNeeded;
+        }
+
+        const isFinished = homeWins || awayWins;
+        const isOngoing = !isFinished && (scoreH > 0 || scoreA > 0);
+
         // Výpočet seedingu (pořadí z tabulky základní části - nyní v rámci skupiny)
         const getTeamSeed = (teamId) => {
             // 1. Najdeme aktuální tým, abychom znali jeho skupinu
@@ -2537,9 +2548,13 @@ async function generateLeftPanel(data, isHistory = false) {
 
         return {
             isWaiting: false,
+            isFinished,
+            isOngoing,
             home: homeTeam.name, away: awayTeam.name,
-            scoreH, scoreA, hWinner, aWinner,
-            bo: match.bo || 1,
+            scoreH, scoreA,
+            homeWins,
+            awayWins,
+            bo: Number(match.bo) || 1,
             winsNeeded,
             homeSeed, awaySeed
         };
@@ -2611,8 +2626,8 @@ async function generateLeftPanel(data, isHistory = false) {
         }
 
         // Klasický vyhodnocovaný zápas (Série)
-        const isCompleted = info.hWinner || info.aWinner;
-        const isInProgress = !isCompleted && (info.scoreH > 0 || info.scoreA > 0);
+        const isCompleted = info.isFinished;
+        const isInProgress = info.isOngoing;
         const statusClass = isCompleted ? 'completed' : (isInProgress ? 'in-progress' : 'waiting');
         const statusIcon = isCompleted ? '🔥' : (isInProgress ? '⏳' : '⏸️');
         
@@ -2631,14 +2646,14 @@ async function generateLeftPanel(data, isHistory = false) {
                 <div class="playoff-series-score">${info.scoreH}:${info.scoreA}</div>
             </div>
             <div class="playoff-series-teams">
-                <div class="playoff-team ${info.hWinner ? 'winner' : 'loser'}">
+                <div class="playoff-team ${info.homeWins ? 'winner' : 'loser'}">
                     <span class="playoff-seed">${info.homeSeed ? '#' + info.homeSeed : ''}</span>
                     <span class="playoff-team-name">${info.home}</span>
                 </div>
-                <div class="playoff-team ${info.aWinner ? 'winner' : 'loser'}">
-                    <span class="playoff-seed">${info.awaySeed ? '#' + info.awaySeed : ''}</span>
-                    <span class="playoff-team-name">${info.away}</span>
-                </div>
+            <div class="playoff-team ${info.awayWins ? 'winner' : 'loser'}">
+                <span class="playoff-seed">${info.awaySeed ? '#' + info.awaySeed : ''}</span>
+                <span class="playoff-team-name">${info.away}</span>
+            </div>
             </div>
             ${showProgressBar ? `
             <div class="playoff-progress-bar">
@@ -2667,15 +2682,15 @@ async function generateLeftPanel(data, isHistory = false) {
         // BO1 speciální případ
         if (match.bo === 1) {
             const result = match.result;
-            const winner = result ? (result.scoreHome > result.scoreAway ? 'home' : 'away') : null;
-            
+            const winnerId = result ? (result.scoreHome > result.scoreAway ? match.homeTeamId : (result.scoreAway > result.scoreHome ? match.awayTeamId : null)) : null;
+
             matchesHtml = `
-            <div class="playoff-bo1-special">
-                ${homeTeam.name} vs ${awayTeam.name}
-                ${result ? `${result.scoreHome}:${result.scoreAway}` : 'Čeká se'}
-                ${winner ? `(${winner === 'home' ? homeTeam.name : awayTeam.name} vyhrál)` : ''}
-            </div>`;
-        } 
+                <div class="playoff-bo1-special">
+                    <span class="playoff-match-team ${winnerId === homeTeam.id ? 'winner' : ''}">${homeTeam.name}</span>
+                    <span class="playoff-match-score">${result ? `${result.scoreHome}:${result.scoreAway}` : 'Čeká se'}</span>
+                    <span class="playoff-match-team ${winnerId === awayTeam.id ? 'winner' : ''}">${awayTeam.name}</span>
+                </div>`;
+        }
         // BO3+ případ s playedMatches
         else if (match.playedMatches && match.playedMatches.length > 0) {
             matchesHtml = match.playedMatches.map((pm) => {
@@ -3668,10 +3683,9 @@ async function createPlayoffBracketImage(data, withWatermark = true) {
             if (match) {
                 const homeTeam = teams.find(t => t.id === match.homeTeamId);
                 const awayTeam = teams.find(t => t.id === match.awayTeamId);
-                
-                let scoreH = 0, scoreA = 0;
-                const bo = match.bo || 3; // Get BO dynamically
-                
+
+                let scoreH = 0;
+                let scoreA = 0;
                 if (match.result) {
                     scoreH = match.result.scoreHome;
                     scoreA = match.result.scoreAway;
@@ -3681,12 +3695,24 @@ async function createPlayoffBracketImage(data, withWatermark = true) {
                         else if (pm.scoreAway > pm.scoreHome) scoreA++;
                     });
                 }
-                
-                // Calculate wins based on actual BO format
-                const homeWins = scoreH >= Math.ceil(bo / 2);
-                const awayWins = scoreA >= Math.ceil(bo / 2);
-                const isFinished = homeWins || awayWins;
-                const isOngoing = !isFinished && (scoreH > 0 || scoreA > 0);
+                const winsNeeded = (Number(match.bo) || 1) > 1 ? Math.ceil((Number(match.bo) || 1) / 2) : 1;
+                let homeWins = false;
+                let awayWins = false;
+
+                if (Number(match.bo) === 1) { // Speciální logika pro BO1 zápasy
+                    if (scoreH > scoreA) {
+                        homeWins = true;
+                    } else if (scoreA > scoreH) {
+                        awayWins = true;
+                    }
+                    // Pokud je skóre shodné (např. 0:0, 1:1), žádný tým není označen jako vítěz, protože to není konečný stav pro playoff BO1.
+                } else { // Pro BO > 1 (série), použij standardní logiku počítání vyhraných map
+                    homeWins = scoreH >= winsNeeded;
+                    awayWins = scoreA >= winsNeeded;
+                }
+
+                const isFinished = homeWins || awayWins; // Pravda, pokud jeden tým vyhrál sérii
+                const isOngoing = !isFinished && (scoreH > 0 || scoreA > 0); // Pravda, pokud zápas není dokončen, ale má nějaké skóre
                 
                 // Get seed from team data or standings
                 function getTeamSeed(teamId) {
@@ -3713,19 +3739,15 @@ async function createPlayoffBracketImage(data, withWatermark = true) {
                 const awaySeed = getTeamSeed(match.awayTeamId);
 
                 return {
-                    home: homeTeam?.name || 'TBD',
-                    away: awayTeam?.name || 'TBD',
-                    homeSeed,
-                    awaySeed,
-                    scoreH, 
-                    scoreA,
-                    homeWins, 
-                    awayWins,
+                    isWaiting: false,
                     isFinished,
                     isOngoing,
-                    isWaiting: false,
-                    bo,
-                    playedMatches: match.playedMatches || []
+                    home: homeTeam.name, away: awayTeam.name,
+                    scoreH, scoreA,
+                    homeWins, awayWins,
+                    bo: Number(match.bo) || 1,
+                    winsNeeded,
+                    homeSeed, awaySeed
                 };
             }
             return {
@@ -3834,11 +3856,11 @@ async function createPlayoffBracketImage(data, withWatermark = true) {
                     ctx.fillText(displayName, x + 8, rowY);
                 }
             }
-            
+
             // Draw Home team
             drawTeamRow(seriesInfo.home, seriesInfo.homeSeed, seriesInfo.homeWins, y + topPadding + 12);
-            
-            // Draw Away team
+
+        // Draw Away team
             drawTeamRow(seriesInfo.away, seriesInfo.awaySeed, seriesInfo.awayWins, y + topPadding + teamRowHeight + 12);
             
             // Draw main score in center-right area
