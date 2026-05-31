@@ -1258,6 +1258,11 @@ router.get('/history', requireLogin, async (req, res) => {
     let matches = [];
     try { matches = await Matches.findAll(); } catch (err) { console.error(err); }
 
+    // Načtení přestupů pro kontrolu dostupnosti
+    const { Transfers } = require('../utils/mongoDataAccess');
+    let transfersData = {};
+    try { transfersData = await Transfers.findAll(); } catch (err) { console.error(err); }
+
     const historyMap = new Map();
 
     // 1. Primární zdroj: Definice v leagues.json
@@ -1265,7 +1270,9 @@ router.get('/history', requireLogin, async (req, res) => {
         if (allSeasonData[season].leagues) {
             allSeasonData[season].leagues.forEach(l => {
                 const key = `${season}_${l.name}`;
-                historyMap.set(key, { season, liga: l.name });
+                const hasTransfers = transfersData?.[season]?.[l.name] && Object.keys(transfersData[season][l.name]).length > 0;
+                const matchCount = matches.filter(m => m.season === season && m.liga === l.name).length;
+                historyMap.set(key, { season, liga: l.name, hasTransfers, matchCount });
             });
         }
     });
@@ -1275,18 +1282,31 @@ router.get('/history', requireLogin, async (req, res) => {
         if (m.liga && m.season) {
             const key = `${m.season}_${m.liga}`;
             if (!historyMap.has(key)) {
-                historyMap.set(key, { season: m.season, liga: m.liga });
+                const hasTransfers = transfersData?.[m.season]?.[m.liga] && Object.keys(transfersData[m.season][m.liga]).length > 0;
+                const matchCount = matches.filter(match => match.season === m.season && match.liga === m.liga).length;
+                historyMap.set(key, { season: m.season, liga: m.liga, hasTransfers, matchCount });
             }
         }
     });
 
     const history = Array.from(historyMap.values());
 
+    // Seskupení podle sezón
+    const groupedBySeason = history.reduce((acc, entry) => {
+        if (!acc[entry.season]) acc[entry.season] = [];
+        acc[entry.season].push(entry);
+        return acc;
+    }, {});
+
+    // Seřazení sezón sestupně
+    const sortedSeasons = Object.keys(groupedBySeason).sort((a, b) => b.localeCompare(a));
+
     let html = `
     <!DOCTYPE html>
     <html lang="cs">
     <head>
         <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Historie lig a sezón</title>
         <link rel="stylesheet" href="/css/styles.css">
         <script src="/js/version-notification.js"></script>
@@ -1303,32 +1323,57 @@ router.get('/history', requireLogin, async (req, res) => {
         </header>
         <header class="time-header">${await generateTimeWidget()}<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a></header>
         <main class="main_page">
-            <table class="points-table">
-                <thead class="points-table-history">
-                    <tr>
-                        <th>Sezóna</th>
-                        <th>Liga</th>
-                        <th>Odkaz</th>
-                    </tr>
-                </thead>
-                <tbody>
+            <div class="history-container">
     `;
 
-    history.sort((a, b) => b.season.localeCompare(a.season));
-
-    for (const entry of history) {
+    for (const season of sortedSeasons) {
+        const leagues = groupedBySeason[season].sort((a, b) => a.liga.localeCompare(b.liga));
+        
         html += `
-            <tr class="history-table-choose">
-                <td>${entry.season}</td>
-                <td>${entry.liga}</td>
-                <td><a href="/history/a/?liga=${encodeURIComponent(entry.liga)}&season=${encodeURIComponent(entry.season)}">Zobrazit</a></td>
-            </tr>
+            <div class="season-section">
+                <h2 class="season-title">${season}</h2>
+                <div class="league-grid">
+        `;
+
+        for (const entry of leagues) {
+            html += `
+                <div class="league-card">
+                    <div class="league-card-header">
+                        <span class="league-name">${entry.liga}</span>
+                        <span class="league-badge">${entry.season}</span>
+                    </div>
+                    <div class="league-stats">
+                        <span>🏆 ${entry.matchCount} zápasů</span>
+                        ${entry.hasTransfers ? '<span>📜 Přestupy dostupné</span>' : ''}
+                    </div>
+                    <div class="league-actions">
+                        <a href="/history/a/?liga=${encodeURIComponent(entry.liga)}&season=${encodeURIComponent(entry.season)}" class="history-action-btn history-action-btn-primary">
+                            ⚽ Tipování zápasů
+                        </a>
+                        <a href="/history/table/?liga=${encodeURIComponent(entry.liga)}&season=${encodeURIComponent(entry.season)}" class="history-action-btn history-action-btn-secondary">
+                            📊 Tipování tabulky
+                        </a>
+                        ${entry.hasTransfers
+                            ? `<a href="/history/prestupy?liga=${encodeURIComponent(entry.liga)}&season=${encodeURIComponent(entry.season)}" class="history-action-btn history-action-btn-tertiary">
+                                📜 Přestupy
+                               </a>`
+                            : `<span class="history-action-btn history-action-btn-disabled" title="Přestupy nejsou dostupné">
+                                📜 Přestupy
+                               </span>`
+                        }
+                    </div>
+                </div>
+            `;
+        }
+
+        html += `
+                </div>
+            </div>
         `;
     }
 
     html += `
-                </tbody>
-            </table>
+            </div>
         </main>
         <script>
             document.addEventListener('DOMContentLoaded', () => {
