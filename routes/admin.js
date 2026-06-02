@@ -7221,9 +7221,10 @@ router.post('/matches/bulk-lock', express.urlencoded({ extended: true }), requir
         
         const actionText = shouldLock ? 'UZAMČENY' : 'ODEMČENY';
         await logAdminAction(req.session.user, "HROMADNÝ_ZÁMEK", `${affectedCount} zápasů v lize ${liga} (${season}) bylo ${actionText}`);
-        
-        // Přesměrování zpět s ligou a sezónou
-        res.redirect(`/admin?liga=${encodeURIComponent(liga)}&season=${encodeURIComponent(season)}`);
+
+        // Přesměrování - použij redirectUrl pokud je poskytnut, jinak na admin
+        const redirectUrl = req.body.redirectUrl || `/admin?liga=${encodeURIComponent(liga)}&season=${encodeURIComponent(season)}`;
+        res.redirect(redirectUrl);
         
     } catch (error) {
         console.error('Chyba při hromadném zamknutí/odemknutí:', error);
@@ -7272,12 +7273,13 @@ router.post('/matches/bulk-delete', express.urlencoded({ extended: true }), requ
         if (deletedCount > 0) {
             await Matches.replaceAll(matchesToKeep);
             
-            await logAdminAction(req.session.user, "HROMADNÉ_SMAZÁNÍ", 
+            await logAdminAction(req.session.user, "HROMADNÉ_SMAZÁNÍ",
                 `Smazeno ${deletedCount} nevyhodnocených zápasů v lize ${liga} (${season}), zachováno ${preservedCount} vyhodnocených`);
         }
-        
-        // Přesměrování zpět s ligou a sezónou
-        res.redirect(`/admin?liga=${encodeURIComponent(liga)}&season=${encodeURIComponent(season)}`);
+
+        // Přesměrování - použij redirectUrl pokud je poskytnut, jinak na admin
+        const redirectUrl = req.body.redirectUrl || `/admin?liga=${encodeURIComponent(liga)}&season=${encodeURIComponent(season)}`;
+        res.redirect(redirectUrl);
         
     } catch (error) {
         console.error('Chyba při hromadném mazání:', error);
