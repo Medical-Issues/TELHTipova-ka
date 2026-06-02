@@ -7291,12 +7291,13 @@ router.post('/matches/bulk-delete', express.urlencoded({ extended: true }), requ
 // STRÁNKA PRO HROMADNÉ ZAMKNUTÍ/ODEMKNUTÍ
 // ==========================================
 router.get('/matches/bulk-lock', requireAdmin, async (req, res) => {
-    const { liga, season } = req.query;
-    
-    // Načtení dat
-    const allMatches = await Matches.findAll();
-    const allowedLeagues = await AllowedLeagues.findAll();
-    const currentSeason = await ChosenSeason.findAll();
+    try {
+        const { liga, season } = req.query;
+
+        // Načtení dat
+        const allMatches = await Matches.findAll();
+        const allowedLeagues = await AllowedLeagues.findAll();
+        const currentSeason = await ChosenSeason.findAll();
     
     // Pokud není vybrána liga, zobrazíme formulář pro výběr
     if (!liga || !season) {
@@ -7338,7 +7339,7 @@ router.get('/matches/bulk-lock', requireAdmin, async (req, res) => {
                         <label style="display: flex; flex-direction: column; color: orangered;">
                             Liga:
                             <select name="liga" required style="padding: 10px; background-color: #222; border: 1px solid orangered; color: white;">
-                                ${allowedLeagues.map(l => `<option value="${l}" ${l === allowedLeagues[0] ? 'selected' : ''}>${l}</option>`).join('')}
+                                ${allowedLeagues.length > 0 ? allowedLeagues.map(l => `<option value="${l}" ${l === allowedLeagues[0] ? 'selected' : ''}>${l}</option>`).join('') : '<option value="">Žádné ligy</option>'}
                             </select>
                         </label>
                         
@@ -7464,8 +7465,12 @@ router.get('/matches/bulk-lock', requireAdmin, async (req, res) => {
         </main>
     </body>
     </html>`;
-    
+
     res.send(html);
+    } catch (error) {
+        console.error('Chyba při načítání bulk-lock stránky:', error);
+        return renderErrorHtml(res, `Chyba při načítání stránky: ${error.message}`, 500);
+    }
 });
 
 // ==========================================
