@@ -1010,6 +1010,10 @@ router.get('/teams/edit/:id', requireAdmin, async (req, res) => {
         ${groupOptions}
       </select>
     </label>` : ''}
+    <label style="display: flex; flex-direction: column" for="aliases">Alternativní názvy (pro import z Livesport)
+      <input autocomplete="off" style="width: 220px" class="league-select" type="text" id="aliases" name="aliases" value="${team.aliases || ''}" placeholder="např. Vítkovice, HC Vítkovice" />
+      <small style="color: gray; font-size: 0.8em;">Oddělte čárkou</small>
+    </label>
     <label style="display: flex; flex-direction: row; align-items: center" for="active">
         Aktivní tým
       <input type="checkbox" id="active" name="active" ${team.active ? 'checked' : ''} />
@@ -1493,6 +1497,10 @@ router.get('/new/team', requireAdmin, async (req, res) => {
             ${groupOptions}
         </select>
     </label>
+    <label style="display: flex; flex-direction: column;">Alternativní názvy (pro import z Livesport):
+      <input style="width: 220px" class="league-select" autocomplete="off" type="text" name="aliases" placeholder="např. Vítkovice, HC Vítkovice">
+      <small style="color: gray; font-size: 0.8em;">Oddělte čárkou</small>
+    </label>
     <label style="display: flex; flex-direction: row; align-items: center">Aktivní tým <input type="checkbox" name="active" checked></label>
     <button class="action-btn btn" type="submit">Vytvořit tým</button>
     </form>
@@ -1570,7 +1578,7 @@ router.post('/new/team', express.urlencoded({ extended: true }), requireAdmin, u
     }
     
     const teams = await Teams.findAll();
-    let {name, liga, active} = req.body;
+    let {name, liga, active, aliases} = req.body;
     active = active === 'on';
 
     const inputName = name.trim().toLowerCase();
@@ -1589,7 +1597,12 @@ router.post('/new/team', express.urlencoded({ extended: true }), requireAdmin, u
     // NOVÉ: Použij admin sezónu pokud je nastavena, jinak chosenSeason
     const chosenSeason = await ChosenSeason.findAll();
     const selectedSeason = req.session.adminSeason || chosenSeason;
-    
+
+    // Zpracování aliasů - rozdělení podle čárky a očištění
+    const aliasesArray = aliases
+        ? aliases.split(',').map(a => a.trim()).filter(a => a.length > 0)
+        : [];
+
     const newTeam = {
         id: teams.length > 0 ? Math.max(...teams.map(t => t.id)) + 1 : 1,
         name: name.trim(),
@@ -1598,7 +1611,8 @@ router.post('/new/team', express.urlencoded({ extended: true }), requireAdmin, u
         season: selectedSeason,
         group: parseInt(req.body.group),
         stats: {},
-        logo: logoFilename // Uložíme název souboru do JSONu
+        logo: logoFilename, // Uložíme název souboru do JSONu
+        aliases: aliasesArray // Uložíme pole alternativních názvů
     };
 
     teams.push(newTeam);
@@ -2055,13 +2069,19 @@ router.post('/teams/edit/:id', express.urlencoded({ extended: true }), requireAd
     if (teamIndex === -1) return renderErrorHtml(res, "Tým s tímto ID nebyl nalezen v aktuální sezóně.", 404);
     
     const team = teams[teamIndex];
-    const { name, liga, active } = req.body;
-    
+    const { name, liga, active, aliases } = req.body;
+
+    // Zpracování aliasů - rozdělení podle čárky a očištění
+    const aliasesArray = aliases
+        ? aliases.split(',').map(a => a.trim()).filter(a => a.length > 0)
+        : [];
+
     // Aktualizace dat týmu
     team.name = name.trim();
     team.liga = liga.trim();
     team.active = active === 'on';
     team.group = parseInt(req.body.group);
+    team.aliases = aliasesArray;
     
     // Pokud bylo nahráno nové logo nebo vybrán existující, aktualizujeme ho
     if (req.file) {

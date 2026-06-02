@@ -113,36 +113,13 @@ function getSeasonFromUrl(url) {
 
 /**
  * Normalizuje název týmu pro porovnání
+ * Pouze základní normalizace - kompletní matching řeší dynamické aliasy
  */
 function normalizeTeamName(name) {
     if (!name) return '';
     return name
         .trim()
         .replace(/\s+/g, ' ')
-        .replace(/^HC\s+/i, '')
-        .replace(/^Rytíři\s+/i, '')
-        .replace(/^Bílí\s+Tygři\s+/i, '')
-        .replace(/^Oceláři\s+/i, '')
-        .replace(/^Piráti\s+/i, '')
-        .replace(/^Dynamo\s+/i, '')
-        .replace(/^Mountfield\s+/i, '')
-        .replace(/^Energie\s+/i, '')
-        .replace(/^Verva\s+/i, '')
-        .replace(/^Kometa\s+/i, '')
-        .replace(/^Vítkovice\s+/i, '')
-        .replace(/^Zlín\s+/i, '')
-        .replace(/^Olomouc\s+/i, '')
-        .replace(/^Mladá\s+Boleslav\s+/i, '')
-        .replace(/^Liberec\s+/i, '')
-        .replace(/^Sparta\s+/i, '')
-        .replace(/^Plzeň\s+/i, '')
-        .replace(/^Pardubice\s+/i, '')
-        .replace(/^Třinec\s+/i, '')
-        .replace(/^Litvínov\s+/i, '')
-        .replace(/^Kladno\s+/i, '')
-        .replace(/^K.\s+/i, 'Karlovy ')
-        .replace(/^Č.\s+/i, 'České ')
-        .replace(/\s+B$/, '')
         .toLowerCase();
 }
 
@@ -162,7 +139,18 @@ function findTeamInDatabase(teamName, dbTeams, liga) {
 
     if (found) return Number(found.id);
 
-    // 2. Partial match - jeden obsahuje druhý
+    // 2. Shoda v aliasech týmu
+    found = leagueTeams.find(t => {
+        if (t.aliases && Array.isArray(t.aliases)) {
+            const normalizedAliases = t.aliases.map(a => normalizeTeamName(a));
+            return normalizedAliases.includes(normalizedName);
+        }
+        return false;
+    });
+
+    if (found) return Number(found.id);
+
+    // 3. Partial match - jeden obsahuje druhý
     found = leagueTeams.find(t => {
         const dbNorm = normalizeTeamName(t.name);
         return dbNorm.includes(normalizedName) || normalizedName.includes(dbNorm);
@@ -170,7 +158,20 @@ function findTeamInDatabase(teamName, dbTeams, liga) {
 
     if (found) return Number(found.id);
 
-    // 3. Shoda na prvních 5 znacích (pro případy jako "Mountfield HK" vs "Mountfield")
+    // 4. Partial match v aliasech
+    found = leagueTeams.find(t => {
+        if (t.aliases && Array.isArray(t.aliases)) {
+            const normalizedAliases = t.aliases.map(a => normalizeTeamName(a));
+            return normalizedAliases.some(alias =>
+                alias.includes(normalizedName) || normalizedName.includes(alias)
+            );
+        }
+        return false;
+    });
+
+    if (found) return Number(found.id);
+
+    // 5. Shoda na prvních 5 znacích (pro případy jako "Mountfield HK" vs "Mountfield")
     found = leagueTeams.find(t => {
         const dbNorm = normalizeTeamName(t.name);
         return dbNorm.substring(0, 5) === normalizedName.substring(0, 5);
