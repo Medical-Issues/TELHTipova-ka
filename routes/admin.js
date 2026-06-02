@@ -7296,8 +7296,20 @@ router.get('/matches/bulk-lock', requireAdmin, async (req, res) => {
 
         // Načtení dat
         const allMatches = await Matches.findAll();
-        const allowedLeagues = await AllowedLeagues.findAll();
+        const allTeams = await Teams.findAll();
+        const allowedLeagues = await AllowedLeagues.findAll() || [];
         const currentSeason = await ChosenSeason.findAll();
+
+        // Získání všech dostupných sezón ze zápasů a týmů
+        const seasonsFromMatches = allMatches.map(m => m.season).filter(Boolean);
+        const seasonsFromTeams = allTeams.map(t => t.season).filter(Boolean);
+        const allSeasons = [...new Set([...seasonsFromMatches, ...seasonsFromTeams])].sort();
+
+        // Získání lig ze zápasů a týmů, pokud je AllowedLeagues prázdné
+        const leaguesFromMatches = [...new Set(allMatches.map(m => m.liga).filter(Boolean))];
+        const leaguesFromTeams = [...new Set(allTeams.map(t => t.liga).filter(Boolean))];
+        const allowedLeaguesArray = Array.isArray(allowedLeagues) ? allowedLeagues : [];
+        const allLeagues = [...new Set([...leaguesFromMatches, ...leaguesFromTeams, ...allowedLeaguesArray])].sort();
     
     // Pokud není vybrána liga, zobrazíme formulář pro výběr
     if (!liga || !season) {
@@ -7337,24 +7349,42 @@ router.get('/matches/bulk-lock', requireAdmin, async (req, res) => {
                     
                     <form method="GET" action="/admin/matches/bulk-lock" style="display: flex; flex-direction: column; gap: 15px;">
                         <label style="display: flex; flex-direction: column; color: orangered;">
-                            Liga:
-                            <select name="liga" required style="padding: 10px; background-color: #222; border: 1px solid orangered; color: white;">
-                                ${allowedLeagues.length > 0 ? allowedLeagues.map(l => `<option value="${l}" ${l === allowedLeagues[0] ? 'selected' : ''}>${l}</option>`).join('') : '<option value="">Žádné ligy</option>'}
-                            </select>
-                        </label>
-                        
-                        <label style="display: flex; flex-direction: column; color: orangered;">
                             Sezóna:
-                            <select name="season" required style="padding: 10px; background-color: #222; border: 1px solid orangered; color: white;">
-                                <option value="${currentSeason}" selected>${currentSeason}</option>
+                            <select name="season" id="seasonSelect" required style="padding: 10px; background-color: #222; border: 1px solid orangered; color: white;">
+                                ${allSeasons.length > 0 ? allSeasons.map(s => `<option value="${s}" ${s === currentSeason ? 'selected' : ''}>${s}</option>`).join('') : '<option value="">Žádné sezóny</option>'}
                             </select>
                         </label>
-                        
+
+                        <label style="display: flex; flex-direction: column; color: orangered;">
+                            Liga:
+                            <select name="liga" id="leagueSelect" required style="padding: 10px; background-color: #222; border: 1px solid orangered; color: white;">
+                                ${allLeagues.length > 0 ? allLeagues.map(l => `<option value="${l}" ${l === allLeagues[0] ? 'selected' : ''}>${l}</option>`).join('') : '<option value="">Žádné ligy</option>'}
+                            </select>
+                        </label>
+
                         <button type="submit" class="login_button" style="width: 100%; margin-top: 10px;">Pokračovat</button>
                     </form>
                 </div>
             </main>
         </body>
+        <script id="matches-data" type="application/json">${JSON.stringify(allMatches)}</script>
+        <script>
+            const allMatches = JSON.parse(document.getElementById('matches-data').textContent);
+            const seasonSelect = document.getElementById('seasonSelect');
+            const leagueSelect = document.getElementById('leagueSelect');
+
+            function filterLeaguesBySeason() {
+                const selectedSeason = seasonSelect.value;
+                const leaguesInSeason = [...new Set(allMatches.filter(m => m.season === selectedSeason).map(m => m.liga))].sort();
+
+                leagueSelect.innerHTML = leaguesInSeason.length > 0
+                    ? leaguesInSeason.map(l => '<option value="' + l + '">' + l + '</option>').join('')
+                    : '<option value="">Žádné ligy</option>';
+            }
+
+            seasonSelect.addEventListener('change', filterLeaguesBySeason);
+            filterLeaguesBySeason(); // Inicializace při načtení
+        </script>
         </html>`;
         return res.send(html);
     }
