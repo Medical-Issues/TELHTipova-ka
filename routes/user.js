@@ -3322,7 +3322,8 @@ router.get("/statistics", requireLogin, async (req, res) => {
     try {
         const username = req.session.user;
         const chosenSeason = await ChosenSeason.findAll();
-        const selectedSeason = chosenSeason || 'Neurčeno';
+        // Use query parameter if provided, otherwise use global chosen season
+        const selectedSeason = req.query.season || chosenSeason || 'Neurčeno';
         
         // Načtení všech uživatelů
         const users = await Users.findAll();
@@ -3331,15 +3332,34 @@ router.get("/statistics", requireLogin, async (req, res) => {
         const leaguesData = await Leagues.findAll();
         const leagues = Array.isArray(leaguesData?.[selectedSeason]) ? leaguesData[selectedSeason] : [];
         
+        // Získání všech sezón z Leagues kolekce (pro dropdown a sezónní porovnání)
+        const allSeasonsFromLeagues = new Set();
+        Object.keys(leaguesData || {}).forEach(season => {
+            // Vyhnout se systémovým klíčům MongoDB (_id, __v, atd.) a klíči 'leagues'
+            if (!season.startsWith('_') && season !== 'leagues') {
+                allSeasonsFromLeagues.add(season);
+            }
+        });
+        
+        // Získání názvů lig definovaných v Leagues kolekci pro danou sezónu
+        const definedLeagues = new Set();
+        if (leaguesData?.[selectedSeason]?.leagues) {
+            leaguesData[selectedSeason].leagues.forEach(l => definedLeagues.add(l.name));
+        }
+        
         // Načtení zápasů pro výpočet playoff statistik
         const matches = await Matches.findAll();
 
         // Nejprve zjistíme všechny ligy, které se skutečně používají v user.stats
+        // Ale filtrované podle lig definovaných v Leagues kolekci pro danou sezónu
         const allLeaguesInStats = new Set();
         for (const user of users) {
             const stats = user.stats?.[selectedSeason] || {};
             for (const league of Object.keys(stats)) {
-                allLeaguesInStats.add(league);
+                // Přidáme jen pokud je liga definovaná v Leagues kolekci pro danou sezónu
+                if (definedLeagues.has(league)) {
+                    allLeaguesInStats.add(league);
+                }
             }
         }
 
@@ -3552,6 +3572,7 @@ router.get("/statistics", requireLogin, async (req, res) => {
 
         const appStats = {
             totalUsers: users.filter(u => u.username !== 'Admin').length,
+            activeUsers: userStats.length, // Uživatelé, kteří aspoň jednou tipovali v této sezóně
             totalLeagues: allLeaguesInStats.size,
             totalTips: userStats.reduce((sum, u) => sum + u.totalTips, 0),
             totalCorrect: userStats.reduce((sum, u) => sum + u.totalCorrect, 0),
@@ -3986,7 +4007,7 @@ router.get("/statistics", requireLogin, async (req, res) => {
 
         // Sezónní porovnání
         const seasonComparison = {};
-        const allSeasons = Object.keys(users[0]?.tips || {}).sort();
+        const allSeasons = Array.from(allSeasonsFromLeagues).sort();
 
         for (const season of allSeasons) {
             const seasonStats = {
@@ -3997,14 +4018,63 @@ router.get("/statistics", requireLogin, async (req, res) => {
 
             for (const user of users) {
                 if (user.username === 'Admin') continue;
-                const userSeasonStats = user.stats?.[season] || {};
+                
+                // Pokud má stats pro danou sezónu, použijeme je
+                // Jinak vypočítáme z tips dynamicky (pro aktuální sezónu)
                 let userTotalCorrect = 0;
                 let userTotalTips = 0;
 
-                for (const league of Object.keys(userSeasonStats)) {
-                    const leagueStats = userSeasonStats[league] || {};
-                    userTotalCorrect += leagueStats.correct || 0;
-                    userTotalTips += (leagueStats.totalRegular || 0) + (leagueStats.totalPlayoff || 0);
+                if (user.stats?.[season]) {
+                    const userSeasonStats = user.stats[season];
+                    for (const league of Object.keys(userSeasonStats)) {
+                        const leagueStats = userSeasonStats[league] || {};
+                        userTotalCorrect += leagueStats.correct || 0;
+                        userTotalTips += (leagueStats.totalRegular || 0) + (leagueStats.totalPlayoff || 0);
+                    }
+                } else {
+                    // Vypočítáme z tips pro danou sezónu
+                    const userTips = user.tips?.[season] || {};
+                    for (const league of Object.keys(userTips)) {
+                        const leagueTips = userTips[league] || [];
+                        for (const tip of leagueTips) {
+                            const match = matches.find(m => m.id === tip.matchId);
+                            if (!match?.result || !match.result.winner) continue;
+                            
+                            userTotalTips++;
+                            
+                            let isCorrect = false;
+                            if (match.isPlayoff && Number(match.bo) === 1) {
+                                const realHome = Number(match.result.scoreHome ?? 0);
+                                const realAway = Number(match.result.scoreAway ?? 0);
+                                let tipHome = Number(tip.scoreHome ?? tip.scoreH ?? tip.homeGoals ?? 0);
+                                let tipAway = Number(tip.scoreAway ?? tip.scoreA ?? tip.awayGoals ?? 0);
+                                
+                                if (match.result?.sideSwap === true) {
+                                    const temp = tipHome;
+                                    tipHome = tipAway;
+                                    tipAway = temp;
+                                }
+                                
+                                if (!Number.isNaN(tipHome) && !Number.isNaN(tipAway)) {
+                                    const realOutcome = Math.sign(realHome - realAway);
+                                    const tipOutcome = Math.sign(tipHome - tipAway);
+                                    isCorrect = realOutcome === tipOutcome;
+                                }
+                            } else if (match.isPlayoff && Number(match.bo) > 1) {
+                                const realWinner = match.result.winner;
+                                const tipWinner = tip.winner;
+                                isCorrect = tipWinner === realWinner;
+                            } else {
+                                let evaluatedWinner = tip.winner;
+                                if (match.result?.sideSwap === true) {
+                                    evaluatedWinner = tip.winner === 'home' ? 'away' : 'home';
+                                }
+                                isCorrect = evaluatedWinner === match.result.winner;
+                            }
+                            
+                            if (isCorrect) userTotalCorrect++;
+                        }
+                    }
                 }
 
                 seasonStats.totalTips += userTotalTips;
@@ -4114,11 +4184,19 @@ router.get("/statistics", requireLogin, async (req, res) => {
             }
         }
         
+        const availableSeasons = Array.from(allSeasonsFromLeagues).sort().reverse();
+
+        // Vytvoření seznamu všech uživatelů pro sezónní porovnání (bez ohledu na vybranou sezónu)
+        const allUsersForSeasonComparison = users
+            .filter(u => u.username !== 'Admin')
+            .map(u => ({ username: u.username }));
+
         const data = {
             username,
             selectedSeason,
-            availableSeasons: Object.keys(users[0]?.tips || {}).sort().reverse(),
+            availableSeasons,
             userStats,
+            allUsersForSeasonComparison,
             currentUserStats,
             currentUserRank,
             appStats,
@@ -4138,9 +4216,6 @@ router.get("/statistics", requireLogin, async (req, res) => {
         if (req.headers.accept === 'application/json') {
             return res.json(data);
         }
-        
-        // Jinak vyrenderujeme HTML stránku
-        const { availableSeasons } = data;
         
         let html = `
 <!DOCTYPE html>
@@ -4215,11 +4290,16 @@ router.get("/statistics", requireLogin, async (req, res) => {
         <p style="color: #aaa;">Komplexní přehled výkonů všech uživatelů</p>
     </div>
     
-    <div class="stats-overview">
+    <div style="grid-template-columns: repeat(5, 1fr);" class="stats-overview">
         <div class="stat-card">
             <h3>Celkem uživatelů</h3>
             <p class="value">${appStats.totalUsers}</p>
-            <p class="label">Aktivních tipujících</p>
+            <p class="label">Celkem registrovaných</p>
+        </div>
+        <div class="stat-card">
+            <h3>Aktivních uživatelů</h3>
+            <p class="value">${appStats.activeUsers}</p>
+            <p class="label">Alespoň jeden tip v sezóně</p>
         </div>
         <div class="stat-card">
             <h3>Celkem lig</h3>
@@ -5084,6 +5164,7 @@ document.addEventListener('DOMContentLoaded', checkSubscriptionStatus);
     const seasonComparisonCtx = document.getElementById('seasonComparisonChart').getContext('2d');
     const seasonComparisonData = ${JSON.stringify(seasonComparison)};
     const seasonLabels = Object.keys(seasonComparisonData).sort();
+    const allUsersForSeasonComparison = ${JSON.stringify(allUsersForSeasonComparison)};
 
     // Vytvoření datasetů pro každého uživatele
     const seasonDatasets = [];
@@ -5097,7 +5178,7 @@ document.addEventListener('DOMContentLoaded', checkSubscriptionStatus);
     ];
 
     let colorIndex = 0;
-    for (const user of userStats) {
+    for (const user of allUsersForSeasonComparison) {
         const userSeasonData = seasonLabels.map(season => {
             return seasonComparisonData[season]?.users[user.username]?.successRate || 0;
         });
