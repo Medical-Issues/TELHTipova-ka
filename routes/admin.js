@@ -2527,9 +2527,7 @@ router.get('/playoff', requireAdmin, async (req, res) => {
             m.isPlayoff &&
             m.result // jen dokončené zápasy
         );
-        const prevRoundTeamCount = completedPlayoffMatches.length;
-
-        // Výpočet počtu pozic na základě skutečného počtu týmů v lize
+// Výpočet počtu pozic na základě skutečného počtu týmů v lize
         let positionCount;
         if (hasMultipleGroups) {
             // Pro skupiny použijeme maximální počet týmů ve skupině
