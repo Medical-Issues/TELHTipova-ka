@@ -6831,9 +6831,8 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
     const transferLeagues = await TransferLeagues.findAll();
 
     const selectedLiga = req.query.liga || leaguesForSeason[0];
-    const hasTransfersEnabled = transferLeagues.includes(selectedLiga);
-    
-    // Načtení nastavení výchozího zobrazení
+    transferLeagues.includes(selectedLiga);
+// Načtení nastavení výchozího zobrazení
     const settingsData = await Settings.findAll();
     const defaultView = settingsData.defaultView || 'transfers'; // 'transfers' nebo 'roster'
 
