@@ -6,7 +6,7 @@ const {
     requireLogin, prepareDashboardData, getGroupDisplayLabel, generateLeftPanel,
     getLeagueStatusData, getTableTipsData, generateTimeWidget, getAllowedLeagues, createMatchImage
 } = require("../utils/fileUtils");
-const { Users, Matches, Leagues, TableTips, ChosenSeason} = require('../utils/mongoDataAccess');
+const { Users, Matches, Leagues, TableTips, ChosenSeason, Players} = require('../utils/mongoDataAccess');
 // Jednoduchá XSS ochrana - sanitizace HTML tagů
 function sanitizeInput(input) {
     if (typeof input !== 'string') return input;
@@ -2528,13 +2528,20 @@ html += await generateLeftPanel(data);
 
                 html += `
     <div style="position: relative; background-color: #000; border: 2px solid #ff4500; overflow: hidden; display: flex; flex-direction: column; min-height: 250px; box-shadow: 0 4px 15px rgba(0,0,0,0.8);">
-        
-        <div style="position: relative; z-index: 1; background: linear-gradient(to bottom, #222, #111); border-bottom: 3px solid #ff4500; display: flex; align-items: center; padding: 10px;">
-            <img src="${logoUrl}" alt="${team.name}" style="height: 45px; width: 45px; object-fit: contain; margin-right: 12px; filter: drop-shadow(0 0 5px rgba(255,255,255,0.2));">
-            <strong style="color: white; font-size: 1.3em; text-transform: uppercase; letter-spacing: 1px;">${team.name}</strong>
+
+        <div style="position: relative; z-index: 1; background: linear-gradient(to bottom, #222, #111); border-bottom: 3px solid #ff4500; display: flex; align-items: center; justify-content: space-between; padding: 10px;">
+            <div style="display: flex; align-items: center;">
+                <img src="${logoUrl}" alt="${team.name}" style="height: 45px; width: 45px; object-fit: contain; margin-right: 12px; filter: drop-shadow(0 0 5px rgba(255,255,255,0.2));">
+                <strong style="color: white; font-size: 1.3em; text-transform: uppercase; letter-spacing: 1px;">${team.name}</strong>
+            </div>
+            <button onclick="toggleRoster(${team.id})" style="background: #ff4500; color: white; border: none; padding: 8px 12px; cursor: pointer; font-size: 0.85em; font-weight: bold;">👥 Soupiska</button>
         </div>
 
-        <div style="position: relative; z-index: 1; display: flex; flex-direction: row; flex: 1;">
+        <div id="roster-${team.id}" style="display: none; background: #1a1a1a; padding: 15px; border-bottom: 1px solid #333;">
+            <div style="text-align: center; color: #888; font-size: 0.9em;">Načítám soupisku...</div>
+        </div>
+
+        <div id="transfers-${team.id}" style="position: relative; z-index: 1; display: flex; flex-direction: row; flex: 1;">
             
             <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-10deg); width: 80%; height: 80%; background-image: url('${logoUrl}'); background-size: contain; background-repeat: no-repeat; background-position: center; opacity: 0.30; filter: grayscale(50%); z-index: -50; pointer-events: none;"></div>
             <div style="flex: 1; padding: 8px; border-right: 1px solid #333; background-color: rgba(0, 50, 80, 0.3);">
@@ -2563,7 +2570,99 @@ html += await generateLeftPanel(data);
 
             html += `</div></section>`;
         }
-        `</main></body>`;
+
+        // JavaScript pro načítání soupisek
+        html += `
+<script>
+async function toggleRoster(teamId) {
+    const rosterDiv = document.getElementById('roster-' + teamId);
+    const transfersDiv = document.getElementById('transfers-' + teamId);
+    
+    if (rosterDiv.style.display === 'none' || rosterDiv.style.display === '') {
+        // Zobrazit soupisku, skrýt přestupy
+        rosterDiv.style.display = 'block';
+        transfersDiv.style.display = 'none';
+        rosterDiv.innerHTML = '<div style="text-align: center; color: #888; font-size: 0.9em;">Načítám soupisku...</div>';
+
+        try {
+            const res = await fetch('/api/players/' + teamId);
+            const data = await res.json();
+
+            if (data.players && data.players.length > 0) {
+                // Rozdělení hráčů podle pozice
+                const positions = {
+                    'Brankář': [],
+                    'Obránce': [],
+                    'Útočník': [],
+                    'Centr': [],
+                    'Křídlo': [],
+                    'Jiné': []
+                };
+                
+                data.players.forEach(p => {
+                    const pos = p.position || 'Jiné';
+                    if (positions[pos]) {
+                        positions[pos].push(p);
+                    } else {
+                        positions['Jiné'].push(p);
+                    }
+                });
+
+                // Seřadit hráče v každé kategorii podle čísla dresu
+                Object.keys(positions).forEach(key => {
+                    positions[key].sort((a, b) => (a.number || 999) - (b.number || 999));
+                });
+
+                let playersHtml = '';
+                Object.entries(positions).forEach(([pos, players]) => {
+                    if (players.length > 0) {
+                        playersHtml += '<div style="margin-bottom: 25px;">';
+                        playersHtml += '<h3 style="color: #00d4ff; font-size: 1.2em; margin: 0 0 12px 0; border-bottom: 2px solid #00d4ff; padding-bottom: 8px; display: flex; align-items: center; gap: 10px;">';
+                        playersHtml += '<span style="background: linear-gradient(135deg, #00d4ff, #0099cc); color: #000; padding: 4px 12px; font-size: 0.9em; font-weight: bold;">' + players.length + '</span>';
+                        playersHtml += pos + '</h3>';
+                        playersHtml += '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px;">';
+                        players.forEach(p => {
+                            playersHtml += '<div style="background: linear-gradient(135deg, ' + p.statusColor + '22 0%, #1a1a1a 100%); padding: 15px; border-left: 4px solid ' + p.statusColor + '; box-shadow: 0 2px 8px rgba(0,0,0,0.3); transition: all 0.3s ease; cursor: default; position: relative; overflow: hidden;">';
+                            playersHtml += '<div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-10deg); width: 80%; height: 400%; background-image: url(' + JSON.stringify(data.logoUrl) + '); background-size: contain; background-repeat: no-repeat; background-position: center; opacity: 0.30; filter: grayscale(50%); pointer-events: none; z-index: 1;"></div>';
+                            playersHtml += '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; position: relative; z-index: 2;">';
+                            playersHtml += '<div style="position: relative; width: 64px; height: 64px; display: inline-flex; justify-content: center; align-items: center;">';
+                            playersHtml += '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;">';
+                            playersHtml += '<path d="M 32 12 C 40 8, 60 8, 68 12 L 86 16 A 8 8 0 0 1 92 24 L 92 65 L 78 65 L 78 78 L 78 92 L 22 92 L 22 78 L 22 65 L 8 65 L 8 24 A 8 8 0 0 1 14 16 Z" fill="url(#jerseyGradient-' + (p.number || '0') + ')" stroke="' + p.statusColor + '" stroke-width="3" stroke-linejoin="round"/>';
+                            playersHtml += '<path d="M 32 12 C 35 24, 65 24, 68 12" fill="transparent" stroke="' + p.statusColor + '" stroke-width="3"/>';
+                            playersHtml += '<path d="M 42 21 L 50 28 L 58 21" fill="transparent" stroke="' + p.statusColor + '" stroke-width="3"/>';
+                            playersHtml += '<defs><linearGradient id="jerseyGradient-' + (p.number || '0') + '" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#333;stop-opacity:1"/><stop offset="100%" style="stop-color:#222;stop-opacity:1"/></linearGradient></defs>';
+                            playersHtml += '</svg>';
+                            playersHtml += '<span style="position: relative; z-index: 2; margin-top: 5px; font-size: 1.3rem; font-weight: bold; font-family: sans-serif; color: #fff; letter-spacing: 0; user-select: none;">' + (p.number || '-') + '</span>';
+                            playersHtml += '</div>';
+                            playersHtml += '<span style="background: ' + p.statusColor + '; color: #000; padding: 4px 10px; font-size: 0.8em; font-weight: bold; display: flex; align-items: center; gap: 4px;">';
+                            playersHtml += '<span style="font-size: 1.1em;">' + p.statusIcon + '</span>';
+                            playersHtml += '<span>' + p.statusLabel + '</span>';
+                            playersHtml += '</span>';
+                            playersHtml += '</div>';
+                            playersHtml += '<div style="color: #fff; font-weight: bold; font-size: 1.1em; margin-bottom: 5px; position: relative; z-index: 2;">' + p.name + '</div>';
+                            if (p.statusDetails) {
+                                playersHtml += '<div style="color: #888; font-size: 0.8em; margin-top: 8px; padding-top: 8px; border-top: 1px solid #333; position: relative; z-index: 2;">' + p.statusDetails + '</div>';
+                            }
+                            playersHtml += '</div>';
+                        });
+                        playersHtml += '</div></div>';
+                    }
+                });
+                rosterDiv.innerHTML = playersHtml;
+            } else {
+                rosterDiv.innerHTML = '<div style="text-align: center; color: #888; font-size: 0.9em;">Žádní hráči v soupisce</div>';
+            }
+        } catch (error) {
+            rosterDiv.innerHTML = '<div style="text-align: center; color: #ff4444; font-size: 0.9em;">Chyba při načítání soupisky</div>';
+        }
+    } else {
+        // Skrýt soupisku, zobrazit přestupy
+        rosterDiv.style.display = 'none';
+        transfersDiv.style.display = 'flex';
+    }
+}
+</script>
+</main></body>`;
     res.send(html)
 });
 
@@ -5299,6 +5398,70 @@ document.addEventListener('DOMContentLoaded', checkSubscriptionStatus);
     } catch (error) {
         console.error('Chyba při načítání statistik:', error);
         res.status(500).send('Došlo k chybě při načítání statistik.');
+    }
+});
+
+// API endpoint pro získání soupisky týmu (pro uživatele)
+router.get('/api/players/:teamId', requireLogin, async (req, res) => {
+    try {
+        const teamId = parseInt(req.params.teamId);
+        const { getChosenSeason } = require('../utils/fileUtils');
+        const { Teams } = require('../utils/mongoDataAccess');
+        const chosenSeason = await getChosenSeason();
+
+        // Načtení hráčů týmu pro aktuální sezónu
+        const allPlayers = await Players.findAll();
+        const teamPlayers = allPlayers.filter(p =>
+            p.teamId === teamId &&
+            p.season === chosenSeason
+        ).sort((a, b) => (a.number || 999) - (b.number || 999));
+
+        // Načtení týmu pro logo
+        const allTeams = await Teams.findAll();
+        const team = allTeams.find(t => t.id === teamId);
+        const logoUrl = team?.logo ? `/logoteamu/${team.logo}` : '/images/logo.png';
+
+        // Stavy hráčů
+        const statusColors = {
+            'active': '#28a745',
+            'injured': '#ffc107',
+            'suspended': '#dc3545',
+            'loan': '#fd7e14',
+            'retired': '#6c757d'
+        };
+
+        const statusLabels = {
+            'active': 'Aktivní',
+            'injured': 'Zraněný',
+            'suspended': 'Suspendován',
+            'loan': 'Hostování',
+            'retired': 'Konec kariéry'
+        };
+
+        const statusIcons = {
+            'active': '✓',
+            'injured': '🏥',
+            'suspended': '⚠',
+            'loan': '↔',
+            'retired': '○'
+        };
+
+        res.json({
+            logoUrl,
+            players: teamPlayers.map(p => ({
+                name: p.name,
+                number: p.number,
+                position: p.position,
+                status: p.status,
+                statusDetails: p.statusDetails,
+                statusColor: statusColors[p.status] || '#888',
+                statusLabel: statusLabels[p.status] || p.status,
+                statusIcon: statusIcons[p.status] || '?'
+            }))
+        });
+    } catch (error) {
+        console.error('Chyba při načítání soupisky:', error);
+        res.status(500).json({ error: 'Chyba serveru' });
     }
 });
 

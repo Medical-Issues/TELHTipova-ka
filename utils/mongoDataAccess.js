@@ -248,6 +248,7 @@ const TeamBonuses = new MongoDataAccess('teamBonuses');
 const LeagueStatus = new MongoDataAccess('leagueStatus');
 const Transfers = new MongoDataAccess('transfers');
 const Tips = new MongoDataAccess('tips');
+const Players = new MongoDataAccess('players');
 
 module.exports = {
     Users,
@@ -264,5 +265,6 @@ module.exports = {
     TeamBonuses,
     LeagueStatus,
     Transfers,
-    Tips
+    Tips,
+    Players
 };

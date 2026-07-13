@@ -1,5 +1,5 @@
 const fs = require("fs");
-const { Users, Matches, Teams, Leagues, AllowedLeagues, ChosenSeason, Settings, TeamBonuses, LeagueStatus, TableTips, Playoff, PlayoffTemplates, TransferLeagues, Transfers, Tips } = require('../utils/mongoDataAccess');
+const { Users, Matches, Teams, Leagues, AllowedLeagues, ChosenSeason, Settings, TeamBonuses, LeagueStatus, TableTips, Playoff, PlayoffTemplates, TransferLeagues, Transfers, Tips, Players } = require('../utils/mongoDataAccess');
 const express = require("express");
 const router = express.Router();
 const path = require('path');
@@ -2521,7 +2521,7 @@ router.get('/playoff', requireAdmin, async (req, res) => {
 
         // Zjištění počtu dokončených playoff zápasů pro dynamický inteligentní výběr
         const allMatches = await Matches.findAll();
-        const completedPlayoffMatches = allMatches.filter(m =>
+        allMatches.filter(m =>
             m.season === selectedSeason &&
             m.liga === selectedLeague &&
             m.isPlayoff &&
@@ -6867,7 +6867,10 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
                     <div class="team-block">
                         <div class="team-background-logo" style="background-image: url('${logoUrl}');"></div>
                         <div class="team-content">
-                            <h2>${team.name} <span style="font-size:0.6em; color:gray; font-weight:normal;">(ID: ${team.id})</span></h2>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <h2>${team.name} <span style="font-size:0.6em; color:gray; font-weight:normal;">(ID: ${team.id})</span></h2>
+                                <a href="/admin/players/${team.id}" class="btn" style="padding: 5px 10px; font-size: 0.85em; text-decoration: none;">👥 Soupiska</a>
+                            </div>
                             <div class="t-grid">
                                 <div><span class="t-label">SPEKULACE IN <span style="color:cyan">(?)</span></span><textarea name="t[id_${team.id}][specIn]">${(data.specIn || []).join('\n')}</textarea></div>
                                 <div><span class="t-label">SPEKULACE OUT <span style="color:cyan">(?)</span></span><textarea name="t[id_${team.id}][specOut]">${(data.specOut || []).join('\n')}</textarea></div>
@@ -9178,10 +9181,717 @@ router.get('/fix-teams-season', requireAdmin, async (req, res) => {
 </html>`);
         
         console.log(`🔧 Dokončeno: ${fixedCount} týmů nastaveno na ${currentSeason}, ${alreadyHasSeason} již mělo sezónu`);
-        
+
     } catch (error) {
         console.error('Chyba při nastavování sezón:', error);
         res.status(500).send('Chyba: ' + error.message);
+    }
+});
+
+// ==========================================
+// SPRÁVA HRÁČŮ (Players)
+// ==========================================
+
+// GET - Zobrazit soupisku týmu
+router.get('/players/:teamId', requireAdmin, async (req, res) => {
+    try {
+        const teamId = parseInt(req.params.teamId);
+        const teams = await Teams.findAll();
+        const team = teams.find(t => t.id === teamId);
+
+        if (!team) {
+            return res.status(404).send('Tým nenalezen');
+        }
+
+        const chosenSeason = await ChosenSeason.findAll();
+        const selectedSeason = req.session.adminSeason || chosenSeason;
+
+        // Načtení hráčů týmu pro vybranou sezónu
+        const allPlayers = await Players.findAll();
+        const teamPlayers = allPlayers.filter(p =>
+            p.teamId === teamId &&
+            p.season === selectedSeason &&
+            p.liga === team.liga
+        ).sort((a, b) => (a.number || 999) - (b.number || 999));
+
+        // Stavy hráčů
+        const statusColors = {
+            'active': '#28a745',
+            'injured': '#ffc107',
+            'suspended': '#dc3545',
+            'loan': '#fd7e14',
+            'retired': '#6c757d'
+        };
+
+        const statusLabels = {
+            'active': '🟢 Aktivní',
+            'injured': '🟡 Zraněný',
+            'suspended': '🔴 Suspendován',
+            'loan': '🟠 Hostování',
+            'retired': '⚫ Konec kariéry'
+        };
+
+        let html = `
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Soupiska - ${team.name}</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="icon" href="/images/logo.png">
+    <style>
+        body { background: #121212; color: white; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .player-table { width: 100%; border-collapse: collapse; background: #1a1a1a; }
+        .player-table th, .player-table td { padding: 12px; text-align: left; border-bottom: 1px solid #333; }
+        .player-table th { background: #2a2a2a; color: orangered; }
+        .player-table tr:hover { background: #252525; }
+        .status-badge { padding: 4px 8px; font-size: 0.85em; font-weight: bold; }
+        .btn { display: inline-block; padding: 8px 16px; background: orangered; color: white; text-decoration: none; margin-right: 10px; }
+        .btn:hover { background: #ff6633; }
+        .btn-secondary { background: #444; }
+        .btn-secondary:hover { background: #555; }
+        .btn-danger { background: #dc3545; }
+        .btn-danger:hover { background: #c82333; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; }
+        .modal-content { background: #1a1a1a; padding: 20px; max-width: 500px; margin: 100px auto; border: 1px solid #444; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; color: #aaa; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 8px; background: #111; border: 1px solid #444; color: white; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>👥 Soupiska: ${team.name} (${selectedSeason})</h1>
+            <div>
+                <a href="/admin/transfers/manage?liga=${encodeURIComponent(team.liga)}" class="btn btn-secondary">← Zpět na přestupy</a>
+                <button class="btn" onclick="openAddModal()">+ Přidat hráče</button>
+            </div>
+        </div>
+
+        <table class="player-table">
+            <thead>
+                <tr>
+                    <th>Číslo</th>
+                    <th>Jméno</th>
+                    <th>Post</th>
+                    <th>Stav</th>
+                    <th>Detaily</th>
+                    <th>Akce</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${teamPlayers.length === 0 ? '<tr><td colspan="6" style="text-align: center; color: #888;">Žádní hráči v soupisce</td></tr>' : ''}
+                ${teamPlayers.map(player => `
+                    <tr>
+                        <td><strong>${player.number || '-'}</strong></td>
+                        <td>${player.name}</td>
+                        <td>${player.position || '-'}</td>
+                        <td style="text-align: center;"><span class="status-badge" style="background: ${statusColors[player.status] || '#888'}; color: white;">${statusLabels[player.status] || player.status}</span></td>
+                        <td style="color: #888; font-size: 0.9em;">${player.statusDetails || '-'}</td>
+                        <td>
+                            <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.85em;" onclick="openEditModal('${player._id}')">✏️</button>
+                            <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.85em;" onclick="openTransferModal('${player._id}', '${player.name}')">🔄 Přestup</button>
+                            <button class="btn btn-danger" style="padding: 4px 8px; font-size: 0.85em;" onclick="deletePlayer('${player._id}')">🗑️</button>
+                        </td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Modal pro přidání/editaci hráče -->
+    <div id="playerModal" class="modal">
+        <div class="modal-content">
+            <h2 id="modalTitle" style="color: orangered; margin-bottom: 15px;">Přidat hráče</h2>
+            <form id="playerForm">
+                <input type="hidden" id="playerId">
+                <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
+                <div class="form-group">
+                    <label>Jméno hráče *</label>
+                    <input type="text" name="name" required>
+                </div>
+                <div class="form-group">
+                    <label>Číslo dresu</label>
+                    <input type="number" name="number" min="0" max="99">
+                </div>
+                <div class="form-group">
+                    <label>Post</label>
+                    <select name="position">
+                        <option value="">-- Vyberte --</option>
+                        <option value="Útočník">Útočník</option>
+                        <option value="Obránce">Obránce</option>
+                        <option value="Brankář">Brankář</option>
+                        <option value="Centr">Centr</option>
+                        <option value="Křídlo">Křídlo</option>
+                        <option value="Jiné">Jiné</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Stav</label>
+                    <select name="status">
+                        <option value="active">🟢 Aktivní</option>
+                        <option value="injured">🟡 Zraněný</option>
+                        <option value="suspended">🔴 Suspendován</option>
+                        <option value="loan">🟠 Hostování</option>
+                        <option value="retired">⚫ Konec kariéry</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Detaily stavu (nepovinné)</label>
+                    <textarea name="statusDetails" rows="2" placeholder="např. zraněno koleno, do 3 týdnů"></textarea>
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button type="submit" class="btn">Uložit</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Zrušit</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal pro přestup hráče -->
+    <div id="transferModal" class="modal">
+        <div class="modal-content">
+            <h2 style="color: orangered; margin-bottom: 15px;">🔄 Přestup hráče</h2>
+            <form id="transferForm">
+                <input type="hidden" id="transferPlayerId">
+                <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
+                <div class="form-group">
+                    <label>Hráč</label>
+                    <input type="text" id="transferPlayerName" readonly style="background: #333;">
+                </div>
+                <div class="form-group">
+                    <label>Z týmu</label>
+                    <input type="text" value="${team.name}" readonly style="background: #333;">
+                </div>
+                <div class="form-group">
+                    <label>Typ akce *</label>
+                    <select name="transferType" id="transferType" onchange="toggleTransferOptions()">
+                        <option value="permanent">Trvalý přestup</option>
+                        <option value="loan">Hostování</option>
+                        <option value="retired">Konec kariéry</option>
+                        <option value="other">Jiný tým (mimo ligu)</option>
+                    </select>
+                </div>
+                <div class="form-group" id="toTeamGroup">
+                    <label>Do týmu *</label>
+                    <select name="toTeamId" id="toTeamId">
+                        <option value="">-- Vyberte cílový tým --</option>
+                        ${teams.filter(t => t.id !== teamId && t.liga === team.liga && t.season === selectedSeason).map(t =>
+                            `<option value="${t.id}">${t.name}</option>`
+                        ).join('')}
+                    </select>
+                </div>
+                <div class="form-group" id="otherTeamGroup" style="display: none;">
+                    <label>Název týmu *</label>
+                    <input type="text" name="otherTeamName" placeholder="Např. HC Kometa Brno, NHL tým, atd.">
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button type="submit" class="btn">Provést přestup</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeTransferModal()">Zrušit</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function toggleTransferOptions() {
+            const transferType = document.getElementById('transferType').value;
+            const toTeamGroup = document.getElementById('toTeamGroup');
+            const otherTeamGroup = document.getElementById('otherTeamGroup');
+            const toTeamId = document.getElementById('toTeamId');
+
+            if (transferType === 'other') {
+                toTeamGroup.style.display = 'none';
+                toTeamId.required = false;
+                otherTeamGroup.style.display = 'block';
+            } else if (transferType === 'retired') {
+                toTeamGroup.style.display = 'none';
+                toTeamId.required = false;
+                otherTeamGroup.style.display = 'none';
+            } else {
+                toTeamGroup.style.display = 'block';
+                toTeamId.required = true;
+                otherTeamGroup.style.display = 'none';
+            }
+        }
+
+        function openAddModal() {
+            document.getElementById('modalTitle').textContent = 'Přidat hráče';
+            document.getElementById('playerForm').reset();
+            document.getElementById('playerId').value = '';
+            document.getElementById('playerModal').style.display = 'block';
+        }
+
+        function openEditModal(playerId) {
+            document.getElementById('modalTitle').textContent = 'Upravit hráče';
+            document.getElementById('playerId').value = playerId;
+            // Načíst data hráče
+            fetch('/admin/api/player/' + playerId)
+                .then(res => res.json())
+                .then(data => {
+                    console.log('Načtená data hráče:', data);
+                    if (!data || data.error) {
+                        alert('Chyba: ' + (data.error || 'Neznámá chyba'));
+                        return;
+                    }
+                    document.querySelector('[name="name"]').value = data.name || '';
+                    document.querySelector('[name="number"]').value = data.number || '';
+                    document.querySelector('[name="position"]').value = data.position || '';
+                    document.querySelector('[name="status"]').value = data.status || 'active';
+                    document.querySelector('[name="statusDetails"]').value = data.statusDetails || '';
+                    document.getElementById('playerModal').style.display = 'block';
+                })
+                .catch(err => {
+                    console.error('Chyba při načítání hráče:', err);
+                    alert('Chyba při načítání dat hráče: ' + err.message);
+                });
+        }
+
+        function closeModal() {
+            document.getElementById('playerModal').style.display = 'none';
+        }
+
+        function openTransferModal(playerId, playerName) {
+            document.getElementById('transferPlayerId').value = playerId;
+            document.getElementById('transferPlayerName').value = playerName;
+            document.getElementById('transferModal').style.display = 'block';
+        }
+
+        function closeTransferModal() {
+            document.getElementById('transferModal').style.display = 'none';
+        }
+
+        function deletePlayer(playerId) {
+            if (confirm('Opravdu smazat tohoto hráče?')) {
+                fetch('/admin/players/' + playerId, { method: 'DELETE', headers: { 'Content-Type': 'application/json' } })
+                    .then(() => location.reload());
+            }
+        }
+
+        document.getElementById('playerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const playerId = document.getElementById('playerId').value;
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            data.teamId = ${teamId};
+            data.season = '${selectedSeason}';
+            data.liga = '${team.liga}';
+
+            const url = playerId ? '/admin/players/' + playerId : '/admin/players';
+            const method = playerId ? 'PUT' : 'POST';
+
+            try {
+                const res = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await res.json();
+
+                if (res.ok) {
+                    closeModal();
+                    location.reload();
+                } else {
+                    alert('Chyba při ukládání: ' + (result.error || 'Neznámá chyba'));
+                }
+            } catch (error) {
+                console.error('Chyba při ukládání:', error);
+                alert('Chyba při ukládání: ' + error.message);
+            }
+        });
+
+        document.getElementById('transferForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            data.playerId = document.getElementById('transferPlayerId').value;
+
+            try {
+                const res = await fetch('/admin/players/transfer', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await res.json();
+
+                if (res.ok) {
+                    closeTransferModal();
+                    alert('Přestup proveden a zapsán do přestupů!');
+                    location.reload();
+                } else {
+                    alert('Chyba při přestupu: ' + (result.error || 'Neznámá chyba'));
+                }
+            } catch (error) {
+                console.error('Chyba při přestupu:', error);
+                alert('Chyba při přestupu: ' + error.message);
+            }
+        });
+    </script>
+</body>
+</html>`;
+
+        res.send(html);
+    } catch (error) {
+        console.error('Chyba při načítání soupisky:', error);
+        res.status(500).send('Chyba: ' + error.message);
+    }
+});
+
+// POST - Přidat hráče
+router.post('/players', express.json(), requireAdmin, async (req, res) => {
+    try {
+        const { name, number, position, status, statusDetails, teamId, season, liga, _csrf } = req.body;
+
+        if (!_csrf || _csrf !== req.session.csrfToken) {
+            return res.status(403).json({ error: 'Neplatný CSRF token' });
+        }
+
+        if (!name || !teamId || !season || !liga) {
+            return res.status(400).json({ error: 'Chybí povinná pole' });
+        }
+
+        const newPlayer = {
+            name,
+            number: number ? parseInt(number) : null,
+            position: position || null,
+            status: status || 'active',
+            statusDetails: statusDetails || null,
+            teamId: parseInt(teamId),
+            season,
+            liga,
+            createdAt: new Date(),
+            updatedAt: new Date()
+        };
+
+        await Players.insertOne(newPlayer);
+        await logAdminAction(req.session.user, "HRÁČ_PŘIDAT", `Přidán hráč ${name} do týmu ${teamId}`);
+
+        res.json({ success: true, player: newPlayer });
+    } catch (error) {
+        console.error('Chyba při přidávání hráče:', error);
+        res.status(500).json({ error: 'Chyba serveru: ' + error.message });
+    }
+});
+
+// PUT - Upravit hráče
+router.put('/players/:id', express.json(), requireAdmin, async (req, res) => {
+    try {
+        const playerId = req.params.id;
+        const { name, number, position, status, statusDetails, _csrf } = req.body;
+
+        if (!_csrf || _csrf !== req.session.csrfToken) {
+            return res.status(403).json({ error: 'Neplatný CSRF token' });
+        }
+
+        const updateData = {
+            name,
+            number: number ? parseInt(number) : null,
+            position: position || null,
+            status: status || 'active',
+            statusDetails: statusDetails || null,
+            updatedAt: new Date()
+        };
+
+        let updated;
+        try {
+            updated = await Players.updateOne({ _id: playerId }, updateData);
+        } catch (e) {
+            // Fallback - najít hráče a aktualizovat jiným způsobem
+            const allPlayers = await Players.findAll();
+            const playerIndex = allPlayers.findIndex(p => String(p._id) === String(playerId));
+            if (playerIndex !== -1) {
+                const player = allPlayers[playerIndex];
+                Object.assign(player, updateData);
+                await Players.replaceAll(allPlayers);
+                updated = player;
+            }
+        }
+
+        // Pokud updateOne vrátil null, zkusíme fallback
+        if (!updated) {
+            const allPlayers = await Players.findAll();
+            const playerIndex = allPlayers.findIndex(p => String(p._id) === String(playerId));
+            if (playerIndex !== -1) {
+                const player = allPlayers[playerIndex];
+                Object.assign(player, updateData);
+                await Players.replaceAll(allPlayers);
+                updated = player;
+            }
+        }
+
+        if (!updated) {
+            return res.status(404).json({ error: 'Hráč nenalezen' });
+        }
+
+        await logAdminAction(req.session.user, "HRÁČ_UPRAVIT", `Upraven hráč ${name}`);
+
+        res.json({ success: true, player: updated });
+    } catch (error) {
+        console.error('Chyba při úpravě hráče:', error);
+        res.status(500).json({ error: 'Chyba serveru: ' + error.message });
+    }
+});
+
+// DELETE - Smazat hráče
+router.delete('/players/:id', requireAdmin, async (req, res) => {
+    try {
+        const playerId = req.params.id;
+        const deleted = await Players.deleteOne({ _id: playerId });
+
+        if (!deleted) {
+            return res.status(404).json({ error: 'Hráč nenalezen' });
+        }
+
+        await logAdminAction(req.session.user, "HRÁČ_SMAZAT", `Smazán hráč ${deleted.name}`);
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Chyba při mazání hráče:', error);
+        res.status(500).json({ error: 'Chyba serveru: ' + error.message });
+    }
+});
+
+// POST - Přestup hráče (s automatickým zápisem do přestupů)
+router.post('/players/transfer', express.json(), requireAdmin, async (req, res) => {
+    try {
+        const { playerId, toTeamId, transferType, otherTeamName, _csrf } = req.body;
+
+        if (!_csrf || _csrf !== req.session.csrfToken) {
+            return res.status(403).json({ error: 'Neplatný CSRF token' });
+        }
+
+        // Načíst hráče - zkusíme najít přes _id nebo jiný způsob
+        let player;
+        try {
+            player = await Players.findOne({ _id: playerId });
+        } catch (e) {
+            // Pokud _id nefunguje, zkusíme najít jiným způsobem
+        }
+
+        if (!player) {
+            // Zkusíme najít přes všechny hráče a porovnat
+            const allPlayers = await Players.findAll();
+            player = allPlayers.find(p => String(p._id) === String(playerId));
+        }
+
+        if (!player) {
+            return res.status(404).json({ error: 'Hráč nenalezen, playerId: ' + playerId });
+        }
+
+        const fromTeamId = player.teamId;
+        const fromTeam = (await Teams.findAll()).find(t => t.id === fromTeamId);
+
+        if (!fromTeam) {
+            return res.status(404).json({ error: 'Původní tým nenalezen' });
+        }
+
+        // Zpracování podle typu akce
+        if (transferType === 'retired') {
+            // Konec kariéry - změnit status a zapsat do přestupů
+            player.status = 'retired';
+            player.statusDetails = 'Konec kariéry';
+            player.updatedAt = new Date();
+
+            // Aktualizovat hráče
+            try {
+                await Players.updateOne({ _id: playerId }, player);
+            } catch (e) {
+                const allPlayers = await Players.findAll();
+                const playerIndex = allPlayers.findIndex(p => String(p._id) === String(playerId));
+                if (playerIndex !== -1) {
+                    allPlayers[playerIndex] = player;
+                    await Players.replaceAll(allPlayers);
+                }
+            }
+
+            // Zapsat do přestupů (pouze jako odchod)
+            let transfersData = await Transfers.findAll();
+            if (!transfersData || Object.keys(transfersData).length === 0) transfersData = {};
+
+            const season = player.season;
+            const liga = player.liga;
+
+            if (!transfersData[season]) transfersData[season] = {};
+            if (!transfersData[season][liga]) transfersData[season][liga] = {};
+
+            const fromTeamStr = String(fromTeamId);
+
+            if (!transfersData[season][liga][fromTeamStr]) {
+                transfersData[season][liga][fromTeamStr] = { specIn: [], specOut: [], confIn: [], confOut: [] };
+            }
+
+            // Přidat do confOut
+            if (!transfersData[season][liga][fromTeamStr].confOut.includes(player.name)) {
+                transfersData[season][liga][fromTeamStr].confOut.push(player.name);
+            }
+
+            await Transfers.replaceAll(transfersData);
+
+            await logAdminAction(req.session.user, "HRÁČ_KONEC_KARIÉRY", `Hráč ${player.name} ukončil kariéru`);
+            return res.json({ success: true, message: 'Hráč byl označen jako konec kariéry' });
+        }
+
+        if (transferType === 'other') {
+            // Jiný tým mimo ligu - zapsat do statusDetails
+            if (!otherTeamName || otherTeamName.trim() === '') {
+                return res.status(400).json({ error: 'Název týmu je povinný' });
+            }
+
+            player.status = 'active';
+            player.statusDetails = `Přestup do: ${otherTeamName.trim()}`;
+            player.updatedAt = new Date();
+
+            // Aktualizovat hráče
+            try {
+                await Players.updateOne({ _id: playerId }, player);
+            } catch (e) {
+                const allPlayers = await Players.findAll();
+                const playerIndex = allPlayers.findIndex(p => String(p._id) === String(playerId));
+                if (playerIndex !== -1) {
+                    allPlayers[playerIndex] = player;
+                    await Players.replaceAll(allPlayers);
+                }
+            }
+
+            // Zapsat do přestupů (pouze jako odchod)
+            let transfersData = await Transfers.findAll();
+            if (!transfersData || Object.keys(transfersData).length === 0) transfersData = {};
+
+            const season = player.season;
+            const liga = player.liga;
+
+            if (!transfersData[season]) transfersData[season] = {};
+            if (!transfersData[season][liga]) transfersData[season][liga] = {};
+
+            const fromTeamStr = String(fromTeamId);
+
+            if (!transfersData[season][liga][fromTeamStr]) {
+                transfersData[season][liga][fromTeamStr] = { specIn: [], specOut: [], confIn: [], confOut: [] };
+            }
+
+            // Přidat do confOut
+            if (!transfersData[season][liga][fromTeamStr].confOut.includes(player.name)) {
+                transfersData[season][liga][fromTeamStr].confOut.push(player.name);
+            }
+
+            await Transfers.replaceAll(transfersData);
+
+            await logAdminAction(req.session.user, "HRÁČ_PŘESTUP_JINÝ", `Hráč ${player.name} přestoupil do ${otherTeamName.trim()}`);
+            return res.json({ success: true, message: `Hráč přestoupil do ${otherTeamName.trim()}` });
+        }
+
+        // Standardní přestup/hostování
+        const toTeamIdNum = parseInt(toTeamId);
+        const toTeam = (await Teams.findAll()).find(t => t.id === toTeamIdNum);
+
+        if (!toTeam) {
+            return res.status(404).json({ error: 'Cílový tým nenalezen' });
+        }
+
+        // Aktualizovat hráče
+        player.teamId = toTeamIdNum;
+        player.status = transferType === 'loan' ? 'loan' : 'active';
+        player.statusDetails = transferType === 'loan' ? `Hostování z ${fromTeam.name}` : null;
+        player.updatedAt = new Date();
+
+        // Zkusíme aktualizovat přes _id, pokud to nefunguje, použijeme jiný způsob
+        try {
+            await Players.updateOne({ _id: playerId }, player);
+        } catch (e) {
+            // Fallback - najít hráče a aktualizovat přes replaceAll
+            const allPlayers = await Players.findAll();
+            const playerIndex = allPlayers.findIndex(p => String(p._id) === String(playerId));
+            if (playerIndex !== -1) {
+                allPlayers[playerIndex] = player;
+                await Players.replaceAll(allPlayers);
+            }
+        }
+
+        // Pokud updateOne vrátil null, zkusíme fallback
+        const allPlayersCheck = await Players.findAll();
+        const playerCheck = allPlayersCheck.find(p => String(p._id) === String(playerId));
+        if (playerCheck && playerCheck.teamId !== toTeamIdNum) {
+            const playerIndex = allPlayersCheck.findIndex(p => String(p._id) === String(playerId));
+            allPlayersCheck[playerIndex] = player;
+            await Players.replaceAll(allPlayersCheck);
+        }
+
+        // Zapsat do přestupů
+        let transfersData = await Transfers.findAll();
+        if (!transfersData || Object.keys(transfersData).length === 0) transfersData = {};
+
+        const season = player.season;
+        const liga = player.liga;
+
+        if (!transfersData[season]) transfersData[season] = {};
+        if (!transfersData[season][liga]) transfersData[season][liga] = {};
+
+        const fromTeamStr = String(fromTeamId);
+        const toTeamStr = String(toTeamIdNum);
+
+        if (!transfersData[season][liga][fromTeamStr]) {
+            transfersData[season][liga][fromTeamStr] = { specIn: [], specOut: [], confIn: [], confOut: [] };
+        }
+        if (!transfersData[season][liga][toTeamStr]) {
+            transfersData[season][liga][toTeamStr] = { specIn: [], specOut: [], confIn: [], confOut: [] };
+        }
+
+        // Přidat do přestupů - s kontrolou duplicity
+        const playerName = transferType === 'loan' ? `${player.name} (loan)` : player.name;
+
+        // Kontrola duplicity v confOut
+        if (!transfersData[season][liga][fromTeamStr].confOut.includes(playerName)) {
+            transfersData[season][liga][fromTeamStr].confOut.push(playerName);
+        }
+
+        // Kontrola duplicity v confIn
+        if (!transfersData[season][liga][toTeamStr].confIn.includes(playerName)) {
+            transfersData[season][liga][toTeamStr].confIn.push(playerName);
+        }
+
+        await Transfers.replaceAll(transfersData);
+
+        await logAdminAction(req.session.user, "HRÁČ_PŘESTUP", `Přestup hráče ${player.name} z ${fromTeam.name} do ${toTeam.name}`);
+
+        res.json({ success: true, message: 'Přestup proveden' });
+    } catch (error) {
+        console.error('Chyba při přestupu hráče:', error);
+        res.status(500).json({ error: 'Chyba serveru: ' + error.message });
+    }
+});
+
+// API endpoint pro získání hráče (pro AJAX)
+router.get('/api/player/:id', requireAdmin, async (req, res) => {
+    try {
+        const playerId = req.params.id;
+        let player;
+
+        // Zkusíme najít přes všechny hráče - tohle by mělo fungovat spolehlivě
+        const allPlayers = await Players.findAll();
+        let playersArray = allPlayers;
+        if (!Array.isArray(allPlayers)) {
+            // Možná to vrací objekt s klíčem 'players'
+            if (allPlayers.players && Array.isArray(allPlayers.players)) {
+                playersArray = allPlayers.players;
+            }
+        }
+
+        player = playersArray.find(p => String(p._id) === String(playerId));
+
+        if (!player) {
+            return res.status(404).json({ error: 'Hráč nenalezen' });
+        }
+
+        res.json(player);
+    } catch (error) {
+        console.error('Chyba při načítání hráče:', error);
+        res.status(500).json({ error: 'Chyba serveru' });
     }
 });
 
