@@ -6,7 +6,7 @@ const {
     requireLogin, prepareDashboardData, getGroupDisplayLabel, generateLeftPanel,
     getLeagueStatusData, getTableTipsData, generateTimeWidget, getAllowedLeagues, createMatchImage
 } = require("../utils/fileUtils");
-const { Users, Matches, Leagues, TableTips, ChosenSeason, Players} = require('../utils/mongoDataAccess');
+const { Users, Matches, Leagues, TableTips, ChosenSeason, Players, Settings} = require('../utils/mongoDataAccess');
 // Jednoduchá XSS ochrana - sanitizace HTML tagů
 function sanitizeInput(input) {
     if (typeof input !== 'string') return input;
@@ -2211,6 +2211,9 @@ router.get("/prestupy", requireLogin, async (req, res) => {
         username, selectedLiga, uniqueLeagues, teamsInSelectedLiga,
         activeTransferLeagues, currentTransfers,
     } = data;
+    
+    // Načtení nastavení
+    const settingsData = await Settings.findAll();
 // --- HTML START ---
     let html = `
 <!DOCTYPE html>
@@ -2451,19 +2454,24 @@ html += await generateLeftPanel(data);
     html += `<section class="matches-container" style="flex: 1; padding: 10px;">`;
         // KONTROLA: Má tato liga zapnuté přestupy?
         if (!activeTransferLeagues.includes(selectedLiga)) {
-            html += `
-            <div style="display: flex; justify-content: center; align-items: center; height: 50vh; flex-direction: column;">
-                <h1 style="color: gray; text-align: center;">V této lize/turnaji nejsou přestupy k dispozici.</h1>
+            // Pokud nejsou přestupy, zobrazit všechny soupisky
+            html += `<div style="text-align: center; margin-bottom: 10px;">
+                <a href="/history/prestupy" style="color: #00d4ff; text-decoration: none; font-size: 0.9em;">📜 Historie přestupů</a>
             </div>
-        </section></main></body>`; // Ukončení HTML
+            <h2 style="margin-top: 0; text-align: center; border-bottom: 2px solid orangered; padding-bottom: 10px;">Soupisky - ${selectedLiga}</h2>
+            <div id="allRostersView" style="margin-top: 15px;" data-team-ids='${JSON.stringify(teamsInSelectedLiga.map(t => t.id))}' data-teams='${JSON.stringify(teamsInSelectedLiga)}'></div>`;
         } else {
             // --- SEKCE PŘESTUPŮ ---
             html += `<div style="text-align: center; margin-bottom: 10px;">
                 <a href="/history/prestupy" style="color: #00d4ff; text-decoration: none; font-size: 0.9em;">📜 Historie přestupů</a>
             </div>
-            <h2 style="margin-top: 0; text-align: center; border-bottom: 2px solid orangered; padding-bottom: 10px;">Přestupy a Spekulace - ${selectedLiga}</h2>
+            <div style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 15px;">
+                <button onclick="toggleView()" id="toggleViewBtn" style="background: #ff4500; color: white; border: none; padding: 8px 16px; cursor: pointer; font-size: 0.9em; font-weight: bold;">🔄 Zobrazit všechny soupisky</button>
+            </div>
+            <h2 id="viewTitle" style="margin-top: 0; text-align: center; border-bottom: 2px solid orangered; padding-bottom: 10px;">Přestupy a Spekulace - ${selectedLiga}</h2>
             
-            <div style="display: grid; gap: 15px; margin-top: 15px;">`;
+            <div id="transfersContainer">
+            <div id="individualTeamsView" style="display: grid; gap: 15px; margin-top: 15px;">`;
 
             // --- Uvnitř router.get("/prestupy", ...) v sekci else (kde jsou povolené přestupy) ---
 
@@ -2568,12 +2576,47 @@ html += await generateLeftPanel(data);
     </div>`;
             });
 
-            html += `</div></section>`;
+            html += `</div>`;
+            html += `<div id="allRostersView" style="display: none; margin-top: 15px;" data-team-ids='${JSON.stringify(teamsInSelectedLiga.map(t => t.id))}' data-teams='${JSON.stringify(teamsInSelectedLiga)}'></div>`;
+            html += `</div>`;
         }
 
         // JavaScript pro načítání soupisek
         html += `
 <script>
+let currentView = 'transfers'; // 'roster' nebo 'transfers'
+let selectedLiga = '${selectedLiga}'; // Vybraná liga pro čtení defaultView
+
+async function toggleView() {
+    const allRostersView = document.getElementById('allRostersView');
+    const individualTeamsView = document.getElementById('individualTeamsView');
+    const toggleViewBtn = document.getElementById('toggleViewBtn');
+    const viewTitle = document.getElementById('viewTitle');
+    
+    console.log('toggleView voláno, currentView:', currentView);
+    console.log('allRostersView:', allRostersView, 'display:', allRostersView?.style.display);
+    console.log('individualTeamsView:', individualTeamsView, 'display:', individualTeamsView?.style.display);
+    
+    if (currentView === 'transfers') {
+        // Přepnout na soupisky
+        currentView = 'roster';
+        individualTeamsView.style.display = 'none';
+        allRostersView.style.display = 'block';
+        toggleViewBtn.textContent = '🔄 Zobrazit přestupy';
+        viewTitle.textContent = 'Soupisky - ${selectedLiga}';
+        console.log('Přepínám na soupisky, volám showAllRosters()');
+        await showAllRosters();
+    } else {
+        // Přepnout na přestupy
+        currentView = 'transfers';
+        allRostersView.style.display = 'none';
+        individualTeamsView.style.display = 'grid';
+        toggleViewBtn.textContent = '🔄 Zobrazit všechny soupisky';
+        viewTitle.textContent = 'Přestupy a Spekulace - ${selectedLiga}';
+        console.log('Přepínám na přestupy');
+    }
+}
+
 async function toggleRoster(teamId) {
     const rosterDiv = document.getElementById('roster-' + teamId);
     const transfersDiv = document.getElementById('transfers-' + teamId);
@@ -2661,6 +2704,150 @@ async function toggleRoster(teamId) {
         transfersDiv.style.display = 'flex';
     }
 }
+
+async function showAllRosters() {
+    const allRostersView = document.getElementById('allRostersView');
+    
+    if (allRostersView) {
+        allRostersView.innerHTML = '<div style="text-align: center; color: #888; font-size: 0.9em;">Načítám všechny soupisky...</div>';
+    }
+    
+    try {
+        // Čtení dat z HTML atributů
+        const teamIds = JSON.parse(allRostersView?.dataset.teamIds || '[]');
+        const teams = JSON.parse(allRostersView?.dataset.teams || '[]');
+        
+        console.log('Načítám soupisky pro týmy:', teamIds, teams);
+        
+        let allPlayersHtml = '<div style="display: grid; gap: 15px; margin-top: 15px;">';
+        
+        for (const teamId of teamIds) {
+            const res = await fetch('/api/players/' + teamId);
+            const data = await res.json();
+            const teamData = teams.find(t => t.id === teamId);
+            
+            console.log('Tým:', teamData?.name, 'Data:', data);
+            
+            // Generovat stejnou strukturu jako v přestupech
+            allPlayersHtml += '<div style="position: relative; background-color: #000; border: 2px solid #ff4500; overflow: hidden; display: flex; flex-direction: column; min-height: 250px; box-shadow: 0 4px 15px rgba(0,0,0,0.8);">';
+            allPlayersHtml += '<div style="position: relative; z-index: 1; background: linear-gradient(to bottom, #222, #111); border-bottom: 3px solid #ff4500; display: flex; align-items: center; justify-content: space-between; padding: 10px;">';
+            allPlayersHtml += '<div style="display: flex; align-items: center;">';
+            allPlayersHtml += '<img src="/logoteamu/' + teamData?.logo + '" alt="' + teamData?.name + '" style="height: 45px; width: 45px; object-fit: contain; margin-right: 12px; filter: drop-shadow(0 0 5px rgba(255,255,255,0.2));">';
+            allPlayersHtml += '<strong style="color: white; font-size: 1.3em; text-transform: uppercase; letter-spacing: 1px;">' + teamData?.name + '</strong>';
+            allPlayersHtml += '</div></div>';
+            allPlayersHtml += '<div id="roster-' + teamId + '" style="background: #1a1a1a; padding: 15px;">';
+            
+            if (data.players && data.players.length > 0) {
+                // Rozdělení hráčů podle pozice
+                const positions = {
+                    'Brankář': [],
+                    'Obránce': [],
+                    'Útočník': [],
+                    'Centr': [],
+                    'Křídlo': [],
+                    'Jiné': []
+                };
+                
+                data.players.forEach(p => {
+                    const pos = p.position || 'Jiné';
+                    if (positions[pos]) {
+                        positions[pos].push(p);
+                    } else {
+                        positions['Jiné'].push(p);
+                    }
+                });
+
+                // Seřadit hráče v každé kategorii podle čísla dresu
+                Object.keys(positions).forEach(key => {
+                    positions[key].sort((a, b) => (a.number || 999) - (b.number || 999));
+                });
+
+                Object.entries(positions).forEach(([pos, players]) => {
+                    if (players.length > 0) {
+                        allPlayersHtml += '<div style="margin-bottom: 25px;">';
+                        allPlayersHtml += '<h3 style="color: #00d4ff; font-size: 1.2em; margin: 0 0 12px 0; border-bottom: 2px solid #00d4ff; padding-bottom: 8px; display: flex; align-items: center; gap: 10px;">';
+                        allPlayersHtml += '<span style="background: linear-gradient(135deg, #00d4ff, #0099cc); color: #000; padding: 4px 12px; font-size: 0.9em; font-weight: bold;">' + players.length + '</span>';
+                        allPlayersHtml += pos + '</h3>';
+                        allPlayersHtml += '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px;">';
+                        players.forEach(p => {
+                            allPlayersHtml += '<div style="background: linear-gradient(135deg, ' + p.statusColor + '22 0%, #1a1a1a 100%); padding: 15px; border-left: 4px solid ' + p.statusColor + '; box-shadow: 0 2px 8px rgba(0,0,0,0.3); transition: all 0.3s ease; cursor: default; position: relative; overflow: hidden;">';
+                            allPlayersHtml += '<div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-10deg); width: 80%; height: 400%; background-image: url(' + JSON.stringify(data.logoUrl) + '); background-size: contain; background-repeat: no-repeat; background-position: center; opacity: 0.30; filter: grayscale(50%); pointer-events: none; z-index: 1;"></div>';
+                            allPlayersHtml += '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; position: relative; z-index: 2;">';
+                            allPlayersHtml += '<div style="position: relative; width: 64px; height: 64px; display: inline-flex; justify-content: center; align-items: center;">';
+                            allPlayersHtml += '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;">';
+                            allPlayersHtml += '<path d="M 32 12 C 40 8, 60 8, 68 12 L 86 16 A 8 8 0 0 1 92 24 L 92 65 L 78 65 L 78 78 L 78 92 L 22 92 L 22 78 L 22 65 L 8 65 L 8 24 A 8 8 0 0 1 14 16 Z" fill="url(#jerseyGradient-' + (p.number || '0') + ')" stroke="' + p.statusColor + '" stroke-width="3" stroke-linejoin="round"/>';
+                            allPlayersHtml += '<path d="M 32 12 C 35 24, 65 24, 68 12" fill="transparent" stroke="' + p.statusColor + '" stroke-width="3"/>';
+                            allPlayersHtml += '<path d="M 42 21 L 50 28 L 58 21" fill="transparent" stroke="' + p.statusColor + '" stroke-width="3"/>';
+                            allPlayersHtml += '<defs><linearGradient id="jerseyGradient-' + (p.number || '0') + '" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#333;stop-opacity:1"/><stop offset="100%" style="stop-color:#222;stop-opacity:1"/></linearGradient></defs>';
+                            allPlayersHtml += '</svg>';
+                            allPlayersHtml += '<span style="position: relative; z-index: 2; margin-top: 5px; font-size: 1.3rem; font-weight: bold; font-family: sans-serif; color: #fff; letter-spacing: 0; user-select: none;">' + (p.number || '-') + '</span>';
+                            allPlayersHtml += '</div>';
+                            allPlayersHtml += '<span style="background: ' + p.statusColor + '; color: #000; padding: 4px 10px; font-size: 0.8em; font-weight: bold; display: flex; align-items: center; gap: 4px;">';
+                            allPlayersHtml += '<span style="font-size: 1.1em;">' + p.statusIcon + '</span>';
+                            allPlayersHtml += '<span>' + p.statusLabel + '</span>';
+                            allPlayersHtml += '</span>';
+                            allPlayersHtml += '</div>';
+                            allPlayersHtml += '<div style="color: #fff; font-weight: bold; font-size: 1.1em; margin-bottom: 5px; position: relative; z-index: 2;">' + p.name + '</div>';
+                            if (p.statusDetails) {
+                                allPlayersHtml += '<div style="color: #888; font-size: 0.8em; margin-top: 8px; padding-top: 8px; border-top: 1px solid #333; position: relative; z-index: 2;">' + p.statusDetails + '</div>';
+                            }
+                            allPlayersHtml += '</div>';
+                        });
+                        allPlayersHtml += '</div></div>';
+                    }
+                });
+            } else {
+                allPlayersHtml += '<div style="text-align: center; color: #888; font-size: 0.9em;">Žádní hráči v soupisce</div>';
+            }
+            
+            allPlayersHtml += '</div></div>';
+        }
+        
+        allPlayersHtml += '</div>';
+        
+        console.log('Výsledné HTML:', allPlayersHtml);
+        if (allRostersView) {
+            console.log('Nastavuji innerHTML pro allRostersView');
+            allRostersView.innerHTML = allPlayersHtml;
+            console.log('innerHTML nastaveno, display:', allRostersView.style.display);
+        } else {
+            console.log('allRostersView neexistuje!');
+        }
+    } catch (error) {
+        console.error('Chyba při načítání soupisek:', error);
+        if (allRostersView) {
+            allRostersView.innerHTML = '<div style="text-align: center; color: #ff4444; font-size: 0.9em;">Chyba při načítání soupisek: ' + error.message + '</div>';
+        }
+    }
+}
+
+// Automatické načítání podle nastavení a stavu přestupů
+document.addEventListener('DOMContentLoaded', async () => {
+    const allRostersView = document.getElementById('allRostersView');
+    const individualTeamsView = document.getElementById('individualTeamsView');
+    const toggleViewBtn = document.getElementById('toggleViewBtn');
+    const viewTitle = document.getElementById('viewTitle');
+    
+    // Pokud nejsou přestupy zapnuté, zobrazit soupisky
+    if (allRostersView && !individualTeamsView) {
+        await showAllRosters();
+    } 
+    // Pokud jsou přestupy zapnuté, respektovat nastavení defaultView
+    else if (allRostersView && individualTeamsView && toggleViewBtn) {
+        const settingsData = ${JSON.stringify(settingsData)};
+        const defaultView = settingsData.defaultView && settingsData.defaultView[selectedLiga] ? settingsData.defaultView[selectedLiga] : 'transfers';
+        
+        if (defaultView === 'roster') {
+            // Nastavíme currentView na transfers, aby toggleView fungoval správně
+            currentView = 'transfers';
+            // Přepneme na soupisky
+            await toggleView();
+        } else {
+            // Výchozí jsou přestupy, nic neměníme
+            currentView = 'transfers';
+        }
+    }
+});
 </script>
 </main></body>`;
     res.send(html)

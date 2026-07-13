@@ -5484,6 +5484,39 @@ router.post('/leagues/transfers', express.urlencoded({ extended: true }), requir
     res.redirect('/admin');
 });
 
+router.post('/settings/default-view', requireAdmin, async (req, res) => {
+    try {
+        const { defaultView, liga } = req.body;
+        
+        if (!defaultView || !['transfers', 'roster'].includes(defaultView)) {
+            return res.status(400).json({ success: false, message: 'Neplatná hodnota defaultView' });
+        }
+        
+        if (!liga) {
+            return res.status(400).json({ success: false, message: 'Chybí liga' });
+        }
+        
+        // Načtení existujících nastavení
+        const settingsData = await Settings.findAll();
+        
+        // Pokud defaultView není objekt, inicializuj ho
+        if (!settingsData.defaultView || typeof settingsData.defaultView !== 'object') {
+            settingsData.defaultView = {};
+        }
+        
+        // Uložení nastavení pro konkrétní ligu
+        settingsData.defaultView[liga] = defaultView;
+        
+        // Uložení nastavení
+        await Settings.replaceAll(settingsData);
+        
+        res.json({ success: true, message: 'Nastavení uloženo' });
+    } catch (error) {
+        console.error('Chyba při ukládání nastavení:', error);
+        res.status(500).json({ success: false, message: 'Chyba při ukládání nastavení' });
+    }
+});
+
 router.get('/images/manage', requireAdmin, async (req, res) => {
     const imagesDir = path.join(__dirname, '..', 'data', 'images');
     const teams = await Teams.findAll();
@@ -6795,8 +6828,14 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
     const selectedSeason = req.session.adminSeason || chosenSeason;
     const allowedLeagues = await AllowedLeagues.findAll();
     const leaguesForSeason = allowedLeagues[selectedSeason] || [];
+    const transferLeagues = await TransferLeagues.findAll();
 
     const selectedLiga = req.query.liga || leaguesForSeason[0];
+    const hasTransfersEnabled = transferLeagues.includes(selectedLiga);
+    
+    // Načtení nastavení výchozího zobrazení
+    const settingsData = await Settings.findAll();
+    const defaultView = settingsData.defaultView || 'transfers'; // 'transfers' nebo 'roster'
 
     let transfersData = await Transfers.findAll();
     if (!transfersData || Object.keys(transfersData).length === 0) transfersData = {};
@@ -6852,6 +6891,18 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
                     ${leaguesForSeason.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected' : ''}>${l}</option>`).join('')}
                 </select>
             </form>
+
+            <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 2px solid #00d4ff; padding: 20px; margin-bottom: 20px;">
+                <h3 style="margin: 0 0 15px 0; color: #00d4ff;">⚙️ Nastavení zobrazení pro uživatele (${selectedLiga})</h3>
+                <label style="display: flex; align-items: center; gap: 10px; color: white; cursor: pointer;">
+                    <input type="radio" name="defaultView" value="transfers" ${defaultView && defaultView[selectedLiga] === 'transfers' ? 'checked' : ''} onchange="saveDefaultView(this.value, '${selectedLiga}')">
+                    <span>Přestupy jako výchozí zobrazení</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 10px; color: white; cursor: pointer; margin-top: 10px;">
+                    <input type="radio" name="defaultView" value="roster" ${defaultView && defaultView[selectedLiga] === 'roster' ? 'checked' : ''} onchange="saveDefaultView(this.value, '${selectedLiga}')">
+                    <span>Soupiska jako výchozí zobrazení</span>
+                </label>
+            </div>
 
             <form method="POST" action="/admin/transfers/save?_csrf=${req.session.csrfToken || ''}" enctype="multipart/form-data">
                 <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
@@ -6978,6 +7029,31 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
                 </div>
 
                 <script>
+                    // Uložení výchozího zobrazení pro user.js
+                    async function saveDefaultView(value, liga) {
+                        try {
+                            const res = await fetch('/admin/settings/default-view', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-CSRF-Token': '${req.session.csrfToken || ''}'
+                                },
+                                body: JSON.stringify({ defaultView: value, liga: liga })
+                            });
+                            const data = await res.json();
+                            if (data.success) {
+                                // Zobrazit potvrzení
+                                const notification = document.createElement('div');
+                                notification.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #28a745; color: white; padding: 15px 20px; border-radius: 5px; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.3);';
+                                notification.textContent = '✅ Nastavení uloženo';
+                                document.body.appendChild(notification);
+                                setTimeout(() => notification.remove(), 2000);
+                            }
+                        } catch (error) {
+                            console.error('Chyba při ukládání nastavení:', error);
+                        }
+                    }
+
                     // Otevře popup pro výběr obrázku
                     function openImageSelector(hiddenInputId, previewId) {
                         const popup = window.open(
