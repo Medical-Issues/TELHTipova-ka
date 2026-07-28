@@ -1496,6 +1496,11 @@ router.get('/history/prestupy', requireLogin, async (req, res) => {
             icon = '📄 ';
             name = name.replace('(K)', '');
         }
+        else if (name.includes('(loan)')) {
+            style = 'color: #9b59b6; font-weight: bold; text-shadow: 0 0 8px rgba(155, 89, 182, 0.4);';
+            icon = '🔄 ';
+            name = name.replace('(loan)', '');
+        }
 
         const colorMatch = name.match(/#([0-9a-fA-F]{3,6})/);
         if (colorMatch) {
@@ -2517,6 +2522,11 @@ html += await generateLeftPanel(data);
                     style = 'color: #ffaa00; font-weight: bold;';
                     icon = '📄 ';
                     name = name.replace('(K)', '');
+                }
+                else if (name.includes('(loan)')) { // Hostování
+                    style = 'color: #9b59b6; font-weight: bold; text-shadow: 0 0 8px rgba(155, 89, 182, 0.4);';
+                    icon = '🔄 ';
+                    name = name.replace('(loan)', '');
                 }
 
                 // B. Detekce vlastní barvy přes hashtag (např. #00ff00)

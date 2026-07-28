@@ -90,11 +90,14 @@ class MongoDataAccess {
     async findOne(query) {
         try {
             const collection = await this.getCollection();
-            
+
             if (typeof query === 'string' || typeof query === 'number') {
                 return await collection.findOne({ id: query });
             } else if (query.username) {
                 return await collection.findOne({ username: query.username });
+            } else if (query._id) {
+                // Podpora pro MongoDB ObjectId
+                return await collection.findOne({ _id: query._id });
             } else {
                 return await collection.findOne(query);
             }
@@ -143,6 +146,18 @@ class MongoDataAccess {
     async deleteOne(query) {
         try {
             const collection = await this.getCollection();
+
+            // Pokud je query string, předpokládáme že je to _id
+            if (typeof query === 'string') {
+                const { ObjectId } = require('mongodb');
+                const deleted = await collection.findOne({ _id: new ObjectId(query) });
+                if (deleted) {
+                    await collection.deleteOne({ _id: new ObjectId(query) });
+                    return deleted;
+                }
+                return null;
+            }
+
             const deleted = await collection.findOne(query);
             if (deleted) {
                 await collection.deleteOne(query);

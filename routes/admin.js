@@ -6885,10 +6885,13 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
                         <span class="code-tag">(?)</span> = <span style="color: #00d4ff; font-style: italic;">❓ Spekulace</span>
                     </div>
                     <div class="legend-item">
-                        <span class="code-tag">(K)</span> = <span style="color: orange; font-weight: bold;"></span>
+                        <span class="code-tag">(K)</span> = <span style="color: orange; font-weight: bold;">📄 Konec smlouvy</span>
                     </div>
                     <div class="legend-item">
-                        <span class="code-tag">(-)</span> = <span style="color: #888; text-decoration: line-through; opacity: 0.5; font-style: italic;">🚫 Konec smlouvy</span>
+                        <span class="code-tag">(loan)</span> = <span style="color: #9b59b6; font-weight: bold;">🔄 Hostování</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="code-tag">(-)</span> = <span style="color: #888; text-decoration: line-through; opacity: 0.5; font-style: italic;">🚫 Zrušeno</span>
                     </div>
                      <div class="legend-item">
                         <span class="code-tag">#00ff00</span> = <span style="color: #00ff00;">Vlastní HEX barva</span>
@@ -9382,6 +9385,7 @@ router.get('/players/:teamId', requireAdmin, async (req, res) => {
                         <td>
                             <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.85em;" onclick="openEditModal('${player._id}')">✏️</button>
                             <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.85em;" onclick="openTransferModal('${player._id}', '${player.name}')">🔄 Přestup</button>
+                            ${player.status === 'loan' ? `<button class="btn btn-warning" style="padding: 4px 8px; font-size: 0.85em;" onclick="endLoan('${player._id}')">🏠 Ukončit hostování</button>` : ''}
                             <button class="btn btn-danger" style="padding: 4px 8px; font-size: 0.85em;" onclick="deletePlayer('${player._id}')">🗑️</button>
                         </td>
                     </tr>
@@ -9467,8 +9471,10 @@ router.get('/players/:teamId', requireAdmin, async (req, res) => {
                     <label>Do týmu *</label>
                     <select name="toTeamId" id="toTeamId">
                         <option value="">-- Vyberte cílový tým --</option>
-                        ${teams.filter(t => t.id !== teamId && t.liga === team.liga && t.season === selectedSeason).map(t =>
-                            `<option value="${t.id}">${t.name}</option>`
+                        ${teams.filter(t => t.id !== teamId && t.season === selectedSeason)
+                            .sort((a, b) => a.liga.localeCompare(b.liga) || a.name.localeCompare(b.name))
+                            .map(t =>
+                            `<option value="${t.id}">${t.name} (${t.liga})</option>`
                         ).join('')}
                     </select>
                 </div>
@@ -9554,14 +9560,52 @@ router.get('/players/:teamId', requireAdmin, async (req, res) => {
 
         function deletePlayer(playerId) {
             if (confirm('Opravdu smazat tohoto hráče?')) {
-                fetch('/admin/players/' + playerId, { 
-                    method: 'DELETE', 
-                    headers: { 
+                fetch('/admin/players/' + playerId, {
+                    method: 'DELETE',
+                    headers: {
                         'Content-Type': 'application/json',
-                        'X-CSRF-Token': '${req.session.csrfToken || ''}'
+                        'x-csrf-token': '${req.session.csrfToken || ''}'
                     }
                 })
-                    .then(() => location.reload());
+                    .then(res => {
+                        if (!res.ok) {
+                            return res.json().then(err => {
+                                alert('Chyba při mazání: ' + (err.error || 'Neznámá chyba'));
+                                console.error('Delete error:', err);
+                            });
+                        }
+                        location.reload();
+                    })
+                    .catch(err => {
+                        alert('Chyba při mazání: ' + err.message);
+                        console.error('Delete error:', err);
+                    });
+            }
+        }
+
+        function endLoan(playerId) {
+            if (confirm('Opravdu ukončit hostování tohoto hráče?')) {
+                fetch('/admin/players/end-loan/' + playerId, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-csrf-token': '${req.session.csrfToken || ''}'
+                    },
+                    body: JSON.stringify({ _csrf: '${req.session.csrfToken || ''}' })
+                })
+                    .then(res => {
+                        if (!res.ok) {
+                            return res.json().then(err => {
+                                alert('Chyba při ukončování hostování: ' + (err.error || 'Neznámá chyba'));
+                                console.error('End loan error:', err);
+                            });
+                        }
+                        location.reload();
+                    })
+                    .catch(err => {
+                        alert('Chyba při ukončování hostování: ' + err.message);
+                        console.error('End loan error:', err);
+                    });
             }
         }
 
@@ -9607,7 +9651,10 @@ router.get('/players/:teamId', requireAdmin, async (req, res) => {
             try {
                 const res = await fetch('/admin/players/transfer', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-csrf-token': '${req.session.csrfToken || ''}'
+                    },
                     body: JSON.stringify(data)
                 });
 
@@ -9682,6 +9729,12 @@ router.put('/players/:id', express.json(), requireAdmin, async (req, res) => {
             return res.status(403).json({ error: 'Neplatný CSRF token' });
         }
 
+        // Nejprve najít hráče, abychom získali linkedPlayerId
+        const existingPlayer = await Players.findOne(playerId);
+        if (!existingPlayer) {
+            return res.status(404).json({ error: 'Hráč nenalezen' });
+        }
+
         const updateData = {
             name,
             number: number ? parseInt(number) : null,
@@ -9693,7 +9746,7 @@ router.put('/players/:id', express.json(), requireAdmin, async (req, res) => {
 
         let updated;
         try {
-            updated = await Players.updateOne({ _id: playerId }, updateData);
+            updated = await Players.updateOne({ _id: new ObjectId(playerId) }, updateData);
         } catch (e) {
             // Fallback - najít hráče a aktualizovat jiným způsobem
             const allPlayers = await Players.findAll();
@@ -9703,6 +9756,21 @@ router.put('/players/:id', express.json(), requireAdmin, async (req, res) => {
                 Object.assign(player, updateData);
                 await Players.replaceAll(allPlayers);
                 updated = player;
+            }
+        }
+
+        // Pokud má propojeného hráče, aktualizovat ho (jen jméno, číslo, pozice)
+        if (existingPlayer.linkedPlayerId) {
+            const linkedUpdateData = {
+                name,
+                number: number ? parseInt(number) : null,
+                position: position || null,
+                updatedAt: new Date()
+            };
+            try {
+                await Players.updateOne({ _id: new ObjectId(existingPlayer.linkedPlayerId) }, linkedUpdateData);
+            } catch (e) {
+                console.error('Chyba při aktualizaci propojeného hráče:', e);
             }
         }
 
@@ -9740,7 +9808,24 @@ router.delete('/players/:id', requireAdmin, async (req, res) => {
         }
 
         const playerId = req.params.id;
-        const deleted = await Players.deleteOne({ _id: playerId });
+
+        // Nejprve najít hráče, abychom získali linkedPlayerId
+        const player = await Players.findOne(playerId);
+        if (!player) {
+            return res.status(404).json({ error: 'Hráč nenalezen' });
+        }
+
+        // Pokud má propojeného hráče, smazat ho
+        if (player.linkedPlayerId) {
+            try {
+                await Players.deleteOne(player.linkedPlayerId);
+            } catch (e) {
+                console.error('Chyba při mazání propojeného hráče:', e);
+            }
+        }
+
+        // Smazat původního hráče
+        const deleted = await Players.deleteOne(playerId);
 
         if (!deleted) {
             return res.status(404).json({ error: 'Hráč nenalezen' });
@@ -9764,16 +9849,18 @@ router.post('/players/transfer', express.json(), requireAdmin, async (req, res) 
             return res.status(403).json({ error: 'Neplatný CSRF token' });
         }
 
-        // Načíst hráče - zkusíme najít přes _id nebo jiný způsob
+        // Načíst hráče - zkusíme najít přes _id s ObjectId konverzí
+        const { ObjectId } = require('mongodb');
         let player;
+
         try {
-            player = await Players.findOne({ _id: playerId });
+            player = await Players.findOne({ _id: new ObjectId(playerId) });
         } catch (e) {
-            // Pokud _id nefunguje, zkusíme najít jiným způsobem
+            console.error('Chyba při hledání hráče:', e);
         }
 
         if (!player) {
-            // Zkusíme najít přes všechny hráče a porovnat
+            // Fallback - zkusíme najít přes všechny hráče a porovnat string _id
             const allPlayers = await Players.findAll();
             player = allPlayers.find(p => String(p._id) === String(playerId));
         }
@@ -9798,7 +9885,7 @@ router.post('/players/transfer', express.json(), requireAdmin, async (req, res) 
 
             // Aktualizovat hráče
             try {
-                await Players.updateOne({ _id: playerId }, player);
+                await Players.updateOne({ _id: new ObjectId(playerId) }, player);
             } catch (e) {
                 const allPlayers = await Players.findAll();
                 const playerIndex = allPlayers.findIndex(p => String(p._id) === String(playerId));
@@ -9836,25 +9923,15 @@ router.post('/players/transfer', express.json(), requireAdmin, async (req, res) 
         }
 
         if (transferType === 'other') {
-            // Jiný tým mimo ligu - zapsat do statusDetails
+            // Jiný tým mimo ligu - smazat hráče a zapsat do přestupů
             if (!otherTeamName || otherTeamName.trim() === '') {
                 return res.status(400).json({ error: 'Název týmu je povinný' });
             }
 
-            player.status = 'active';
-            player.statusDetails = `Přestup do: ${otherTeamName.trim()}`;
-            player.updatedAt = new Date();
-
-            // Aktualizovat hráče
-            try {
-                await Players.updateOne({ _id: playerId }, player);
-            } catch (e) {
-                const allPlayers = await Players.findAll();
-                const playerIndex = allPlayers.findIndex(p => String(p._id) === String(playerId));
-                if (playerIndex !== -1) {
-                    allPlayers[playerIndex] = player;
-                    await Players.replaceAll(allPlayers);
-                }
+            // Smazat hráče ze soupisky
+            const deleted = await Players.deleteOne(playerId);
+            if (!deleted) {
+                return res.status(404).json({ error: 'Hráč nenalezen' });
             }
 
             // Zapsat do přestupů (pouze jako odchod)
@@ -9892,32 +9969,55 @@ router.post('/players/transfer', express.json(), requireAdmin, async (req, res) 
             return res.status(404).json({ error: 'Cílový tým nenalezen' });
         }
 
-        // Aktualizovat hráče
-        player.teamId = toTeamIdNum;
-        player.status = transferType === 'loan' ? 'loan' : 'active';
-        player.statusDetails = transferType === 'loan' ? `Hostování z ${fromTeam.name}` : null;
-        player.updatedAt = new Date();
+        // Rozlišení mezi trvalým přestupem a hostováním
+        if (transferType === 'loan') {
+            // Hostování - hráč v původním týmu má stav hostování, vytvoříme kopii pro cílový tým
+            player.status = 'loan';
+            player.statusDetails = `Hostuje do ${toTeam.name}`;
+            player.updatedAt = new Date();
 
-        // Zkusíme aktualizovat přes _id, pokud to nefunguje, použijeme jiný způsob
-        try {
-            await Players.updateOne({ _id: playerId }, player);
-        } catch (e) {
-            // Fallback - najít hráče a aktualizovat přes replaceAll
-            const allPlayers = await Players.findAll();
-            const playerIndex = allPlayers.findIndex(p => String(p._id) === String(playerId));
-            if (playerIndex !== -1) {
-                allPlayers[playerIndex] = player;
-                await Players.replaceAll(allPlayers);
+            try {
+                await Players.updateOne({ _id: new ObjectId(playerId) }, player);
+            } catch (e) {
+                const allPlayers = await Players.findAll();
+                const playerIndex = allPlayers.findIndex(p => String(p._id) === String(playerId));
+                if (playerIndex !== -1) {
+                    allPlayers[playerIndex] = player;
+                    await Players.replaceAll(allPlayers);
+                }
             }
-        }
 
-        // Pokud updateOne vrátil null, zkusíme fallback
-        const allPlayersCheck = await Players.findAll();
-        const playerCheck = allPlayersCheck.find(p => String(p._id) === String(playerId));
-        if (playerCheck && playerCheck.teamId !== toTeamIdNum) {
-            const playerIndex = allPlayersCheck.findIndex(p => String(p._id) === String(playerId));
-            allPlayersCheck[playerIndex] = player;
-            await Players.replaceAll(allPlayersCheck);
+            // Vytvořit kopii hráče pro cílový tým
+            const loanPlayer = {
+                ...player,
+                _id: undefined, // Nové _id se vygeneruje automaticky
+                teamId: toTeamIdNum,
+                status: 'active',
+                statusDetails: `Hostování z ${fromTeam.name}`,
+                linkedPlayerId: playerId, // Propojení s původním hráčem
+                updatedAt: new Date()
+            };
+
+            const insertedLoanPlayer = await Players.insertOne(loanPlayer);
+
+            // Aktualizovat původního hráče s propojením na kopii
+            player.linkedPlayerId = String(insertedLoanPlayer._id);
+            try {
+                await Players.updateOne({ _id: new ObjectId(playerId) }, player);
+            } catch (e) {
+                const allPlayers = await Players.findAll();
+                const playerIndex = allPlayers.findIndex(p => String(p._id) === String(playerId));
+                if (playerIndex !== -1) {
+                    allPlayers[playerIndex] = player;
+                    await Players.replaceAll(allPlayers);
+                }
+            }
+        } else {
+            // Trvalý přestup - smazat hráče ze soupisky
+            const deleted = await Players.deleteOne(playerId);
+            if (!deleted) {
+                return res.status(404).json({ error: 'Hráč nenalezen' });
+            }
         }
 
         // Zapsat do přestupů
@@ -9940,7 +10040,7 @@ router.post('/players/transfer', express.json(), requireAdmin, async (req, res) 
             transfersData[season][liga][toTeamStr] = { specIn: [], specOut: [], confIn: [], confOut: [] };
         }
 
-        // Přidat do přestupů - s kontrolou duplicity
+        // Všechny přestupy používají confIn/confOut
         const playerName = transferType === 'loan' ? `${player.name} (loan)` : player.name;
 
         // Kontrola duplicity v confOut
@@ -9960,6 +10060,60 @@ router.post('/players/transfer', express.json(), requireAdmin, async (req, res) 
         res.json({ success: true, message: 'Přestup proveden' });
     } catch (error) {
         console.error('Chyba při přestupu hráče:', error);
+        res.status(500).json({ error: 'Chyba serveru: ' + error.message });
+    }
+});
+
+// POST - Ukončit hostování
+router.post('/players/end-loan/:id', express.json(), requireAdmin, async (req, res) => {
+    try {
+        const playerId = req.params.id;
+        const { _csrf } = req.body;
+
+        if (!_csrf || _csrf !== req.session.csrfToken) {
+            return res.status(403).json({ error: 'Neplatný CSRF token' });
+        }
+
+        // Najít hráče
+        const player = await Players.findOne(playerId);
+        if (!player) {
+            return res.status(404).json({ error: 'Hráč nenalezen' });
+        }
+
+        // Pokud nemá propojeného hráče, není to hostování
+        if (!player.linkedPlayerId) {
+            return res.status(400).json({ error: 'Hráč není na hostování' });
+        }
+
+        // Smazat kopii hráče v cílovém týmu
+        try {
+            await Players.deleteOne(player.linkedPlayerId);
+        } catch (e) {
+            console.error('Chyba při mazání kopie hráče:', e);
+        }
+
+        // Vrátit původnímu hráči status aktivní
+        player.status = 'active';
+        player.statusDetails = null;
+        player.linkedPlayerId = null;
+        player.updatedAt = new Date();
+
+        try {
+            await Players.updateOne({ _id: new ObjectId(playerId) }, player);
+        } catch (e) {
+            const allPlayers = await Players.findAll();
+            const playerIndex = allPlayers.findIndex(p => String(p._id) === String(playerId));
+            if (playerIndex !== -1) {
+                allPlayers[playerIndex] = player;
+                await Players.replaceAll(allPlayers);
+            }
+        }
+
+        await logAdminAction(req.session.user, "HRÁČ_KONEC_HOSTOVÁNÍ", `Ukončeno hostování hráče ${player.name}`);
+
+        res.json({ success: true, message: 'Hostování ukončeno' });
+    } catch (error) {
+        console.error('Chyba při ukončování hostování:', error);
         res.status(500).json({ error: 'Chyba serveru: ' + error.message });
     }
 });
