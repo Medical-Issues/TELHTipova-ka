@@ -27,8 +27,13 @@ const {
     checkNewFileDuplicate,
     syncImageHashesToDatabase 
 } = require('../utils/imageUtils');
-router.post('/backup', async (req, res) => {
+router.post('/backup', requireAdmin, async (req, res) => {
     try {
+        const csrfToken = req.headers['x-csrf-token'] || req.body._csrf;
+        if (!csrfToken || csrfToken !== req.session.csrfToken) {
+            return res.status(403).json({ error: 'Neplatný CSRF token' });
+        }
+
         await backupJsonFilesToGitHub();
         res.json({ success: true, message: '✅ Záloha provedena' });
         await logAdminAction(req.session.user, "ZÁLOHA_DAT", `Spuštěna manuální záloha na GitHub`);
@@ -555,7 +560,14 @@ router.get('/', requireAdmin, async (req, res) => {
 </body>
 <script>
 document.getElementById('backupBtn').addEventListener('click', async () => {
-  const res = await fetch('/admin/backup', { method: 'POST' });
+  const csrfToken = document.querySelector('input[name="_csrf"]')?.value || '';
+  const res = await fetch('/admin/backup', { 
+    method: 'POST',
+    headers: { 
+      'Content-Type': 'application/json',
+      'X-CSRF-Token': csrfToken
+    }
+  });
   const data = await res.json();
   alert(data.message);
 });
@@ -9542,7 +9554,13 @@ router.get('/players/:teamId', requireAdmin, async (req, res) => {
 
         function deletePlayer(playerId) {
             if (confirm('Opravdu smazat tohoto hráče?')) {
-                fetch('/admin/players/' + playerId, { method: 'DELETE', headers: { 'Content-Type': 'application/json' } })
+                fetch('/admin/players/' + playerId, { 
+                    method: 'DELETE', 
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': '${req.session.csrfToken || ''}'
+                    }
+                })
                     .then(() => location.reload());
             }
         }
@@ -9716,6 +9734,11 @@ router.put('/players/:id', express.json(), requireAdmin, async (req, res) => {
 // DELETE - Smazat hráče
 router.delete('/players/:id', requireAdmin, async (req, res) => {
     try {
+        const csrfToken = req.headers['x-csrf-token'] || req.body._csrf;
+        if (!csrfToken || csrfToken !== req.session.csrfToken) {
+            return res.status(403).json({ error: 'Neplatný CSRF token' });
+        }
+
         const playerId = req.params.id;
         const deleted = await Players.deleteOne({ _id: playerId });
 

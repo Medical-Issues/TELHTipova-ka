@@ -547,6 +547,11 @@ router.post("/table-tip", requireLogin, express.json(), async (req, res) => {
     const username = req.session.user;
     if (username === "Admin") return res.status(403).send("Admin netipuje.");
 
+    const csrfToken = req.headers['x-csrf-token'] || req.body._csrf;
+    if (!csrfToken || csrfToken !== req.session.csrfToken) {
+        return res.status(403).json({ error: 'Neplatný CSRF token' });
+    }
+
     const {liga, season, teamOrder} = req.body; // teamOrder je objekt, např. {"1": [1,2,3]}
     if (!liga || !season || !teamOrder) return res.status(400).send("Chybí data.");
 
@@ -630,6 +635,12 @@ router.post("/tip", requireLogin, async (req, res) => {
     if (username === "Admin") {
         return res.status(403).send("Administrátor se nemůže účastnit tipování.");
     }
+
+    const csrfToken = req.headers['x-csrf-token'] || req.body._csrf;
+    if (!csrfToken || csrfToken !== req.session.csrfToken) {
+        return res.status(403).json({ error: 'Neplatný CSRF token' });
+    }
+
     const matchId = parseInt(req.body.matchId);
     const winner = req.body.winner;
     const loserWins = parseInt(req.body.loserWins);
@@ -2860,6 +2871,11 @@ router.post("/image-exporter/generate", requireLogin, express.json({ limit: '50m
     const { createTransferImage, createWinnerImage, createStandingsImage, createStatisticsImage, createPlayoffBracketImage } = require("../utils/fileUtils");
     const { createVersusImageForExport } = require("../routes/notificationService.js");
     const { getChosenSeason } = require('../utils/fileUtils');
+
+    const csrfToken = req.headers['x-csrf-token'] || req.body._csrf;
+    if (!csrfToken || csrfToken !== req.session.csrfToken) {
+        return res.status(403).json({ error: 'Neplatný CSRF token' });
+    }
 
     try {
         const { type, homeTeamId, awayTeamId, fromTeamId, toTeamId, winnerTeamId, scoreHome, scoreAway, title, winnerTitle, playerName, playerPhoto, watermark, isPlayoff, seriesHomeWins, seriesAwayWins, season: exportSeason } = req.body;

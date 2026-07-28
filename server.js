@@ -342,11 +342,15 @@ app.get('/warm', async (req, res) => {
 
 // Admin endpoint pro manuální restore z GitHubu
 app.post('/admin/restore-from-github', (req, res) => {
-    // Zde by měla být auth kontrola, ale pro jednoduchost ji vynecháváme
+    const csrfToken = req.headers['x-csrf-token'] || req.body._csrf;
+    if (!csrfToken || csrfToken !== req.session.csrfToken) {
+        return res.status(403).json({ error: 'Neplatný CSRF token' });
+    }
+
     if (!process.env.GITHUB_TOKEN) {
         return res.status(400).json({ success: false, message: 'GITHUB_TOKEN není nastaven' });
     }
-    
+
     restoreFromGitHub().then(success => {
         if (success) {
             res.json({ success: true, message: 'Restore obrázků z GitHubu úspěšný' });
@@ -360,10 +364,15 @@ app.post('/admin/restore-from-github', (req, res) => {
 
 // Admin endpoint pro kompletní restore (JSON + obrázky) - pro nouzové případy
 app.post('/admin/full-restore-from-github', (req, res) => {
+    const csrfToken = req.headers['x-csrf-token'] || req.body._csrf;
+    if (!csrfToken || csrfToken !== req.session.csrfToken) {
+        return res.status(403).json({ error: 'Neplatný CSRF token' });
+    }
+
     if (!process.env.GITHUB_TOKEN) {
         return res.status(400).json({ success: false, message: 'GITHUB_TOKEN není nastaven' });
     }
-    
+
     fullRestoreFromGitHub().then(success => {
         if (success) {
             res.json({ success: true, message: 'Kompletní restore (JSON + obrázky) z GitHubu úspěšný' });
@@ -406,6 +415,11 @@ app.post('/api/subscribe', async (req, res) => {
     // 1. Kontrola přihlášení
     if (!req.session.user) {
         return res.status(401).json({ error: "Pro zapnutí notifikací musíš být přihlášen." });
+    }
+
+    const csrfToken = req.headers['x-csrf-token'] || req.body._csrf;
+    if (!csrfToken || csrfToken !== req.session.csrfToken) {
+        return res.status(403).json({ error: 'Neplatný CSRF token' });
     }
 
     const subscription = req.body;
@@ -463,6 +477,11 @@ app.post('/api/check-subscription', async (req, res) => {
         return res.json({ belongsToMe: false });
     }
 
+    const csrfToken = req.headers['x-csrf-token'] || req.body._csrf;
+    if (!csrfToken || csrfToken !== req.session.csrfToken) {
+        return res.status(403).json({ error: 'Neplatný CSRF token' });
+    }
+
     try {
         const users = await Users.findAll();
         const user = users.find(u => u.username === username);
@@ -486,6 +505,11 @@ app.post('/api/check-subscription-legacy', async (req, res) => {
     const users = await Users.findAll();
     const user = users.find(u => u.username === req.session.user);
 
+    const csrfToken = req.headers['x-csrf-token'] || req.body._csrf;
+    if (!csrfToken || csrfToken !== req.session.csrfToken) {
+        return res.status(403).json({ error: 'Neplatný CSRF token' });
+    }
+
     const belongsToMe = user?.subscriptions?.some(sub => sub.endpoint === endpoint) || false;
     res.json({ belongsToMe });
 });
@@ -493,6 +517,12 @@ app.post('/api/check-subscription-legacy', async (req, res) => {
 // Odhlášení z notifikací
 app.post('/api/unsubscribe', async (req, res) => {
     const { endpoint } = req.body;
+
+    const csrfToken = req.headers['x-csrf-token'] || req.body._csrf;
+    if (!csrfToken || csrfToken !== req.session.csrfToken) {
+        return res.status(403).json({ error: 'Neplatný CSRF token' });
+    }
+
     let users = await Users.findAll();
 
     const userIndex = users.findIndex(u => u.username === req.session.user);
