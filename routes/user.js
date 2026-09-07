@@ -2888,11 +2888,10 @@ router.post("/image-exporter/generate", requireLogin, express.json({ limit: '50m
     }
 
     try {
-        const { type, homeTeamId, awayTeamId, fromTeamId, toTeamId, winnerTeamId, scoreHome, scoreAway, title, winnerTitle, playerName, playerPhoto, watermark, isPlayoff, seriesHomeWins, seriesAwayWins, season: exportSeason, customBgColor, customTextColor, customAccentColor, customWatermarkColor, customBgImage, customWatermarkText, customHomeLogo, customAwayLogo, customFromTeamName, customFromLeague, customToTeamName, customToLeague, customHomeTeamName, customHomeLeague, customAwayTeamName, customAwayLeague, customHomeLogoBase64, customAwayLogoBase64, customFromLogoBase64, customToLogoBase64 } = req.body;
+        const { type, homeTeamId, awayTeamId, fromTeamId, toTeamId, winnerTeamId, scoreHome, scoreAway, title, winnerTitle, playerName, playerPhoto, watermark, isPlayoff, seriesHomeWins, seriesAwayWins, season: customBgColor, customTextColor, customAccentColor, customWatermarkColor, customBgImage, customWatermarkText, customHomeLogo, customAwayLogo, customFromTeamName, customFromLeague, customToTeamName, customToLeague, customHomeTeamName, customHomeLeague, customAwayTeamName, customAwayLeague, customHomeLogoBase64, customAwayLogoBase64, customFromLogoBase64, customToLogoBase64 } = req.body;
 
         const { Teams } = require('../utils/mongoDataAccess');
-        const currentSeason = await getChosenSeason();
-        const selectedSeason = exportSeason || currentSeason;
+        await getChosenSeason();
         const allTeams = await Teams.findAll();
         // EXPORTER: Načítáme VŠECHNY aktivní týmy (nejen podle sezóny) - exportér je odemčený
         const seasonTeams = allTeams.filter(t => t.active);
@@ -3427,8 +3426,7 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById("customBgBase64").value = settings.bgImage || '';
         document.querySelector('input[name="customWatermarkText"]').value = settings.watermarkText || '';
         // Automaticky zaškrtnout checkbox pokud existují uložená nastavení
-        const useCustom = settings.useCustom !== undefined ? settings.useCustom : true;
-        document.getElementById("use-custom-settings").checked = useCustom;
+        document.getElementById("use-custom-settings").checked = settings.useCustom !== undefined ? settings.useCustom : true;
     }
     
     // Načíst custom obrázky

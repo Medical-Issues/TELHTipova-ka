@@ -378,7 +378,6 @@ async function createVersusImageForExport(homeTeam, awayTeam, customSettings = {
     // Custom nastavení barev
     const bgColor = customSettings.bgColor || '#1a1a1a';
     const accentColor = customSettings.accentColor || '#ff4500';
-    const textColor = customSettings.textColor || '#ffffff';
     const customHomeLogo = customSettings.customHomeLogo || null;
     const customAwayLogo = customSettings.customAwayLogo || null;
 
