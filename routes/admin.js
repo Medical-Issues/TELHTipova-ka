@@ -10153,7 +10153,7 @@ router.get('/api/player/:id', requireAdmin, async (req, res) => {
 // ==========================================
 router.get('/audit-log', requireAdmin, async (req, res) => {
     try {
-        const AuditLog = require('../models/AuditLog');
+        require('../models/AuditLog');
         const { AuditLogs } = require('../utils/mongoDataAccess');
 
         // Filtry z query parametrů
