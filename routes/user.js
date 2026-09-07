@@ -2888,15 +2888,26 @@ router.post("/image-exporter/generate", requireLogin, express.json({ limit: '50m
     }
 
     try {
-        const { type, homeTeamId, awayTeamId, fromTeamId, toTeamId, winnerTeamId, scoreHome, scoreAway, title, winnerTitle, playerName, playerPhoto, watermark, isPlayoff, seriesHomeWins, seriesAwayWins, season: exportSeason } = req.body;
+        const { type, homeTeamId, awayTeamId, fromTeamId, toTeamId, winnerTeamId, scoreHome, scoreAway, title, winnerTitle, playerName, playerPhoto, watermark, isPlayoff, seriesHomeWins, seriesAwayWins, season: exportSeason, customBgColor, customTextColor, customAccentColor, customWatermarkColor, customBgImage, customWatermarkText, customHomeLogo, customAwayLogo, customFromTeamName, customFromLeague, customToTeamName, customToLeague, customHomeTeamName, customHomeLeague, customAwayTeamName, customAwayLeague, customHomeLogoBase64, customAwayLogoBase64, customFromLogoBase64, customToLogoBase64 } = req.body;
 
         const { Teams } = require('../utils/mongoDataAccess');
         const currentSeason = await getChosenSeason();
-        // NOVÉ: Použij exportovanou sezónu pokud je specifikována, jinak aktuální
         const selectedSeason = exportSeason || currentSeason;
         const allTeams = await Teams.findAll();
-        // OPRAVA: Filtrovat týmy podle zvolené sezóny (ne pouze aktuální)
-        const seasonTeams = allTeams.filter(t => t.active && t.season === selectedSeason);
+        // EXPORTER: Načítáme VŠECHNY aktivní týmy (nejen podle sezóny) - exportér je odemčený
+        const seasonTeams = allTeams.filter(t => t.active);
+
+        // Custom nastavení pro všechny obrázky
+        const customSettings = {
+            bgColor: customBgColor || '#1a1a1a',
+            textColor: customTextColor || '#ffffff',
+            accentColor: customAccentColor || '#ff4500',
+            watermarkColor: customWatermarkColor || '#888888',
+            bgImage: customBgImage || null,
+            watermarkText: customWatermarkText || null,
+            customHomeLogo: customHomeLogo || null,
+            customAwayLogo: customAwayLogo || null
+        };
 
         const outDir = path.join(__dirname, '../public/images/exports');
         if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
@@ -2907,12 +2918,35 @@ router.post("/image-exporter/generate", requireLogin, express.json({ limit: '50m
 
         switch (type) {
             case 'match': {
-                const homeTeam = seasonTeams.find(t => t.id === parseInt(homeTeamId));
-                const awayTeam = seasonTeams.find(t => t.id === parseInt(awayTeamId));
+                let homeTeam, awayTeam;
+
+                // Použít vlastní týmy pokud jsou zadány
+                if (homeTeamId === 'custom' && customHomeTeamName) {
+                    homeTeam = { name: customHomeTeamName, liga: customHomeLeague || 'Custom', isCustom: true };
+                } else {
+                    homeTeam = seasonTeams.find(t => t.id === parseInt(homeTeamId));
+                }
+
+                if (awayTeamId === 'custom' && customAwayTeamName) {
+                    awayTeam = { name: customAwayTeamName, liga: customAwayLeague || 'Custom', isCustom: true };
+                } else {
+                    awayTeam = seasonTeams.find(t => t.id === parseInt(awayTeamId));
+                }
+
                 if (!homeTeam || !awayTeam) return res.status(400).json({ error: 'Týmy nenalezeny' });
 
-                buffer = await createVersusImageForExport(homeTeam, awayTeam);
-                filename = `match-${homeTeam.id}-vs-${awayTeam.id}-${timestamp}.png`;
+                // Použít base64 loga z nahrání přímo u custom týmu, pokud jsou k dispozici
+                if (customHomeLogoBase64) {
+                    customSettings.customHomeLogo = customHomeLogoBase64;
+                }
+                if (customAwayLogoBase64) {
+                    customSettings.customAwayLogo = customAwayLogoBase64;
+                }
+
+                buffer = await createVersusImageForExport(homeTeam, awayTeam, customSettings);
+                const homeId = homeTeam.isCustom ? 'custom' : homeTeam.id;
+                const awayId = awayTeam.isCustom ? 'custom' : awayTeam.id;
+                filename = `match-${homeId}-vs-${awayId}-${timestamp}.png`;
                 break;
             }
             case 'result': {
@@ -2924,13 +2958,26 @@ router.post("/image-exporter/generate", requireLogin, express.json({ limit: '50m
                     ? { homeWins: parseInt(seriesHomeWins), awayWins: parseInt(seriesAwayWins) }
                     : null;
 
-                buffer = await createMatchImage(homeTeam, awayTeam, parseInt(scoreHome), parseInt(scoreAway), title || null, watermark !== 'false', seriesData);
+                buffer = await createMatchImage(homeTeam, awayTeam, parseInt(scoreHome), parseInt(scoreAway), title || null, watermark !== 'false', seriesData, customSettings);
                 filename = `result-${homeTeam.id}-${scoreHome}-${awayTeam.id}-${scoreAway}-${timestamp}.png`;
                 break;
             }
             case 'transfer': {
-                const fromTeam = seasonTeams.find(t => t.id === parseInt(fromTeamId));
-                const toTeam = seasonTeams.find(t => t.id === parseInt(toTeamId));
+                let fromTeam, toTeam;
+
+                // Použít vlastní týmy pokud jsou zadány
+                if (fromTeamId === 'custom' && customFromTeamName) {
+                    fromTeam = { name: customFromTeamName, liga: customFromLeague || 'Custom', isCustom: true };
+                } else {
+                    fromTeam = seasonTeams.find(t => t.id === parseInt(fromTeamId));
+                }
+
+                if (toTeamId === 'custom' && customToTeamName) {
+                    toTeam = { name: customToTeamName, liga: customToLeague || 'Custom', isCustom: true };
+                } else {
+                    toTeam = seasonTeams.find(t => t.id === parseInt(toTeamId));
+                }
+
                 if (!fromTeam || !toTeam) return res.status(400).json({ error: 'Týmy nenalezeny' });
 
                 let playerPhotoPath = null;
@@ -2942,13 +2989,15 @@ router.post("/image-exporter/generate", requireLogin, express.json({ limit: '50m
                     fs.writeFileSync(playerPhotoPath, Buffer.from(base64Data, 'base64'));
                 }
 
-                buffer = await createTransferImage(fromTeam, toTeam, playerName || null, watermark !== 'false', playerPhotoPath);
+                buffer = await createTransferImage(fromTeam, toTeam, playerName || null, watermark !== 'false', playerPhotoPath, customFromLogoBase64 || null, customToLogoBase64 || null, customSettings);
 
                 if (playerPhotoPath && fs.existsSync(playerPhotoPath)) {
                     try { fs.unlinkSync(playerPhotoPath); } catch (e) {}
                 }
                 const playerSuffix = playerName ? `-${playerName.replace(/\s+/g, '-')}` : '';
-                filename = `transfer-${fromTeam.id}-to-${toTeam.id}${playerSuffix}-${timestamp}.png`;
+                const fromId = fromTeam.isCustom ? 'custom' : fromTeam.id;
+                const toId = toTeam.isCustom ? 'custom' : toTeam.id;
+                filename = `transfer-${fromId}-to-${toId}${playerSuffix}-${timestamp}.png`;
                 break;
             }
             case 'winner': {
@@ -2961,7 +3010,7 @@ router.post("/image-exporter/generate", requireLogin, express.json({ limit: '50m
                     accentColor: winnerColor || '#ffd700',
                     showTrophy: showTrophy === 'true' || showTrophy === true
                 };
-                buffer = await createWinnerImage(winnerTeam, titleText, watermark !== 'false', winnerOptions);
+                buffer = await createWinnerImage(winnerTeam, titleText, watermark !== 'false', winnerOptions, customSettings);
                 filename = `winner-${winnerTeam.id}-${timestamp}.png`;
                 break;
             }
@@ -3088,7 +3137,7 @@ router.post("/image-exporter/generate", requireLogin, express.json({ limit: '50m
                         selectedLiga,
                         title: standingsTitle || `Playoff - ${selectedLiga}`,
                         standings: playoffStandings
-                    }, watermark !== 'false');
+                    }, watermark !== 'false', customSettings);
                     filename = `playoff-bracket-${selectedLiga}-${timestamp}.png`;
                 } else {
                     // ZÁKLADNÍ ČÁST - použijeme stejné výpočty jako left panel
@@ -3190,7 +3239,7 @@ router.post("/image-exporter/generate", requireLogin, express.json({ limit: '50m
                         clinchMode: mode,
                         multiGroup: sortedGroups.length > 1
                     };
-                    buffer = await createStandingsImage(standingsData, title, watermark !== 'false', options);
+                    buffer = await createStandingsImage(standingsData, title, watermark !== 'false', options, customSettings);
                     filename = `standings-${selectedLiga}-${timestamp}.png`;
                 }
                 break;
@@ -3225,7 +3274,7 @@ router.post("/image-exporter/generate", requireLogin, express.json({ limit: '50m
                 });
 
                 const title = statisticsTitle || `Statistiky tipujících - ${selectedLiga}`;
-                buffer = await createStatisticsImage(usersStats, title, watermark !== 'false');
+                buffer = await createStatisticsImage(usersStats, title, watermark !== 'false', customSettings);
                 filename = `statistics-${selectedLiga}-${timestamp}.png`;
                 break;
             }
@@ -3255,15 +3304,19 @@ router.get("/image-exporter", requireLogin, async (req, res) => {
     const matches = await getMatches();
     const data = await prepareDashboardData(req, false, true);
     const { username, selectedSeason } = data;
-    const teams = (await loadTeams()).filter(t => t.active && t.season === selectedSeason); // OPRAVA: Filtrování podle chosenSeason
+    // EXPORTER: Načítáme VŠECHNY aktivní týmy ze VŠECH lig a sezón (odemčeno od ligy/sezóny)
+    const teams = (await loadTeams()).filter(t => t.active);
     const allowedLeagues = await getAllowedLeagues(selectedSeason);
     const allSeasonData = await getLeaguesData();
     const leagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues) ? allSeasonData[selectedSeason].leagues : [];
     const leaguesFromTeams = [...new Set(teams.map(t => t.liga))];
-    const leaguesFromMatches = [...new Set(matches.filter(m => m.season === selectedSeason).map(m => m.liga))]; // OPRAVA: Filtrování zápasů podle sezóny
+    const leaguesFromMatches = [...new Set(matches.map(m => m.liga))];
     const leaguesFromLeagues = [...new Set(leagues.map(l => l.name))];
     // OPRAVA: Prioritizovat pořadí z definice lig - nejprve definice, pak doplnit z týmů a zápasů
     const uniqueLeagues = [...new Set([...leaguesFromLeagues, ...leaguesFromTeams, ...leaguesFromMatches])];
+    
+    // Získání všech sezón z týmů pro dropdown v exportéru
+    const seasonsFromTeams = [...new Set(teams.map(t => t.season).filter(Boolean))].sort();
     
     // Zjistíme jest je vybraná liga veřejná
     const selectedLiga = req.query.liga && uniqueLeagues.includes(req.query.liga)
@@ -3272,11 +3325,17 @@ router.get("/image-exporter", requireLogin, async (req, res) => {
     
     const isPublicLeague = allowedLeagues.includes(selectedLiga);
     
-    const teamsList = teams || [];
-    const leagueTeams = teamsList.filter(t =>
-        t.liga === selectedLiga ||
-        t.liga.toLowerCase() === selectedLiga.toLowerCase()
-    );
+    // EXPORTER: Filtrování týmů podle vybrané ligy/sezóny v dropdownu (default: všechny)
+    const exporterLiga = req.query.exporterLiga || "all";
+    const exporterSeason = req.query.exporterSeason || "all";
+    
+    let teamsList = teams || [];
+    if (exporterLiga !== "all") {
+        teamsList = teamsList.filter(t => t.liga === exporterLiga || t.liga.toLowerCase() === exporterLiga.toLowerCase());
+    }
+    if (exporterSeason !== "all") {
+        teamsList = teamsList.filter(t => t.season === exporterSeason);
+    }
     
     // CSS pro disabled tlačítka
     const disabledStyle = "background-color: #555; color: #888; cursor: not-allowed; pointer-events: none;";
@@ -3299,29 +3358,232 @@ function showImageType(type) {
     document.getElementById('preview-container').classList.remove('active');
 }
 
-function handlePlayerPhoto(input) { 
-    const file = input.files[0]; 
-    if (!file) return; 
-    if (file.size > 2 * 1024 * 1024) {  
-        alert("Fotka je příliš velká. Maximum je 2MB."); 
-        input.value = ""; 
-        return; 
-    } 
-    const reader = new FileReader(); 
-    reader.onload = function(e) { 
-        document.getElementById("playerPhotoBase64").value = e.target.result; 
+function handlePlayerPhoto(input) {
+    const file = input.files[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+        alert("Fotka je příliš velká. Maximum je 2MB.");
+        input.value = "";
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        document.getElementById("playerPhotoBase64").value = e.target.result;
     };
     reader.readAsDataURL(file);
+}
+
+function handleCustomBg(input) {
+    const file = input.files[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+        alert("Obrázek je příliš velký. Maximum je 5MB.");
+        input.value = "";
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        document.getElementById("customBgBase64").value = e.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
+function saveCustomSettings() {
+    const settings = {
+        bgColor: document.querySelector('input[name="customBgColor"]').value,
+        textColor: document.querySelector('input[name="customTextColor"]').value,
+        accentColor: document.querySelector('input[name="customAccentColor"]').value,
+        watermarkColor: document.querySelector('input[name="customWatermarkColor"]').value,
+        bgImage: document.getElementById("customBgBase64").value,
+        watermarkText: document.querySelector('input[name="customWatermarkText"]').value,
+        useCustom: document.getElementById("use-custom-settings").checked
+    };
+    localStorage.setItem('imageExporterSettings', JSON.stringify(settings));
+    alert('Custom nastavení uloženo!');
+}
+
+function resetCustomSettings() {
+    localStorage.removeItem('imageExporterSettings');
+    document.querySelector('input[name="customBgColor"]').value = '#1a1a1a';
+    document.querySelector('input[name="customTextColor"]').value = '#ffffff';
+    document.querySelector('input[name="customAccentColor"]').value = '#ff4500';
+    document.querySelector('input[name="customWatermarkColor"]').value = '#888888';
+    document.getElementById("customBgBase64").value = '';
+    document.querySelector('input[name="customWatermarkText"]').value = '';
+    document.getElementById("use-custom-settings").checked = false;
+    document.getElementById("customBgInput").value = '';
+    alert('Nastavení resetováno na výchozí hodnoty.');
+}
+
+// Načíst uložená nastavení při načtení stránky
+document.addEventListener('DOMContentLoaded', function() {
+    const savedSettings = localStorage.getItem('imageExporterSettings');
+    if (savedSettings) {
+        const settings = JSON.parse(savedSettings);
+        document.querySelector('input[name="customBgColor"]').value = settings.bgColor || '#1a1a1a';
+        document.querySelector('input[name="customTextColor"]').value = settings.textColor || '#ffffff';
+        document.querySelector('input[name="customAccentColor"]').value = settings.accentColor || '#ff4500';
+        document.querySelector('input[name="customWatermarkColor"]').value = settings.watermarkColor || '#888888';
+        document.getElementById("customBgBase64").value = settings.bgImage || '';
+        document.querySelector('input[name="customWatermarkText"]').value = settings.watermarkText || '';
+        // Automaticky zaškrtnout checkbox pokud existují uložená nastavení
+        const useCustom = settings.useCustom !== undefined ? settings.useCustom : true;
+        document.getElementById("use-custom-settings").checked = useCustom;
+    }
+    
+    // Načíst custom obrázky
+    loadCustomImages();
+});
+
+// Custom obrázky - proměnná pro uložený obrázek
+let uploadedCustomImageBase64 = null;
+
+function handleCustomImageUpload(input) {
+    const file = input.files[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+        alert("Obrázek je příliš velký. Maximum je 5MB.");
+        input.value = "";
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        uploadedCustomImageBase64 = e.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
+function uploadCustomImage() {
+    const name = document.getElementById('customImageName').value.trim();
+    if (!name) {
+        alert('Zadej název obrázku');
+        return;
+    }
+    if (!uploadedCustomImageBase64) {
+        alert('Nejprve vyber obrázek');
+        return;
+    }
+    
+    // Načíst existující obrázky
+    let customImages = JSON.parse(localStorage.getItem('customExporterImages') || '{}');
+    
+    // Přidat nový obrázek
+    customImages[name] = {
+        data: uploadedCustomImageBase64,
+        uploadedAt: new Date().toISOString()
+    };
+    
+    // Uložit
+    localStorage.setItem('customExporterImages', JSON.stringify(customImages));
+    
+    // Reset
+    document.getElementById('customImageInput').value = '';
+    document.getElementById('customImageName').value = '';
+    uploadedCustomImageBase64 = null;
+    
+    // Znovu načíst
+    loadCustomImages();
+    
+    alert('Obrázek nahrán!');
+}
+
+function loadCustomImages() {
+    const customImages = JSON.parse(localStorage.getItem('customExporterImages') || '{}');
+    const grid = document.getElementById('custom-images-grid');
+    
+    if (Object.keys(customImages).length === 0) {
+        grid.innerHTML = '<p style="color: #888; grid-column: 1/-1;">Žádné uložené obrázky</p>';
+        updateCustomLogoSelects([]);
+        return;
+    }
+    
+    grid.innerHTML = Object.entries(customImages).map(([name, imgData]) => {
+        return '<div style="background: #222; padding: 10px; border: 1px solid #444;">' +
+            '<img src="' + imgData.data + '" alt="' + name + '" style="width: 100%; height: 100px; object-fit: contain; margin-bottom: 8px;">' +
+            '<div style="font-size: 0.85em; color: #aaa; word-break: break-all; margin-bottom: 8px;">' + name + '</div>' +
+            '<div style="display: flex; gap: 5px;">' +
+                '<button onclick="useCustomImage(&apos;' + name + '&apos;)" style="flex: 1; padding: 5px; background: #00d4ff; color: #000; border: none; cursor: pointer; font-size: 0.8em;">Použít</button>' +
+                '<button onclick="deleteCustomImage(&apos;' + name + '&apos;)" style="flex: 1; padding: 5px; background: #ff4444; color: white; border: none; cursor: pointer; font-size: 0.8em;">Smazat</button>' +
+            '</div>' +
+        '</div>';
+    }).join('');
+    
+    // Aktualizovat selecty ve formulářích
+    updateCustomLogoSelects(Object.keys(customImages));
+}
+
+function updateCustomLogoSelects(imageNames) {
+    const homeSelect = document.getElementById('custom-home-logo-select');
+    const awaySelect = document.getElementById('custom-away-logo-select');
+
+    if (homeSelect && awaySelect) {
+        const options = imageNames.map(name => '<option value="' + name + '">' + name + '</option>').join('');
+        homeSelect.innerHTML = '<option value="">Použít výchozí logo týmu</option>' + options;
+        awaySelect.innerHTML = '<option value="">Použít výchozí logo týmu</option>' + options;
+    }
+}
+
+function updateCustomLogoPreview(side) {
+    // Tato funkce může v budoucnu zobrazovat náhled vybraného custom loga
+    // Prozatím je prázdná, protože náhled není nutný
+    console.log('Custom logo preview pro ' + side + ' - funkce připravena pro budoucí rozšíření');
+}
+
+function deleteCustomImage(name) {
+    if (!confirm('Opravdu smazat obrázek "' + name + '"?')) return;
+    
+    let customImages = JSON.parse(localStorage.getItem('customExporterImages') || '{}');
+    delete customImages[name];
+    localStorage.setItem('customExporterImages', JSON.stringify(customImages));
+    
+    loadCustomImages();
+}
+
+function useCustomImage(name) {
+    const customImages = JSON.parse(localStorage.getItem('customExporterImages') || '{}');
+    const imgData = customImages[name];
+
+    if (imgData) {
+        // Zkopírovat do schránky jako base64
+        navigator.clipboard.writeText(imgData.data).then(() => {
+            alert('Obrázek "' + name + '" zkopírován do schránky jako base64. Můžeš ho použít v formulářích.');
+        }).catch(() => {
+            alert('Obrázek "' + name + '" vybrán. Base64 data: ' + imgData.data.substring(0, 50) + '...');
+        });
+    }
 }
 
 async function generateImage(type) {
     const btn = document.getElementById('generate-btn-' + type);
     btn.disabled = true;
     btn.textContent = 'Generuji...';
-    
+
     const formData = new FormData(document.getElementById(type + '-form'));
     const data = Object.fromEntries(formData);
     data.type = type;
+
+    // Přidat custom nastavení pokud je povoleno
+    const useCustom = document.getElementById("use-custom-settings").checked;
+    if (useCustom) {
+        data.customBgColor = document.querySelector('input[name="customBgColor"]').value;
+        data.customTextColor = document.querySelector('input[name="customTextColor"]').value;
+        data.customAccentColor = document.querySelector('input[name="customAccentColor"]').value;
+        data.customWatermarkColor = document.querySelector('input[name="customWatermarkColor"]').value;
+        data.customBgImage = document.getElementById("customBgBase64").value;
+        data.customWatermarkText = document.querySelector('input[name="customWatermarkText"]').value;
+    }
+
+    // Přidat custom loga pokud jsou vybrány
+    const customImages = JSON.parse(localStorage.getItem('customExporterImages') || '{}');
+    const homeLogoName = data.customHomeLogo;
+    const awayLogoName = data.customAwayLogo;
+
+    if (homeLogoName && customImages[homeLogoName]) {
+        data.customHomeLogo = customImages[homeLogoName].data;
+    }
+    if (awayLogoName && customImages[awayLogoName]) {
+        data.customAwayLogo = customImages[awayLogoName].data;
+    }
     
     try {
         const csrfToken = document.getElementById('globalCsrfToken')?.value || '';
@@ -3356,6 +3618,41 @@ async function generateImage(type) {
     btn.disabled = false;
     btn.textContent = 'Vygenerovat obrázek';
 }
+
+function toggleCustomTeam(side) {
+    const select = document.getElementById(side + 'TeamSelect');
+    const customDiv = document.getElementById('custom' + side.charAt(0).toUpperCase() + side.slice(1) + 'Team');
+    const logoUploadDiv = document.getElementById('custom' + side.charAt(0).toUpperCase() + side.slice(1) + 'LogoUpload');
+    
+    if (select.value === 'custom') {
+        customDiv.style.display = 'flex';
+        if (logoUploadDiv) {
+            logoUploadDiv.style.display = 'block';
+        }
+    } else {
+        customDiv.style.display = 'none';
+        if (logoUploadDiv) {
+            logoUploadDiv.style.display = 'none';
+        }
+    }
+}
+
+function handleCustomLogoUpload(side, input) {
+    const file = input.files[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+        alert('Obrázek je příliš velký. Maximum je 5MB.');
+        input.value = '';
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const base64Input = document.getElementById('custom' + side.charAt(0).toUpperCase() + side.slice(1) + 'LogoBase64');
+        base64Input.value = e.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
 </script>
 <body class="usersite">
 <header class="header">
@@ -3393,6 +3690,29 @@ html += `<section class="matches-container" style="flex: 1; padding: 20px;">
         <p>Vygeneruj si vlastní obrázky se zápasy, přestupy nebo vítězi ligy.</p>
     </div>
     
+    <div style="background: rgba(0, 212, 255, 0.1); padding: 15px; margin-bottom: 20px; border: 1px solid #00d4ff;">
+        <h4 style="color: #00d4ff; margin: 0 0 10px 0;">🔧 Filtr týmů pro exportér</h4>
+        <form method="GET" style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end;">
+            <div style="flex: 1; min-width: 200px;">
+                <label style="color: #aaa; font-size: 0.9em; display: block; margin-bottom: 5px;">Liga:</label>
+                <select name="exporterLiga" onchange="this.form.submit()" style="width: 100%; padding: 8px; background: #222; color: white; border: 1px solid #444;">
+                    <option value="all" ${exporterLiga === "all" ? "selected" : ""}>Všechny ligy</option>
+                    ${uniqueLeagues.map(l => `<option value="${l}" ${exporterLiga === l ? "selected" : ""}>${l}</option>`).join('')}
+                </select>
+            </div>
+            <div style="flex: 1; min-width: 200px;">
+                <label style="color: #aaa; font-size: 0.9em; display: block; margin-bottom: 5px;">Sezóna:</label>
+                <select name="exporterSeason" onchange="this.form.submit()" style="width: 100%; padding: 8px; background: #222; color: white; border: 1px solid #444;">
+                    <option value="all" ${exporterSeason === "all" ? "selected" : ""}>Všechny sezóny</option>
+                    ${seasonsFromTeams.map(s => `<option value="${s}" ${exporterSeason === s ? "selected" : ""}>${s}</option>`).join('')}
+                </select>
+            </div>
+            <div style="color: #888; font-size: 0.85em; padding-bottom: 8px;">
+                ${teamsList.length} týmů k dispozici
+            </div>
+        </form>
+    </div>
+    
     <div class="image-exporter-container">
         <div class="image-type-selector">
             <button type="button" class="image-type-btn active" onclick="showImageType('match')">🏒 Zápas VS</button>
@@ -3401,6 +3721,8 @@ html += `<section class="matches-container" style="flex: 1; padding: 20px;">
             <button type="button" class="image-type-btn" onclick="showImageType('winner')">🏆 Vítěz ligy</button>
             <button type="button" class="image-type-btn" onclick="showImageType('standings')">📋 Tabulka</button>
             <button type="button" class="image-type-btn" onclick="showImageType('statistics')">📈 Statistiky</button>
+            <button type="button" class="image-type-btn" onclick="showImageType('custom-images')">🖼️ Custom obrázky</button>
+            <button type="button" class="image-type-btn" onclick="showImageType('custom')">🎨 Custom nastavení</button>
         </div>
         
         <div id="match-section" class="form-section active">
@@ -3409,18 +3731,66 @@ html += `<section class="matches-container" style="flex: 1; padding: 20px;">
                 <div class="form-row">
                     <div class="form-group">
                         <label>Domácí tým</label>
-                        <select name="homeTeamId" required>
+                        <select name="homeTeamId" id="homeTeamSelect" onchange="toggleCustomTeam('home')">
                             <option value="">Vyber tým</option>
-                            ${leagueTeams.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+                            <option value="custom">Vlastní tým</option>
+                            ${teamsList.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name} (${t.liga} - ${t.season})</option>`).join('')}
                         </select>
                     </div>
                     <div class="form-group">
                         <label>Hostující tým</label>
-                        <select name="awayTeamId" required>
+                        <select name="awayTeamId" id="awayTeamSelect" onchange="toggleCustomTeam('away')">
                             <option value="">Vyber tým</option>
-                            ${leagueTeams.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+                            <option value="custom">Vlastní tým</option>
+                            ${teamsList.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name} (${t.liga} - ${t.season})</option>`).join('')}
                         </select>
                     </div>
+                </div>
+                <div class="form-row" id="customHomeTeam" style="display: none;">
+                    <div class="form-group">
+                        <label>Vlastní název týmu (domácí)</label>
+                        <input type="text" name="customHomeTeamName" placeholder="např. Toronto Maple Leafs">
+                    </div>
+                    <div class="form-group">
+                        <label>Liga (domácí)</label>
+                        <input type="text" name="customHomeLeague" placeholder="např. NHL">
+                    </div>
+                </div>
+                <div class="form-group" id="customHomeLogoUpload" style="display: none;">
+                    <label>Vlastní logo domácího (nepovinné)</label>
+                    <input type="file" id="customHomeLogoInput" accept="image/*,image/webp" onchange="handleCustomLogoUpload('home', this)">
+                    <input type="hidden" name="customHomeLogoBase64" id="customHomeLogoBase64">
+                    <small style="color: #888; display: block; margin-top: 5px;">Max 5MB, nebo vyber z nahraných custom obrázků níže</small>
+                </div>
+                <div class="form-row" id="customAwayTeam" style="display: none;">
+                    <div class="form-group">
+                        <label>Vlastní název týmu (hostující)</label>
+                        <input type="text" name="customAwayTeamName" placeholder="např. Edmonton Oilers">
+                    </div>
+                    <div class="form-group">
+                        <label>Liga (hostující)</label>
+                        <input type="text" name="customAwayLeague" placeholder="např. NHL">
+                    </div>
+                </div>
+                <div class="form-group" id="customAwayLogoUpload" style="display: none;">
+                    <label>Vlastní logo hostujícího (nepovinné)</label>
+                    <input type="file" id="customAwayLogoInput" accept="image/*,image/webp" onchange="handleCustomLogoUpload('away', this)">
+                    <input type="hidden" name="customAwayLogoBase64" id="customAwayLogoBase64">
+                    <small style="color: #888; display: block; margin-top: 5px;">Max 5MB, nebo vyber z nahraných custom obrázků níže</small>
+                </div>
+                <div class="form-group">
+                    <label>Custom logo domácího (nepovinné)</label>
+                    <select name="customHomeLogo" id="custom-home-logo-select" onchange="updateCustomLogoPreview('home')">
+                        <option value="">Použít výchozí logo týmu</option>
+                    </select>
+                    <small style="color: #888; display: block; margin-top: 5px;">Vyber z nahraných custom obrázků</small>
+                </div>
+                <div class="form-group">
+                    <label>Custom logo hostujícího (nepovinné)</label>
+                    <select name="customAwayLogo" id="custom-away-logo-select" onchange="updateCustomLogoPreview('away')">
+                        <option value="">Použít výchozí logo týmu</option>
+                    </select>
+                    <small style="color: #888; display: block; margin-top: 5px;">Vyber z nahraných custom obrázků</small>
                 </div>
                 <div class="form-group watermark-option">
                     <input type="checkbox" name="watermark" id="match-watermark" checked>
@@ -3438,14 +3808,14 @@ html += `<section class="matches-container" style="flex: 1; padding: 20px;">
                         <label>Domácí tým</label>
                         <select name="homeTeamId" required>
                             <option value="">Vyber tým</option>
-                            ${leagueTeams.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+                            ${teamsList.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name} (${t.liga} - ${t.season})</option>`).join('')}
                         </select>
                     </div>
                     <div class="form-group">
                         <label>Hostující tým</label>
                         <select name="awayTeamId" required>
                             <option value="">Vyber tým</option>
-                            ${leagueTeams.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+                            ${teamsList.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name} (${t.liga} - ${t.season})</option>`).join('')}
                         </select>
                     </div>
                 </div>
@@ -3491,18 +3861,52 @@ html += `<section class="matches-container" style="flex: 1; padding: 20px;">
                 <div class="form-row">
                     <div class="form-group">
                         <label>Z týmu</label>
-                        <select name="fromTeamId" required>
+                        <select name="fromTeamId" id="fromTeamSelect" onchange="toggleCustomTeam('from')">
                             <option value="">Vyber tým</option>
-                            ${leagueTeams.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+                            <option value="custom">Vlastní tým</option>
+                            ${teamsList.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name} (${t.liga} - ${t.season})</option>`).join('')}
                         </select>
                     </div>
                     <div class="form-group">
                         <label>Do týmu</label>
-                        <select name="toTeamId" required>
+                        <select name="toTeamId" id="toTeamSelect" onchange="toggleCustomTeam('to')">
                             <option value="">Vyber tým</option>
-                            ${leagueTeams.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+                            <option value="custom">Vlastní tým</option>
+                            ${teamsList.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name} (${t.liga} - ${t.season})</option>`).join('')}
                         </select>
                     </div>
+                </div>
+                <div class="form-row" id="customFromTeam" style="display: none;">
+                    <div class="form-group">
+                        <label>Vlastní název týmu (z)</label>
+                        <input type="text" name="customFromTeamName" placeholder="např. Toronto Maple Leafs">
+                    </div>
+                    <div class="form-group">
+                        <label>Nadpis (z)</label>
+                        <input type="text" name="customFromLeague" placeholder="např. NHL">
+                    </div>
+                </div>
+                <div class="form-group" id="customFromLogoUpload" style="display: none;">
+                    <label>Vlastní logo týmu (z) (nepovinné)</label>
+                    <input type="file" id="customFromLogoInput" accept="image/*,image/webp" onchange="handleCustomLogoUpload('from', this)">
+                    <input type="hidden" name="customFromLogoBase64" id="customFromLogoBase64">
+                    <small style="color: #888; display: block; margin-top: 5px;">Max 5MB</small>
+                </div>
+                <div class="form-row" id="customToTeam" style="display: none;">
+                    <div class="form-group">
+                        <label>Vlastní název týmu (do)</label>
+                        <input type="text" name="customToTeamName" placeholder="např. Edmonton Oilers">
+                    </div>
+                    <div class="form-group">
+                        <label>Nadpis (do)</label>
+                        <input type="text" name="customToLeague" placeholder="např. NHL">
+                    </div>
+                </div>
+                <div class="form-group" id="customToLogoUpload" style="display: none;">
+                    <label>Vlastní logo týmu (do) (nepovinné)</label>
+                    <input type="file" id="customToLogoInput" accept="image/*,image/webp" onchange="handleCustomLogoUpload('to', this)">
+                    <input type="hidden" name="customToLogoBase64" id="customToLogoBase64">
+                    <small style="color: #888; display: block; margin-top: 5px;">Max 5MB</small>
                 </div>
                 <div class="form-group">
                     <label>Jméno hráče (nepovinné)</label>
@@ -3529,7 +3933,7 @@ html += `<section class="matches-container" style="flex: 1; padding: 20px;">
                     <label>Vítězný tým</label>
                     <select name="winnerTeamId" required>
                         <option value="">Vyber tým</option>
-                        ${leagueTeams.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+                        ${teamsList.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name} (${t.liga} - ${t.season})</option>`).join('')}
                     </select>
                 </div>
                 <div class="form-group">
@@ -3600,6 +4004,78 @@ html += `<section class="matches-container" style="flex: 1; padding: 20px;">
                 </div>
                 <button type="submit" id="generate-btn-statistics" class="generate-btn">Vygenerovat obrázek</button>
             </form>
+        </div>
+        
+        <div id="custom-images-section" class="form-section">
+            <h3 style="color: #ff4500; margin-top: 0;">🖼️ Custom obrázky</h3>
+            <p style="color: #888; font-size: 0.9em; margin-bottom: 15px;">Nahraj vlastní obrázky (loga, fotky hráčů, pozadí) a používej je v exportéru.</p>
+            
+            <div class="form-group">
+                <label>Nahrát nový obrázek</label>
+                <input type="file" id="customImageInput" accept="image/*" onchange="handleCustomImageUpload(this)">
+                <input type="text" id="customImageName" placeholder="Název obrázku (např. logo-tymu)" style="margin-top: 10px; width: 100%; padding: 8px; background: #222; color: white; border: 1px solid #444;">
+                <button type="button" onclick="uploadCustomImage()" style="margin-top: 10px; padding: 8px 20px; background: #00d4ff; color: #000; border: none; cursor: pointer; font-weight: bold;">📤 Nahrát</button>
+                <small style="color: #888; display: block; margin-top: 5px;">Max 5MB, uloží se do prohlížeče (localStorage)</small>
+            </div>
+            
+            <div id="custom-images-list" style="margin-top: 20px;">
+                <h4 style="color: #00d4ff; margin-bottom: 10px;">Uložené obrázky:</h4>
+                <div id="custom-images-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px;">
+                    <!-- Obrázky se načtou dynamicky -->
+                </div>
+            </div>
+        </div>
+        
+        <div id="custom-section" class="form-section">
+            <h3 style="color: #ff4500; margin-top: 0;">🎨 Custom nastavení vzhledu</h3>
+            <p style="color: #888; font-size: 0.9em; margin-bottom: 15px;">Tyto nastavení se aplikují na všechny vygenerované obrázky.</p>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Barva pozadí</label>
+                    <input type="color" name="customBgColor" value="#1a1a1a" style="width: 60px; height: 40px; padding: 0; border: none; cursor: pointer;">
+                    <small style="color: #888; display: block; margin-top: 5px;">Výchozí: #1a1a1a (tmavě šedá)</small>
+                </div>
+                <div class="form-group">
+                    <label>Barva textu</label>
+                    <input type="color" name="customTextColor" value="#ffffff" style="width: 60px; height: 40px; padding: 0; border: none; cursor: pointer;">
+                    <small style="color: #888; display: block; margin-top: 5px;">Výchozí: #ffffff (bílá)</small>
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Barva akcentu (nadpisy, zvýraznění)</label>
+                    <input type="color" name="customAccentColor" value="#ff4500" style="width: 60px; height: 40px; padding: 0; border: none; cursor: pointer;">
+                    <small style="color: #888; display: block; margin-top: 5px;">Výchozí: #ff4500 (oranžová)</small>
+                </div>
+                <div class="form-group">
+                    <label>Barva watermarku</label>
+                    <input type="color" name="customWatermarkColor" value="#888888" style="width: 60px; height: 40px; padding: 0; border: none; cursor: pointer;">
+                    <small style="color: #888; display: block; margin-top: 5px;">Výchozí: #888888 (šedá)</small>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label>Custom pozadí (nepovinné)</label>
+                <input type="file" id="customBgInput" accept="image/*" onchange="handleCustomBg(this)">
+                <input type="hidden" name="customBgImage" id="customBgBase64">
+                <small style="color: #888; display: block; margin-top: 5px;">Max 5MB, přepíše barvu pozadí</small>
+            </div>
+            
+            <div class="form-group">
+                <label>Custom watermark text (nepovinné)</label>
+                <input type="text" name="customWatermarkText" placeholder="např. @muj_tipovacka">
+                <small style="color: #888; display: block; margin-top: 5px;">Přepíše výchozí watermark</small>
+            </div>
+            
+            <div class="form-group watermark-option">
+                <input type="checkbox" name="useCustomSettings" id="use-custom-settings">
+                <label for="use-custom-settings" style="margin: 0;">Použít custom nastavení pro všechny obrázky</label>
+            </div>
+            
+            <button type="button" onclick="saveCustomSettings()" class="generate-btn" style="background-color: #00d4ff;">💾 Uložit nastavení</button>
+            <button type="button" onclick="resetCustomSettings()" class="generate-btn" style="background-color: #ff4444; margin-left: 10px;">🔄 Resetovat na výchozí</button>
         </div>
         
         <div id="preview-container" class="preview-container">

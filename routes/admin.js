@@ -329,6 +329,7 @@ router.get('/', requireAdmin, async (req, res) => {
         <h3>👤 Uživatelé a obsah</h3>
         <div class="nav-buttons">
           <a href="/admin/users" class="btn btn-primary">👥 Správa uživatelů</a>
+          <a href="/admin/audit-log" class="btn btn-secondary">📋 Audit Log</a>
           <a href="/admin/images/manage" class="btn btn-secondary">🖼️ Správce obrázků</a>
           <a href="/admin/transfers/manage" class="btn btn-secondary">💰 Správa přestupů</a>
         </div>
@@ -10144,6 +10145,262 @@ router.get('/api/player/:id', requireAdmin, async (req, res) => {
     } catch (error) {
         console.error('Chyba při načítání hráče:', error);
         res.status(500).json({ error: 'Chyba serveru' });
+    }
+});
+
+// ==========================================
+// AUDIT LOG - PROHLÍŽENÍ LOGŮ AKCÍ
+// ==========================================
+router.get('/audit-log', requireAdmin, async (req, res) => {
+    try {
+        const AuditLog = require('../models/AuditLog');
+        const { AuditLogs } = require('../utils/mongoDataAccess');
+
+        // Filtry z query parametrů
+        const { username, action, entity, limit = '100' } = req.query;
+
+        let logs = await AuditLogs.findAll();
+
+        // Seřadit podle data (nejnovější nahoře)
+        logs = logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+        // Aplikovat filtry
+        if (username) {
+            logs = logs.filter(log => log.username === username);
+        }
+        if (action) {
+            logs = logs.filter(log => log.action === action);
+        }
+        if (entity) {
+            logs = logs.filter(log => log.entity === entity);
+        }
+
+        // Limit
+        logs = logs.slice(0, parseInt(limit));
+
+        // Získat unikátní hodnoty pro filtry
+        const allLogs = await AuditLogs.findAll();
+        const usernames = [...new Set(allLogs.map(log => log.username))].sort();
+        const actions = [...new Set(allLogs.map(log => log.action))].sort();
+        const entities = [...new Set(allLogs.map(log => log.entity))].sort();
+
+        let html = `<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audit Log - Admin</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <style>
+        .audit-log-container {
+            padding: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .audit-filters {
+            background: rgba(0, 212, 255, 0.1);
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #00d4ff;
+        }
+        .audit-filters form {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
+        .audit-filters .form-group {
+            flex: 1;
+            min-width: 150px;
+        }
+        .audit-filters label {
+            color: #aaa;
+            font-size: 0.9em;
+            display: block;
+            margin-bottom: 5px;
+        }
+        .audit-filters select, .audit-filters input {
+            width: 100%;
+            padding: 8px;
+            background: #222;
+            color: white;
+            border: 1px solid #444;
+            border-radius: 4px;
+        }
+        .audit-filters button {
+            padding: 8px 20px;
+            background: #00d4ff;
+            color: #000;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .audit-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #1a1a1a;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .audit-table th, .audit-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #333;
+        }
+        .audit-table th {
+            background: #222;
+            color: #00d4ff;
+            font-weight: bold;
+        }
+        .audit-table tr:hover {
+            background: #252525;
+        }
+        .audit-table .timestamp {
+            color: #888;
+            font-size: 0.85em;
+            min-width: 150px;
+        }
+        .audit-table .username {
+            color: #ffd700;
+            font-weight: bold;
+            min-width: 120px;
+        }
+        .audit-table .action {
+            color: #00d4ff;
+            font-weight: bold;
+            min-width: 100px;
+        }
+        .audit-table .entity {
+            color: #ff4500;
+            min-width: 100px;
+        }
+        .audit-table .details {
+            color: #aaa;
+            font-size: 0.9em;
+            max-width: 400px;
+            word-break: break-word;
+        }
+        .audit-table .ip {
+            color: #666;
+            font-size: 0.85em;
+            min-width: 120px;
+        }
+        .action-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+        .action-create { background: #28a745; color: white; }
+        .action-update { background: #ffc107; color: black; }
+        .action-delete { background: #dc3545; color: white; }
+        .action-login { background: #17a2b8; color: white; }
+        .action-logout { background: #6c757d; color: white; }
+        .action-default { background: #444; color: white; }
+    </style>
+</head>
+<body class="admin-panel">
+    <div class="audit-log-container">
+        <h1 style="color: #00d4ff; margin-bottom: 20px;">📋 Audit Log</h1>
+        
+        <div class="audit-filters">
+            <form method="GET">
+                <div class="form-group">
+                    <label>Uživatel:</label>
+                    <select name="username">
+                        <option value="">Všichni</option>
+                        ${usernames.map(u => `<option value="${u}" ${username === u ? 'selected' : ''}>${u}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Akce:</label>
+                    <select name="action">
+                        <option value="">Všechny</option>
+                        ${actions.map(a => `<option value="${a}" ${action === a ? 'selected' : ''}>${a}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Entita:</label>
+                    <select name="entity">
+                        <option value="">Všechny</option>
+                        ${entities.map(e => `<option value="${e}" ${entity === e ? 'selected' : ''}>${e}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Limit:</label>
+                    <select name="limit">
+                        <option value="50" ${limit === '50' ? 'selected' : ''}>50</option>
+                        <option value="100" ${limit === '100' ? 'selected' : ''}>100</option>
+                        <option value="500" ${limit === '500' ? 'selected' : ''}>500</option>
+                        <option value="1000" ${limit === '1000' ? 'selected' : ''}>1000</option>
+                    </select>
+                </div>
+                <button type="submit">Filtrovat</button>
+                <a href="/admin/audit-log" style="padding: 8px 20px; background: #444; color: white; text-decoration: none; border-radius: 4px; margin-left: 10px;">Reset</a>
+            </form>
+        </div>
+
+        <table class="audit-table">
+            <thead>
+                <tr>
+                    <th>Čas</th>
+                    <th>Uživatel</th>
+                    <th>Akce</th>
+                    <th>Entita</th>
+                    <th>ID entity</th>
+                    <th>Detaily</th>
+                    <th>IP adresa</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${logs.map(log => {
+                    const actionClass = {
+                        'create': 'action-create',
+                        'update': 'action-update',
+                        'delete': 'action-delete',
+                        'login': 'action-login',
+                        'logout': 'action-logout'
+                    }[log.action] || 'action-default';
+
+                    const detailsStr = typeof log.details === 'object' 
+                        ? JSON.stringify(log.details, null, 2).substring(0, 200) + (JSON.stringify(log.details).length > 200 ? '...' : '')
+                        : String(log.details || '');
+
+                    return `
+                        <tr>
+                            <td class="timestamp">${new Date(log.timestamp).toLocaleString('cs-CZ')}</td>
+                            <td class="username">${log.username}</td>
+                            <td class="action"><span class="action-badge ${actionClass}">${log.action}</span></td>
+                            <td class="entity">${log.entity}</td>
+                            <td>${log.entityId || '-'}</td>
+                            <td class="details">${detailsStr}</td>
+                            <td class="ip">${log.ip || '-'}</td>
+                        </tr>
+                    `;
+                }).join('')}
+            </tbody>
+        </table>
+
+        ${logs.length === 0 ? '<p style="text-align: center; color: #888; padding: 40px;">Žádné záznamy v audit logu.</p>' : ''}
+        
+        <div style="margin-top: 20px; color: #888; font-size: 0.9em;">
+            Celkem záznamů: ${logs.length} ${limit !== '1000' ? `(zobrazeno limit ${limit})` : ''}
+        </div>
+
+        <div style="margin-top: 30px;">
+            <a href="/admin" style="padding: 10px 20px; background: #444; color: white; text-decoration: none; border-radius: 4px;">← Zpět na admin</a>
+        </div>
+    </div>
+</body>
+</html>`;
+
+        res.send(html);
+    } catch (error) {
+        console.error('Chyba při načítání audit logu:', error);
+        res.status(500).send('Chyba při načítání audit logu');
     }
 });
 

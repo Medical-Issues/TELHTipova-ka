@@ -264,6 +264,7 @@ const LeagueStatus = new MongoDataAccess('leagueStatus');
 const Transfers = new MongoDataAccess('transfers');
 const Tips = new MongoDataAccess('tips');
 const Players = new MongoDataAccess('players');
+const AuditLogs = new MongoDataAccess('auditLogs');
 
 module.exports = {
     Users,
@@ -281,5 +282,6 @@ module.exports = {
     LeagueStatus,
     Transfers,
     Tips,
-    Players
+    Players,
+    AuditLogs
 };

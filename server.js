@@ -62,6 +62,16 @@ app.get('/sw.js', (req, res) => {
     }
 });
 
+// Favicon endpoint - prohlížeče automaticky hledají /favicon.ico
+app.get('/favicon.ico', (req, res) => {
+    const logoPath = path.join(__dirname, 'data', 'images', 'logo.png');
+    if (fs.existsSync(logoPath)) {
+        res.sendFile(logoPath);
+    } else {
+        res.status(404).send('Favicon not found');
+    }
+});
+
 // Also serve from /logoteamu/ for backward compatibility
 app.use('/logoteamu', (req, res, next) => {
     const filename = req.path.replace(/^\//, '');
