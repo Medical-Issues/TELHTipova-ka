@@ -25,9 +25,9 @@ class AuditLog {
         };
 
         const auditLog = new AuditLog(logData);
-        
+
         // Uložit do MongoDB
-        await AuditLogs.add(auditLog);
+        await AuditLogs.insertOne(auditLog);
         
         // Uložit i do admin_log.txt pro kompatibilitu
         const fs = require('fs');
@@ -70,20 +70,6 @@ class AuditLog {
             const logDate = new Date(log.timestamp);
             return logDate >= new Date(startDate) && logDate <= new Date(endDate);
         });
-    }
-
-    toJSON() {
-        return {
-            id: this.id,
-            timestamp: this.timestamp,
-            username: this.username,
-            action: this.action,
-            entity: this.entity,
-            entityId: this.entityId,
-            details: this.details,
-            ip: this.ip,
-            userAgent: this.userAgent
-        };
     }
 }
 
