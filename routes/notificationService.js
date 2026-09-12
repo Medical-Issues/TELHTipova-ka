@@ -1111,7 +1111,7 @@ cron.schedule('0 3 * * *', () => { // Spustí se každý den ve 3:00 ráno
 
                     // Pokud je soubor starší než 3 dny, smažeme ho
                     if (now - stats.mtimeMs > MAX_AGE_MS) {
-                        fs.unlink(filePath, err => {});
+                        fs.unlink(filePath, () => {});
                     }
                 });
             }
