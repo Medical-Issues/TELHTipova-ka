@@ -225,6 +225,7 @@ app.get('/wake', async (req, res) => {
             operations.push(db.collection('ligy').findOne({}));
         } catch (e) {
             // Ignorovat pokud kolekce neexistuje
+            console.error('Chyba při přístupu k kolekcím v wake endpoint:', e);
         }
         
         // Zápis do log kolekce (pokud existuje) - pouze pro externí IP
@@ -244,6 +245,7 @@ app.get('/wake', async (req, res) => {
             }
         } catch (logError) {
             // Pokud kolekce neexistuje, ignorujeme chybu
+            console.error('Chyba při zápisu do wake_logs:', logError);
         }
         
         // Čekat na všechny operace
@@ -310,6 +312,7 @@ app.get('/warm', async (req, res) => {
         try {
             operations.push(db.collection('users').findOne({}));
         } catch (e) {
+            console.error('Chyba při čtení users kolekce:', e);
             operations.push(Promise.resolve(null));
         }
         
@@ -317,6 +320,7 @@ app.get('/warm', async (req, res) => {
         try {
             operations.push(db.collection('ligy').findOne({}));
         } catch (e) {
+            console.error('Chyba při čtení ligy kolekce:', e);
             operations.push(Promise.resolve(null));
         }
         
@@ -501,7 +505,6 @@ app.post('/api/check-subscription', async (req, res) => {
         // DŮLEŽITÉ: Kontrola v poli subscriptions
         const hasIt = user.subscriptions && user.subscriptions.some(s => s.endpoint === endpoint);
 
-        console.log(`[Stav] Uživatel: ${username}, nalezen odběr: ${!!hasIt}`);
         res.json({ belongsToMe: !!hasIt });
     } catch (e) {
         console.error("Chyba check-subscription:", e);

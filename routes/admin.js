@@ -923,12 +923,10 @@ router.post('/leagues/visibility', express.urlencoded({ extended: true }), requi
 
     // MIGRACE: Pokud stará data jsou ve formátu { values: [...] }, převedeme je
     if (existingData.values && Array.isArray(existingData.values)) {
-        console.log('🔄 Migrace AllowedLeagues ze starého formátu na sezónní...');
         const oldLeagues = existingData.values;
         const migratedData = {};
         migratedData[chosenSeason] = oldLeagues; // Staré ligy přiřadíme k aktuální sezóně
         await AllowedLeagues.replaceAll(migratedData);
-        console.log('✅ Migrace dokončena');
         // Použijeme nová data
         const newData = await AllowedLeagues.findAll() || {};
         newData[selectedSeason] = ligaNames;
@@ -1097,7 +1095,6 @@ router.post('/edit/:id', express.urlencoded({ extended: true }), requireAdmin, a
 
     const {homeTeamId, awayTeamId, datetime, season, scoreHome, scoreAway} = req.body;
 
-    console.log(`🔥 DEBUG EDIT: matchId=${matchId}, overtime=${req.body.overtime}, rawBody=${JSON.stringify(req.body.overtime)}`);
 
     const matchIndex = matches.findIndex(m => m.id === matchId);
     if (matchIndex === -1) return renderErrorHtml(res, "Zápas nebyl nalezen.", 404);
@@ -1133,7 +1130,6 @@ router.post('/edit/:id', express.urlencoded({ extended: true }), requireAdmin, a
     }
 
     const isSeries = match.isPlayoff && match.bo > 1;
-    console.log(`🔥 DEBUG isSeries=${isSeries}, isPlayoff=${match.isPlayoff}, bo=${match.bo}`);
 
     // --- ULOŽÍME SI STARÝ POČET ODEHRANÝCH ZÁPASŮ ---
     const oldPlayedCount = (match.isPlayoff && match.playedMatches) ? match.playedMatches.length : 0;
@@ -1660,7 +1656,6 @@ router.get('/edit/:id', requireAdmin, async (req, res) => {
     const selectedSeason = match.season ?? allSeasons[0] ?? '';
 
     const isSeries = match.isPlayoff && match.bo > 1;
-    console.log(`🔥 DEBUG isSeries=${isSeries}, isPlayoff=${match.isPlayoff}, bo=${match.bo}`);
 
     // Úprava v admin.js (router.get('/edit/:id'))
     let matchInputs = `<fieldset id="series-score-fields" style="display: ${isSeries ? 'block' : 'none'}; margin-top: 1rem;"><legend>Jednotlivé zápasy série</legend>`;
@@ -1907,7 +1902,6 @@ router.post('/edit/:id', express.urlencoded({ extended: true }), requireAdmin, a
 
     const {homeTeamId, awayTeamId, datetime, season, scoreHome, scoreAway} = req.body;
 
-    console.log(`🔥 DEBUG EDIT: matchId=${matchId}, overtime=${req.body.overtime}, rawBody=${JSON.stringify(req.body.overtime)}`);
 
     const matchIndex = matches.findIndex(m => m.id === matchId);
     if (matchIndex === -1) return renderErrorHtml(res, "Zápas nebyl nalezen.", 404);
@@ -1943,7 +1937,6 @@ router.post('/edit/:id', express.urlencoded({ extended: true }), requireAdmin, a
     }
 
     const isSeries = match.isPlayoff && match.bo > 1;
-    console.log(`🔥 DEBUG isSeries=${isSeries}, isPlayoff=${match.isPlayoff}, bo=${match.bo}`);
 
     // --- ULOŽÍME SI STARÝ POČET ODEHRANÝCH ZÁPASŮ ---
     const oldPlayedCount = (match.isPlayoff && match.playedMatches) ? match.playedMatches.length : 0;
@@ -1989,13 +1982,11 @@ router.post('/edit/:id', express.urlencoded({ extended: true }), requireAdmin, a
         }
     } else {
         // --- ULOŽENÍ VÝSLEDKU BO1 ZÁPASU ---
-        console.log(`🔥 DEBUG BO1 BRANCH: scoreHome="${scoreHome}", scoreAway="${scoreAway}"`);
         if (scoreHome !== '' && scoreAway !== '' && scoreHome !== undefined && scoreAway !== undefined) {
             const sideSwap = req.body.sideSwap === 'true' || req.body.sideSwap === 'on';
             const scoreH = parseInt(scoreHome);
             const scoreA = parseInt(scoreAway);
             const isOvertime = req.body.overtime === 'on';
-            console.log(`📝 DEBUG BO1: scoreHome=${scoreH}, scoreAway=${scoreA}, overtime=${isOvertime}, raw=${req.body.overtime}`);
             match.result = {
                 scoreHome: scoreH,
                 scoreAway: scoreA,
@@ -2003,7 +1994,6 @@ router.post('/edit/:id', express.urlencoded({ extended: true }), requireAdmin, a
                 sideSwap: sideSwap,
                 winner: scoreH > scoreA ? 'home' : 'away'
             };
-            console.log(`📝 DEBUG match.result:`, JSON.stringify(match.result));
         } else {
             delete match.result;
         }
@@ -2299,7 +2289,9 @@ router.get('/playoff', requireAdmin, async (req, res) => {
         if (playoffData[selectedSeason] && playoffData[selectedSeason][selectedLeague]) {
             savedSlots = playoffData[selectedSeason][selectedLeague];
         }
-    } catch (e) {}
+    } catch (e) {
+        console.error('Chyba při načítání playoff dat:', e);
+    }
 
     // --- 2. NAHRAĎ PŮVODNÍ FUNKCI renderSlot TÍMTO ---
     const renderSlot = (slotId, label) => {
@@ -2478,6 +2470,7 @@ router.get('/playoff', requireAdmin, async (req, res) => {
                 const statusData = await LeagueStatus.findAll();
                 existingBarazType = statusData?.[selectedSeason]?.[selectedLeague]?.barazType || 'manual';
             } catch (e) {
+                console.error('Chyba při načítání LeagueStatus:', e);
             }
 
             return `
@@ -2515,6 +2508,7 @@ router.get('/playoff', requireAdmin, async (req, res) => {
                 }
             }
         } catch (e) {
+            console.error('Chyba při načítání playoff dat:', e);
         }
 
         // Načtení týmů pro zjištění skupin
@@ -3715,7 +3709,6 @@ async function autoGenerateMatchesFromLockedPositions(season, league, positionMo
 
                 if (teamA && teamB && teamALocked && teamBLocked) {
                     // KONTROLA DUPLICITY:
-                    console.log(`Slot ${slotId}: teamA=${teamA?.name} (locked=${teamALocked}), teamB=${teamB?.name} (locked=${teamBLocked})`);
                     const matchExists = allMatches.some(m =>
                         m.season === season &&
                         m.liga === league &&
@@ -4263,14 +4256,12 @@ async function checkAndCreatePlayoffMatches(season, league) {
         // Uložení nových zápasů
         if (newMatches.length > 0) {
             await Matches.replaceAll(allMatches);
-            console.log(`Automaticky vytvořeno ${newMatches.length} playoff zápasů pro ${league} (${season})`);
         }
 
         // Uložení přiřazení slotů (včetně čekajících týmů)
         if (Object.keys(slotAssignments).length > 0) {
             playoffData[season][league] = {...existingAssignments, ...slotAssignments};
             await Playoff.replaceAll(playoffData);
-            console.log(`Aktualizováno ${Object.keys(slotAssignments).length} slotů pro ${league} (${season})`);
         }
     } catch (error) {
         console.error('Chyba při automatické kontrole playoff:', error);
@@ -4369,7 +4360,6 @@ async function checkAndPropagateWinners(season, league) {
         if (Object.keys(slotAssignments).length > 0) {
             playoffData[season][league] = {...existingAssignments, ...slotAssignments};
             await Playoff.replaceAll(playoffData);
-            console.log(`Automaticky propagováno ${Object.keys(slotAssignments).length} vítězů pro ${league} (${season})`);
         }
     } catch (error) {
         console.error('Chyba při automatickém postupu vítězů:', error);
@@ -4650,7 +4640,6 @@ router.post('/leagues/update', express.urlencoded({ extended: true }), requireAd
         if (index !== -1) {
             // 1. Změna názvu
             if (originalLeagueName !== leagueName) {
-                console.log(`Změna názvu ligy z ${originalLeagueName} na ${leagueName}`);
                 await renameLeagueGlobal(originalLeagueName, leagueName);
                 allSeasonData[selectedSeason].leagues[index].name = leagueName;
             }
@@ -4734,7 +4723,6 @@ router.post("/toggle-regular-season", express.urlencoded({ extended: true }), re
 
     // NOTIFIKACE: Pokud byla liga právě teď označena jako dokončená (a předtím nebyla)
     if (isFinishedNow && !wasFinishedBefore) {
-        console.log(`Posílám notifikaci o ukončení ligy: ${liga}`);
         
         // Získání vítězného týmu z tabulky
         let winnerTeam = null;
@@ -5114,27 +5102,18 @@ router.post('/settings/clinch', express.urlencoded({ extended: true }), requireA
         return res.status(403).send('Neplatný CSRF token');
     }
     
-    // 1. Zkontrolujeme, co přesně přišlo z formuláře
-    console.log("--- UKLÁDÁNÍ NASTAVENÍ ---");
-    console.log("Přijatá data v req.body:", req.body);
-
     const mode = req.body.mode;
     
     // Načtení z MongoDB
     let settings = await Settings.findAll();
     if (!settings || Object.keys(settings).length === 0) settings = {};
 
-    console.log("Aktuální stav před změnou:", settings);
-
     // 3. Nastavení nové hodnoty
     settings.clinchMode = (mode === 'cascade') ? 'cascade' : 'strict';
-
-    console.log("Nový stav k uložení:", settings);
 
     // 4. Uložení do MongoDB
     try {
         await Settings.replaceAll(settings);
-        console.log("Úspěšně uloženo do MongoDB (settings)");
     } catch (err) {
         console.error("Kritická chyba při zápisu do MongoDB:", err);
     }
@@ -5303,9 +5282,6 @@ router.post('/matches/import-run', express.urlencoded({ extended: true }), requi
             const numId = Number(m.id);
             return !isNaN(numId) && numId > max ? numId : max;
         }, 0);
-
-        console.log(`ℹ️ Start ID: ${maxId + 1}`);
-        console.log(`📥 Importuji z Livesport: ${liga} - ${season}`);
 
         // 3. Stažení zápasů z Livesportu
         const importResult = await fetchMatchesFromLivesport({
@@ -6264,7 +6240,7 @@ router.post('/images/check-duplicates', requireAdmin, upload.any(), async (req, 
                 conflicts: result.conflicts
             });
             // Vyčistíme temp file
-            try { fs.unlinkSync(file.path); } catch (e) {}
+            try { fs.unlinkSync(file.path); } catch (e) {} // Ignorujeme chyby při mazání temp souboru
         }
         
         res.json({ conflicts });
@@ -6294,7 +6270,7 @@ router.post('/images/batch-upload', requireAdmin, upload.any(), async (req, res)
             if (check.isDuplicate && check.conflicts.some(c => c.type === 'exact' || c.type === 'filename')) {
                 // Přeskočíme identické duplicity a konflikty názvů
                 skipped++;
-                try { fs.unlinkSync(file.path); } catch (e) {}
+                try { fs.unlinkSync(file.path); } catch (e) {} // Ignorujeme chyby při mazání temp souboru
                 continue;
             }
             
@@ -7264,7 +7240,7 @@ router.post('/transfers/generate-preview', handleFormDataBeforeCSRF, requireAdmi
         
         // Vyčistit temporary file pokud existuje
         if (playerPhotoPath && fs.existsSync(playerPhotoPath)) {
-            try { fs.unlinkSync(playerPhotoPath); } catch (e) {}
+            try { fs.unlinkSync(playerPhotoPath); } catch (e) {} // Ignorujeme chyby při mazání temp souboru
         }
         
         const publicUrl = `/images/exports/${filename}`;
@@ -8190,6 +8166,7 @@ router.post('/playoff/templates/save', express.urlencoded({ extended: true }), r
         await PlayoffTemplates.replaceAll(templates);
         res.redirect('/admin/playoff/templates');
     } catch (e) {
+        console.error('Chyba při ukládání playoff šablony:', e);
         res.status(400).send("Chyba v JSON struktuře!");
     }
 });

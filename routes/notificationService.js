@@ -113,7 +113,6 @@ async function processCustomImageForNotification(imageUrl) {
         const buffer = canvas.toBuffer('image/png');
         fs.writeFileSync(outPath, buffer);
         
-        console.log(`[processCustomImage] Upraven custom obrázek: ${imageUrl} -> ${filename} (${canvasWidth}x${canvasHeight})`);
         return `/images/notifications/${filename}`;
         
     } catch (err) {
@@ -125,9 +124,8 @@ async function processCustomImageForNotification(imageUrl) {
 
 // --- FUNKCE PRO VYTVOŘENÍ "VERSUS" OBRÁZKU ---
 async function createVersusImage(homeTeam, awayTeam, matchId, scoreHome = null, scoreAway = null, seriesMatches = null, ot = false) {
-    console.log(`[createVersusImage] START - matchId=${matchId}, teams=${homeTeam?.name} vs ${awayTeam?.name}, ot=${ot}`);
     if (!homeTeam || !awayTeam) {
-        console.log('[createVersusImage] ERROR: Missing teams');
+        console.error('[createVersusImage] ERROR: Missing teams');
         return null;
     }
 
@@ -191,6 +189,7 @@ async function createVersusImage(homeTeam, awayTeam, matchId, scoreHome = null, 
                 const nh = img.height * ratio;
                 ctx.drawImage(img, x + (size - nw) / 2, y + (size - nh) / 2, nw, nh);
             } catch (e) {
+                console.error('Chyba při načítání loga, používám iniciály:', e);
                 const initials = teamName.split(' ').map(w => w[0]).join('').slice(0, 3).toUpperCase();
                 ctx.fillStyle = teamColor;
                 ctx.beginPath();
@@ -334,7 +333,6 @@ async function createVersusImage(homeTeam, awayTeam, matchId, scoreHome = null, 
     let buffer;
     try {
         buffer = canvas.toBuffer('image/png');
-        console.log(`[createVersusImage] Buffer created: ${buffer ? buffer.length : 0} bytes`);
     } catch (err) {
         console.error('[createVersusImage] ERROR při vytváření bufferu:', err);
         return null;
@@ -347,14 +345,12 @@ async function createVersusImage(homeTeam, awayTeam, matchId, scoreHome = null, 
     
     // Pokud je matchId null, vrátíme jen buffer (pro export)
     if (matchId === null || matchId === undefined) {
-        console.log('[createVersusImage] Export mode - vracím buffer bez uložení souboru');
         return buffer;
     }
     
     // Pro notifikace uložíme soubor a vrátíme URL
     try {
         fs.writeFileSync(outPath, buffer);
-        console.log(`[createVersusImage] SUCCESS - saved to ${outPath}`);
         return publicUrl;
     } catch (err) {
         console.error('[createVersusImage] ERROR při ukládání souboru:', err);
@@ -364,9 +360,8 @@ async function createVersusImage(homeTeam, awayTeam, matchId, scoreHome = null, 
 
 // --- FUNKCE PRO VYTVOŘENÍ "VERSUS" OBRÁZKU PRO EXPORTER ---
 async function createVersusImageForExport(homeTeam, awayTeam, customSettings = {}) {
-    console.log(`[createVersusImageForExport] START - teams=${homeTeam?.name} vs ${awayTeam?.name}`);
     if (!homeTeam || !awayTeam) {
-        console.log('[createVersusImageForExport] ERROR: Missing teams');
+        console.error('[createVersusImageForExport] ERROR: Missing teams');
         return null;
     }
 
@@ -496,6 +491,7 @@ async function createVersusImageForExport(homeTeam, awayTeam, customSettings = {
                     ctx.fillText(leagueName, isLeft ? visibleWidth/2 : 800 - visibleWidth/2, y + logoHeight + 30);
                 }
             } catch (e) {
+                console.error('Chyba při načítání loga, používám iniciály:', e);
                 // Fallback na iniciály
                 ctx.fillStyle = teamColor;
                 ctx.beginPath();
@@ -546,7 +542,6 @@ async function createVersusImageForExport(homeTeam, awayTeam, customSettings = {
     let buffer;
     try {
         buffer = canvas.toBuffer('image/png');
-        console.log(`[createVersusImageForExport] Buffer created: ${buffer ? buffer.length : 0} bytes`);
     } catch (err) {
         console.error('[createVersusImageForExport] ERROR při vytváření bufferu:', err);
         return null;
@@ -635,6 +630,7 @@ async function createLeagueWinnerImage(winnerTeam, liga) {
                 const nh = img.height * ratio;
                 ctx.drawImage(img, x + (size - nw) / 2, y + (size - nh) / 2, nw, nh);
             } catch (e) {
+                console.error('Chyba při načítání loga, používám iniciály:', e);
                 // Fallback - iniciály
                 const centerX = x + size / 2;
                 const centerY = y + size / 2;
@@ -695,7 +691,6 @@ async function createLeagueWinnerImage(winnerTeam, liga) {
     
     try {
         fs.writeFileSync(outPath, buffer);
-        console.log(`[createLeagueWinnerImage] Obrázek uložen: ${outPath}`);
         return publicUrl;
     } catch (err) {
         console.error('[createLeagueWinnerImage] ERROR při ukládání souboru:', err);
@@ -732,7 +727,6 @@ const sendToUserDevices = (user, payload) => {
             })
             .catch(err => {
                 if (err.statusCode === 410 || err.statusCode === 404) {
-                    console.log(`[Push] Odběr expiroval pro uživatele ${user.username}, mažu jej.`);
                     hasChanges = true;
                 } else {
                     console.error(`[Push] Chyba při odesílání pro ${user.username}:`, err);
@@ -808,7 +802,6 @@ const notifyResult = async (matchId, scoreHome, scoreAway) => {
         }
         const isOt = match.result && match.result.ot;
         heroImageUrl = await createVersusImage(homeTeam, awayTeam, match.id, scoreHome, scoreAway, seriesMatches, isOt);
-        console.log(`[notifyResult] Generated heroImageUrl: ${heroImageUrl}`);
     } catch (err) {
         console.error("Chyba při generování Versus obrázku:", err);
     }
@@ -828,7 +821,6 @@ const notifyResult = async (matchId, scoreHome, scoreAway) => {
         ]
     };
 
-    console.log(`[notifyResult] Sending payload with image: ${payload.image}`);
     const users = await getUsers();
     users.forEach(u => sendToUserDevices(u, payload));
 };
@@ -838,16 +830,14 @@ const notifySeriesProgress = async (matchOrId, matchIndex, scoreHome, scoreAway,
     let match;
     if (typeof matchOrId === 'object' && matchOrId !== null) {
         match = matchOrId;
-        console.log(`[notifySeriesProgress] Received match object id=${match.id}`);
     } else {
         const matchId = matchOrId;
-        console.log(`[notifySeriesProgress] CALLED matchId=${matchId}, matchIndex=${matchIndex}, score=${scoreHome}:${scoreAway}`);
         const matches = await getMatches();
         match = matches.find(m => m.id === parseInt(matchId));
     }
     
     if (!match) {
-        console.log(`[notifySeriesProgress] ERROR: Match not found`);
+        console.error(`[notifySeriesProgress] ERROR: Match not found`);
         return;
     }
 
@@ -966,7 +956,6 @@ const notifyLeagueEnd = async (liga, winnerTeam = null) => {
     if (winnerTeam) {
         try {
             heroImageUrl = await createLeagueWinnerImage(winnerTeam, liga);
-            console.log(`[LeagueEnd] Vytvořen obrázek vítěze: ${heroImageUrl}`);
         } catch (err) {
             console.error("Chyba při generování obrázku vítěze:", err);
         }
@@ -1060,7 +1049,6 @@ cron.schedule('0 * * * *', async () => {
 
                 if (!hasTip) {
                     const timeText = type === "4h" ? "4 hodiny" : "hodinu";
-                    console.log(`[CRON] Posílám ${type} upozornění že nemá tip: ${u.username} (${homeName} vs ${awayName})`);
                     sendToUserDevices(u, {
                         title: type === "4h" ? "🔔 Nezapomeň si tipnout!" : "⏳ Poslední šance!",
                         TTL: type === "4h" ? 14400 : 3600,
@@ -1077,7 +1065,6 @@ cron.schedule('0 * * * *', async () => {
                         ]
                     });
                 } else if (hasTip && type === "1h") {
-                    console.log(`[CRON] Posílám ${type} upozornění že začíná zápas: ${u.username} (${homeName} vs ${awayName})`);
                     sendToUserDevices(u, {
                         title: "⏳ Za hodinu už si nezměníš tip!",
                         body: `Za hodinu začíná ${matchTypeSubj} ${homeName} vs ${awayName}.`,
@@ -1124,9 +1111,7 @@ cron.schedule('0 3 * * *', () => { // Spustí se každý den ve 3:00 ráno
 
                     // Pokud je soubor starší než 3 dny, smažeme ho
                     if (now - stats.mtimeMs > MAX_AGE_MS) {
-                        fs.unlink(filePath, err => {
-                            if (!err) console.log(`[ÚKLID] Smazán starý notifikační obrázek: ${file}`);
-                        });
+                        fs.unlink(filePath, err => {});
                     }
                 });
             }

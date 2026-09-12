@@ -81,7 +81,7 @@
         try {
             const response = await fetch(API_URL);
             if (!response.ok) {
-                console.log('Verze: Response not OK, skipping');
+                console.error('Verze: Response not OK, skipping');
                 return;
             }
 
@@ -95,7 +95,7 @@
             // Zobrazit notifikaci
             showVersionNotification(data);
         } catch (error) {
-            console.log('Verze oznámení: Nepodařilo se načíst verzi', error);
+            console.error('Verze oznámení: Nepodařilo se načíst verzi', error);
         }
     }
 
@@ -104,14 +104,14 @@
         try {
             const response = await fetch(API_URL);
             if (!response.ok) {
-                console.log('Verze: Response not OK, skipping');
+                console.error('Verze: Response not OK, skipping');
                 return;
             }
 
             const data = await response.json();
             showVersionNotification(data, true); // forceShow = true
         } catch (error) {
-            console.log('Verze oznámení: Nepodařilo se načíst verzi', error);
+            console.error('Verze oznámení: Nepodařilo se načíst verzi', error);
         }
     };
 

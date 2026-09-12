@@ -533,7 +533,7 @@ html += await generateLeftPanel(data);
                             versionBadge.textContent = data.version;
                         }
                     })
-                    .catch(err => console.log('Nepodařilo se načíst verzi', err));
+                    .catch(err => console.error('Nepodařilo se načíst verzi', err));
             });
         </script>
         <script src="/js/version-notification.js"></script>
@@ -1254,7 +1254,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 versionBadge.textContent = data.version;
             }
         })
-        .catch(err => console.log('Nepodařilo se načíst verzi', err));
+        .catch(err => console.error('Nepodařilo se načíst verzi', err));
 });
 </script></html>`;
         res.send(html);
@@ -1396,7 +1396,7 @@ router.get('/history', requireLogin, async (req, res) => {
                             versionBadge.textContent = data.version;
                         }
                     })
-                    .catch(err => console.log('Nepodařilo se načíst verzi', err));
+                    .catch(err => console.error('Nepodařilo se načíst verzi', err));
             });
         </script>
     </body>
@@ -1580,7 +1580,7 @@ router.get('/history/prestupy', requireLogin, async (req, res) => {
                     versionBadge.textContent = data.version;
                 }
             })
-            .catch(err => console.log('Nepodařilo se načíst verzi', err));
+            .catch(err => console.error('Nepodařilo se načíst verzi', err));
     });
 </script>
 </body>
@@ -1668,7 +1668,7 @@ html += await generateLeftPanel(data, true);
                     versionBadge.textContent = data.version;
                 }
             })
-            .catch(err => console.log('Nepodařilo se načíst verzi', err));
+            .catch(err => console.error('Nepodařilo se načíst verzi', err));
 
         // Funkce pro zobrazení historie a dynamické barvení políček
         function showUserHistory(username) {
@@ -2052,7 +2052,7 @@ html += await generateLeftPanel(data, true);
                     versionBadge.textContent = data.version;
                 }
             })
-            .catch(err => console.log('Nepodařilo se načíst verzi', err));
+            .catch(err => console.error('Nepodařilo se načíst verzi', err));
         </script>
         </section>
         <section class="matches-container">
@@ -2460,7 +2460,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 versionBadge.textContent = data.version;
             }
         })
-        .catch(err => console.log('Nepodařilo se načíst verzi', err));
+        .catch(err => console.error('Nepodařilo se načíst verzi', err));
 });
 </script>
 <main class="main_page">
@@ -2614,10 +2614,6 @@ async function toggleView() {
     const toggleViewBtn = document.getElementById('toggleViewBtn');
     const viewTitle = document.getElementById('viewTitle');
     
-    console.log('toggleView voláno, currentView:', currentView);
-    console.log('allRostersView:', allRostersView, 'display:', allRostersView?.style.display);
-    console.log('individualTeamsView:', individualTeamsView, 'display:', individualTeamsView?.style.display);
-    
     if (currentView === 'transfers') {
         // Přepnout na soupisky
         currentView = 'roster';
@@ -2625,7 +2621,6 @@ async function toggleView() {
         allRostersView.style.display = 'block';
         toggleViewBtn.textContent = '🔄 Zobrazit přestupy';
         viewTitle.textContent = 'Soupisky - ${selectedLiga}';
-        console.log('Přepínám na soupisky, volám showAllRosters()');
         await showAllRosters();
     } else {
         // Přepnout na přestupy
@@ -2634,7 +2629,6 @@ async function toggleView() {
         individualTeamsView.style.display = 'grid';
         toggleViewBtn.textContent = '🔄 Zobrazit všechny soupisky';
         viewTitle.textContent = 'Přestupy a Spekulace - ${selectedLiga}';
-        console.log('Přepínám na přestupy');
     }
 }
 
@@ -2717,6 +2711,7 @@ async function toggleRoster(teamId) {
                 rosterDiv.innerHTML = '<div style="text-align: center; color: #888; font-size: 0.9em;">Žádní hráči v soupisce</div>';
             }
         } catch (error) {
+            console.error('Chyba při načítání soupisky:', error);
             rosterDiv.innerHTML = '<div style="text-align: center; color: #ff4444; font-size: 0.9em;">Chyba při načítání soupisky</div>';
         }
     } else {
@@ -2738,16 +2733,12 @@ async function showAllRosters() {
         const teamIds = JSON.parse(allRostersView?.dataset.teamIds || '[]');
         const teams = JSON.parse(allRostersView?.dataset.teams || '[]');
         
-        console.log('Načítám soupisky pro týmy:', teamIds, teams);
-        
         let allPlayersHtml = '<div style="display: grid; gap: 15px; margin-top: 15px;">';
         
         for (const teamId of teamIds) {
             const res = await fetch('/api/players/' + teamId);
             const data = await res.json();
             const teamData = teams.find(t => t.id === teamId);
-            
-            console.log('Tým:', teamData?.name, 'Data:', data);
             
             // Generovat stejnou strukturu jako v přestupech
             allPlayersHtml += '<div style="position: relative; background-color: #000; border: 2px solid #ff4500; overflow: hidden; display: flex; flex-direction: column; min-height: 250px; box-shadow: 0 4px 15px rgba(0,0,0,0.8);">';
@@ -2826,13 +2817,8 @@ async function showAllRosters() {
         
         allPlayersHtml += '</div>';
         
-        console.log('Výsledné HTML:', allPlayersHtml);
         if (allRostersView) {
-            console.log('Nastavuji innerHTML pro allRostersView');
             allRostersView.innerHTML = allPlayersHtml;
-            console.log('innerHTML nastaveno, display:', allRostersView.style.display);
-        } else {
-            console.log('allRostersView neexistuje!');
         }
     } catch (error) {
         console.error('Chyba při načítání soupisek:', error);
@@ -2991,7 +2977,7 @@ router.post("/image-exporter/generate", requireLogin, express.json({ limit: '50m
                 buffer = await createTransferImage(fromTeam, toTeam, playerName || null, watermark !== 'false', playerPhotoPath, customFromLogoBase64 || null, customToLogoBase64 || null, customSettings);
 
                 if (playerPhotoPath && fs.existsSync(playerPhotoPath)) {
-                    try { fs.unlinkSync(playerPhotoPath); } catch (e) {}
+                    try { fs.unlinkSync(playerPhotoPath); } catch (e) {} // Ignorujeme chyby při mazání temp souboru
                 }
                 const playerSuffix = playerName ? `-${playerName.replace(/\s+/g, '-')}` : '';
                 const fromId = fromTeam.isCustom ? 'custom' : fromTeam.id;
@@ -3524,7 +3510,6 @@ function updateCustomLogoSelects(imageNames) {
 function updateCustomLogoPreview(side) {
     // Tato funkce může v budoucnu zobrazovat náhled vybraného custom loga
     // Prozatím je prázdná, protože náhled není nutný
-    console.log('Custom logo preview pro ' + side + ' - funkce připravena pro budoucí rozšíření');
 }
 
 function deleteCustomImage(name) {
@@ -4095,7 +4080,7 @@ html += `<section class="matches-container" style="flex: 1; padding: 20px;">
                     versionBadge.textContent = data.version;
                 }
             })
-            .catch(err => console.log('Nepodařilo se načíst verzi', err));
+            .catch(err => console.error('Nepodařilo se načíst verzi', err));
     });
 </script>
 </body>
