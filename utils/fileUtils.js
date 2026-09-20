@@ -39,7 +39,6 @@ async function requireAdmin(req, res, next) {
     if (!req.session.user || req.session.role !== 'admin') {
         // Logování neoprávněného přístupu s critical severity
         const username = req.session.user || 'anonymous';
-        const ip = req.ip || req.connection.remoteAddress;
         const path = req.path || req.originalUrl;
         
         logAdminAction(username, "UNAUTHORIZED_ADMIN_ACCESS", `Neoprávněný pokus o přístup k admin endpointu: ${path}`, 'admin', null, req, 'critical', false);
