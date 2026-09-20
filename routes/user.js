@@ -4,7 +4,7 @@ const router = express.Router();
 const path = require('path');
 const {
     requireLogin, prepareDashboardData, getGroupDisplayLabel, generateLeftPanel,
-    getLeagueStatusData, getTableTipsData, generateTimeWidget, getAllowedLeagues, createMatchImage
+    getLeagueStatusData, getTableTipsData, generateTimeWidget, getAllowedLeagues, createMatchImage, logUserAction
 } = require("../utils/fileUtils");
 const { Users, Matches, Leagues, TableTips, ChosenSeason, Players, Settings} = require('../utils/mongoDataAccess');
 // Jednoduchá XSS ochrana - sanitizace HTML tagů
@@ -624,9 +624,11 @@ router.post("/table-tip", requireLogin, express.json(), async (req, res) => {
         }
     } catch (err) {
         console.error("Chyba při ukládání tableTips do MongoDB:", err);
+        await logUserAction(username, "TABLE_TIP", `Neúspěšné tipování tabulky pro ${liga} (${season}) - ${err.message}`, 'table_tip', null, req, 'error', false);
         return res.status(500).send("Chyba při ukládání tipu tabulky.");
     }
 
+    await logUserAction(username, "TABLE_TIP", `Tipování tabulky pro ${liga} (${season})`, 'table_tip', null, req, 'info', true);
     res.sendStatus(200);
 });
 
@@ -732,8 +734,11 @@ router.post("/tip", requireLogin, async (req, res) => {
         );
     } catch (err) {
         console.error("Chyba při ukládání do MongoDB:", err);
+        await logUserAction(username, "MATCH_TIP", `Neúspěšné tipování zápasu ID ${matchId} - ${err.message}`, 'match_tip', matchId, req, 'error', false);
         return res.status(500).send("Chyba při ukládání tipu.");
     }
+
+    await logUserAction(username, "MATCH_TIP", `Tipování zápasu ID ${matchId} (${match.homeTeam} vs ${match.awayTeam})`, 'match_tip', matchId, req, 'info', true);
 
     req.session.save(err => {
         if (err) {
@@ -3271,6 +3276,8 @@ router.post("/image-exporter/generate", requireLogin, express.json({ limit: '50m
         const outPath = path.join(outDir, filename);
         fs.writeFileSync(outPath, buffer);
 
+        await logUserAction(req.session.user, "IMAGE_EXPORT", `Generování obrázku typu: ${type}, soubor: ${filename}`, 'image_export', filename, req, 'info', true);
+
         res.json({
             url: `/images/exports/${filename}`,
             filename: filename
@@ -3278,6 +3285,7 @@ router.post("/image-exporter/generate", requireLogin, express.json({ limit: '50m
 
     } catch (err) {
         console.error('Chyba při generování obrázku:', err);
+        await logUserAction(req.session.user, "IMAGE_EXPORT", `Neúspěšné generování obrázku typu: ${req.body?.type || 'unknown'} - ${err.message}`, 'image_export', null, req, 'error', false);
         res.status(500).json({ error: 'Chyba při generování obrázku' });
     }
 });

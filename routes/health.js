@@ -288,12 +288,21 @@ router.get('/health', async (req, res) => {
 
 // Jednoduchý ping endpoint pro rychlou kontrolu
 router.get('/ping', (req, res) => {
-    res.json({
-        status: 'OK',
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
-        message: 'PONG'
-    });
+    try {
+        res.json({
+            status: 'OK',
+            timestamp: new Date().toISOString(),
+            uptime: process.uptime(),
+            message: 'PONG'
+        });
+    } catch (error) {
+        console.error('Ping endpoint error:', error);
+        res.status(500).json({
+            status: 'ERROR',
+            timestamp: new Date().toISOString(),
+            error: error.message
+        });
+    }
 });
 
 // Detailní status pro UptimeRobot (vždy 200 s detailním popisem)
@@ -316,6 +325,7 @@ router.get('/status', async (req, res) => {
             message: 'All systems operational'
         });
     } catch (error) {
+        console.error('Status endpoint error:', error);
         // I při chybě vracíme 200, ale s informací o problému
         res.status(200).json({
             status: 'DEGRADED',

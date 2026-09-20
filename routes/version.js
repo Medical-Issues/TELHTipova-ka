@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { requireAdmin } = require('../utils/fileUtils');
+const { requireAdmin, logAdminAction } = require('../utils/fileUtils');
 const { connectToDatabase } = require('../config/database');
 
 // GET - Získat aktuální verzi a changelog
@@ -88,11 +88,14 @@ router.post('/version', express.urlencoded({ extended: true }), requireAdmin, as
         };
         
         await versionsCollection.insertOne(newVersion);
-        
+
+        await logAdminAction(req.session.user, "VERSION_CREATE", `Vytvořena nová verze: ${version} - ${title}`, 'version', version, req, 'info', true);
+
         console.log(`✅ Nová verze ${version} vytvořena uživatelem ${req.session.user}`);
         res.json({ success: true, message: `Verze ${version} byla vytvořena` });
     } catch (error) {
         console.error('Chyba při vytváření verze:', error);
+        await logAdminAction(req.session.user, "VERSION_CREATE", `Neúspěšné vytvoření verze: ${req.body?.version || 'unknown'} - ${error.message}`, 'version', null, req, 'error', false);
         res.status(500).json({ error: 'Nepodařilo se vytvořit verzi' });
     }
 });
@@ -260,11 +263,14 @@ router.post('/version-form', express.urlencoded({ extended: true }), requireAdmi
             releasedAt: new Date(),
             createdBy: req.session.user
         });
-        
+
+        await logAdminAction(req.session.user, "VERSION_CREATE", `Vytvořena nová verze z formuláře: ${version} - ${title}`, 'version', version, req, 'info', true);
+
         console.log(`✅ Nová verze ${version} vytvořena uživatelem ${req.session.user}`);
         res.redirect('/api/versions/manage');
     } catch (error) {
         console.error('Chyba při vytváření verze:', error);
+        await logAdminAction(req.session.user, "VERSION_CREATE", `Neúspěšné vytvoření verze z formuláře: ${req.body?.version || 'unknown'} - ${error.message}`, 'version', null, req, 'error', false);
         res.status(500).send('Chyba při vytváření verze');
     }
 });

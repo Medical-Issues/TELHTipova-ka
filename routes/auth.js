@@ -3,11 +3,14 @@ const fs = require('fs');
 const bcrypt = require("bcrypt");
 const express = require("express");
 const router = express.Router();
-const { renderErrorHtml } = require("../utils/fileUtils");
+const { renderErrorHtml, logUserAction, logAdminAction } = require("../utils/fileUtils");
 const { Settings, Users } = require('../utils/mongoDataAccess');
 
 // Jednoduchý brute force protection - max 5 pokusů za 15 minut na IP
 const loginAttempts = new Map();
+
+// Tracking neúspěšných admin přihlášení - critical alert po 5 pokusech
+const adminLoginAttempts = new Map();
 
 // Funkce pro logování neúspěšných pokusů do MongoDB
 async function logFailedLogin(ip, username, reason) {
@@ -111,10 +114,13 @@ router.post("/register", express.urlencoded({ extended: true }), async (req, res
         
         // Uložení do MongoDB
         await Users.insertOne(newUser);
-        
+
+        await logUserAction(username, "REGISTER", `Registrace nového uživatele: ${username}`, 'user', null, req, 'info', true);
+
         res.redirect('/auth/login');
     } catch (err) {
         console.error(err);
+        await logUserAction(username, "REGISTER", `Neúspěšná registrace: ${username} - ${err.message}`, 'user', null, req, 'error', false);
         await renderErrorHtml(res, "Při registraci nastala chyba. Zkuste to prosím později.");
     }
 });
@@ -140,7 +146,7 @@ router.post('/login', express.urlencoded({ extended: true }), checkBruteForce, a
     if (!isLocalhost) {
         // CSRF kontrola jen pro produkci
         if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
-            console.log('CSRF failed - User:', req.body.username, 'Token:', req.body._csrf, 'Session:', req.session.csrfToken);
+            console.error('CSRF failed - User:', req.body.username, 'Token:', req.body._csrf, 'Session:', req.session.csrfToken);
             return res.status(403).send('Neplatný CSRF token');
         }
     }
@@ -165,7 +171,33 @@ router.post('/login', express.urlencoded({ extended: true }), checkBruteForce, a
         }
         // Logovat do DB
         await logFailedLogin(ip, username, 'user_not_found');
+        await logUserAction(username, "LOGIN", `Neúspěšné přihlášení: uživatel nenalezen - ${username}`, 'user', null, req, 'warning', false);
         return res.redirect('/auth/login?error=1');
+    }
+
+    // Pokud se jedná o admin účet, trackingovat neúspěšné pokusy
+    if (user.role === 'admin') {
+        const ip = req.ip || req.connection.remoteAddress;
+        const key = `${ip}:${username}`;
+        
+        if (!adminLoginAttempts.has(key)) {
+            adminLoginAttempts.set(key, []);
+        }
+        
+        const attempts = adminLoginAttempts.get(key);
+        const now = Date.now();
+        
+        // Odstranit staré pokusy (> 1 hodina)
+        const recentAttempts = attempts.filter(time => now - time < 60 * 60 * 1000);
+        adminLoginAttempts.set(key, recentAttempts);
+        
+        // Přidat aktuální pokus
+        recentAttempts.push(now);
+        
+        // Pokud je to 5. pokus, poslat critical alert
+        if (recentAttempts.length === 5) {
+            await logAdminAction(username, "BRUTE_FORCE_SUSPECTED", `5 neúspěšných pokusů o admin přihlášení z IP: ${ip}`, 'admin', null, req, 'critical', false);
+        }
     }
 
     const passwordMatch = await bcrypt.compare(password, user.password);
@@ -178,7 +210,15 @@ router.post('/login', express.urlencoded({ extended: true }), checkBruteForce, a
         }
         // Logovat do DB
         await logFailedLogin(ip, username, 'wrong_password');
+        await logUserAction(username, "LOGIN", `Neúspěšné přihlášení: špatné heslo - ${username}`, 'user', null, req, 'warning', false);
         return res.redirect("/auth/login?error=1");
+    }
+
+    // Reset admin pokusů po úspěšném přihlášení
+    if (user.role === 'admin') {
+        const ip = req.ip || req.connection.remoteAddress;
+        const key = `${ip}:${username}`;
+        adminLoginAttempts.delete(key);
     }
 
     // Reset pokusů po úspěšném přihlášení
@@ -187,6 +227,8 @@ router.post('/login', express.urlencoded({ extended: true }), checkBruteForce, a
 
     req.session.user = username;
     req.session.role = user.role || "user";
+
+    await logUserAction(username, "LOGIN", `Úspěšné přihlášení uživatele: ${username}`, 'user', null, req, 'info', true);
 
     req.session.save((err) => {
         if (err) {
@@ -200,7 +242,11 @@ router.post('/login', express.urlencoded({ extended: true }), checkBruteForce, a
 });
 
 router.get("/logout", (req, res) => {
-    req.session.destroy(() => {
+    const username = req.session.user;
+    req.session.destroy(async () => {
+        if (username) {
+            await logUserAction(username, "LOGOUT", `Odhlášení uživatele: ${username}`, 'user', null, req, 'info', true);
+        }
         res.redirect('/auth/login');
     });
 });

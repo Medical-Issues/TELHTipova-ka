@@ -1119,6 +1119,35 @@ cron.schedule('0 3 * * *', () => { // Spustí se každý den ve 3:00 ráno
     });
 });
 
+// ==========================================
+// CRITICAL EVENT NOTIFICATION
+// ==========================================
+const notifyCriticalEvent = async (username, action, entity, entityId, details, ip) => {
+    const { Users } = require('../utils/mongoDataAccess');
+    const users = await Users.findAll();
+
+    // Filtrujeme jen adminy
+    const admins = users.filter(u => u.role === 'admin');
+
+    const payload = {
+        title: "🚨 KRITICKÁ UDÁLOST",
+        body: `Uživatel: ${username} | Akce: ${action} | Entity: ${entity}${entityId ? ` | ID: ${entityId}` : ''}${ip ? ` | IP: ${ip}` : ''}`,
+        icon: '/images/logo.png',
+        vibrate: [200, 100, 200, 100, 200, 100, 500],
+        url: '/admin/audit-log',
+        requireInteraction: true,
+        urgency: 'high',
+        ttl: 3600, // 1 hodina
+        actions: [
+            { action: 'open_audit', title: 'Zobrazit audit log' },
+            { action: 'close', title: 'Zavřít' }
+        ]
+    };
+
+    admins.forEach(admin => sendToUserDevices(admin, payload));
+    console.log(`[CRITICAL] Odeslána notifikace pro ${admins.length} adminů: ${action} od ${username}`);
+};
+
 module.exports = {
     notifyNewMatches,
     notifyResult,
@@ -1127,5 +1156,6 @@ module.exports = {
     notifyTransfer,
     notifyLeagueEnd,
     sendToUserDevices,
-    createVersusImageForExport
+    createVersusImageForExport,
+    notifyCriticalEvent
 };

@@ -37,6 +37,13 @@ async function requireLogin(req, res, next) {
 
 async function requireAdmin(req, res, next) {
     if (!req.session.user || req.session.role !== 'admin') {
+        // Logování neoprávněného přístupu s critical severity
+        const username = req.session.user || 'anonymous';
+        const ip = req.ip || req.connection.remoteAddress;
+        const path = req.path || req.originalUrl;
+        
+        logAdminAction(username, "UNAUTHORIZED_ADMIN_ACCESS", `Neoprávněný pokus o přístup k admin endpointu: ${path}`, 'admin', null, req, 'critical', false);
+        
         return res.status(403).send(`
             <!DOCTYPE html>
             <html lang="cs">
@@ -2813,9 +2820,14 @@ async function generateLeftPanel(data, isHistory = false) {
     return html;
 }
 
-async function logAdminAction(username, action, details, entity = 'admin', entityId = null, req = null) {
+async function logAdminAction(username, action, details, entity = 'admin', entityId = null, req = null, severity = 'info', success = true) {
     const AuditLog = require('../models/AuditLog');
-    await AuditLog.log(username, action, entity, entityId, details, req);
+    await AuditLog.log(username, action, entity, entityId, details, req, severity, 'admin', success);
+}
+
+async function logUserAction(username, action, details, entity = 'user', entityId = null, req = null, severity = 'info', success = true) {
+    const AuditLog = require('../models/AuditLog');
+    await AuditLog.log(username, action, entity, entityId, details, req, severity, 'user', success);
 }
 
 async function generateTimeWidget() {
@@ -4330,6 +4342,7 @@ module.exports = {
     getChosenSeason,
     generateLeftPanel,
     logAdminAction,
+    logUserAction,
     getLeagueStatusData,
     getTableTipsData,
     generateTimeWidget,
