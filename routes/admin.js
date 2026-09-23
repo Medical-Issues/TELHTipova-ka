@@ -58,12 +58,6 @@ const storage = multer.diskStorage({
     }
 });
 
-// Globální error handler pro admin routy
-router.use(async (err, req, res) => {
-    console.error('Globální chyba v admin routeru:', err);
-    await logAdminAction(req.session.user || 'anonymous', "ADMIN_ERROR", `Globální chyba: ${err.message}`, 'admin', null, req, 'error', false);
-    renderErrorHtml(res, 'Došlo k chybě při zpracování požadavku. Chyba byla logována.', 500);
-});
 
 const fileFilter = (req, file, cb) => {
     // Zakázat WebP - canvas nepodporuje WebP a notifikace by se nezobrazovaly správně
@@ -6886,11 +6880,7 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
 
         const selectedLiga = req.query.liga || leaguesForSeason[0];
         
-        // Kontrola zda je liga povolena pro přestupy (podpora obou formátů)
-        Array.isArray(transferLeagues)
-            ? transferLeagues.includes(selectedLiga)
-            : (transferLeagues?.[selectedSeason]?.includes(selectedLiga) || false);
-// Načtení nastavení výchozího zobrazení
+        // Načtení nastavení výchozího zobrazení
     const settingsData = await Settings.findAll();
     const defaultView = settingsData.defaultView || 'transfers'; // 'transfers' nebo 'roster'
 
@@ -10583,6 +10573,18 @@ router.post('/audit-log/:id/resolve', requireAdmin, async (req, res) => {
         console.error('Chyba při označování logu jako vyřešený:', error);
         res.status(500).json({ success: false, message: 'Chyba při označování logu' });
     }
+});
+
+// noinspection JSUnusedLocalSymbols
+// Globální error handler pro admin routy (Express striktně vyžaduje 4 parametry: err, req, res, next)
+router.use(async (err, req, res, _next) => {
+    console.error('Globální chyba v admin routeru:', err);
+    try {
+        await logAdminAction(req.session?.user || 'anonymous', "ADMIN_ERROR", `Globální chyba: ${err.message}`, 'admin', null, req, 'error', false);
+    } catch (logErr) {
+        console.error('Chyba při logování admin chyby:', logErr);
+    }
+    renderErrorHtml(res, 'Došlo k chybě při zpracování požadavku. Chyba byla logována.', 500);
 });
 
 module.exports = router;
