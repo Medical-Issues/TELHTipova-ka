@@ -95,6 +95,9 @@ router.get('/', requireAdmin, async (req, res) => {
     // Získání zveřejněných lig pro vybranou admin sezónu
     const allowedLeaguesForSeason = allowedLeagues[selectedSeason] || [];
     
+    // Získání lig s přestupy pro vybranou admin sezónu
+    const transferLeaguesForSeason = transferLeagues[selectedSeason] || [];
+    
     const chosenSeasonValue = chosenSeason;
 
     let clinchMode = 'strict';
@@ -266,7 +269,7 @@ router.get('/', requireAdmin, async (req, res) => {
           <div class="setting-item">
             <div class="setting-info">
               <label id="transfersLeaguesLabel" class="setting-label">💰 Ligy s přestupy</label>
-              <span class="setting-description">Ligy s aktivním přestupovým oknem (globální nastavení)<br>
+              <span class="setting-description">Ligy s aktivním přestupovým oknem (nastavení pro každou sezónu zvlášť)<br>
                 <strong>Aktuálně zobrazeno pro sezónu:</strong> ${selectedSeason}</span>
             </div>
             <form method="POST" action="/admin/leagues/transfers" style="display: flex; flex-direction: column; gap: 10px;">
@@ -274,7 +277,7 @@ router.get('/', requireAdmin, async (req, res) => {
               <div class="leagues-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px;">
                 ${allLeagues.map(l => `
                   <label style="display: flex; align-items: center; gap: 6px; font-size: 0.9em;">
-                    <input type="checkbox" name="transferLeagues" value="${l}" ${transferLeagues.includes(l) ? 'checked' : ''}/>
+                    <input type="checkbox" name="transferLeagues" value="${l}" ${transferLeaguesForSeason.includes(l) ? 'checked' : ''}/>
                     <span>${l}</span>
                   </label>
                 `).join('')}
@@ -5497,21 +5500,33 @@ router.post('/leagues/transfers', express.urlencoded({ extended: true }), requir
     if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
         return res.status(403).send('Neplatný CSRF token');
     }
-    
-    let { transferLeagues } = req.body;
 
-    // Ošetření, aby to bylo vždycky pole
-    let savedTransferLeagues = [];
-    if (Array.isArray(transferLeagues)) {
-        savedTransferLeagues = transferLeagues;
-    } else if (typeof transferLeagues === 'string') {
-        savedTransferLeagues = [transferLeagues];
+    const chosenSeason = await ChosenSeason.findAll();
+    const selectedSeason = req.session.adminSeason || chosenSeason;
+
+    let ligaNames = req.body.transferLeagues || [];
+    if (!Array.isArray(ligaNames)) ligaNames = [ligaNames];
+
+    // Načtení existujících dat
+    const existingData = await TransferLeagues.findAll() || {};
+
+    // MIGRACE: Pokud stará data jsou ve formátu pole, převedeme je na objekt podle sezón
+    if (Array.isArray(existingData)) {
+        const oldLeagues = existingData;
+        const migratedData = {};
+        migratedData[chosenSeason] = oldLeagues; // Staré ligy přiřadíme k aktuální sezóně
+        await TransferLeagues.replaceAll(migratedData);
+        // Použijeme nová data
+        const newData = await TransferLeagues.findAll() || {};
+        newData[selectedSeason] = ligaNames;
+        await TransferLeagues.replaceAll(newData);
+    } else {
+        // Aktualizace pouze pro vybranou sezónu
+        existingData[selectedSeason] = ligaNames;
+        await TransferLeagues.replaceAll(existingData);
     }
 
-    // Uložení do MongoDB
-    await TransferLeagues.replaceAll(savedTransferLeagues);
-
-    await logAdminAction(req.session.user, "LIGY_S_PŘESTUPY", `Změněny ligy s přestupy: ${savedTransferLeagues.join(', ')}`, 'league', null, req, 'info', true);
+    await logAdminAction(req.session.user, "LIGY_S_PŘESTUPY", `Změněny ligy s přestupy pro sezónu ${selectedSeason}: ${ligaNames.join(', ')}`, 'league', null, req, 'info', true);
     res.redirect('/admin');
 });
 
