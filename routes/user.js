@@ -1277,9 +1277,13 @@ router.get('/history', requireLogin, async (req, res) => {
     try { matches = await Matches.findAll(); } catch (err) { console.error(err); }
 
     // Načtení přestupů pro kontrolu dostupnosti
-    const { Transfers } = require('../utils/mongoDataAccess');
+    const { Transfers, TransferLeagues } = require('../utils/mongoDataAccess');
     let transfersData = {};
     try { transfersData = await Transfers.findAll(); } catch (err) { console.error(err); }
+    
+    // Načtení lig s povolenými přestupy
+    let transferLeaguesData = {};
+    try { transferLeaguesData = await TransferLeagues.findAll(); } catch (err) { console.error(err); }
 
     const historyMap = new Map();
 
@@ -1289,8 +1293,11 @@ router.get('/history', requireLogin, async (req, res) => {
             allSeasonData[season].leagues.forEach(l => {
                 const key = `${season}_${l.name}`;
                 const hasTransfers = transfersData?.[season]?.[l.name] && Object.keys(transfersData[season][l.name]).length > 0;
+                const hasTransferLeagues = Array.isArray(transferLeaguesData) 
+                    ? transferLeaguesData.includes(l.name) 
+                    : (transferLeaguesData?.[season]?.includes(l.name) || false);
                 const matchCount = matches.filter(m => m.season === season && m.liga === l.name).length;
-                historyMap.set(key, { season, liga: l.name, hasTransfers, matchCount });
+                historyMap.set(key, { season, liga: l.name, hasTransfers, hasTransferLeagues, matchCount });
             });
         }
     });
@@ -1301,8 +1308,11 @@ router.get('/history', requireLogin, async (req, res) => {
             const key = `${m.season}_${m.liga}`;
             if (!historyMap.has(key)) {
                 const hasTransfers = transfersData?.[m.season]?.[m.liga] && Object.keys(transfersData[m.season][m.liga]).length > 0;
+                const hasTransferLeagues = Array.isArray(transferLeaguesData) 
+                    ? transferLeaguesData.includes(m.liga) 
+                    : (transferLeaguesData?.[m.season]?.includes(m.liga) || false);
                 const matchCount = matches.filter(match => match.season === m.season && match.liga === m.liga).length;
-                historyMap.set(key, { season: m.season, liga: m.liga, hasTransfers, matchCount });
+                historyMap.set(key, { season: m.season, liga: m.liga, hasTransfers, hasTransferLeagues, matchCount });
             }
         }
     });
@@ -1362,7 +1372,7 @@ router.get('/history', requireLogin, async (req, res) => {
                     </div>
                     <div class="league-stats">
                         <span>🏆 ${entry.matchCount} zápasů</span>
-                        ${entry.hasTransfers ? '<span>📜 Přestupy dostupné</span>' : ''}
+                        ${entry.hasTransferLeagues ? '<span>📜 Přestupy dostupné</span>' : ''}
                     </div>
                     <div class="league-actions">
                         <a href="/history/a/?liga=${encodeURIComponent(entry.liga)}&season=${encodeURIComponent(entry.season)}" class="history-action-btn history-action-btn-primary">
@@ -1371,7 +1381,7 @@ router.get('/history', requireLogin, async (req, res) => {
                         <a href="/history/table/?liga=${encodeURIComponent(entry.liga)}&season=${encodeURIComponent(entry.season)}" class="history-action-btn history-action-btn-secondary">
                             📊 Tipování tabulky
                         </a>
-                        ${entry.hasTransfers
+                        ${entry.hasTransferLeagues
                             ? `<a href="/history/prestupy?liga=${encodeURIComponent(entry.liga)}&season=${encodeURIComponent(entry.season)}" class="history-action-btn history-action-btn-tertiary">
                                 📜 Přestupy
                                </a>`
@@ -1611,10 +1621,16 @@ router.get('/history/a', requireLogin, async (req, res) => {
     } = data;
 
     // 3. NAČTENÍ PŘESTUPŮ PRO KONTROLU ZDA EXISTUJÍ
-    const { Transfers } = require('../utils/mongoDataAccess');
+    const { Transfers, TransferLeagues } = require('../utils/mongoDataAccess');
     const transfersData = await Transfers.findAll();
     const seasonTransfers = transfersData?.[selectedSeason]?.[selectedLiga] || {};
     const hasTransfers = Object.keys(seasonTransfers).length > 0;
+    
+    // KONTROLA ZDA JE LIGA POVOLENA PRO PŘESTUPY
+    const transferLeaguesData = await TransferLeagues.findAll();
+    const hasTransferLeagues = Array.isArray(transferLeaguesData) 
+        ? transferLeaguesData.includes(selectedLiga) 
+        : (transferLeaguesData?.[selectedSeason]?.includes(selectedLiga) || false);
 
     // 4. DATA SPECIFICKÁ PRO HISTORII (Výběr uživatele z rolovacího menu vpravo)
     const usersWithTips = allUsers.filter(u => u.tips?.[selectedSeason]?.[selectedLiga]?.length > 0).sort((a, b) => a.username.localeCompare(b.username));
@@ -1653,7 +1669,7 @@ p.style.display = which === 'playoff' ? 'block' : 'none';
 <a class="history-btn" href="/history">Zpět na výběr</a>
 <a class="history-btn" style="background:orangered; color:black;" href="/history/a/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy zápasů</a>
 <a class="history-btn" href="/history/table/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy tabulky</a>
-${hasTransfers
+${hasTransferLeagues
     ? `<a class="history-btn" style="background:#00d4ff; color:black;" href="/history/prestupy?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">📜 Přestupy</a>`
     : `<span class="history-btn" style="background:#333; color:#666; cursor:not-allowed;" title="Pro tuto sezónu/ligu nejsou dostupné přestupy">📜 Přestupy</span>`
 }
@@ -1992,10 +2008,16 @@ router.get('/history/table', requireLogin, async (req, res) => {
     isTipsLocked = data.isTipsLocked;
 
     // 3. NAČTENÍ PŘESTUPŮ PRO KONTROLU ZDA EXISTUJÍ
-    const { Transfers } = require('../utils/mongoDataAccess');
+    const { Transfers, TransferLeagues } = require('../utils/mongoDataAccess');
     const transfersData = await Transfers.findAll();
     const seasonTransfers = transfersData?.[selectedSeason]?.[selectedLiga] || {};
     const hasTransfers = Object.keys(seasonTransfers).length > 0;
+    
+    // KONTROLA ZDA JE LIGA POVOLENA PRO PŘESTUPY
+    const transferLeaguesData = await TransferLeagues.findAll();
+    const hasTransferLeagues = Array.isArray(transferLeaguesData) 
+        ? transferLeaguesData.includes(selectedLiga) 
+        : (transferLeaguesData?.[selectedSeason]?.includes(selectedLiga) || false);
 
     const usersWithTableTips = allUsers.filter(u => tableTips?.[selectedSeason]?.[selectedLiga]?.[u.username]).sort((a, b) => a.username.localeCompare(b.username));
     const initialUser = usersWithTableTips.find(u => u.username === username) ? username : (usersWithTableTips[0]?.username || "");
@@ -2032,7 +2054,7 @@ function showTable(which) {
 <a class="history-btn" href="/history">Zpět na výběr</a>
 <a class="history-btn" href="/history/a/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy zápasů</a>
 <a class="history-btn" style="background:orangered; color:black;" href="/history/table/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy tabulky</a>
-${hasTransfers
+${hasTransferLeagues
     ? `<a class="history-btn" style="background:#00d4ff; color:black;" href="/history/prestupy?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">📜 Přestupy</a>`
     : `<span class="history-btn" style="background:#333; color:#666; cursor:not-allowed;" title="Pro tuto sezónu/ligu nejsou dostupné přestupy">📜 Přestupy</span>`
 }
