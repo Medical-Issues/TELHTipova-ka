@@ -10179,7 +10179,7 @@ router.get('/audit-log', requireAdmin, async (req, res) => {
         const { AuditLogs } = require('../utils/mongoDataAccess');
 
         // Filtry z query parametrů
-        const { username, action, entity, limit = '100', showUserLogs = 'false' } = req.query;
+        const { username, action, entity, limit = '100', showUserLogs = 'false', showResolved = 'false' } = req.query;
 
         let logs = await AuditLogs.findAll();
 
@@ -10189,6 +10189,11 @@ router.get('/audit-log', requireAdmin, async (req, res) => {
         // Defaultně skrýt user logy, pokud není checkbox zaškrtnut
         if (showUserLogs !== 'true') {
             logs = logs.filter(log => log.userRole === 'admin');
+        }
+
+        // Defaultně skrýt vyřešené critical logy, pokud není checkbox zaškrtnut
+        if (showResolved !== 'true') {
+            logs = logs.filter(log => !log.resolved);
         }
 
         // Aplikovat filtry
@@ -10406,6 +10411,12 @@ router.get('/audit-log', requireAdmin, async (req, res) => {
                     <label style="display: flex; align-items: center; gap: 5px; margin-bottom: 0;">
                         <input type="checkbox" name="showUserLogs" value="true" ${showUserLogs === 'true' ? 'checked' : ''} style="width: auto; margin: 0;">
                         Zobrazit user logy
+                    </label>
+                </div>
+                <div class="form-group" style="flex: 0; min-width: auto; margin-bottom: 0;">
+                    <label style="display: flex; align-items: center; gap: 5px; margin-bottom: 0;">
+                        <input type="checkbox" name="showResolved" value="true" ${showResolved === 'true' ? 'checked' : ''} style="width: auto; margin: 0;">
+                        Zobrazit vyřešené
                     </label>
                 </div>
                 <button type="submit">Filtrovat</button>

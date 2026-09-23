@@ -70,4 +70,4 @@ Chytřejší Playoff generování ✅
 
 Chytřejší obarvování tabulek základní části a oprava pro kaskádový mód ✅
 
-Exportér který bude odemčený od ligy/sezóny a bude fungovat na custom obrázky / customizace barev
+Exportér který bude odemčený od ligy/sezóny a bude fungovat na custom obrázky / customizace barev ✅
