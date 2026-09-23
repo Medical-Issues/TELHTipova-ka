@@ -1,5 +1,5 @@
 const fs = require("fs");
-const { Users, Matches, Teams, Leagues, AllowedLeagues, ChosenSeason, Settings, TeamBonuses, LeagueStatus, TableTips, Playoff, PlayoffTemplates, TransferLeagues, Transfers, Tips, Players } = require('../utils/mongoDataAccess');
+const { Users, Matches, Teams, Leagues, AllowedLeagues, ChosenSeason, Settings, TeamBonuses, LeagueStatus, TableTips, Playoff, PlayoffTemplates, TransferLeagues, Transfers, Tips, Players, AuditLogs } = require('../utils/mongoDataAccess');
 const express = require("express");
 const router = express.Router();
 const path = require('path');
@@ -152,6 +152,15 @@ router.get('/', requireAdmin, async (req, res) => {
     const finishedMatches = filteredMatches
         .filter(m => m.result)
         .sort((a, b) => new Date(a.datetime) - new Date(b.datetime));
+
+    // Načíst počet nevyřešených critical logů pro badge u audit-log
+    let criticalCount = 0;
+    try {
+        const AuditLog = require('../models/AuditLog');
+        criticalCount = await AuditLog.getUnresolvedCriticalCount();
+    } catch (e) {
+        console.error('Chyba při načítání critical logů:', e);
+    }
 
     let html = `
 <!DOCTYPE html>
@@ -330,7 +339,10 @@ router.get('/', requireAdmin, async (req, res) => {
         <h3>👤 Uživatelé a obsah</h3>
         <div class="nav-buttons">
           <a href="/admin/users" class="btn btn-primary">👥 Správa uživatelů</a>
-          <a href="/admin/audit-log" class="btn btn-secondary">📋 Audit Log</a>
+          <a href="/admin/audit-log" class="btn btn-secondary" style="position: relative;">
+            📋 Audit Log
+            ${criticalCount > 0 ? `<span style="position: absolute; top: -8px; right: -8px; background: #dc3545; color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 0.75em; font-weight: bold;">${criticalCount}</span>` : ''}
+          </a>
           <a href="/admin/images/manage" class="btn btn-secondary">🖼️ Správce obrázků</a>
           <a href="/admin/transfers/manage" class="btn btn-secondary">💰 Správa přestupů</a>
         </div>
@@ -1161,11 +1173,16 @@ router.post('/edit/:id', express.urlencoded({ extended: true }), requireAdmin, a
 
         // Vyhodnocení série pouze v případě dosažení potřebného počtu výher
         if (seriesHomeWins >= requiredWins || seriesAwayWins >= requiredWins) {
+            const oldResult = match.result;
             match.result = {
                 scoreHome: seriesHomeWins,
                 scoreAway: seriesAwayWins,
                 winner: seriesHomeWins > seriesAwayWins ? 'home' : 'away'
             };
+            // Logování přidání výsledku playoff série
+            if (!oldResult) {
+                await logAdminAction(req.session.user, "VÝSLEDEK_PLAYOFF_SÉRIE", `Přidán výsledek playoff série ID ${matchId}: ${seriesHomeWins}:${seriesAwayWins} (${match.liga})`, 'match', matchId, req, 'info', true);
+            }
         } else {
             delete match.result; // Série ještě neskončila
 
@@ -1182,6 +1199,7 @@ router.post('/edit/:id', express.urlencoded({ extended: true }), requireAdmin, a
             const sideSwap = req.body.sideSwap === 'true' || req.body.sideSwap === 'on';
             const scoreH = parseInt(scoreHome);
             const scoreA = parseInt(scoreAway);
+            const oldResult = match.result;
             match.result = {
                 scoreHome: scoreH,
                 scoreAway: scoreA,
@@ -1189,6 +1207,10 @@ router.post('/edit/:id', express.urlencoded({ extended: true }), requireAdmin, a
                 sideSwap: sideSwap,
                 winner: scoreH > scoreA ? 'home' : 'away'
             };
+            // Logování přidání výsledku běžného zápasu
+            if (!oldResult) {
+                await logAdminAction(req.session.user, "VÝSLEDEK_ZÁPASU", `Přidán výsledek zápasu ID ${matchId}: ${scoreH}:${scoreA} (${match.liga})${req.body.overtime === 'on' ? ' (prodloužení)' : ''}`, 'match', matchId, req, 'info', true);
+            }
         } else {
             delete match.result;
         }
@@ -1452,7 +1474,7 @@ router.post('/new/match', express.urlencoded({ extended: true }), requireAdmin, 
     await checkAndCreatePlayoffMatches(season, finalLiga);
     await checkAndPropagateWinners(season, finalLiga);
     
-    await logAdminAction(req.session.user, "NOVÝ_ZÁPAS", `Vytvořen nový zápas: ${homeTeam.name} vs ${awayTeam.name} (${finalLiga})`, 'match', null, req);
+    await logAdminAction(req.session.user, "NOVÝ_ZÁPAS", `Vytvořen nový zápas: ${homeTeam.name} vs ${awayTeam.name} (${finalLiga}, ${season}) - Playoff: ${isPlayoff === 'on'}, BO: ${bo || 'N/A'}, Locked: ${locked === 'on'}, Baráž: ${isBarazBool}`, 'match', newMatch.id, req, 'info', true);
     res.redirect(`/admin?liga=${encodeURIComponent(finalLiga)}&season=${encodeURIComponent(season)}`);
 });
 
@@ -1969,11 +1991,16 @@ router.post('/edit/:id', express.urlencoded({ extended: true }), requireAdmin, a
 
         // Vyhodnocení série pouze v případě dosažení potřebného počtu výher
         if (seriesHomeWins >= requiredWins || seriesAwayWins >= requiredWins) {
+            const oldResult = match.result;
             match.result = {
                 scoreHome: seriesHomeWins,
                 scoreAway: seriesAwayWins,
                 winner: seriesHomeWins > seriesAwayWins ? 'home' : 'away'
             };
+            // Logování přidání výsledku playoff série
+            if (!oldResult) {
+                await logAdminAction(req.session.user, "VÝSLEDEK_PLAYOFF_SÉRIE", `Přidán výsledek playoff série ID ${matchId}: ${seriesHomeWins}:${seriesAwayWins} (${match.liga})`, 'match', matchId, req, 'info', true);
+            }
         } else {
             delete match.result; // Série ještě neskončila
 
@@ -1990,6 +2017,7 @@ router.post('/edit/:id', express.urlencoded({ extended: true }), requireAdmin, a
             const scoreH = parseInt(scoreHome);
             const scoreA = parseInt(scoreAway);
             const isOvertime = req.body.overtime === 'on';
+            const oldResult = match.result;
             match.result = {
                 scoreHome: scoreH,
                 scoreAway: scoreA,
@@ -1997,6 +2025,10 @@ router.post('/edit/:id', express.urlencoded({ extended: true }), requireAdmin, a
                 sideSwap: sideSwap,
                 winner: scoreH > scoreA ? 'home' : 'away'
             };
+            // Logování přidání výsledku běžného zápasu
+            if (!oldResult) {
+                await logAdminAction(req.session.user, "VÝSLEDEK_ZÁPASU", `Přidán výsledek zápasu ID ${matchId}: ${scoreH}:${scoreA} (${match.liga})${isOvertime ? ' (prodloužení)' : ''}`, 'match', matchId, req, 'info', true);
+            }
         } else {
             delete match.result;
         }
@@ -3872,7 +3904,7 @@ router.post('/playoff/save-position-config', express.urlencoded({ extended: true
 
         await LeagueStatus.replaceAll(statusData);
 
-        await logAdminAction(req.session.user, "PLAYOFF_POSITION_CONFIG", `Uložena konfigurace pozic pro ${league} (${season})`, 'playoff', null, req);
+        await logAdminAction(req.session.user, "PLAYOFF_POSITION_CONFIG", `Uložena konfigurace pozic pro ${league} (${season}) - Typ baráže: ${barazType || 'manual'}, počet přiřazení: ${configParts.length}`, 'playoff', null, req, 'info', true);
         
         res.redirect(`/admin/playoff?league=${encodeURIComponent(league)}`);
     } catch (error) {
@@ -4671,7 +4703,7 @@ router.post('/leagues/update', express.urlencoded({ extended: true }), requireAd
             await Leagues.replaceAll(allSeasonData);
         }
     }
-    await logAdminAction(req.session.user, "ÚPRAVA_LIGY", `Upraveno nastavení ligy: ${leagueName}`, 'league', null, req);
+    await logAdminAction(req.session.user, "ÚPRAVA_LIGY", `Upraveno nastavení ligy: ${originalLeagueName} -> ${leagueName} - Max zápasů: ${maxMatches}, ČF: ${quarterfinal}, P-in: ${playin}, Baráž: ${relegation}, Tiebreaker: ${tiebreakerPriority}, Playoff formát: ${playoffFormat}, X-tá tabulka: ${crossGroupEnabled === 'on' ? 'zapnuta' : 'vypnuta'} (pozice: ${crossGroupPosition})`, 'league', leagueName, req, 'info', true);
     res.redirect('/admin/leagues/manage');
 });
 
@@ -4691,7 +4723,7 @@ router.post('/leagues/delete', express.urlencoded({ extended: true }), requireAd
 
         await Leagues.replaceAll(allSeasonData);
     }
-    await logAdminAction(req.session.user, "SMAZÁNÍ_LIGY", `Kompletně smazána liga: ${league}`, 'league', null, req);
+    await logAdminAction(req.session.user, "SMAZÁNÍ_LIGY", `Kompletně smazána liga: ${league} (${selectedSeason})`, 'league', league, req, 'warning', true);
     res.redirect('/admin/leagues/manage');
 });
 router.post("/toggle-regular-season", express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
@@ -5300,6 +5332,7 @@ router.post('/matches/import-run', express.urlencoded({ extended: true }), requi
 
         if (!importResult.success) {
             console.error('❌ Chyba při importu z Livesport:', importResult.error);
+            await logAdminAction(req.session.user, "IMPORT_ZÁPASŮ_LIVESPORT_ERROR", `Chyba při importu z Livesportu pro ${liga} (${season}): ${importResult.error}`, 'match', null, req, 'error', false);
             return res.status(500).send(`
             <!DOCTYPE html>
             <html lang="cs">
@@ -5428,11 +5461,12 @@ router.post('/matches/import-run', express.urlencoded({ extended: true }), requi
         </html>
         `;
 
-        await logAdminAction(req.session.user, "IMPORT_ZÁPASŮ_LIVESPORT", `Importováno ${newMatchesCount} zápasů z Livesportu pro ${liga} (${season})`, 'match', null, req);
+        await logAdminAction(req.session.user, "IMPORT_ZÁPASŮ_LIVESPORT", `Importováno ${newMatchesCount} zápasů z Livesportu pro ${liga} (${season}) - celkem nalezeno: ${importResult.stats?.totalFound || 0}, spárováno: ${importResult.matches.length}, přeskočeno: ${skippedCount}, mimo rozsah: ${outOfRangeCount}${importResult.notFoundTeams.length > 0 ? `, nespárované týmy: ${importResult.notFoundTeams.join(', ')}` : ''}`, 'match', null, req, 'info', true);
         res.send(htmlRes);
 
     } catch (error) {
         console.error('❌ Chyba při importu z Livesport:', error);
+        await logAdminAction(req.session.user, "IMPORT_ZÁPASŮ_LIVESPORT_ERROR", `Kritická chyba při importu z Livesportu pro ${liga} (${season}): ${error.message}`, 'match', null, req, 'critical', false);
         res.status(500).send(`
         <!DOCTYPE html>
         <html lang="cs">
@@ -5477,6 +5511,7 @@ router.post('/leagues/transfers', express.urlencoded({ extended: true }), requir
     // Uložení do MongoDB
     await TransferLeagues.replaceAll(savedTransferLeagues);
 
+    await logAdminAction(req.session.user, "LIGY_S_PŘESTUPY", `Změněny ligy s přestupy: ${savedTransferLeagues.join(', ')}`, 'league', null, req, 'info', true);
     res.redirect('/admin');
 });
 
@@ -7434,7 +7469,7 @@ router.post('/transfers/save', express.urlencoded({ extended: true }), requireAd
     } else {
         console.log(`[Transfer] Notifikace přeskočena: send=${shouldSendNotification}, changes=${newTransfersNotification.length}`);
     }
-    await logAdminAction(req.session.user, "PŘESTUPY", `Uloženy přestupy pro ligu ${liga}`);
+    await logAdminAction(req.session.user, "PŘESTUPY", `Uloženy přestupy pro ligu ${liga} (${selectedSeason}) - počet změn: ${newTransfersNotification.length}, odeslána notifikace: ${shouldSendNotification}`, 'transfer', null, req, 'info', true);
     res.redirect(`/admin/transfers/manage?liga=${encodeURIComponent(liga)}`);
 });
 
@@ -10305,6 +10340,31 @@ router.get('/audit-log', requireAdmin, async (req, res) => {
         .severity-error { background: #dc3545; color: white; }
         .severity-critical { background: #721c24; color: white; }
     </style>
+    <script>
+        async function resolveLog(logId) {
+            if (!confirm('Opravdu chceš označit tento critical error jako vyřešený?')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/admin/audit-log/${logId}/resolve`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                if (response.ok) {
+                    location.reload();
+                } else {
+                    alert('Chyba při označování logu jako vyřešený');
+                }
+            } catch (error) {
+                console.error('Chyba:', error);
+                alert('Chyba při označování logu jako vyřešený');
+            }
+        }
+    </script>
 </head>
 <body class="admin-panel">
     <div class="audit-log-container">
@@ -10366,6 +10426,7 @@ router.get('/audit-log', requireAdmin, async (req, res) => {
                     <th>Stav</th>
                     <th>Detaily</th>
                     <th>IP adresa</th>
+                    <th>Akce</th>
                 </tr>
             </thead>
             <tbody>
@@ -10390,7 +10451,7 @@ router.get('/audit-log', requireAdmin, async (req, res) => {
                         : String(log.details || '');
 
                     return `
-                        <tr>
+                        <tr ${log.resolved ? 'style="opacity: 0.5;"' : ''}>
                             <td class="timestamp">${new Date(log.timestamp).toLocaleString('cs-CZ')}</td>
                             <td class="username">${log.username}</td>
                             <td class="action"><span class="action-badge ${actionClass}">${log.action}</span></td>
@@ -10401,6 +10462,12 @@ router.get('/audit-log', requireAdmin, async (req, res) => {
                             <td>${log.success === false ? '❌' : '✅'}</td>
                             <td class="details">${detailsStr}</td>
                             <td class="ip">${log.ip || '-'}</td>
+                            <td>
+                                ${log.severity === 'critical' && !log.resolved ? 
+                                    `<button onclick="resolveLog('${log.id}')" style="padding: 4px 8px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8em;">✓ Vyřešit</button>` : 
+                                    (log.resolved ? '<span style="color: #28a745;">✓ Vyřešeno</span>' : '-')
+                                }
+                            </td>
                         </tr>
                     `;
                 }).join('')}
@@ -10419,6 +10486,32 @@ router.get('/audit-log', requireAdmin, async (req, res) => {
     </div>
 </body>
 </html>`;
+
+        res.send(html);
+    } catch (error) {
+        console.error('Chyba při načítání audit logu:', error);
+        res.status(500).send('Chyba při načítání audit logu');
+    }
+});
+
+// Endpoint pro označení logu jako vyřešený
+router.post('/audit-log/:id/resolve', requireAdmin, async (req, res) => {
+    try {
+        const AuditLog = require('../models/AuditLog');
+        const logId = req.params.id;
+        
+        const resolvedLog = await AuditLog.markAsResolved(logId);
+        
+        if (resolvedLog) {
+            res.json({ success: true, message: 'Log označen jako vyřešený' });
+        } else {
+            res.status(404).json({ success: false, message: 'Log nenalezen' });
+        }
+    } catch (error) {
+        console.error('Chyba při označování logu jako vyřešený:', error);
+        res.status(500).json({ success: false, message: 'Chyba při označování logu' });
+    }
+});
 
         res.send(html);
     } catch (error) {

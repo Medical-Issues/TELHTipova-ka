@@ -14,6 +14,7 @@ class AuditLog {
         this.severity = data.severity || 'info'; // 'info', 'warning', 'error', 'critical'
         this.userRole = data.userRole || 'user'; // 'admin', 'user'
         this.success = data.success !== false; // default true, false pro neúspěšné akce
+        this.resolved = data.resolved || false; // true pokud byl critical error označen jako vyřešený
     }
 
     static async log(username, action, entity, entityId = null, details = {}, req = null, severity = 'info', userRole = 'user', success = true) {
@@ -35,15 +36,15 @@ class AuditLog {
         // Uložit do MongoDB
         await AuditLogs.insertOne(auditLog);
 
-        // Automatická notifikace při critical severity
-        if (severity === 'critical') {
-            try {
-                const { notifyCriticalEvent } = require('../routes/notificationService');
-                await notifyCriticalEvent(username, action, entity, entityId, details, logData.ip);
-            } catch (notifError) {
-                console.error('Chyba při odesílání critical notifikace:', notifError);
-            }
-        }
+        // Automatická notifikace při critical severity - ZRUŠENO podle požadavku uživatele
+        // if (severity === 'critical') {
+        //     try {
+        //         const { notifyCriticalEvent } = require('../routes/notificationService');
+        //         await notifyCriticalEvent(username, action, entity, entityId, details, logData.ip);
+        //     } catch (notifError) {
+        //         console.error('Chyba při odesílání critical notifikace:', notifError);
+        //     }
+        // }
 
         // Uložit i do admin_log.txt pro kompatibilitu
         const fs = require('fs');
@@ -86,6 +87,22 @@ class AuditLog {
             const logDate = new Date(log.timestamp);
             return logDate >= new Date(startDate) && logDate <= new Date(endDate);
         });
+    }
+
+    static async markAsResolved(logId) {
+        const logs = await AuditLogs.findAll();
+        const log = logs.find(l => l.id === logId);
+        if (log) {
+            log.resolved = true;
+            await AuditLogs.replaceAll(logs);
+            return log;
+        }
+        return null;
+    }
+
+    static async getUnresolvedCriticalCount() {
+        const logs = await AuditLogs.findAll();
+        return logs.filter(log => log.severity === 'critical' && !log.resolved).length;
     }
 }
 

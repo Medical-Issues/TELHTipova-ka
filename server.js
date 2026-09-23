@@ -355,7 +355,7 @@ app.get('/warm', async (req, res) => {
 });
 
 // Admin endpoint pro manuální restore z GitHubu
-app.post('/admin/restore-from-github', (req, res) => {
+app.post('/admin/restore-from-github', async (req, res) => {
     const csrfToken = req.headers['x-csrf-token'] || req.body._csrf;
     if (!csrfToken || csrfToken !== req.session.csrfToken) {
         return res.status(403).json({ error: 'Neplatný CSRF token' });
@@ -365,19 +365,25 @@ app.post('/admin/restore-from-github', (req, res) => {
         return res.status(400).json({ success: false, message: 'GITHUB_TOKEN není nastaven' });
     }
 
-    restoreFromGitHub().then(success => {
+    const { logAdminAction } = require('./utils/fileUtils');
+    await logAdminAction(req.session.user, "GITHUB_RESTORE_START", `Spuštěn restore obrázků z GitHubu`, 'admin', null, req, 'info', true);
+
+    restoreFromGitHub().then(async (success) => {
         if (success) {
+            await logAdminAction(req.session.user, "GITHUB_RESTORE_SUCCESS", `Restore obrázků z GitHubu úspěšný`, 'admin', null, req, 'info', true);
             res.json({ success: true, message: 'Restore obrázků z GitHubu úspěšný' });
         } else {
+            await logAdminAction(req.session.user, "GITHUB_RESTORE_FAILED", `Restore obrázků z GitHubu selhal`, 'admin', null, req, 'error', false);
             res.status(500).json({ success: false, message: 'Restore obrázků z GitHubu selhal' });
         }
-    }).catch(error => {
+    }).catch(async (error) => {
+        await logAdminAction(req.session.user, "GITHUB_RESTORE_ERROR", `Chyba při restore z GitHubu: ${error.message}`, 'admin', null, req, 'critical', false);
         res.status(500).json({ success: false, message: error.message });
     });
 });
 
 // Admin endpoint pro kompletní restore (JSON + obrázky) - pro nouzové případy
-app.post('/admin/full-restore-from-github', (req, res) => {
+app.post('/admin/full-restore-from-github', async (req, res) => {
     const csrfToken = req.headers['x-csrf-token'] || req.body._csrf;
     if (!csrfToken || csrfToken !== req.session.csrfToken) {
         return res.status(403).json({ error: 'Neplatný CSRF token' });
@@ -387,13 +393,19 @@ app.post('/admin/full-restore-from-github', (req, res) => {
         return res.status(400).json({ success: false, message: 'GITHUB_TOKEN není nastaven' });
     }
 
-    fullRestoreFromGitHub().then(success => {
+    const { logAdminAction } = require('./utils/fileUtils');
+    await logAdminAction(req.session.user, "GITHUB_FULL_RESTORE_START", `Spuštěn kompletní restore (JSON + obrázky) z GitHubu`, 'admin', null, req, 'warning', true);
+
+    fullRestoreFromGitHub().then(async (success) => {
         if (success) {
+            await logAdminAction(req.session.user, "GITHUB_FULL_RESTORE_SUCCESS", `Kompletní restore (JSON + obrázky) z GitHubu úspěšný`, 'admin', null, req, 'info', true);
             res.json({ success: true, message: 'Kompletní restore (JSON + obrázky) z GitHubu úspěšný' });
         } else {
+            await logAdminAction(req.session.user, "GITHUB_FULL_RESTORE_FAILED", `Kompletní restore z GitHubu selhal`, 'admin', null, req, 'error', false);
             res.status(500).json({ success: false, message: 'Kompletní restore z GitHubu selhal' });
         }
-    }).catch(error => {
+    }).catch(async (error) => {
+        await logAdminAction(req.session.user, "GITHUB_FULL_RESTORE_ERROR", `Chyba při kompletním restore z GitHubu: ${error.message}`, 'admin', null, req, 'critical', false);
         res.status(500).json({ success: false, message: error.message });
     });
 });
