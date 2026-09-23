@@ -2090,14 +2090,10 @@ router.get('/history/roster', requireLogin, async (req, res) => {
                 const roster = data.roster || data.players || [];
                 if (roster.length > 0) {
                     // Rozdělení hráčů podle pozice
-                    const positions = {
-                        'Brankář': [],
-                        'Obránce': [],
-                        'Útočník': [],
-                        'Centr': [],
-                        'Křídlo': [],
-                        'Jiné': []
-                    };
+                    const positionList = ['Brankář', 'Obránce', 'Útočník', 'Centr', 'Křídlo', 'Jiné'];
+                    const defaultPos = 'Jiné';
+                    const positions = {};
+                    positionList.forEach(pos => { positions[pos] = []; });
                     
                     // Status barvy a ikony
                     const statusColors = {
@@ -2125,11 +2121,11 @@ router.get('/history/roster', requireLogin, async (req, res) => {
                     };
                     
                     roster.forEach(p => {
-                        const pos = p.position || 'Jiné';
+                        const pos = p.position || defaultPos;
                         if (positions[pos]) {
                             positions[pos].push(p);
                         } else {
-                            positions['Jiné'].push(p);
+                            positions[defaultPos].push(p);
                         }
                         // Přidat status barvy a ikony
                         p.statusColor = statusColors[p.status] || '#6c757d';
@@ -2138,12 +2134,13 @@ router.get('/history/roster', requireLogin, async (req, res) => {
                     });
 
                     // Seřadit hráče v každé kategorii podle čísla dresu
-                    Object.keys(positions).forEach(key => {
-                        positions[key].sort((a, b) => (a.number || 999) - (b.number || 999));
+                    positionList.forEach(pos => {
+                        positions[pos].sort((a, b) => (a.number || 999) - (b.number || 999));
                     });
 
                     let playersHtml = '';
-                    Object.entries(positions).forEach(([pos, players]) => {
+                    positionList.forEach(pos => {
+                        const players = positions[pos];
                         if (players.length > 0) {
                             playersHtml += '<div style="margin-bottom: 25px;">';
                             playersHtml += '<h3 style="color: #00d4ff; font-size: 1.2em; margin: 0 0 12px 0; border-bottom: 2px solid #00d4ff; padding-bottom: 8px; display: flex; align-items: center; gap: 10px;">';
@@ -2944,31 +2941,28 @@ async function toggleRoster(teamId) {
 
             if (data.players && data.players.length > 0) {
                 // Rozdělení hráčů podle pozice
-                const positions = {
-                    'Brankář': [],
-                    'Obránce': [],
-                    'Útočník': [],
-                    'Centr': [],
-                    'Křídlo': [],
-                    'Jiné': []
-                };
+                const positionList = ['Brankář', 'Obránce', 'Útočník', 'Centr', 'Křídlo', 'Jiné'];
+                const defaultPos = 'Jiné';
+                const positions = {};
+                positionList.forEach(pos => { positions[pos] = []; });
                 
                 data.players.forEach(p => {
-                    const pos = p.position || 'Jiné';
+                    const pos = p.position || defaultPos;
                     if (positions[pos]) {
                         positions[pos].push(p);
                     } else {
-                        positions['Jiné'].push(p);
+                        positions[defaultPos].push(p);
                     }
                 });
 
                 // Seřadit hráče v každé kategorii podle čísla dresu
-                Object.keys(positions).forEach(key => {
-                    positions[key].sort((a, b) => (a.number || 999) - (b.number || 999));
+                positionList.forEach(pos => {
+                    positions[pos].sort((a, b) => (a.number || 999) - (b.number || 999));
                 });
 
                 let playersHtml = '';
-                Object.entries(positions).forEach(([pos, players]) => {
+                positionList.forEach(pos => {
+                    const players = positions[pos];
                     if (players.length > 0) {
                         playersHtml += '<div style="margin-bottom: 25px;">';
                         playersHtml += '<h3 style="color: #00d4ff; font-size: 1.2em; margin: 0 0 12px 0; border-bottom: 2px solid #00d4ff; padding-bottom: 8px; display: flex; align-items: center; gap: 10px;">';
@@ -3047,30 +3041,27 @@ async function showAllRosters() {
             
             if (data.players && data.players.length > 0) {
                 // Rozdělení hráčů podle pozice
-                const positions = {
-                    'Brankář': [],
-                    'Obránce': [],
-                    'Útočník': [],
-                    'Centr': [],
-                    'Křídlo': [],
-                    'Jiné': []
-                };
+                const positionList = ['Brankář', 'Obránce', 'Útočník', 'Centr', 'Křídlo', 'Jiné'];
+                const defaultPos = 'Jiné';
+                const positions = {};
+                positionList.forEach(pos => { positions[pos] = []; });
                 
                 data.players.forEach(p => {
-                    const pos = p.position || 'Jiné';
+                    const pos = p.position || defaultPos;
                     if (positions[pos]) {
                         positions[pos].push(p);
                     } else {
-                        positions['Jiné'].push(p);
+                        positions[defaultPos].push(p);
                     }
                 });
 
                 // Seřadit hráče v každé kategorii podle čísla dresu
-                Object.keys(positions).forEach(key => {
-                    positions[key].sort((a, b) => (a.number || 999) - (b.number || 999));
+                positionList.forEach(pos => {
+                    positions[pos].sort((a, b) => (a.number || 999) - (b.number || 999));
                 });
 
-                Object.entries(positions).forEach(([pos, players]) => {
+                positionList.forEach(pos => {
+                    const players = positions[pos];
                     if (players.length > 0) {
                         allPlayersHtml += '<div style="margin-bottom: 25px;">';
                         allPlayersHtml += '<h3 style="color: #00d4ff; font-size: 1.2em; margin: 0 0 12px 0; border-bottom: 2px solid #00d4ff; padding-bottom: 8px; display: flex; align-items: center; gap: 10px;">';

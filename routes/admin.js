@@ -59,7 +59,7 @@ const storage = multer.diskStorage({
 });
 
 // Globální error handler pro admin routy
-router.use(async (err, req, res, next) => {
+router.use(async (err, req, res) => {
     console.error('Globální chyba v admin routeru:', err);
     await logAdminAction(req.session.user || 'anonymous', "ADMIN_ERROR", `Globální chyba: ${err.message}`, 'admin', null, req, 'error', false);
     renderErrorHtml(res, 'Došlo k chybě při zpracování požadavku. Chyba byla logována.', 500);
@@ -6887,8 +6887,8 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
         const selectedLiga = req.query.liga || leaguesForSeason[0];
         
         // Kontrola zda je liga povolena pro přestupy (podpora obou formátů)
-        const hasTransferLeagues = Array.isArray(transferLeagues) 
-            ? transferLeagues.includes(selectedLiga) 
+        Array.isArray(transferLeagues)
+            ? transferLeagues.includes(selectedLiga)
             : (transferLeagues?.[selectedSeason]?.includes(selectedLiga) || false);
 // Načtení nastavení výchozího zobrazení
     const settingsData = await Settings.findAll();
