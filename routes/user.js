@@ -1624,9 +1624,8 @@ router.get('/history/a', requireLogin, async (req, res) => {
     const { Transfers, TransferLeagues } = require('../utils/mongoDataAccess');
     const transfersData = await Transfers.findAll();
     const seasonTransfers = transfersData?.[selectedSeason]?.[selectedLiga] || {};
-    const hasTransfers = Object.keys(seasonTransfers).length > 0;
-    
-    // KONTROLA ZDA JE LIGA POVOLENA PRO PŘESTUPY
+    Object.keys(seasonTransfers).length > 0;
+// KONTROLA ZDA JE LIGA POVOLENA PRO PŘESTUPY
     const transferLeaguesData = await TransferLeagues.findAll();
     const hasTransferLeagues = Array.isArray(transferLeaguesData) 
         ? transferLeaguesData.includes(selectedLiga) 
@@ -2011,9 +2010,8 @@ router.get('/history/table', requireLogin, async (req, res) => {
     const { Transfers, TransferLeagues } = require('../utils/mongoDataAccess');
     const transfersData = await Transfers.findAll();
     const seasonTransfers = transfersData?.[selectedSeason]?.[selectedLiga] || {};
-    const hasTransfers = Object.keys(seasonTransfers).length > 0;
-    
-    // KONTROLA ZDA JE LIGA POVOLENA PRO PŘESTUPY
+    Object.keys(seasonTransfers).length > 0;
+// KONTROLA ZDA JE LIGA POVOLENA PRO PŘESTUPY
     const transferLeaguesData = await TransferLeagues.findAll();
     const hasTransferLeagues = Array.isArray(transferLeaguesData) 
         ? transferLeaguesData.includes(selectedLiga) 
