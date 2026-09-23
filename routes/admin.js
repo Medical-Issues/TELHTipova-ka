@@ -1,5 +1,5 @@
 const fs = require("fs");
-const { Users, Matches, Teams, Leagues, AllowedLeagues, ChosenSeason, Settings, TeamBonuses, LeagueStatus, TableTips, Playoff, PlayoffTemplates, TransferLeagues, Transfers, Tips, Players, AuditLogs } = require('../utils/mongoDataAccess');
+const { Users, Matches, Teams, Leagues, AllowedLeagues, ChosenSeason, Settings, TeamBonuses, LeagueStatus, TableTips, Playoff, PlayoffTemplates, TransferLeagues, Transfers, Tips, Players} = require('../utils/mongoDataAccess');
 const express = require("express");
 const router = express.Router();
 const path = require('path');
@@ -10352,7 +10352,7 @@ router.get('/audit-log', requireAdmin, async (req, res) => {
             }
             
             try {
-                const response = await fetch(`/admin/audit-log/${logId}/resolve`, {
+                const response = await fetch('/admin/audit-log/' + logId + '/resolve', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -10521,13 +10521,6 @@ router.post('/audit-log/:id/resolve', requireAdmin, async (req, res) => {
     } catch (error) {
         console.error('Chyba při označování logu jako vyřešený:', error);
         res.status(500).json({ success: false, message: 'Chyba při označování logu' });
-    }
-});
-
-        res.send(html);
-    } catch (error) {
-        console.error('Chyba při načítání audit logu:', error);
-        res.status(500).send('Chyba při načítání audit logu');
     }
 });
 
