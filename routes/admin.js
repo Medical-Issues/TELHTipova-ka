@@ -6876,8 +6876,7 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
         const selectedSeason = req.session.adminSeason || chosenSeason;
         const allowedLeagues = await AllowedLeagues.findAll();
         const leaguesForSeason = allowedLeagues[selectedSeason] || [];
-        const transferLeagues = await TransferLeagues.findAll();
-
+        await TransferLeagues.findAll();
         const selectedLiga = req.query.liga || leaguesForSeason[0];
         
         // Načtení nastavení výchozího zobrazení
@@ -10576,7 +10575,7 @@ router.post('/audit-log/:id/resolve', requireAdmin, async (req, res) => {
 });
 
 // noinspection JSUnusedLocalSymbols
-// Globální error handler pro admin routy (Express striktně vyžaduje 4 parametry: err, req, res, next)
+// Globální error handler na admin routy (Express striktně vyžaduje 4 parametry: err, req, res, next)
 router.use(async (err, req, res, _next) => {
     console.error('Globální chyba v admin routeru:', err);
     try {
