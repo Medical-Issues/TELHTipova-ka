@@ -58,6 +58,13 @@ const storage = multer.diskStorage({
     }
 });
 
+// Globální error handler pro admin routy
+router.use(async (err, req, res, next) => {
+    console.error('Globální chyba v admin routeru:', err);
+    await logAdminAction(req.session.user || 'anonymous', "ADMIN_ERROR", `Globální chyba: ${err.message}`, 'admin', null, req, 'error', false);
+    renderErrorHtml(res, 'Došlo k chybě při zpracování požadavku. Chyba byla logována.', 500);
+});
+
 const fileFilter = (req, file, cb) => {
     // Zakázat WebP - canvas nepodporuje WebP a notifikace by se nezobrazovaly správně
     if (file.originalname.toLowerCase().endsWith('.webp')) {
@@ -6868,16 +6875,21 @@ router.get('/images/selector', requireAdmin, async (req, res) => {
 });
 
 router.get('/transfers/manage', requireAdmin, async (req, res) => {
-    const teams = await Teams.findAll();
-    const chosenSeason = await ChosenSeason.findAll();
-    // Použít admin sezónu pro prohlížení pokud je nastavena
-    const selectedSeason = req.session.adminSeason || chosenSeason;
-    const allowedLeagues = await AllowedLeagues.findAll();
-    const leaguesForSeason = allowedLeagues[selectedSeason] || [];
-    const transferLeagues = await TransferLeagues.findAll();
+    try {
+        const teams = await Teams.findAll();
+        const chosenSeason = await ChosenSeason.findAll();
+        // Použít admin sezónu pro prohlížení pokud je nastavena
+        const selectedSeason = req.session.adminSeason || chosenSeason;
+        const allowedLeagues = await AllowedLeagues.findAll();
+        const leaguesForSeason = allowedLeagues[selectedSeason] || [];
+        const transferLeagues = await TransferLeagues.findAll();
 
-    const selectedLiga = req.query.liga || leaguesForSeason[0];
-    transferLeagues.includes(selectedLiga);
+        const selectedLiga = req.query.liga || leaguesForSeason[0];
+        
+        // Kontrola zda je liga povolena pro přestupy (podpora obou formátů)
+        const hasTransferLeagues = Array.isArray(transferLeagues) 
+            ? transferLeagues.includes(selectedLiga) 
+            : (transferLeagues?.[selectedSeason]?.includes(selectedLiga) || false);
 // Načtení nastavení výchozího zobrazení
     const settingsData = await Settings.findAll();
     const defaultView = settingsData.defaultView || 'transfers'; // 'transfers' nebo 'roster'
@@ -7218,6 +7230,40 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
     </body>
     </html>`;
     res.send(html);
+    } catch (error) {
+        console.error('Chyba v /admin/transfers/manage route:', error);
+        await logAdminAction(req.session.user, "TRANSFERS_MANAGE_ERROR", `Chyba při načítání správy přestupů: ${error.message}`, 'admin', null, req, 'error', false);
+        
+        let errorHtml = `
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Chyba - Admin</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+    <link rel="icon" href="/images/logo.png">
+</head>
+<body class="admin-panel">
+<header class="header">
+<div class="header-main">
+<div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Admin Panel</h1></div>
+<div class="header-user">
+<a href="/" class="history-btn">← Zpět na hlavní stránku</a>
+</div>
+</div>
+</header>
+<main class="admin_site">
+<div style="text-align: center; padding: 40px; background: #1a1a1a; border-radius: 8px; margin: 20px; border: 2px solid #ff4444;">
+<h1 style="color: #ff4444; margin-bottom: 20px;">❌ Došlo k chybě</h1>
+<p style="color: #ccc; margin-bottom: 20px;">Omlouváme se, ale došlo k chybě při načítání stránky. Chyba byla logována do audit logu.</p>
+<a href="/admin" style="display: inline-block; margin-top: 20px; padding: 10px 20px; background: #444; color: white; text-decoration: none; border-radius: 4px;">Zpět na admin panel</a>
+</div>
+</main>
+</body>
+</html>`;
+        res.status(500).send(errorHtml);
+    }
 });
 
 

@@ -7,6 +7,7 @@ const {
     getLeagueStatusData, getTableTipsData, generateTimeWidget, getAllowedLeagues, createMatchImage, logUserAction
 } = require("../utils/fileUtils");
 const { Users, Matches, Leagues, TableTips, ChosenSeason, Players, Settings} = require('../utils/mongoDataAccess');
+
 // Jednoduchá XSS ochrana - sanitizace HTML tagů
 function sanitizeInput(input) {
     if (typeof input !== 'string') return input;
@@ -1389,6 +1390,9 @@ router.get('/history', requireLogin, async (req, res) => {
                                 📜 Přestupy
                                </span>`
                         }
+                        <a href="/history/roster?liga=${encodeURIComponent(entry.liga)}&season=${encodeURIComponent(entry.season)}" class="history-action-btn history-action-btn-tertiary">
+                            👥 Soupisky
+                        </a>
                     </div>
                 </div>
             `;
@@ -1472,6 +1476,8 @@ router.get('/history/prestupy', requireLogin, async (req, res) => {
 <a class="history-btn" href="/history">Zpět na výběr</a>
 <a class="history-btn" href="/history/a/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy zápasů</a>
 <a class="history-btn" href="/history/table/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy tabulky</a>
+<a class="history-btn" style="background:#00d4ff; color:black;" href="/history/prestupy?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">📜 Přestupy</a>
+<a class="history-btn" href="/history/roster?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">👥 Soupisky</a>
 </div>
 </div>
 </header>
@@ -1672,6 +1678,7 @@ ${hasTransferLeagues
     ? `<a class="history-btn" style="background:#00d4ff; color:black;" href="/history/prestupy?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">📜 Přestupy</a>`
     : `<span class="history-btn" style="background:#333; color:#666; cursor:not-allowed;" title="Pro tuto sezónu/ligu nejsou dostupné přestupy">📜 Přestupy</span>`
 }
+<a class="history-btn" href="/history/roster?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">👥 Soupisky</a>
 </div>
 </div>
 </header>
@@ -1991,6 +1998,262 @@ function toggleSeriesDetails(btn) {
     </script></body></html>`;
     res.send(html);
 });
+
+router.get('/history/roster', requireLogin, async (req, res) => {
+    try {
+        // 0. Bezpečnostní kontrola adresy
+        if (!req.query.liga || !req.query.season) return res.redirect('/history');
+
+        // 1. ZAVOLÁME MOZEK (s parametrem true pro režim historie)
+        const data = await prepareDashboardData(req, true);
+
+        // 2. VYBALÍME SI PROMĚNNÉ
+        const {
+            username, selectedSeason, selectedLiga, teamsInSelectedLiga,
+        } = data;
+
+        // --- HTML START ---
+        let html = `
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Soupisky - ${selectedLiga} ${selectedSeason}</title>
+<link rel="stylesheet" href="/css/styles.css" />
+<script src="/js/version-notification.js"></script>
+<link rel="icon" href="/images/logo.png">
+</head>
+<body class="usersite">
+<header class="header">
+<div class="header-main">
+<div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
+<div class="header-user">
+<p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
+</div>
+</div>
+<div class="header-controls">
+<div class="league-dropdown">
+<a class="history-btn" href="/">Aktuální</a>
+<a class="history-btn" href="/history">Zpět na výběr</a>
+<a class="history-btn" href="/history/a/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy zápasů</a>
+<a class="history-btn" href="/history/table/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy tabulky</a>
+<a class="history-btn" style="background:#00d4ff; color:black;" href="/history/prestupy?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">📜 Přestupy</a>
+<a class="history-btn" style="background:orangered; color:black;" href="/history/roster?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">👥 Soupisky</a>
+</div>
+</div>
+</header>
+<header class="time-header">${await generateTimeWidget()}<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a></header>
+<main class="main_page" style="flex-direction: column; width: 100%; max-width: 1400px; margin: 0 auto; padding: 15px; box-sizing: border-box;">
+
+<div style="text-align: center; margin-bottom: 20px; width: 100%;">
+<h2 style="margin-top: 0; text-align: center; border-bottom: 2px solid orangered; padding-bottom: 10px; width: 100%;">Soupisky - ${selectedLiga} (${selectedSeason})</h2>
+</div>
+
+<div id="allRostersView" style="margin-top: 15px; width: 100%; display: flex; flex-direction: column; gap: 20px;" data-team-ids='${JSON.stringify(teamsInSelectedLiga.map(t => t.id))}' data-teams='${JSON.stringify(teamsInSelectedLiga)}' data-season='${selectedSeason}'></div>
+
+<script>
+    async function showAllRosters() {
+        const allRostersView = document.getElementById('allRostersView');
+        if (!allRostersView) return;
+
+        if (allRostersView) {
+            allRostersView.innerHTML = '<div style="text-align: center; color: #888; font-size: 0.9em;">Načítám všechny soupisky...</div>';
+        }
+
+        try {
+            // Čtení dat z HTML atributů
+            const teamIds = JSON.parse(allRostersView?.dataset.teamIds || '[]');
+            const teams = JSON.parse(allRostersView?.dataset.teams || '[]');
+            const season = allRostersView?.dataset.season;
+
+            let allPlayersHtml = '<div style="display: flex; flex-direction: column; gap: 20px; width: 100%;">';
+
+            for (const teamId of teamIds) {
+                const res = await fetch('/api/players/' + teamId + '?season=' + encodeURIComponent(season));
+                const data = await res.json();
+                const teamData = teams.find(t => t.id === teamId);
+                const teamLogo = teamData && teamData.logo ? teamData.logo : null;
+                const logoUrl = data.logoUrl || (teamLogo ? '/logoteamu/' + teamLogo : '/images/logo.png');
+                const teamName = teamData && teamData.name ? teamData.name : 'Neznámý tým';
+
+                // Generovat layout s logem a podsvícením jako na hlavní stránce
+                allPlayersHtml += '<div style="position: relative; background-color: #000; border: 2px solid #ff4500; overflow: hidden; display: flex; flex-direction: column; min-height: 250px; box-shadow: 0 4px 15px rgba(0,0,0,0.8); width: 100%;">';
+                allPlayersHtml += '<div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-10deg); width: 80%; height: 80%; background-image: url(' + JSON.stringify(logoUrl) + '); background-size: contain; background-repeat: no-repeat; background-position: center; opacity: 0.30; filter: grayscale(50%); pointer-events: none; z-index: 0;"></div>';
+                allPlayersHtml += '<div style="position: relative; z-index: 1; background: linear-gradient(to bottom, #222, #111); border-bottom: 3px solid #ff4500; display: flex; align-items: center; padding: 10px;">';
+                allPlayersHtml += '<img src="' + logoUrl + '" alt="' + teamName + '" style="height: 45px; width: 45px; object-fit: contain; margin-right: 12px; filter: drop-shadow(0 0 5px rgba(255,255,255,0.2));">';
+                allPlayersHtml += '<strong style="color: white; font-size: 1.3em; text-transform: uppercase; letter-spacing: 1px;">' + teamName + '</strong>';
+                allPlayersHtml += '</div>';
+                allPlayersHtml += '<div style="position: relative; z-index: 1; padding: 20px;">';
+
+                // Zobrazení hráčů ve soupisce - stejné jako v přestupech
+                const roster = data.roster || data.players || [];
+                if (roster.length > 0) {
+                    // Rozdělení hráčů podle pozice
+                    const positions = {
+                        'Brankář': [],
+                        'Obránce': [],
+                        'Útočník': [],
+                        'Centr': [],
+                        'Křídlo': [],
+                        'Jiné': []
+                    };
+                    
+                    // Status barvy a ikony
+                    const statusColors = {
+                        'active': '#28a745',
+                        'injured': '#ffc107',
+                        'suspended': '#dc3545',
+                        'loan': '#fd7e14',
+                        'retired': '#6c757d'
+                    };
+
+                    const statusLabels = {
+                        'active': 'Aktivní',
+                        'injured': 'Zraněný',
+                        'suspended': 'Suspendován',
+                        'loan': 'Hostování',
+                        'retired': 'Konec kariéry'
+                    };
+
+                    const statusIcons = {
+                        'active': '✓',
+                        'injured': '🏥',
+                        'suspended': '⚠',
+                        'loan': '↔',
+                        'retired': '🏁'
+                    };
+                    
+                    roster.forEach(p => {
+                        const pos = p.position || 'Jiné';
+                        if (positions[pos]) {
+                            positions[pos].push(p);
+                        } else {
+                            positions['Jiné'].push(p);
+                        }
+                        // Přidat status barvy a ikony
+                        p.statusColor = statusColors[p.status] || '#6c757d';
+                        p.statusLabel = statusLabels[p.status] || 'Neznámý';
+                        p.statusIcon = statusIcons[p.status] || '?';
+                    });
+
+                    // Seřadit hráče v každé kategorii podle čísla dresu
+                    Object.keys(positions).forEach(key => {
+                        positions[key].sort((a, b) => (a.number || 999) - (b.number || 999));
+                    });
+
+                    let playersHtml = '';
+                    Object.entries(positions).forEach(([pos, players]) => {
+                        if (players.length > 0) {
+                            playersHtml += '<div style="margin-bottom: 25px;">';
+                            playersHtml += '<h3 style="color: #00d4ff; font-size: 1.2em; margin: 0 0 12px 0; border-bottom: 2px solid #00d4ff; padding-bottom: 8px; display: flex; align-items: center; gap: 10px;">';
+                            playersHtml += '<span style="background: linear-gradient(135deg, #00d4ff, #0099cc); color: #000; padding: 4px 12px; font-size: 0.9em; font-weight: bold;">' + players.length + '</span>';
+                            playersHtml += pos + '</h3>';
+                            playersHtml += '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px;">';
+                            players.forEach(p => {
+                                playersHtml += '<div style="background: linear-gradient(135deg, ' + p.statusColor + '22 0%, #1a1a1a 100%); padding: 15px; border-left: 4px solid ' + p.statusColor + '; box-shadow: 0 2px 8px rgba(0,0,0,0.3); transition: all 0.3s ease; cursor: default; position: relative; overflow: hidden;">';
+                                playersHtml += '<div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-10deg); width: 80%; height: 80%; background-image: url(' + JSON.stringify(logoUrl) + '); background-size: contain; background-repeat: no-repeat; background-position: center; opacity: 0.30; filter: grayscale(50%); pointer-events: none; z-index: 1;"></div>';
+                                playersHtml += '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; position: relative; z-index: 2;">';
+                                playersHtml += '<div style="position: relative; width: 64px; height: 64px; display: inline-flex; justify-content: center; align-items: center;">';
+                                playersHtml += '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;">';
+                                playersHtml += '<path d="M 32 12 C 40 8, 60 8, 68 12 L 86 16 A 8 8 0 0 1 92 24 L 92 65 L 78 65 L 78 78 L 78 92 L 22 92 L 22 78 L 22 65 L 8 65 L 8 24 A 8 8 0 0 1 14 16 Z" fill="url(#jerseyGradient-' + (p.number || '0') + ')" stroke="' + p.statusColor + '" stroke-width="3" stroke-linejoin="round"/>';
+                                playersHtml += '<path d="M 32 12 C 35 24, 65 24, 68 12" fill="transparent" stroke="' + p.statusColor + '" stroke-width="3"/>';
+                                playersHtml += '<path d="M 42 21 L 50 28 L 58 21" fill="transparent" stroke="' + p.statusColor + '" stroke-width="3"/>';
+                                playersHtml += '<defs><linearGradient id="jerseyGradient-' + (p.number || '0') + '" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#333;stop-opacity:1"/><stop offset="100%" style="stop-color:#222;stop-opacity:1"/></linearGradient></defs>';
+                                playersHtml += '</svg>';
+                                playersHtml += '<span style="position: relative; z-index: 2; margin-top: 5px; font-size: 1.3rem; font-weight: bold; font-family: sans-serif; color: #fff; letter-spacing: 0; user-select: none;">' + (p.number || '-') + '</span>';
+                                playersHtml += '</div>';
+                                playersHtml += '<span style="background: ' + p.statusColor + '; color: #000; padding: 4px 10px; font-size: 0.8em; font-weight: bold; display: flex; align-items: center; gap: 4px;">';
+                                playersHtml += '<span style="font-size: 1.1em;">' + p.statusIcon + '</span>';
+                                playersHtml += '<span>' + p.statusLabel + '</span>';
+                                playersHtml += '</span>';
+                                playersHtml += '</div>';
+                                playersHtml += '<div style="color: #fff; font-weight: bold; font-size: 1.1em; margin-bottom: 5px; position: relative; z-index: 2;">' + p.name + '</div>';
+                                if (p.statusDetails) {
+                                    playersHtml += '<div style="color: #888; font-size: 0.8em; margin-top: 8px; padding-top: 8px; border-top: 1px solid #333; position: relative; z-index: 2;">' + p.statusDetails + '</div>';
+                                }
+                                playersHtml += '</div>';
+                            });
+                            playersHtml += '</div></div>';
+                        }
+                    });
+                    allPlayersHtml += playersHtml;
+                } else {
+                    allPlayersHtml += '<div style="text-align: center; color: #888; font-size: 0.9em; margin-top: 15px;">Žádní hráči v soupisce</div>';
+                }
+
+                allPlayersHtml += '</div>'; // Konec padding div
+                allPlayersHtml += '</div>'; // Konec týmové karty
+            }
+
+            allPlayersHtml += '</div>';
+            allRostersView.innerHTML = allPlayersHtml;
+        } catch (error) {
+            console.error('Chyba při načítání soupisek:', error);
+            if (allRostersView) {
+                allRostersView.innerHTML = '<div style="text-align: center; color: #ff4444; font-size: 0.9em;">Chyba při načítání soupisek</div>';
+            }
+        }
+    }
+
+    // Načíst verzi a zobrazit v badge
+    fetch('/api/version')
+        .then(res => res.json())
+        .then(data => {
+            const versionBadge = document.getElementById('current-version');
+            if (versionBadge) {
+                versionBadge.textContent = data.version;
+            }
+        })
+        .catch(err => console.error('Nepodařilo se načíst verzi', err));
+
+    // Automaticky načíst soupisky při načtení stránky
+    showAllRosters();
+</script>
+</main>
+</body>
+</html>`;
+
+        res.send(html);
+    } catch (error) {
+        console.error('Chyba v /history/roster route:', error);
+        await logUserAction(req.session.user, "HISTORY_ROSTER_ERROR", `Chyba při načítání historických soupisek: ${error.message}`, 'history', null, req, 'error', false);
+        
+        let errorHtml = `
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width; initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Chyba - Tipovačka</title>
+<link rel="stylesheet" href="/css/styles.css" />
+<link rel="icon" href="/images/logo.png">
+</head>
+<body class="usersite">
+<header class="header">
+<div class="header-main">
+<div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
+<div class="header-user">
+<p id="logged_user">${req.session?.user ? `Přihlášený jako: <strong>${req.session.user}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
+</div>
+</div>
+<div class="header-controls">
+<a class="history-btn" href="/">← Zpět na hlavní stránku</a>
+</div>
+</header>
+<main class="main_page">
+<div style="text-align: center; padding: 40px; background: #1a1a1a; border-radius: 8px; margin: 20px; border: 2px solid #ff4444;">
+<h1 style="color: #ff4444; margin-bottom: 20px;">❌ Došlo k chybě</h1>
+<p style="color: #ccc; margin-bottom: 20px;">Omlouváme se, ale došlo k chybě při načítání stránky. Chyba byla logována.</p>
+<a href="/history" style="display: inline-block; margin-top: 20px; padding: 10px 20px; background: #444; color: white; text-decoration: none; border-radius: 4px;">Zpět na výběr historie</a>
+</div>
+</main>
+</body>
+</html>`;
+        res.status(500).send(errorHtml);
+    }
+});
+
 router.get('/history/table', requireLogin, async (req, res) => {
     // 0. Bezpečnostní kontrola adresy
     if (!req.query.liga || !req.query.season) return res.redirect('/history');
@@ -2056,6 +2319,7 @@ ${hasTransferLeagues
     ? `<a class="history-btn" style="background:#00d4ff; color:black;" href="/history/prestupy?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">📜 Přestupy</a>`
     : `<span class="history-btn" style="background:#333; color:#666; cursor:not-allowed;" title="Pro tuto sezónu/ligu nejsou dostupné přestupy">📜 Přestupy</span>`
 }
+<a class="history-btn" href="/history/roster?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">👥 Soupisky</a>
 </div>
 </div>
 </header>
@@ -2244,19 +2508,20 @@ html += await generateLeftPanel(data, true);
 });
 
 router.get("/prestupy", requireLogin, async (req, res) => {
-    // Odstraněna podmínka kontroly veřejné ligy - přestupy jsou viditelné vždy
-    
-    // 1. ZAVOLÁME MOZEK, KTERÝ VŠE VYPOČÍTÁ BĚHEM MILISEKUNDY
-    const data = await prepareDashboardData(req);
+    try {
+        // Odstraněna podmínka kontroly veřejné ligy - přestupy jsou viditelné vždy
+        
+        // 1. ZAVOLÁME MOZEK, KTERÝ VŠE VYPOČÍTÁ BĚHEM MILISEKUNDY
+        const data = await prepareDashboardData(req);
 
-    // 2. VYBALÍME SI PROMĚNNÉ, KTERÉ POTŘEBUJE HTML (Destructuring)
-    const {
-        username, selectedLiga, uniqueLeagues, teamsInSelectedLiga,
-        activeTransferLeagues, currentTransfers,
-    } = data;
-    
-    // Načtení nastavení
-    const settingsData = await Settings.findAll();
+        // 2. VYBALÍME SI PROMĚNNÉ, KTERÉ POTŘEBUJE HTML (Destructuring)
+        const {
+            username, selectedLiga, selectedSeason, uniqueLeagues, teamsInSelectedLiga,
+            activeTransferLeagues, currentTransfers,
+        } = data;
+        
+        // Načtení nastavení
+        const settingsData = await Settings.findAll();
 // --- HTML START ---
     let html = `
 <!DOCTYPE html>
@@ -2495,8 +2760,12 @@ document.addEventListener('DOMContentLoaded', () => {
 html += await generateLeftPanel(data);
 
     html += `<section class="matches-container" style="flex: 1; padding: 10px;">`;
-        // KONTROLA: Má tato liga zapnuté přestupy?
-        if (!activeTransferLeagues.includes(selectedLiga)) {
+        // KONTROLA: Má tato liga zapnuté přestupy? (podpora obou formátů)
+        const hasTransferLeagues = Array.isArray(activeTransferLeagues) 
+            ? activeTransferLeagues.includes(selectedLiga) 
+            : (activeTransferLeagues?.[selectedSeason]?.includes(selectedLiga) || false);
+        
+        if (!hasTransferLeagues) {
             // Pokud nejsou přestupy, zobrazit všechny soupisky
             html += `<div style="text-align: center; margin-bottom: 10px;">
                 <a href="/history/prestupy" style="color: #00d4ff; text-decoration: none; font-size: 0.9em;">📜 Historie přestupů</a>
@@ -2885,6 +3154,43 @@ document.addEventListener('DOMContentLoaded', async () => {
 </script>
 </main></body>`;
     res.send(html)
+    } catch (error) {
+        console.error('Chyba v /prestupy route:', error);
+        await logUserAction(req.session.user, "PRESTUPY_ERROR", `Chyba při načítání přestupů: ${error.message}`, 'prestupy', null, req, 'error', false);
+        
+        let errorHtml = `
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Chyba - Tipovačka</title>
+<link rel="stylesheet" href="/css/styles.css" />
+<link rel="icon" href="/images/logo.png">
+</head>
+<body class="usersite">
+<header class="header">
+<div class="header-main">
+<div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
+<div class="header-user">
+<p id="logged_user">${req.session?.user ? `Přihlášený jako: <strong>${req.session.user}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
+</div>
+</div>
+<div class="header-controls">
+<a class="history-btn" href="/">← Zpět na hlavní stránku</a>
+</div>
+</header>
+<main class="main_page">
+<div style="text-align: center; padding: 40px; background: #1a1a1a; border-radius: 8px; margin: 20px; border: 2px solid #ff4444;">
+<h1 style="color: #ff4444; margin-bottom: 20px;">❌ Došlo k chybě</h1>
+<p style="color: #ccc; margin-bottom: 20px;">Omlouváme se, ale došlo k chybě při načítání stránky. Chyba byla logována a bude opravena.</p>
+<a href="/" style="display: inline-block; margin-top: 20px; padding: 10px 20px; background: #444; color: white; text-decoration: none; border-radius: 4px;">Zpět na hlavní stránku</a>
+</div>
+</main>
+</body>
+</html>`;
+        res.status(500).send(errorHtml);
+    }
 });
 
 
@@ -6110,12 +6416,15 @@ router.get('/api/players/:teamId', requireLogin, async (req, res) => {
         const { getChosenSeason } = require('../utils/fileUtils');
         const { Teams } = require('../utils/mongoDataAccess');
         const chosenSeason = await getChosenSeason();
+        
+        // Použít sezónu z query param nebo aktuální sezónu
+        const requestedSeason = req.query.season || chosenSeason;
 
-        // Načtení hráčů týmu pro aktuální sezónu
+        // Načtení hráčů týmu pro zadanou sezónu
         const allPlayers = await Players.findAll();
         const teamPlayers = allPlayers.filter(p =>
             p.teamId === teamId &&
-            p.season === chosenSeason
+            p.season === requestedSeason
         ).sort((a, b) => (a.number || 999) - (b.number || 999));
 
         // Načtení týmu pro logo

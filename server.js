@@ -1,5 +1,8 @@
 require('dotenv').config();
 
+// Debug mód pro vypnutí obrázků
+const DEBUG_NO_IMAGES = process.env.DEBUG_NO_IMAGES === 'true';
+
 const express = require('express');
 const path = require('path');
 const bodyParser = require("body-parser");
@@ -19,6 +22,30 @@ const { connectToDatabase } = require('./config/database');
 const {backupJsonFilesToGitHub} = require("./utils/githubBackup");
 const {restoreFromGitHub, fullRestoreFromGitHub} = require("./utils/githubRestore");
 const app = express();
+
+// Nastavit debug mód pro všechny routy
+app.locals.debugNoImages = DEBUG_NO_IMAGES;
+
+// Debug mód bez stahování obrázků (DEBUG_NO_IMAGES=true v .env)
+if (DEBUG_NO_IMAGES) {
+    console.log('⚡ [DEBUG] DEBUG_NO_IMAGES je aktivní - stahování obrázků z GitHubu je vypnuté (použijí se již stažené lokální obrázky)');
+
+    // Injektovat pouze fixní plovoucí odznak (žádný posun layoutu ani mezera nad stránkou)
+    app.use((req, res, next) => {
+        const originalSend = res.send;
+        res.send = function (body) {
+            if (typeof body === 'string' && body.includes('<!DOCTYPE html>')) {
+                const badgeHtml = `<div id="debug-no-images-badge" style="position: fixed; bottom: 12px; right: 12px; background: rgba(220, 38, 38, 0.88); color: #ffffff; padding: 5px 12px; border-radius: 20px; font-size: 11px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-weight: 600; letter-spacing: 0.3px; z-index: 999999; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); pointer-events: none; user-select: none;">⚡ DEBUG: Bez stahování obrázků</div>`;
+
+                if (/<body[^>]*>/i.test(body)) {
+                    body = body.replace(/(<body[^>]*>)/i, `$1${badgeHtml}`);
+                }
+            }
+            return originalSend.call(this, body);
+        };
+        next();
+    });
+}
 
 // Serve static files (CSS, images, etc.) - MUSÍ BÝT PRVNÍ!
 // CSS a JS z public
@@ -83,6 +110,12 @@ app.use('/logoteamu', (req, res, next) => {
     }
     if (fs.existsSync(publicPath)) {
         return res.sendFile(publicPath);
+    }
+    if (DEBUG_NO_IMAGES) {
+        const fallbackPublic = path.join(__dirname, 'public', 'images', 'logo.png');
+        const fallbackData = path.join(__dirname, 'data', 'images', 'logo.png');
+        if (fs.existsSync(fallbackPublic)) return res.sendFile(fallbackPublic);
+        if (fs.existsSync(fallbackData)) return res.sendFile(fallbackData);
     }
     next();
 });
@@ -594,7 +627,9 @@ async function startServer() {
     await connectToDatabase();
 
     // Automatický restore obrázků z GitHubu při startu
-    if (process.env.GITHUB_TOKEN) {
+    if (DEBUG_NO_IMAGES) {
+        console.log('⚡ [DEBUG] DEBUG_NO_IMAGES je aktivní -> Automatický restore obrázků z GitHubu přeskočen');
+    } else if (process.env.GITHUB_TOKEN) {
         console.log('🔄 Spouštím automatický restore obrázků z GitHubu...');
         const restoreSuccess = await restoreFromGitHub();
         if (restoreSuccess) {

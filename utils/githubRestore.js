@@ -22,6 +22,10 @@ async function getDeletedImagesList() {
 }
 
 async function restoreFromGitHub() {
+    if (process.env.DEBUG_NO_IMAGES === 'true') {
+        console.log('⚡ [DEBUG] DEBUG_NO_IMAGES=true -> Stahování obrázků z GitHubu přeskočeno');
+        return true;
+    }
     console.log('🔄 Začínám stahování obrázků z GitHubu...');
     
     const octokit = new Octokit({
