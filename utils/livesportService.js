@@ -554,6 +554,7 @@ async function fetchMatchesFromLivesport(options) {
                     args
                 });
                 const page = await browser.newPage();
+                await page.emulateTimezone('Europe/Prague');
                 
                 
                 await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
