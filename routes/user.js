@@ -4812,12 +4812,19 @@ router.get("/statistics", requireLogin, async (req, res) => {
                         isCorrect = evaluatedWinner === match.result.winner;
                     }
                     
-                    allTips.push({ isCorrect, date: match.date });
+                    const matchDate = match.datetime || match.date;
+                    if (!matchDate) continue;
+
+                    allTips.push({ matchId: match.id, isCorrect, date: matchDate });
                 }
             }
             
-            // Seřazení podle data
-            allTips.sort((a, b) => new Date(a.date) - new Date(b.date));
+            // Seřazení podle data, a při shodném času podle ID zápasu pro konzistentní pořadí
+            allTips.sort((a, b) => {
+                const timeDiff = new Date(a.date).getTime() - new Date(b.date).getTime();
+                if (timeDiff !== 0) return timeDiff;
+                return (a.matchId || 0) - (b.matchId || 0);
+            });
             
             // Výpočet sérií
             let longestWinStreak = 0;
@@ -4844,8 +4851,16 @@ router.get("/statistics", requireLogin, async (req, res) => {
             });
         }
         
-        // Seřazení podle nejdelší série výher
-        streakStats.sort((a, b) => b.longestWinStreak - a.longestWinStreak);
+        // Seřazení podle nejdelší série výher, při shodě podle MENŠÍ série proher
+        streakStats.sort((a, b) => {
+            if (b.longestWinStreak !== a.longestWinStreak) {
+                return b.longestWinStreak - a.longestWinStreak;
+            }
+            if (a.longestLoseStreak !== b.longestLoseStreak) {
+                return a.longestLoseStreak - b.longestLoseStreak;
+            }
+            return a.username.localeCompare(b.username);
+        });
         
         // Trendy v čase (úspěšnost podle měsíce)
         const monthlyStats = {};

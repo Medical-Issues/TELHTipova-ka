@@ -7353,6 +7353,7 @@ router.post('/transfers/save', express.urlencoded({ extended: true }), requireAd
     const notif = require('./notificationService');
 
     const { liga, season, t, sendNotification, imageType, customMessage } = req.body;
+    const selectedSeason = season || req.session?.adminSeason;
 
     // Kontrola, zda máme data týmů
     if (!t) {
