@@ -18,9 +18,6 @@ try {
     chromium = null;
 }
 
-// Livesport API endpointy
-const LIVESPORT_BASE_URL = 'https://www.livesport.cz';
-
 // Liga ID mapování pro Livesport
 const LEAGUE_ID_MAP = {
     'TELH': { id: 'UCEL8Q9b', name: 'Tipsport extraliga' },
