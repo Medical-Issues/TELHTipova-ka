@@ -75,7 +75,7 @@ function getLeagueId(ligaName, url = null) {
                     const normalizedKey = key.replace(/-/g, ' ').toLowerCase();
                     const normalizedValue = value.name.replace(/-/g, ' ').toLowerCase();
                     if (normalizedKey === normalizedCategory || normalizedValue === normalizedCategory) {
-                                        return value.id;
+                        return value.id;
                     }
                 }
                 
@@ -246,6 +246,87 @@ function parseDateTime(dateStr, timeStr, season) {
 }
 
 /**
+ * Extrahuje zápasy přímo z cjs.initialFeeds v HTML stránky (bez nutnosti spouštět Puppeteer/Chrome)
+ * Livesport servíruje data v cjs.initialFeeds přímo v HTML odpovědi.
+ */
+function extractEventsFromInitialFeeds(html) {
+    if (!html || typeof html !== 'string') return [];
+
+    const events = [];
+    const seen = new Set();
+    const feedKeys = ['fixtures', 'summary-fixtures', 'results', 'summary-results'];
+
+    for (const key of feedKeys) {
+        const keyIdx = html.indexOf(`initialFeeds['${key}']`) !== -1 
+            ? html.indexOf(`initialFeeds['${key}']`) 
+            : html.indexOf(`initialFeeds["${key}"]`);
+
+        if (keyIdx === -1) continue;
+
+        const dataIdx = html.indexOf('data:', keyIdx);
+        if (dataIdx === -1 || (dataIdx - keyIdx) > 300) continue;
+
+        const quoteMatch = html.slice(dataIdx + 5, dataIdx + 20).match(/[`'"]/);
+        if (!quoteMatch) continue;
+
+        const quoteChar = quoteMatch[0];
+        const quoteStart = html.indexOf(quoteChar, dataIdx + 5);
+        const quoteEnd = html.indexOf(quoteChar, quoteStart + 1);
+        if (quoteEnd === -1) continue;
+
+        const feedData = html.slice(quoteStart + 1, quoteEnd);
+        const matchBlocks = feedData.split('~AA÷');
+
+        for (let i = 1; i < matchBlocks.length; i++) {
+            const block = matchBlocks[i];
+            const parts = block.split('¬');
+            let homeTeam = '';
+            let awayTeam = '';
+            let timestamp = '';
+
+            for (const part of parts) {
+                if (part.startsWith('CX÷')) {
+                    homeTeam = part.substring(3).trim();
+                } else if (part.startsWith('AF÷')) {
+                    awayTeam = part.substring(3).trim();
+                } else if (part.startsWith('AD÷')) {
+                    timestamp = part.substring(3).trim();
+                }
+            }
+
+            if (homeTeam && awayTeam && timestamp) {
+                const uniqueKey = `${homeTeam}_${awayTeam}_${timestamp}`;
+                if (seen.has(uniqueKey)) continue;
+                seen.add(uniqueKey);
+
+                // Převod timestamp na středoevropský čas (Europe/Prague)
+                const d = new Date(parseInt(timestamp, 10) * 1000);
+                const pragueParts = new Intl.DateTimeFormat('cs-CZ', {
+                    timeZone: 'Europe/Prague',
+                    year: 'numeric', month: '2-digit', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit', hour12: false
+                }).formatToParts(d);
+                const map = Object.fromEntries(pragueParts.map(p => [p.type, p.value]));
+
+                events.push({
+                    homeTeam,
+                    awayTeam,
+                    date: `${map.year}-${map.month}-${map.day}`,
+                    time: `${map.hour}:${map.minute}`,
+                    status: 'scheduled'
+                });
+            }
+        }
+
+        if (events.length > 0 && (key === 'fixtures' || key === 'results')) {
+            break;
+        }
+    }
+
+    return events;
+}
+
+/**
  * Hlavní funkce pro stažení zápasů z Livesportu
  * @param {Object} options - Konfigurační objekt
  * @param {string} options.url - URL stránky se zápasy na Livesportu
@@ -257,7 +338,16 @@ function parseDateTime(dateStr, timeStr, season) {
  * @returns {Promise<Object>} - Výsledek importu
  */
 async function fetchMatchesFromLivesport(options) {
-    const { url, liga, season, dateFrom, dateTo, dbTeams } = options;
+    let { url, liga, season, dateFrom, dateTo, dbTeams } = options;
+
+    // Očištění URL od bílých znaků a nechtěně vložených cest k souborům z IDE
+    if (url) {
+        url = url.trim();
+        if (url.includes('/C:') || url.includes('//C:')) {
+            url = url.split(/\/+C:/i)[0];
+            if (!url.endsWith('/')) url += '/';
+        }
+    }
 
     const notFoundTeams = new Set();
     const matches = [];
@@ -295,7 +385,6 @@ async function fetchMatchesFromLivesport(options) {
         
         const html = response.data;
         
-        
         // Hledáme tournament ID v HTML - toto je skutečné Livesport ID
         // POUZE pokud nemáme ID z mapy lig (LEAGUE_ID_MAP)
         let realTournamentId = null;
@@ -311,52 +400,60 @@ async function fetchMatchesFromLivesport(options) {
             realTournamentId = tournamentId;
         }
 
-        // 4. Extrakce dat - Livesport embeduje data v JSON ve skriptech nebo v atributech
-        // Hledáme "initialData" nebo podobné struktury
+        // 4. Extrakce dat
         let events = [];
 
-        // Pokus 1: Hledáme JSON v <script> tagu - rozšířené patterny
-        const scriptPatterns = [
-            /window\.__INITIAL_STATE__\s*=\s*(\{.*?});/s,
-            /window\.__DATA__\s*=\s*(\{.*?});/s,
-            /var\s+initialData\s*=\s*(\[.*?]);/s,
-            /window\.__APP__\s*=\s*(\{.*?});/s,
-            /window\.__CONFIG__\s*=\s*(\{.*?});/s,
-            /"fixtures":\s*(\[.*?]),?/s,
-            /"events":\s*(\[.*?]),?/s,
-            /"tournament":\s*(\{.*?}),?/s
-        ];
-
-        let scriptMatch = null;
-        for (const pattern of scriptPatterns) {
-            const match = html.match(pattern);
-            if (match) {
-                scriptMatch = match;
-                break;
+        // Pokus 0: Extrakce z cjs.initialFeeds přímo v HTML (nejrychlejší, funguje na hostingu bez Chrome)
+        try {
+            events = extractEventsFromInitialFeeds(html);
+            if (events.length > 0) {
+                console.log(`✅ Úspěšně extrahováno ${events.length} zápasů přímo z initialFeeds v HTML`);
             }
+        } catch (feedErr) {
+            console.error('⚠️ Chyba při extrakci z initialFeeds:', feedErr.message);
         }
 
-        if (scriptMatch) {
-            try {
-                const jsonData = JSON.parse(scriptMatch[1]);
-                events = jsonData.events || jsonData.matches || jsonData.data?.events || [];
-            } catch (e) {
-                console.error('❌ JSON parse selhal:', e.message);
+        // Pokus 1: Hledáme JSON v <script> tagu - rozšířené patterny (fallback)
+        if (events.length === 0) {
+            const scriptPatterns = [
+                /window\.__INITIAL_STATE__\s*=\s*(\{.*?});/s,
+                /window\.__DATA__\s*=\s*(\{.*?});/s,
+                /var\s+initialData\s*=\s*(\[.*?]);/s,
+                /window\.__APP__\s*=\s*(\{.*?});/s,
+                /window\.__CONFIG__\s*=\s*(\{.*?});/s,
+                /"fixtures":\s*(\[.*?]),?/s,
+                /"events":\s*(\[.*?]),?/s,
+                /"tournament":\s*(\{.*?}),?/s
+            ];
+
+            let scriptMatch = null;
+            for (const pattern of scriptPatterns) {
+                const match = html.match(pattern);
+                if (match) {
+                    scriptMatch = match;
+                    break;
+                }
+            }
+
+            if (scriptMatch) {
+                try {
+                    const jsonData = JSON.parse(scriptMatch[1]);
+                    events = jsonData.events || jsonData.matches || jsonData.data?.events || [];
+                } catch (e) {
+                    console.error('❌ JSON parse selhal:', e.message);
+                }
             }
         }
 
         // Pokus 2: Přímé volání API - použijeme reálné ID z HTML nebo kategorii
         const apiId = realTournamentId || tournamentId;
         if (events.length === 0 && apiId) {
-            // Pro URL typu /hokej/svet/mistrovstvi-sveta/program/ zkusíme sezónní formát
             const seasonYear = seasonToUse ? `20${seasonToUse.split('/')[0]}-20${seasonToUse.split('/')[1]}` : '2025-2026';
             
             const apiUrls = [
-                // Přímé API endpointy
                 `https://www.livesport.cz/api/v1/tournament/${apiId}/fixtures`,
                 `https://www.livesport.cz/api/v1/tournament/${apiId}/events`,
                 `https://www.livesport.cz/api/v2/tournament/${apiId}/fixtures`,
-                // Sezónní stránky (pro MS apod.)
                 `https://www.livesport.cz/zapasy/${seasonYear}/${apiId}/`,
                 `https://www.livesport.cz/zapasy/${seasonYear}/ms-${apiId}/`,
                 `https://www.livesport.cz/zapasy/${seasonYear}/mistrovstvi-sveta-${apiId}/`,
@@ -374,20 +471,17 @@ async function fetchMatchesFromLivesport(options) {
                         timeout: 10000
                     });
                     
-                    // Kontrola jestli je odpověď JSON nebo HTML
                     const contentType = apiResponse.headers['content-type'] || '';
                     
                     if (contentType.includes('json')) {
-                        // JSON odpověď
                         if (apiResponse.data && (apiResponse.data.fixtures || apiResponse.data.events || Array.isArray(apiResponse.data))) {
                             events = apiResponse.data.fixtures || apiResponse.data.events || apiResponse.data;
                             break;
                         }
                     } else {
-                        // HTML odpověď - zkusíme najít JSON v HTML
-                        const html = apiResponse.data;
-                        const scriptMatch = html.match(/window\.__INITIAL_STATE__\s*=\s*(\{.*?});/s) ||
-                                           html.match(/window\.__DATA__\s*=\s*(\{.*?});/s);
+                        const htmlApi = apiResponse.data;
+                        const scriptMatch = htmlApi.match(/window\.__INITIAL_STATE__\s*=\s*(\{.*?});/s) ||
+                                           htmlApi.match(/window\.__DATA__\s*=\s*(\{.*?});/s);
                         if (scriptMatch) {
                             const jsonData = JSON.parse(scriptMatch[1]);
                             events = jsonData.events || jsonData.matches || jsonData.data?.events || [];
@@ -397,32 +491,7 @@ async function fetchMatchesFromLivesport(options) {
                         }
                     }
                 } catch (apiErr) {
-                    console.error(`❌ API request selhal: ${apiErr.message}`);
-                }
-            }
-        }
-
-        // Pokus 3: Hledáme data v atributech HTML (novější verze Livesportu)
-        if (events.length === 0) {
-            // Hledáme API endpoint ve skriptech
-            const apiMatch = html.match(/\/api\/v\d+\/[^"']*?tournament\/[A-Za-z0-9]+[^"']*/);
-            if (apiMatch) {
-                const apiUrl = `${LIVESPORT_BASE_URL}${apiMatch[0]}`;
-                try {
-                    const apiResponse = await axios.get(apiUrl, {
-                        headers: {
-                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                            'Accept': 'application/json',
-                            'X-Requested-With': 'XMLHttpRequest'
-                        },
-                        timeout: 15000
-                    });
-
-                    if (apiResponse.data && apiResponse.data.events) {
-                        events = apiResponse.data.events;
-                    }
-                } catch (apiErr) {
-                    console.error(`❌ API fetch selhal: ${apiErr.message}`);
+                    // API request selhal - tiše pokračujeme
                 }
             }
         }
@@ -432,28 +501,20 @@ async function fetchMatchesFromLivesport(options) {
             const cheerio = require('cheerio');
             const $ = cheerio.load(html);
 
-            // Selektory pro stránku "Zápasy"
             const matchSelectors = '.event__match, .match, [class*="event"]';
-            $(matchSelectors);
-            $('.event__match, .match, [class*="event"]').each((i, el) => {
+            $(matchSelectors).each((i, el) => {
                 const $el = $(el);
 
-                // Extrakce týmů - podle skutečné struktury z screenshotu
-                // Hledáme v .wcl-participant -> span s class obsahující "name"
                 const homeTeam = $el.find('.event__homeParticipant [class*="name"]').first().text().trim() ||
                                $el.find('.wcl-participant').first().find('[class*="name"]').first().text().trim();
                 const awayTeam = $el.find('.event__awayParticipant [class*="name"]').first().text().trim() ||
                                $el.find('.wcl-participant').last().find('[class*="name"]').first().text().trim();
 
-                // Extrakce času - např. "16.05. 12:20"
                 const timeText = $el.find('.event__time').first().text().trim();
 
-
-                // Extrakce data - z času nebo z atributu
                 let dateText = $el.closest('[class*="round"]').find('[class*="date"]').first().text().trim() ||
                               $el.attr('data-date');
 
-                // Pokud máme čas ve formátu "16.05. 12:20", extrahujeme datum
                 if (timeText && timeText.includes('.')) {
                     const parts = timeText.split(' ');
                     if (parts.length >= 1) {
@@ -472,25 +533,16 @@ async function fetchMatchesFromLivesport(options) {
                 }
             });
 
-            // Selektory pro stránku "Program" (tabulkový formát)
             if (events.length === 0) {
                 const programSelectors = 'table tr, .program__row, [class*="program"]';
-                const programElements = $(programSelectors);
-
-                programElements.each((i, el) => {
+                $(programSelectors).each((i, el) => {
                     const $el = $(el);
-
-                    // Hledáme buňky s týmy
                     const cells = $el.find('td, .team, [class*="team"], .participant');
                     if (cells.length >= 2) {
                         const homeTeam = $(cells[0]).text().trim();
                         const awayTeam = $(cells[1]).text().trim();
-
-                        // Čas může být v další buňce nebo atributu
                         const timeText = $el.find('[class*="time"], .time, td:nth-child(3)').first().text().trim() ||
                                         $el.attr('data-time') || '17:00';
-
-                        // Datum z atributu nebo nadpisu sekce
                         const dateText = $el.attr('data-date') ||
                                         $el.closest('[class*="date"], .date, [class*="round"]').find('[class*="date"], .date-header').first().text().trim();
 
@@ -508,26 +560,24 @@ async function fetchMatchesFromLivesport(options) {
             }
         }
 
-        // Pokus 4: Puppeteer pro dynamicky načítané stránky
+        // Pokus 4: Puppeteer pro dynamicky načítané stránky (pouze jako poslední záchrana)
         if (events.length === 0 && puppeteer) {
             let browser;
             try {
                 let executablePath;
                 let args = ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'];
                 
-                // Zkusíme najít Chrome - nejdřív systémový, pak @sparticuz/chromium
                 const fs = require('fs');
                 const possiblePaths = [
                     process.env.PUPPETEER_EXECUTABLE_PATH,
-                    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', // Windows (z registru)
-                    process.env.LOCALAPPDATA + '\\Google\\Chrome\\Application\\chrome.exe', // Windows
-                    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe', // Windows
-                    '/usr/bin/google-chrome-stable', // Linux
+                    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+                    process.env.LOCALAPPDATA + '\\Google\\Chrome\\Application\\chrome.exe',
+                    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+                    '/usr/bin/google-chrome-stable',
                     '/usr/bin/chromium-browser',
                     '/usr/bin/chromium',
                 ];
                 
-                // Najdeme existující systémový Chrome
                 for (const path of possiblePaths) {
                     if (path) {
                         const exists = fs.existsSync(path);
@@ -538,114 +588,93 @@ async function fetchMatchesFromLivesport(options) {
                     }
                 }
                 
-                // Pokud není systémový, zkusíme @sparticuz/chromium (pro hosting)
                 if (!executablePath && chromium) {
                     executablePath = await chromium.executablePath();
                     args = chromium.args;
                 }
                 
-                if (!executablePath) {
-                    return;
-                }
-                
-                browser = await puppeteer.launch({
-                    headless: chromium ? chromium.headless : 'new',
-                    executablePath,
-                    args
-                });
-                const page = await browser.newPage();
-                await page.emulateTimezone('Europe/Prague');
-                
-                
-                await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
-                await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
-                
-                // Počkáme na načtení cjs.initialFeeds - nová Livesport struktura
-                await page.waitForFunction(() => {
-                    return window.cjs && window.cjs.initialFeeds && window.cjs.initialFeeds['fixtures'];
-                }, { timeout: 30000 }).catch(() => {
-                    // cjs.initialFeeds nenalezeno, pokračujeme na DOM extrakci
-                });
-                
-                // Extrahujeme data z prohlížeče - prioritně z cjs.initialFeeds
-                events = await page.evaluate(() => {
-                    const matches = [];
+                if (executablePath) {
+                    browser = await puppeteer.launch({
+                        headless: chromium ? chromium.headless : 'new',
+                        executablePath,
+                        args
+                    });
+                    const page = await browser.newPage();
+                    await page.emulateTimezone('Europe/Prague');
+                    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+                    await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
                     
-                    // Pokus 1: Zkusíme získat data z cjs.initialFeeds (nová Livesport struktura)
-                    if (window.cjs && window.cjs.initialFeeds && window.cjs.initialFeeds['fixtures']) {
-                        const feed = window.cjs.initialFeeds['fixtures'];
-                        
-                        // Data jsou v feed.data jako zakódovaný string (Flashscore formát)
-                        if (feed.data && typeof feed.data === 'string') {
-                            const data = feed.data;
-                            
-                            // Parsujeme Flashscore formát
-                            // Formát: ~AA÷[match_id]¬AD÷[timestamp]¬CX÷[home_team]¬...~BB÷[away_team_id]...
-                            const matchBlocks = data.split('~AA÷');
-                            
-                            matchBlocks.forEach((block, index) => {
-                                if (!block || index === 0) return; // První blok je info o turnaji, přeskočíme
+                    await page.waitForFunction(() => {
+                        return window.cjs && window.cjs.initialFeeds && window.cjs.initialFeeds['fixtures'];
+                    }, { timeout: 30000 }).catch(() => {});
+                    
+                    events = await page.evaluate(() => {
+                        const matches = [];
+                        if (window.cjs && window.cjs.initialFeeds && window.cjs.initialFeeds['fixtures']) {
+                            const feed = window.cjs.initialFeeds['fixtures'];
+                            if (feed.data && typeof feed.data === 'string') {
+                                const data = feed.data;
+                                const matchBlocks = data.split('~AA÷');
                                 
-                                // Extrahujeme údaje z bloku
-                                const parts = block.split('¬');
-                                let homeTeam = '';
-                                let awayTeam = '';
-                                let timestamp = '';
-                                
-                                parts.forEach(part => {
-                                    if (part.startsWith('CX÷')) {
-                                        homeTeam = part.substring(3);
-                                    } else if (part.startsWith('AD÷')) {
-                                        timestamp = part.substring(3);
-                                    } else if (part.startsWith('AF÷')) {
-                                        awayTeam = part.substring(3);
+                                matchBlocks.forEach((block, index) => {
+                                    if (!block || index === 0) return;
+                                    const parts = block.split('¬');
+                                    let homeTeam = '';
+                                    let awayTeam = '';
+                                    let timestamp = '';
+                                    
+                                    parts.forEach(part => {
+                                        if (part.startsWith('CX÷')) {
+                                            homeTeam = part.substring(3);
+                                        } else if (part.startsWith('AD÷')) {
+                                            timestamp = part.substring(3);
+                                        } else if (part.startsWith('AF÷')) {
+                                            awayTeam = part.substring(3);
+                                        }
+                                    });
+                                    
+                                    if (homeTeam && awayTeam && timestamp) {
+                                        const date = new Date(parseInt(timestamp) * 1000);
+                                        const dateStr = date.toISOString().split('T')[0];
+                                        const timeStr = date.toTimeString().split(' ')[0].substring(0, 5);
+                                        
+                                        matches.push({
+                                            homeTeam,
+                                            awayTeam,
+                                            time: timeStr,
+                                            date: dateStr
+                                        });
                                     }
                                 });
                                 
-                                if (homeTeam && awayTeam && timestamp) {
-                                    // Převod Unix timestamp (sekundy) na formát data
-                                    const date = new Date(parseInt(timestamp) * 1000);
-                                    const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD
-                                    const timeStr = date.toTimeString().split(' ')[0].substring(0, 5); // HH:MM
-                                    
-                                    matches.push({
-                                        homeTeam,
-                                        awayTeam,
-                                        time: timeStr,
-                                        date: dateStr
-                                    });
-                                }
-                            });
-                            
-                            return matches;
+                                return matches;
+                            }
                         }
-                    }
-                    
-                    // Pokus 2: Standardní DOM extrakce (fallback)
-                    document.querySelectorAll('.event__match, [class*="event-row"], .match').forEach(el => {
-                        const homeTeam = el.querySelector('[class*="home"] [class*="name"], .event__homeParticipant')?.textContent?.trim() ||
-                                       el.querySelector('.participant:first-child [class*="name"]')?.textContent?.trim();
-                        const awayTeam = el.querySelector('[class*="away"] [class*="name"], .event__awayParticipant')?.textContent?.trim() ||
-                                       el.querySelector('.participant:last-child [class*="name"]')?.textContent?.trim();
-                        const timeText = el.querySelector('[class*="time"], .event__time')?.textContent?.trim();
+                        
+                        document.querySelectorAll('.event__match, [class*="event-row"], .match').forEach(el => {
+                            const homeTeam = el.querySelector('[class*="home"] [class*="name"], .event__homeParticipant')?.textContent?.trim() ||
+                                           el.querySelector('.participant:first-child [class*="name"]')?.textContent?.trim();
+                            const awayTeam = el.querySelector('[class*="away"] [class*="name"], .event__awayParticipant')?.textContent?.trim() ||
+                                           el.querySelector('.participant:last-child [class*="name"]')?.textContent?.trim();
+                            const timeText = el.querySelector('[class*="time"], .event__time')?.textContent?.trim();
 
-                        if (homeTeam && awayTeam && timeText) {
-                            const parts = timeText.split(' ');
-                            const datePart = parts[0] || '';
-                            const timePart = parts[1] || timeText;
-                            
-                            matches.push({
-                                homeTeam, 
-                                awayTeam, 
-                                time: timePart,
-                                date: datePart
-                            });
-                        }
+                            if (homeTeam && awayTeam && timeText) {
+                                const parts = timeText.split(' ');
+                                const datePart = parts[0] || '';
+                                const timePart = parts[1] || timeText;
+                                
+                                matches.push({
+                                    homeTeam, 
+                                    awayTeam, 
+                                    time: timePart,
+                                    date: datePart
+                                });
+                            }
+                        });
+                        
+                        return matches;
                     });
-                    
-                    return matches;
-                });
-                
+                }
             } catch (puppeteerErr) {
                 console.error(`❌ Puppeteer selhal: ${puppeteerErr.message}`);
             } finally {
@@ -658,7 +687,6 @@ async function fetchMatchesFromLivesport(options) {
         let skippedDate = 0;
         
         for (const event of events) {
-            // Různé struktury dat podle zdroje
             const homeTeamName = event.homeTeam?.name || event.homeTeam || event.team1;
             const awayTeamName = event.awayTeam?.name || event.awayTeam || event.team2;
             const timeStr = event.time || event.startTime || '17:00';
@@ -666,7 +694,6 @@ async function fetchMatchesFromLivesport(options) {
 
             if (!homeTeamName || !awayTeamName) continue;
 
-            // Najdeme ID týmů
             const homeTeamId = findTeamInDatabase(homeTeamName, dbTeams, liga);
             const awayTeamId = findTeamInDatabase(awayTeamName, dbTeams, liga);
 
@@ -681,7 +708,6 @@ async function fetchMatchesFromLivesport(options) {
 
             if (!homeTeamId || !awayTeamId) continue;
 
-            // Parsování data a času
             const parsedDateTime = parseDateTime(dateStr, timeStr, seasonToUse);
             if (!parsedDateTime) {
                 console.error(`❌ Nelze parsovat datum: ${dateStr} ${timeStr}`);
@@ -689,7 +715,6 @@ async function fetchMatchesFromLivesport(options) {
                 continue;
             }
 
-            // Kontrola rozsahu dat
             if (dateFrom && parsedDateTime.date < dateFrom) {
                 outOfRangeCount++;
                 continue;
@@ -734,5 +759,6 @@ async function fetchMatchesFromLivesport(options) {
 
 module.exports = {
     fetchMatchesFromLivesport,
+    extractEventsFromInitialFeeds,
     LEAGUE_ID_MAP
 };
