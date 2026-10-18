@@ -21,7 +21,6 @@
     "@octokit/core": "^7.0.6",
     "@octokit/plugin-retry": "^4.1.6",
     "@octokit/rest": "^22.0.1",
-    "@sparticuz/chromium": "^153.0.0",
     "axios": "^1.13.5",
     "bcrypt": "^6.0.0",
     "body-parser": "^2.2.0",
