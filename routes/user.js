@@ -1093,7 +1093,7 @@ ${await renderUserHeader({
                 } else if (!isPlayoff) {
                     // --- ZÁKLADNÍ ČÁST (Simple Match) ---
                     html += `
-                    <tr class="match-row simple-match-row" data-match-id="${match.id}">
+<tr class="match-row simple-match-row ${matchStarted ? 'is-locked' : ''}" data-match-id="${match.id}">
     <td style="width: calc(45%);">
         <button type="button" class="team-link home-btn ${selectedWinner === "home" ? "selected" : ""}" data-winner="home" ${matchStarted ? 'disabled' : ''}>
             <div class="team-info-row">

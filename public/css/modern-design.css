@@ -2169,9 +2169,76 @@ button.playoff-series-header[aria-expanded="true"] .series-toggle-icon {
     opacity: 0.75;
 }
 
-.team-link:disabled, .team-pick-btn:disabled {
-    cursor: not-allowed;
-    opacity: 0.5;
+.matches-table {
+    border-collapse: separate;
+    border-spacing: 0;
+    margin-bottom: 20px;
+}
+
+/* tr nesmí malovat pozadí, jinak by prosvítalo v mezerách */
+.matches-table .match-row {
+    background: transparent;
+}
+
+/* odstup mezi zápasy = průhledná hranice, pozadí pod ni nezasahuje */
+.matches-table .match-row td {
+    border-top: 10px solid transparent;
+    background-clip: padding-box;
+}
+
+/* zamčené řádky */
+.matches-table .match-row.is-locked td {
+    --sl: 0 0 transparent;
+    --sr: 0 0 transparent;
+    --st: 0 0 transparent;
+    --sb: 0 0 transparent;
+    background-color: rgba(220, 38, 38, 0.15);
+    box-shadow: var(--sl), var(--sr), var(--st), var(--sb);
+    border-radius: 0; /* uvnitř bloku žádné zaoblení */
+}
+
+.matches-table .match-row.is-locked:hover td {
+    background-color: rgba(220, 38, 38, 0.22);
+}
+
+/* boční hrany */
+.matches-table .match-row.is-locked td:first-child { --sl: inset 3px 0 0 #dc2626; }
+.matches-table .match-row.is-locked td:last-child  { --sr: inset -3px 0 0 #dc2626; }
+
+/* začátek bloku */
+.matches-table .match-row:not(.is-locked) + .match-row.is-locked td,
+.matches-table tbody > .match-row.is-locked:first-child td {
+    --st: inset 0 3px 0 #dc2626;
+}
+.matches-table .match-row:not(.is-locked) + .match-row.is-locked td:first-child,
+.matches-table tbody > .match-row.is-locked:first-child td:first-child {
+    border-top-left-radius: var(--radius-md);
+}
+.matches-table .match-row:not(.is-locked) + .match-row.is-locked td:last-child,
+.matches-table tbody > .match-row.is-locked:first-child td:last-child {
+    border-top-right-radius: var(--radius-md);
+}
+
+/* konec bloku */
+.matches-table .match-row.is-locked:has(+ .match-row:not(.is-locked)) td,
+.matches-table tbody > .match-row.is-locked:last-child td {
+    --sb: inset 0 -3px 0 #dc2626;
+}
+.matches-table .match-row.is-locked:has(+ .match-row:not(.is-locked)) td:first-child,
+.matches-table tbody > .match-row.is-locked:last-child td:first-child {
+    border-bottom-left-radius: var(--radius-md);
+}
+.matches-table .match-row.is-locked:has(+ .match-row:not(.is-locked)) td:last-child,
+.matches-table tbody > .match-row.is-locked:last-child td:last-child {
+    border-bottom-right-radius: var(--radius-md);
+}
+
+.matches-table .match-row.is-locked .team-link:disabled {
+    opacity: 1;
+}
+/* zamčený řádek hned po zamčeném: žádný odstup, řádky se slijí */
+.matches-table .match-row.is-locked + .match-row.is-locked td {
+    border-top: 0;
 }
 
 .team-info-row {
