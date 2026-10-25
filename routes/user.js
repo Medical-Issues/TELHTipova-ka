@@ -4184,7 +4184,7 @@ function loadCustomImages() {
         return;
     }
     
-    grid.innerHTML = Object.entries(validImages).map(([name, imgData]) => {
+    grid.innerHTML = Object.entries(validImages).map(([, imgData]) => {
         return '<div style="background: #222; padding: 10px; border: 1px solid #444;">' +
         '<img src="' + imgData.data + '" alt="" style="width: 100%; height: 100px; object-fit: contain; margin-bottom: 8px;">' +
         '<div style="font-size: 0.85em; color: #aaa; word-break: break-all; margin-bottom: 8px;"></div>' +
@@ -4452,7 +4452,6 @@ async function generateImage(type) {
             console.error(response.error || 'Obrázek se nepodařilo vygenerovat.');
             errorMessage.textContent = response.error || 'Obrázek se nepodařilo vygenerovat.';
             errorMessage.hidden = false;
-            return;
         }
     } catch (error) {
         console.error('Chyba při generování obrázku:', error);
