@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap');
-
 @view-transition {
     navigation: auto;
 }
@@ -926,8 +924,12 @@ h1, h2, h3, h4, h5, h6 {
     padding-left: 4px;
 }
 
+.stats-overview-table td.rank-cell {
+    padding-left: 16px !important;
+}
+
 .stats-overview-table .rank-badge {
-    margin: 0 auto;
+    margin-left: 6px;
 }
 
 .stats-overview-table th.position {
@@ -1232,14 +1234,13 @@ tr.locked.clinched-neutral td:first-child, tr.locked.neutral td:first-child {
     width: 18px;
     height: 18px;
     padding: 0;
-    border: 1px solid;
     border-radius: 5px;
     font-family: 'JetBrains Mono', monospace;
     font-size: 9px;
     font-weight: 800;
     line-height: 1.05;
     font-variant-numeric: tabular-nums;
-    border-color: rgba(255, 85, 0, 0.42);
+    border: 1px solid rgba(255, 85, 0, 0.42);
     background: rgba(255, 85, 0, 0.09);
     color: #ff8a50;
     transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
@@ -2119,6 +2120,35 @@ button.playoff-series-header[aria-expanded="true"] .series-toggle-icon {
     margin-left: auto;
     flex-shrink: 0;
     order: 1;
+}
+
+.team-link.selected.right-selected {
+    background: rgba(34, 197, 94, 0.18) !important;
+    border-color: #22c55e !important;
+    color: #fff !important;
+}
+
+.team-link.selected.wrong-selected {
+    background: rgba(239, 68, 68, 0.18) !important;
+    border-color: #ef4444 !important;
+    color: #fff !important;
+}
+
+/* Zelené tlačítko (správný tip) */
+.team-link.selected.right-selected,
+.team-link.right-selected {
+    background: rgba(34, 197, 94, 0.18) !important;
+    border-color: #22c55e !important;
+    color: #fff !important;
+    box-shadow: 0 0 12px rgba(34, 197, 94, 0.3) !important;
+}
+
+.team-link.selected.wrong-selected,
+.team-link.wrong-selected {
+    background: rgba(239, 68, 68, 0.18) !important;
+    border-color: #ef4444 !important;
+    color: #fff !important;
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.3) !important;
 }
 
 .team-link.away-btn.selected::after, .team-pick-btn.away-btn.selected::after {
@@ -3127,7 +3157,7 @@ td.vs {
         margin-top: 14px;
     }
 
-    .nav-pill, .history-btn {
+    .nav-pill, .historybtn {
         padding: 5px 10px;
         font-size: 11px;
     }
@@ -4271,4 +4301,117 @@ td.vs {
         min-height: 72px;
         padding: 9px;
     }
+}
+/* =========================================================
+   ADDITIONS FOR MODERN STATISTICS PAGE
+   ========================================================= */
+
+.charts-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+}
+
+.chart-container {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    box-shadow: var(--shadow-card);
+}
+
+.chart-container h3 {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-main);
+    margin-bottom: 16px;
+    text-align: center;
+}
+
+/* Podium pre top 3 uzivatelov */
+.podium-container {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    align-items: end;
+    margin-bottom: 24px;
+}
+
+.podium-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 20px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    box-shadow: var(--shadow-card);
+    position: relative;
+}
+
+.podium-card.gold {
+    border-color: rgba(245, 158, 11, 0.5);
+    background: linear-gradient(180deg, rgba(245, 158, 11, 0.12) 0%, var(--bg-card) 100%);
+    transform: translateY(-8px);
+}
+
+.podium-card.silver {
+    border-color: rgba(148, 163, 184, 0.4);
+    background: linear-gradient(180deg, rgba(148, 163, 184, 0.08) 0%, var(--bg-card) 100%);
+}
+
+.podium-card.bronze {
+    border-color: rgba(180, 83, 9, 0.4);
+    background: linear-gradient(180deg, rgba(180, 83, 9, 0.08) 0%, var(--bg-card) 100%);
+}
+
+.medal-icon {
+    font-size: 28px;
+    margin-bottom: 6px;
+}
+
+.podium-user {
+    font-size: 15px;
+    font-weight: 800;
+    color: #fff;
+}
+
+.podium-points {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--primary);
+    margin-top: 2px;
+}
+
+@media (max-width: 768px) {
+    .charts-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .podium-container {
+        grid-template-columns: 1fr;
+        align-items: stretch;
+    }
+
+    .podium-card.gold {
+        transform: none;
+        order: -1;
+    }
+}
+
+.user-stat-box.favorite-team {
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    background: linear-gradient(180deg, rgba(16, 185, 129, 0.05) 0%, var(--bg-surface) 100%);
+}
+
+.user-stat-box.kat-team {
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    background: linear-gradient(180deg, rgba(239, 68, 68, 0.05) 0%, var(--bg-surface) 100%);
+}
+
+.history-team-wrapper {
+    position: relative;
+    width: 100%;
 }

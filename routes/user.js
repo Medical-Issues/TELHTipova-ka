@@ -6,7 +6,7 @@ const {
     requireLogin, prepareDashboardData, getGroupDisplayLabel, generateLeftPanel,
     getLeagueStatusData, getTableTipsData, generateTimeWidget, getAllowedLeagues, createMatchImage, logUserAction
 } = require("../utils/fileUtils");
-const { Users, Matches, Leagues, TableTips, ChosenSeason, Players, Settings} = require('../utils/mongoDataAccess');
+const { Users, Matches, Leagues, TableTips, ChosenSeason, Players, Settings, Teams} = require('../utils/mongoDataAccess');
 
 function toPragueDateTime(value) {
     if (!value) return null;
@@ -275,7 +275,7 @@ async function toggleNotifications() {
         let registration = await navigator.serviceWorker.getRegistration();
         
         if (!registration) {
-            registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+            registration = await navigator.serviceWorker.register('./sw.js');
         }
 
         let retry = 0;
@@ -407,6 +407,10 @@ router.get("/table-tip", requireLogin, async (req, res) => {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+            <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+            <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
 <title>Tipování tabulky – Tipovačka</title>
 <link rel="stylesheet" href="/css/modern-design.css?v=standings-layout-20261024" />
 <script src="/js/version-notification.js"></script>
@@ -957,6 +961,10 @@ router.get('/', requireLogin, async (req, res) => {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+            <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+            <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
 <title>Tipovačka</title>
 <link rel="stylesheet" href="/css/modern-design.css" />
 <script src="/js/version-notification.js"></script>
@@ -1293,131 +1301,173 @@ document.addEventListener('DOMContentLoaded', () => {
         res.send(html);
 });
 
+// =========================================================
+// 1. VÝBĚR HISTORIE (VŠECHNY LIGY & SEZÓNY)
+// =========================================================
 router.get('/history', requireLogin, async (req, res) => {
-    // Načtení definic lig (aby byly vidět i ty bez zápasů)
-    let allSeasonData = {};
-    try { allSeasonData = await Leagues.findAll(); } catch (err) { console.error(err); }
+    try {
+        const { Transfers, TransferLeagues, Leagues, Matches } = require('../utils/mongoDataAccess');
 
-    // Načtení zápasů (pro zpětnou kompatibilitu)
-    let matches = [];
-    try { matches = await Matches.findAll(); } catch (err) { console.error(err); }
+        const [allSeasonData, matches, transfersData, transferLeaguesData] = await Promise.all([
+            Leagues.findAll().catch(err => { console.error('Chyba načtení Leagues:', err); return {}; }),
+            Matches.findAll().catch(err => { console.error('Chyba načtení Matches:', err); return []; }),
+            Transfers.findAll().catch(err => { console.error('Chyba načtení Transfers:', err); return {}; }),
+            TransferLeagues.findAll().catch(err => { console.error('Chyba načtení TransferLeagues:', err); return {}; })
+        ]);
 
-    // Načtení přestupů pro kontrolu dostupnosti
-    const { Transfers, TransferLeagues } = require('../utils/mongoDataAccess');
-    let transfersData = {};
-    try { transfersData = await Transfers.findAll(); } catch (err) { console.error(err); }
-    
-    // Načtení lig s povolenými přestupy
-    let transferLeaguesData = {};
-    try { transferLeaguesData = await TransferLeagues.findAll(); } catch (err) { console.error(err); }
+        const isTransferEnabled = (season, leagueName) => {
+            const hasData = transfersData?.[season]?.[leagueName] && Object.keys(transfersData[season][leagueName]).length > 0;
+            if (hasData) return true;
 
-    const historyMap = new Map();
+            if (Array.isArray(transferLeaguesData)) {
+                return transferLeaguesData.includes(leagueName);
+            }
+            if (transferLeaguesData?.[season]) {
+                if (Array.isArray(transferLeaguesData[season])) {
+                    return transferLeaguesData[season].includes(leagueName);
+                }
+                return !!transferLeaguesData[season][leagueName];
+            }
+            return false;
+        };
 
-    // 1. Primární zdroj: Definice v leagues.json
-    Object.keys(allSeasonData).forEach(season => {
-        if (allSeasonData[season].leagues) {
-            allSeasonData[season].leagues.forEach(l => {
-                const key = `${season}_${l.name}`;
-                const hasTransfers = transfersData?.[season]?.[l.name] && Object.keys(transfersData[season][l.name]).length > 0;
-                const hasTransferLeagues = Array.isArray(transferLeaguesData) 
-                    ? transferLeaguesData.includes(l.name) 
-                    : (transferLeaguesData?.[season]?.includes(l.name) || false);
-                const matchCount = matches.filter(m => m.season === season && m.liga === l.name).length;
-                historyMap.set(key, { season, liga: l.name, hasTransfers, hasTransferLeagues, matchCount });
+        const historyMap = new Map();
+
+        if (allSeasonData && typeof allSeasonData === 'object') {
+            Object.keys(allSeasonData).forEach(season => {
+                if (Array.isArray(allSeasonData[season]?.leagues)) {
+                    allSeasonData[season].leagues.forEach(l => {
+                        const leagueName = l.name || l;
+                        const key = `${season}_${leagueName}`;
+                        const hasTransfers = isTransferEnabled(season, leagueName);
+                        const matchCount = Array.isArray(matches)
+                            ? matches.filter(m => String(m.season) === String(season) && String(m.liga) === String(leagueName)).length
+                            : 0;
+
+                        historyMap.set(key, { season, liga: leagueName, hasTransfers, matchCount });
+                    });
+                }
             });
         }
-    });
 
-    // 2. Záložní zdroj: Zápasy (pokud by něco chybělo v definici)
-    matches.forEach(m => {
-        if (m.liga && m.season) {
-            const key = `${m.season}_${m.liga}`;
-            if (!historyMap.has(key)) {
-                const hasTransfers = transfersData?.[m.season]?.[m.liga] && Object.keys(transfersData[m.season][m.liga]).length > 0;
-                const hasTransferLeagues = Array.isArray(transferLeaguesData) 
-                    ? transferLeaguesData.includes(m.liga) 
-                    : (transferLeaguesData?.[m.season]?.includes(m.liga) || false);
-                const matchCount = matches.filter(match => match.season === m.season && match.liga === m.liga).length;
-                historyMap.set(key, { season: m.season, liga: m.liga, hasTransfers, hasTransferLeagues, matchCount });
-            }
+        if (Array.isArray(matches)) {
+            matches.forEach(m => {
+                if (m.liga && m.season) {
+                    const key = `${m.season}_${m.liga}`;
+                    if (!historyMap.has(key)) {
+                        const hasTransfers = isTransferEnabled(m.season, m.liga);
+                        const matchCount = matches.filter(match => String(match.season) === String(m.season) && String(match.liga) === String(m.liga)).length;
+                        historyMap.set(key, { season: m.season, liga: m.liga, hasTransfers, matchCount });
+                    }
+                }
+            });
         }
-    });
 
-    const history = Array.from(historyMap.values());
+        const history = Array.from(historyMap.values());
+        const groupedBySeason = history.reduce((acc, entry) => {
+            if (!acc[entry.season]) acc[entry.season] = [];
+            acc[entry.season].push(entry);
+            return acc;
+        }, {});
 
-    // Seskupení podle sezón
-    const groupedBySeason = history.reduce((acc, entry) => {
-        if (!acc[entry.season]) acc[entry.season] = [];
-        acc[entry.season].push(entry);
-        return acc;
-    }, {});
+        const sortedSeasons = Object.keys(groupedBySeason).sort((a, b) => b.localeCompare(a, undefined, { numeric: true, sensitivity: 'base' }));
 
-    // Seřazení sezón sestupně
-    const sortedSeasons = Object.keys(groupedBySeason).sort((a, b) => b.localeCompare(a));
-
-    let html = `
-    <!DOCTYPE html>
-    <html lang="cs">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Historie lig a sezón – Tipovačka</title>
-        <link rel="stylesheet" href="/css/modern-design.css">
-        <script src="/js/version-notification.js"></script>
-        <link rel="icon" href="/images/logo.png">
-    </head>
-    ${renderNotificationScript(req.session.csrfToken || '')}
-    <body class="usersite">
-        ${await renderUserHeader({
-            username: req.session.user,
+        let html = `
+        <!DOCTYPE html>
+        <html lang="cs">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+            <link rel="preconnect" href="https://fonts.googleapis.com">
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+            <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+            <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
+            <title>Historie lig a sezón – Tipovačka</title>
+            <link rel="stylesheet" href="/css/modern-design.css">
+            <script src="/js/version-notification.js"></script>
+            <link rel="icon" href="/images/logo.png">
+        </head>
+        ${typeof renderNotificationScript === 'function' ? renderNotificationScript(req.session?.csrfToken || '') : ''}
+        <body class="usersite">
+            ${await renderUserHeader({
+            username: req.session?.user,
             selectedLiga: '',
             uniqueLeagues: [],
             activeTab: 'history',
-            csrfToken: req.session.csrfToken || '',
-            timeWidgetHtml: await generateTimeWidget()
+            csrfToken: req.session?.csrfToken || '',
+            timeWidgetHtml: typeof generateTimeWidget === 'function' ? await generateTimeWidget() : ''
         })}
-        <main class="layout-single-column">
-            <div class="history-container">
-    `;
+            <main class="layout-single-column">
+                <div class="section-header">
+                    <h1 class="section-title">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 0 0118 0z"/></svg>
+                        Historie lig a sezón
+                    </h1>
+                </div>
 
-    for (const season of sortedSeasons) {
-        const leagues = groupedBySeason[season].sort((a, b) => a.liga.localeCompare(b.liga));
-        
-        html += `
-            <div class="season-section">
-                <h2 class="season-title">${season}</h2>
-                <div class="league-grid">
+                <div class="history-container" style="background: transparent; border: none; padding: 0; box-shadow: none;">
         `;
 
-        for (const entry of leagues) {
+        if (sortedSeasons.length === 0) {
             html += `
-                <div class="league-card">
-                    <div class="league-card-header">
-                        <span class="league-name">${entry.liga}</span>
-                        <span class="league-badge">${entry.season}</span>
+                <div class="dashboard-section" style="text-align: center; padding: 40px 20px;">
+                    <p style="color: var(--text-muted);">Zatím nebyla nalezena žádná historie lig ani sezón.</p>
+                </div>
+            `;
+        }
+
+        for (const season of sortedSeasons) {
+            const leagues = groupedBySeason[season].sort((a, b) => a.liga.localeCompare(b.liga));
+
+            html += `
+                <div class="season-section" style="margin-bottom: 32px;">
+                    <div class="date-divider" style="margin-top: 0; margin-bottom: 16px;">
+                        <span class="date-badge">📅 Sezóna ${season}</span>
+                        <div class="date-line"></div>
                     </div>
-                    <div class="league-stats">
-                        <span>🏆 ${entry.matchCount} zápasů</span>
-                        ${entry.hasTransferLeagues ? '<span>📜 Přestupy dostupné</span>' : ''}
+                    <div class="league-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px;">
+            `;
+
+            for (const entry of leagues) {
+                html += `
+                    <div class="league-card" style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 18px; display: flex; flex-direction: column; justify-content: space-between; gap: 14px; box-shadow: var(--shadow-card);">
+                        <div class="league-card-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-subtle); padding-bottom: 10px;">
+                            <span class="league-name" style="font-size: 16px; font-weight: 800; color: #fff;">${entry.liga}</span>
+                            <span class="league-badge" style="font-size: 11px; font-weight: 700; color: var(--primary); background: var(--primary-subtle); padding: 2px 8px; border-radius: var(--radius-full);">${entry.season}</span>
+                        </div>
+                        
+                        <div class="league-stats" style="display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--text-muted);">
+                            <span>🏆 <strong>${entry.matchCount}</strong> zápasů</span>
+                            ${entry.hasTransfers
+                    ? '<span style="color: var(--accent-green);">📜 Přestupy dostupné</span>'
+                    : '<span style="color: var(--text-dim);">📜 Přestupy nedostupné</span>'
+                }
+                        </div>
+
+                        <div class="league-actions" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                            <a href="/history/a/?liga=${encodeURIComponent(entry.liga)}&season=${encodeURIComponent(entry.season)}" class="btn-secondary" style="font-size: 12px; padding: 8px 10px; text-align: center;">
+                                ⚽ Zápasy
+                            </a>
+                            <a href="/history/table/?liga=${encodeURIComponent(entry.liga)}&season=${encodeURIComponent(entry.season)}" class="btn-secondary" style="font-size: 12px; padding: 8px 10px; text-align: center;">
+                                📊 Tabulka
+                            </a>
+                            ${entry.hasTransfers
+                    ? `<a href="/history/prestupy?liga=${encodeURIComponent(entry.liga)}&season=${encodeURIComponent(entry.season)}" class="btn-secondary" style="font-size: 12px; padding: 8px 10px; text-align: center;">
+                                    📜 Přestupy
+                                   </a>`
+                    : `<button disabled class="btn-secondary" style="font-size: 12px; padding: 8px 10px; opacity: 0.4; cursor: not-allowed;" title="Přestupy pro tuto ligu/sezónu nejsou k dispozici">
+                                    📜 Přestupy
+                                   </button>`
+                }
+                            <a href="/history/roster?liga=${encodeURIComponent(entry.liga)}&season=${encodeURIComponent(entry.season)}" class="btn-secondary" style="font-size: 12px; padding: 8px 10px; text-align: center;">
+                                👥 Soupisky
+                            </a>
+                        </div>
                     </div>
-                    <div class="league-actions">
-                        <a href="/history/a/?liga=${encodeURIComponent(entry.liga)}&season=${encodeURIComponent(entry.season)}" class="history-action-btn history-action-btn-primary">
-                            ⚽ Tipování zápasů
-                        </a>
-                        <a href="/history/table/?liga=${encodeURIComponent(entry.liga)}&season=${encodeURIComponent(entry.season)}" class="history-action-btn history-action-btn-secondary">
-                            📊 Tipování tabulky
-                        </a>
-                        ${entry.hasTransferLeagues
-                            ? `<a href="/history/prestupy?liga=${encodeURIComponent(entry.liga)}&season=${encodeURIComponent(entry.season)}" class="history-action-btn history-action-btn-tertiary">
-                                📜 Přestupy
-                               </a>`
-                            : `<span class="history-action-btn history-action-btn-disabled" title="Přestupy nejsou dostupné">
-                                📜 Přestupy
-                               </span>`
-                        }
-                        <a href="/history/roster?liga=${encodeURIComponent(entry.liga)}&season=${encodeURIComponent(entry.season)}" class="history-action-btn history-action-btn-tertiary">
-                            👥 Soupisky
-                        </a>
+                `;
+            }
+
+            html += `
                     </div>
                 </div>
             `;
@@ -1425,78 +1475,79 @@ router.get('/history', requireLogin, async (req, res) => {
 
         html += `
                 </div>
-            </div>
+            </main>
+            <script>
+                document.addEventListener('DOMContentLoaded', () => {
+                    fetch('/api/version')
+                        .then(res => res.json())
+                        .then(data => {
+                            const versionBadge = document.getElementById('current-version');
+                            if (versionBadge) {
+                                versionBadge.textContent = data.version;
+                            }
+                        })
+                        .catch(err => console.error('Nepodařilo se načíst verzi', err));
+                });
+            </script>
+        </body>
+        </html>
         `;
+
+        res.send(html);
+
+    } catch (globalErr) {
+        console.error('Kritická chyba při generování stránky historie:', globalErr);
+        res.status(500).send('Nastala chyba při načítání historie.');
     }
-
-    html += `
-            </div>
-        </main>
-        <script>
-            document.addEventListener('DOMContentLoaded', () => {
-                fetch('/api/version')
-                    .then(res => res.json())
-                    .then(data => {
-                        const versionBadge = document.getElementById('current-version');
-                        if (versionBadge) {
-                            versionBadge.textContent = data.version;
-                        }
-                    })
-                    .catch(err => console.error('Nepodařilo se načíst verzi', err));
-            });
-        </script>
-    </body>
-    </html>
-    `;
-
-    res.send(html);
 });
 
-// NOVÁ ROUTA: Historie přestupů - zobrazí přestupy pro danou ligu a sezónu (stejný layout jako aktuální)
+// =========================================================
+// 2. HISTORIE PŘESTUPŮ (/history/prestupy)
+// =========================================================
 router.get('/history/prestupy', requireLogin, async (req, res) => {
-    const { Transfers, Teams, Matches } = require('../utils/mongoDataAccess');
-    const transfersData = await Transfers.findAll();
-    const allTeams = await Teams.findAll();
-    await Matches.findAll();
-// Získání parametrů z URL
-    const selectedLiga = req.query.liga;
-    const selectedSeason = req.query.season;
-    
-    // Pokud chybí parametry, přesměruj na výběr historie
-    if (!selectedLiga || !selectedSeason) {
-        return res.redirect('/history');
-    }
-    
-    // Filtrování týmů podle sezóny a ligy (podobně jako v aktuálních přestupech)
-    const teamsInSelectedLiga = allTeams.filter(t => 
-        t.liga === selectedLiga && t.season === selectedSeason && t.active
-    );
-    
-    // Načtení přestupů pro danou ligu a sezónu
-    const currentTransfers = transfersData?.[selectedSeason]?.[selectedLiga] || {};
-    
-    // Generování HTML s přestupy pro danou sezónu/ligu
-    let html = `
+    try {
+        const { Transfers, Teams } = require('../utils/mongoDataAccess');
+        const transfersData = await Transfers.findAll();
+        const allTeams = await Teams.findAll();
+
+        const selectedLiga = req.query.liga;
+        const selectedSeason = req.query.season;
+
+        if (!selectedLiga || !selectedSeason) {
+            return res.redirect('/history');
+        }
+
+        const teamsInSelectedLiga = allTeams.filter(t =>
+            t.liga === selectedLiga && t.season === selectedSeason && t.active
+        );
+
+        const currentTransfers = transfersData?.[selectedSeason]?.[selectedLiga] || {};
+
+        let html = `
 <!DOCTYPE html>
 <html lang="cs">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Přestupy - ${selectedLiga} ${selectedSeason}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+            <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+            <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
+<title>Přestupy – ${selectedLiga} ${selectedSeason}</title>
 <link rel="stylesheet" href="/css/modern-design.css" />
 <script src="/js/version-notification.js"></script>
 <link rel="icon" href="/images/logo.png">
 </head>
-${renderNotificationScript(req.session?.csrfToken || '')}
+${typeof renderNotificationScript === 'function' ? renderNotificationScript(req.session?.csrfToken || '') : ''}
 <body class="usersite">
 ${await renderUserHeader({
-    username: req.session?.user,
-    selectedLiga: selectedLiga,
-    uniqueLeagues: [],
-    activeTab: 'history',
-    csrfToken: req.session?.csrfToken || '',
-    timeWidgetHtml: await generateTimeWidget()
-})}
+            username: req.session?.user,
+            selectedLiga: selectedLiga,
+            uniqueLeagues: [],
+            activeTab: 'history',
+            csrfToken: req.session?.csrfToken || '',
+            timeWidgetHtml: typeof generateTimeWidget === 'function' ? await generateTimeWidget() : ''
+        })}
 <main class="layout-single-column">
     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom: 20px;">
         <div class="segmented-tabs">
@@ -1509,119 +1560,112 @@ ${await renderUserHeader({
         </div>
     </div>
 
-<div style="display: grid; gap: 16px; width: 100%;">
-<div class="section-header">
-    <div class="section-title">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M16 3h5v5"/><path d="M4 20L21 3"/><path d="M21 16v5h-5"/><path d="M15 15l6 6"/><path d="M4 4l5 5"/></svg>
-        Přestupy a Spekulace – ${selectedLiga} (${selectedSeason})
+    <div class="section-header">
+        <div class="section-title">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M16 3h5v5"/><path d="M4 20L21 3"/><path d="M21 16v5h-5"/><path d="M15 15l6 6"/><path d="M4 4l5 5"/></svg>
+            Přestupy a Spekulace – ${selectedLiga} (${selectedSeason})
+        </div>
     </div>
-</div>
+    <div style="display: grid; gap: 15px; width: 100%;">
 `;
 
-    // FUNKCE PRO OBARVOVÁNÍ (stejné jako v aktuálních přestupech)
-    const formatPlayerName = (rawName) => {
-        let style = 'color: white;';
-        let icon = '';
-        let name = rawName;
+        const formatPlayerName = (rawName) => {
+            let style = 'color: white;';
+            let icon = '';
+            let name = rawName;
 
-        if (name.includes('(X)')) {
-            style = 'color: #ff6666; text-decoration: line-through; opacity: 0.7;';
-            icon = '❌ ';
-            name = name.replace('(X)', '');
+            if (name.includes('(X)')) {
+                style = 'color: #ff6666; text-decoration: line-through; opacity: 0.7;';
+                icon = '❌ ';
+                name = name.replace('(X)', '');
+            } else if (name.includes('(-)')) {
+                style = 'color: #888; text-decoration: line-through; opacity: 0.5; font-style: italic;';
+                icon = '🚫 ';
+                name = name.replace('(-)', '');
+            } else if (name.includes('(!)')) {
+                style = 'color: #ffd700; font-weight: bold; text-shadow: 0 0 8px rgba(255, 215, 0, 0.4);';
+                icon = '🔥 ';
+                name = name.replace('(!)', '');
+            } else if (name.includes('(?)')) {
+                style = 'color: #00d4ff; font-style: italic;';
+                icon = '❓ ';
+                name = name.replace('(?)', '');
+            } else if (name.includes('(K)')) {
+                style = 'color: #ffaa00; font-weight: bold;';
+                icon = '📄 ';
+                name = name.replace('(K)', '');
+            } else if (name.includes('(loan)')) {
+                style = 'color: #9b59b6; font-weight: bold; text-shadow: 0 0 8px rgba(155, 89, 182, 0.4);';
+                icon = '🔄 ';
+                name = name.replace('(loan)', '');
+            }
+
+            const colorMatch = name.match(/#([0-9a-fA-F]{3,6})/);
+            if (colorMatch) {
+                style = `color: ${colorMatch[0]}; font-weight: bold;`;
+                name = name.replace(colorMatch[0], '');
+            }
+
+            return `<span style="${style}">${icon}${name.trim()}</span>`;
+        };
+
+        const renderList = (arr) => {
+            if (!arr || arr.length === 0) return '<div style="color: gray; font-size: 0.8em; font-style: italic;">-</div>';
+
+            return arr.map(player => `
+                <div style="font-size: 0.95em; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                    ${formatPlayerName(player)}
+                </div>
+            `).join('');
+        };
+
+        if (teamsInSelectedLiga.length === 0) {
+            html += `<div class="dashboard-section" style="text-align: center; padding: 40px; color: var(--text-dim);">Žádné týmy v lize ${selectedLiga} pro sezónu ${selectedSeason}</div>`;
+        } else {
+            teamsInSelectedLiga.sort((a, b) => (a.id || 0) - (b.id || 0)).forEach(team => {
+                const tId = String(team.id);
+                const tData = currentTransfers[tId] || { specIn: [], specOut: [], confIn: [], confOut: [] };
+                const logoUrl = team.logo ? `/logoteamu/${team.logo}` : '/images/logo.png';
+
+                html += `
+                <div class="transfer-team-card">
+                    <div class="transfer-team-header">
+                        <div class="transfer-team-info">
+                            <img src="${logoUrl}" alt="${team.name}" class="transfer-team-logo">
+                            <div class="transfer-team-title">${team.name}</div>
+                        </div>
+                    </div>
+
+                    <div class="transfer-cols-grid">
+                        <div class="transfer-watermark" style="background-image: url('${logoUrl}');"></div>
+                        
+                        <div class="transfer-col col-spec-in">
+                            <div class="transfer-col-header">⚡ Spekulace IN</div>
+                            ${renderList(tData.specIn)}
+                        </div>
+
+                        <div class="transfer-col col-spec-out">
+                            <div class="transfer-col-header">⚡ Spekulace OUT</div>
+                            ${renderList(tData.specOut)}
+                        </div>
+
+                        <div class="transfer-col col-conf-in">
+                            <div class="transfer-col-header">✓ Příchody</div>
+                            ${renderList(tData.confIn)}
+                        </div>
+
+                        <div class="transfer-col col-conf-out">
+                            <div class="transfer-col-header">✕ Odchody</div>
+                            ${renderList(tData.confOut)}
+                        </div>
+                    </div>
+                </div>
+                `;
+            });
         }
-        else if (name.includes('(-)')) {
-            style = 'color: #888; text-decoration: line-through; opacity: 0.5; font-style: italic;';
-            icon = '🚫 ';
-            name = name.replace('(-)', '');
-        }
-        else if (name.includes('(!)')) {
-            style = 'color: #ffd700; font-weight: bold; text-shadow: 0 0 8px rgba(255, 215, 0, 0.4);';
-            icon = '🔥 ';
-            name = name.replace('(!)', '');
-        }
-        else if (name.includes('(?)')) {
-            style = 'color: #00d4ff; font-style: italic;';
-            icon = '❓ ';
-            name = name.replace('(?)', '');
-        }
-        else if (name.includes('(K)')) {
-            style = 'color: #ffaa00; font-weight: bold;';
-            icon = '📄 ';
-            name = name.replace('(K)', '');
-        }
-        else if (name.includes('(loan)')) {
-            style = 'color: #9b59b6; font-weight: bold; text-shadow: 0 0 8px rgba(155, 89, 182, 0.4);';
-            icon = '🔄 ';
-            name = name.replace('(loan)', '');
-        }
 
-        const colorMatch = name.match(/#([0-9a-fA-F]{3,6})/);
-        if (colorMatch) {
-            style = `color: ${colorMatch[0]}; font-weight: bold;`;
-            name = name.replace(colorMatch[0], '');
-        }
-
-        return `<span style="${style}">${icon}${name.trim()}</span>`;
-    };
-
-    const renderList = (arr) => {
-        if (!arr || arr.length === 0) return '<div style="color: gray; font-size: 0.8em; font-style: italic;">-</div>';
-
-        return arr.map(player => `
-        <div style="font-size: 0.95em; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
-            ${formatPlayerName(player)}
-        </div>
-    `).join('');
-    };
-
-    // VYKRESLENÍ KARET TÝMŮ
-    if (teamsInSelectedLiga.length === 0) {
-        html += `<div style="text-align: center; padding: 40px; color: var(--text-dim);">Žádné týmy v lize ${selectedLiga} pro sezónu ${selectedSeason}</div>`;
-    } else {
-        teamsInSelectedLiga.sort((a, b) => a.id - b.id).forEach(team => {
-            const tId = String(team.id);
-            const tData = currentTransfers[tId] || { specIn: [], specOut: [], confIn: [], confOut: [] };
-            const logoUrl = team.logo ? `/logoteamu/${team.logo}` : '/images/logo.png';
-
-            html += `
-    <div class="transfer-team-card">
-        <div class="transfer-team-header">
-            <div class="transfer-team-info">
-                <img src="${logoUrl}" alt="${team.name}" class="transfer-team-logo">
-                <div class="transfer-team-title">${team.name}</div>
-            </div>
-        </div>
-
-        <div class="transfer-cols-grid">
-            <div class="transfer-watermark" style="background-image: url('${logoUrl}');"></div>
-            
-            <div class="transfer-col col-spec-in">
-                <div class="transfer-col-header">⚡ Spekulace IN</div>
-                ${renderList(tData.specIn)}
-            </div>
-
-            <div class="transfer-col col-spec-out">
-                <div class="transfer-col-header">⚡ Spekulace OUT</div>
-                ${renderList(tData.specOut)}
-            </div>
-
-            <div class="transfer-col col-conf-in">
-                <div class="transfer-col-header">✓ Příchody</div>
-                ${renderList(tData.confIn)}
-            </div>
-
-            <div class="transfer-col col-conf-out">
-                <div class="transfer-col-header">✕ Odchody</div>
-                ${renderList(tData.confOut)}
-            </div>
-        </div>
+        html += `
     </div>
-    `;
-        });
-    }
-
-    html += `
-</div>
 </main>
 <script>
     document.addEventListener('DOMContentLoaded', () => {
@@ -1640,59 +1684,57 @@ ${await renderUserHeader({
 </html>
 `;
 
-    res.send(html);
+        res.send(html);
+    } catch (err) {
+        console.error('Chyba v /history/prestupy:', err);
+        res.status(500).send('Nastala chyba při načítání historie přestupů.');
+    }
 });
 
+// =========================================================
+// 3. HISTORIE TIPŮ ZÁPASŮ (/history/a)
+// =========================================================
 router.get('/history/a', requireLogin, async (req, res) => {
-    // 0. Bezpečnostní kontrola adresy
-    if (!req.query.liga || !req.query.season) return res.redirect('/history');
+    try {
+        if (!req.query.liga || !req.query.season) return res.redirect('/history');
 
-    // 1. ZAVOLÁME MOZEK (s parametrem true pro režim historie)
-    const data = await prepareDashboardData(req, true);
+        const data = await prepareDashboardData(req, true);
+        const { username, selectedSeason, selectedLiga, teams, matches, allUsers, userStats } = data;
 
-    // 2. VYBALÍME SI PROMĚNNÉ
-    const {
-        username, selectedSeason, selectedLiga, teams,
-        matches, allUsers, userStats,
-    } = data;
+        const { TransferLeagues } = require('../utils/mongoDataAccess');
+        const transferLeaguesData = await TransferLeagues.findAll().catch(() => ({}));
+        const hasTransferLeagues = Array.isArray(transferLeaguesData)
+            ? transferLeaguesData.includes(selectedLiga)
+            : (transferLeaguesData?.[selectedSeason]?.includes(selectedLiga) || false);
 
-    // 3. NAČTENÍ PŘESTUPŮ PRO KONTROLU ZDA EXISTUJÍ
-    const { Transfers, TransferLeagues } = require('../utils/mongoDataAccess');
-    const transfersData = await Transfers.findAll();
-    const seasonTransfers = transfersData?.[selectedSeason]?.[selectedLiga] || {};
-    Object.keys(seasonTransfers).length > 0;
-// KONTROLA ZDA JE LIGA POVOLENA PRO PŘESTUPY
-    const transferLeaguesData = await TransferLeagues.findAll();
-    const hasTransferLeagues = Array.isArray(transferLeaguesData) 
-        ? transferLeaguesData.includes(selectedLiga) 
-        : (transferLeaguesData?.[selectedSeason]?.includes(selectedLiga) || false);
+        const usersWithTips = allUsers.filter(u => u.tips?.[selectedSeason]?.[selectedLiga]?.length > 0).sort((a, b) => a.username.localeCompare(b.username));
+        const initialUser = usersWithTips.find(u => u.username === username) ? username : (usersWithTips[0]?.username || "");
 
-    // 4. DATA SPECIFICKÁ PRO HISTORII (Výběr uživatele z rolovacího menu vpravo)
-    const usersWithTips = allUsers.filter(u => u.tips?.[selectedSeason]?.[selectedLiga]?.length > 0).sort((a, b) => a.username.localeCompare(b.username));
-    const initialUser = usersWithTips.find(u => u.username === username) ? username : (usersWithTips[0]?.username || "");
-
-    // --- HTML START ---
-    let html = `
+        let html = `
 <!DOCTYPE html>
 <html lang="cs">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+            <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+            <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
 <title>Tipovačka – Historie ${selectedLiga} ${selectedSeason}</title>
 <link rel="stylesheet" href="/css/modern-design.css" />
 <script src="/js/version-notification.js"></script>
 <link rel="icon" href="/images/logo.png">
 </head>
-${renderNotificationScript(req.session.csrfToken || '')}
+${typeof renderNotificationScript === 'function' ? renderNotificationScript(req.session?.csrfToken || '') : ''}
 <body class="usersite">
 ${await renderUserHeader({
-    username: username,
-    selectedLiga: selectedLiga,
-    uniqueLeagues: [],
-    activeTab: 'history',
-    csrfToken: req.session.csrfToken || '',
-    timeWidgetHtml: await generateTimeWidget()
-})}
+            username: username,
+            selectedLiga: selectedLiga,
+            uniqueLeagues: [],
+            activeTab: 'history',
+            csrfToken: req.session?.csrfToken || '',
+            timeWidgetHtml: typeof generateTimeWidget === 'function' ? await generateTimeWidget() : ''
+        })}
 <main class="main_page">
 <div style="grid-column: 1 / -1; margin-bottom: 12px;">
     <div class="segmented-tabs">
@@ -1707,226 +1749,292 @@ ${await renderUserHeader({
         <a class="segmented-btn" href="/history/roster?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">👥 Soupisky</a>
     </div>
 </div>
-`
-html += await generateLeftPanel(data, true);
-    html += `<script>
+`;
+        html += await generateLeftPanel(data, true);
+        html += `<script>
         const globalStatsData = ${JSON.stringify(userStats)};
 
-        // Načíst verzi a zobrazit v badge
         fetch('/api/version')
             .then(res => res.json())
             .then(data => {
                 const versionBadge = document.getElementById('current-version');
-                if (versionBadge) {
-                    versionBadge.textContent = data.version;
-                }
+                if (versionBadge) versionBadge.textContent = data.version;
             })
             .catch(err => console.error('Nepodařilo se načíst verzi', err));
 
-        // Funkce pro zobrazení historie a dynamické barvení políček
         function showUserHistory(username) {
-        // 1. Schovat všechny tipy
-        document.querySelectorAll('.history-item').forEach(el => el.style.display = 'none');
+            const safeName = username.replace(/[^a-zA-Z0-9]/g, '_');
 
-        const safeName = username.replace(/[^a-zA-Z0-9]/g, '_');
-        const userSelector = '.user-' + safeName;
+            document.querySelectorAll('.history-team-wrapper').forEach(wrapper => {
+                const activeItem = wrapper.querySelector('.user-' + safeName);
+                const parentBtn = wrapper.querySelector('.team-link');
+                if (!parentBtn) return;
 
-        // 2. Zobrazit tipy vybraného uživatele a aktualizovat rodičovské TD
-        document.querySelectorAll(userSelector).forEach(el => {
-        el.style.display = 'flex'; // Zobrazíme text (např. 3:2)
+                parentBtn.classList.remove('selected', 'right-selected', 'wrong-selected');
 
-        // Najdeme rodičovskou buňku tabulky
-        const parentTd = el.closest('td');
-        if (parentTd) {
-        // Resetujeme třídy (odstraníme staré barvy, necháme jen základ)
-        parentTd.classList.remove('right-selected', 'wrong-selected', 'wrong-selected-hidden', 'exact-score', 'diff-1', 'diff-2', 'diff-3plus');
-
-        // Pokud má element data-td-class, přidáme ji rodiči
-        if (el.dataset.tdClass) {
-        parentTd.classList.add(el.dataset.tdClass);
-        }
-        }
-        });
-        }
-        // Přidej do <script> v proměnné html v user.js
-function toggleSeriesDetails(btn) {
-    const details = btn.nextElementSibling;
-    const expanded = btn.getAttribute('aria-expanded') === 'true';
-    details.hidden = expanded;
-    btn.setAttribute('aria-expanded', String(!expanded));
-    btn.querySelector('.series-toggle-icon').textContent = expanded ? '▾' : '▴';
-}
-        </script>
-        <section class="matches-container">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
-                <h2 style="margin: 0;">Historie tipů</h2>
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <label for="historyUserSelect" style="color: lightgrey;">Zobrazit:</label>
-                    <select id="historyUserSelect" onchange="showUserHistory(this.value)" style="background-color: black; color: orangered; border: 1px solid orangered; padding: 5px;">`;
-
-    if (usersWithTips.length === 0) {
-        html += `<option disabled selected>Žádná data</option>`;
-    } else {
-        usersWithTips.forEach(u => {
-            const isSelected = u.username === initialUser ? 'selected' : '';
-            html += `<option value="${u.username}" ${isSelected}>${u.username}</option>`;
-        });
-    }
-
-    html += `   </select></div></div>
-   <table class="points-table">`;
-
-    // Seskupení zápasů
-    const groupedMatches = matches
-        .filter(m => m.liga === selectedLiga && m.result && m.season === selectedSeason)
-        .sort((a, b) => new Date(b.datetime) - new Date(a.datetime))
-        .reduce((groups, match) => {
-            const dateTime = match.datetime || match.date || "Neznámý čas";
-            if (!groups[dateTime]) groups[dateTime] = [];
-            groups[dateTime].push(match);
-            return groups;
-        }, {});
-
-    // Funkce pro watermark (OPRAVENO: position: absolute)
-    // 1. OPRAVA: Sjednocení opacity vodoznaku na 0.15, aby vypadal stejně jako na hlavní straně
-    const watermarkHTML = (url) => `
-        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-10deg); 
-                    width: 120%; height: 400%; 
-                    background-image: url('${url}'); background-size: contain; background-repeat: no-repeat; background-position: center; 
-                    opacity: 0.50; filter: grayscale(50%); pointer-events: none; z-index: 1;">
-        </div>`;
-
-    // 2. OPRAVA: Přidáno Number() pro správné nalezení tipu
-    const renderUserTip = (u, match, type) => {
-        // TADY BYLA CHYBA: Porovnával se text s číslem!
-        const userTip = u.tips?.[selectedSeason]?.[selectedLiga]?.find(t => Number(t.matchId) === Number(match.id));
-        const selectedWinner = userTip?.winner;
-        const bo = match.bo || 5;
-
-        const visibilityStyle = u.username === initialUser ? '' : 'display:none;';
-        const userClass = `history-item user-${u.username.replace(/[^a-zA-Z0-9]/g, '_')}`;
-
-        let tdStatusClass = "";
-
-        if (type === 'home' || type === 'away') {
-            const teamName = type === 'home' ? (teams.find(t => t.id === match.homeTeamId)?.name || '???') : (teams.find(t => t.id === match.awayTeamId)?.name || '???');
-
-            // Pokud má tipnuto, vyhodnotíme třídu
-            if (selectedWinner === type) {
-                tdStatusClass = match.result.winner === type ? "right-selected" : "wrong-selected";
-            }
-
-            return `<div class="${userClass} team-link-history" style="position: absolute; inset: 0; z-index: 2; background: transparent; color: inherit; ${visibilityStyle}" data-td-class="${tdStatusClass}">${teamName}</div>`;        }
-
-        if (type === 'score') {
-            let content = '-';
-            if (selectedWinner === "home" || selectedWinner === "away") {
-                if (bo === 1) {
-                    if (selectedWinner === match.result.winner) {
-                        const tH = userTip?.scoreHome ?? 0;
-                        const tA = userTip?.scoreAway ?? 0;
-                        const totalDiff = Math.abs(tH - match.result.scoreHome) + Math.abs(tA - match.result.scoreAway);
-                        if (totalDiff === 0) tdStatusClass = 'exact-score';
-                        else if (totalDiff === 1) tdStatusClass = 'diff-1';
-                        else if (totalDiff === 2) tdStatusClass = 'diff-2';
-                        else tdStatusClass = 'diff-3plus';
-                        content = `${tH} : ${tA}`;
-                    } else {
-                        const tH = userTip?.scoreHome ?? 0;
-                        const tA = userTip?.scoreAway ?? 0;
-                        content = `${tH} : ${tA}`;
-                        tdStatusClass = 'wrong-selected-hidden';
-                    }
-                } else {
-                    content = userTip?.loserWins ?? '-';
-                    let realLoserWins = 0;
-                    if (match.result.winner === 'home') {
-                        realLoserWins = match.result.scoreAway || 0;
-                    } else if (match.result.winner === 'away') {
-                        realLoserWins = match.result.scoreHome || 0;
-                    }
-
-                    if (selectedWinner === match.result.winner) {
-                        if (parseInt(userTip?.loserWins) === realLoserWins) {
-                            tdStatusClass = 'exact-score';
-                        } else {
-                            tdStatusClass = 'diff-3plus';
-                        }
-                    } else {
-                        tdStatusClass = 'wrong-selected-hidden';
-                    }
-                }
-            }
-            return `<div class="${userClass} team-link-history" style="position: absolute; inset: 0; z-index: 2; background: transparent; color: inherit; ${visibilityStyle}" data-td-class="${tdStatusClass}">${content}</div>`;        }
-        return '';
-    };
-
-    for (const [dateTime, matchesAtSameTime] of Object.entries(groupedMatches)) {
-        const formattedDateTime = new Date(dateTime).toLocaleString('cs-CZ', {
-            day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
-        });
-        html += `<h3>${formattedDateTime}</h3>
-<table class="matches-table">
-    <colgroup>
-        <col style="width: calc(45%);"> <col style="width: 1.5%;">             <col style="width: 2%;">             <col style="width: 1.5%;">             <col style="width: calc(45%);"> </colgroup>
-    <thead class="matches-table-header">
-        <tr><th colspan="5">Zápasy</th></tr>
-    </thead>
-    <tbody>`;
-
-        for (const match of matchesAtSameTime) {
-            const homeTeamObj = teams.find(t => t.id === match.homeTeamId);
-            const awayTeamObj = teams.find(t => t.id === match.awayTeamId);
-
-            const homeLogoUrl = homeTeamObj?.logo ? `/logoteamu/${homeTeamObj.logo}` : '/images/logo.png';
-            const awayLogoUrl = awayTeamObj?.logo ? `/logoteamu/${awayTeamObj.logo}` : '/images/logo.png';
-
-            let homeCellHTML = "", awayCellHTML = "", scoreCellHTML = "";
-            let initHomeClass = "", initAwayClass = "", initScoreClass = "";
-
-            usersWithTips.forEach(u => {
-                homeCellHTML += renderUserTip(u, match, 'home');
-                awayCellHTML += renderUserTip(u, match, 'away');
-                if (match.isPlayoff) scoreCellHTML += renderUserTip(u, match, 'score');
-
-                if (u.username === initialUser) {
-                    const homeMatch = renderUserTip(u, match, 'home').match(/data-td-class="([^"]*)"/);
-                    if (homeMatch) initHomeClass = homeMatch[1];
-
-                    const awayMatch = renderUserTip(u, match, 'away').match(/data-td-class="([^"]*)"/);
-                    if (awayMatch) initAwayClass = awayMatch[1];
-
-                    if(match.isPlayoff) {
-                        const scoreMatch = renderUserTip(u, match, 'score').match(/data-td-class="([^"]*)"/);
-                        if (scoreMatch) initScoreClass = scoreMatch[1];
+                if (activeItem) {
+                    const statusClass = activeItem.dataset.tdClass;
+                    if (statusClass) {
+                        parentBtn.classList.add('selected', statusClass);
                     }
                 }
             });
 
-            // OPRAVENO: Odstraněna třída match-row u tagů <td>!
-            if (!match.isPlayoff) {
-                html += `<tr class="match-row">
-    <td class="${initHomeClass}" style="position: relative; overflow: hidden; width: 41%;">${watermarkHTML(homeLogoUrl)}${homeCellHTML}</td>
-    <td style="width: 4%;">${match.result.scoreHome}</td>
-    <td class="vs" style="width: 20px;">${match.result.ot === true ? "pp/sn" : ":"}</td>
-    <td style="width: 4%;">${match.result.scoreAway}</td>
-    <td class="${initAwayClass}" style="position: relative; overflow: hidden; width: 41%;">${watermarkHTML(awayLogoUrl)}${awayCellHTML}</td>
+            document.querySelectorAll('.history-score-wrapper').forEach(wrapper => {
+                wrapper.querySelectorAll('.history-score-item').forEach(el => el.style.display = 'none');
+                const activeScore = wrapper.querySelector('.user-' + safeName);
+                if (activeScore) {
+                    activeScore.style.display = 'flex';
+                }
+            });
+        }
+
+        function toggleSeriesDetails(btn) {
+            const details = btn.nextElementSibling;
+            const expanded = btn.getAttribute('aria-expanded') === 'true';
+            details.hidden = expanded;
+            btn.setAttribute('aria-expanded', String(!expanded));
+            btn.querySelector('.series-toggle-icon').textContent = expanded ? '▾' : '▴';
+        }
+        </script>
+        <section class="matches-container">
+            <div class="section-header" style="justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                <div class="section-title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 0 0118 0z"/></svg>
+                    Historie tipů zápasů
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <label for="historyUserSelect" style="color: var(--text-muted); font-size: 13px; font-weight: 600;">Zobrazit tipéra:</label>
+                    <select id="historyUserSelect" class="modern-select" onchange="showUserHistory(this.value)" style="width: auto; padding: 6px 12px; font-weight: 700;">`;
+
+        if (usersWithTips.length === 0) {
+            html += `<option disabled selected>Žádná data</option>`;
+        } else {
+            usersWithTips.forEach(u => {
+                const isSelected = u.username === initialUser ? 'selected' : '';
+                html += `<option value="${u.username}" ${isSelected}>${u.username}</option>`;
+            });
+        }
+
+        html += `   </select></div></div>`;
+
+        const groupedMatches = matches
+            .filter(m => m.liga === selectedLiga && m.result && m.season === selectedSeason)
+            .sort((a, b) => new Date(b.datetime) - new Date(a.datetime))
+            .reduce((groups, match) => {
+                const dateTime = match.datetime || match.date || "Neznámý čas";
+                const datePart = dateTime.includes('T') ? dateTime.split('T')[0] : dateTime.split(' ')[0];
+                if (!groups[datePart]) groups[datePart] = [];
+                groups[datePart].push(match);
+                return groups;
+            }, {});
+
+        const renderUserTip = (u, match, type) => {
+            const userTip = u.tips?.[selectedSeason]?.[selectedLiga]?.find(t => Number(t.matchId) === Number(match.id));
+            const selectedWinner = userTip?.winner;
+            const bo = match.bo || 1;
+            const isPlayoffBo1 = match.isPlayoff && bo === 1;
+
+            const safeUser = u.username.replace(/[^a-zA-Z0-9]/g, '_');
+            const isInitial = u.username === initialUser;
+
+            let earnedPoints = 0;
+            let isCorrectTip = selectedWinner === match.result?.winner;
+
+            if (isCorrectTip) {
+                if (!match.isPlayoff) {
+                    earnedPoints = 1;
+                } else if (isPlayoffBo1) {
+                    const tH = userTip?.scoreHome ?? 0;
+                    const tA = userTip?.scoreAway ?? 0;
+                    const totalDiff = Math.abs(tH - match.result.scoreHome) + Math.abs(tA - match.result.scoreAway);
+                    if (totalDiff === 0) earnedPoints = 5;
+                    else if (totalDiff === 1) earnedPoints = 4;
+                    else if (totalDiff === 2) earnedPoints = 3;
+                    else earnedPoints = 1;
+                } else if (match.isPlayoff && bo > 1) {
+                    let realLoserWins = match.result.winner === 'home' ? (match.result.scoreAway || 0) : (match.result.scoreHome || 0);
+                    if (parseInt(userTip?.loserWins) === realLoserWins) {
+                        earnedPoints = 3;
+                    } else {
+                        earnedPoints = 1;
+                    }
+                }
+            }
+
+            if (type === 'home' || type === 'away') {
+                const isSelected = selectedWinner === type;
+                const tdStatusClass = isSelected ? (isCorrectTip ? 'right-selected' : 'wrong-selected') : '';
+
+                let badgeStyle = "background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444;";
+                if (isCorrectTip) {
+                    badgeStyle = "background: rgba(34, 197, 94, 0.2); color: #22c55e; border: 1px solid #22c55e;";
+                }
+
+                // Badge s body pro ZČ (s mezerou od fajfky/textu)
+                const pointsBadgeHtml = (isSelected && !match.isPlayoff) ? `
+                    <span class="badge history-item user-${safeUser}" style="display:${isInitial ? 'inline-flex' : 'none'}; ${badgeStyle} font-weight: 800; padding: 2px 7px; border-radius: var(--radius-md); font-size: 11px; flex-shrink: 0; margin-left: 5px; margin-right: 5px;">
+                        ${earnedPoints > 0 ? `+${earnedPoints} b.` : '0 b.'}
+                    </span>
+                ` : '';
+
+                return {
+                    html: isSelected ? `<span class="history-item user-${safeUser}" data-td-class="${tdStatusClass}" style="display:none;"></span>` : '',
+                    pointsBadgeHtml,
+                    isSelected,
+                    tdStatusClass
+                };
+            }
+
+            if (type === 'score' && match.isPlayoff) {
+                let content = 'Netipováno';
+                if (selectedWinner) {
+                    content = bo === 1 ? `${userTip?.scoreHome ?? 0} : ${userTip?.scoreAway ?? 0}` : `Série: ${userTip?.loserWins ?? 0} výher poraženého`;
+                }
+
+                let badgeStyle = "background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid #ef4444;";
+                if (isCorrectTip) {
+                    badgeStyle = "background: rgba(34, 197, 94, 0.15); color: #22c55e; border: 1px solid #22c55e;";
+                }
+
+                return {
+                    html: `
+            <div class="history-score-item user-${safeUser}" style="display:${isInitial ? 'flex' : 'none'}; align-items:center; justify-content:center; gap:12px; width:100%;">
+                <span style="color: var(--text-muted); font-size: 13px;">Tip skóre: <strong style="color: #fff; font-size: 14px;">${content}</strong></span>
+                <span class="badge" style="${badgeStyle} font-weight: 800; padding: 3px 10px; border-radius: var(--radius-md); font-size: 12px;">
+                    ${earnedPoints > 0 ? `+${earnedPoints} b.` : '0 b.'}
+                </span>
+            </div>`
+                };
+            }
+
+            return { html: '' };
+        };
+
+        for (const [dateKey, matchesOnDate] of Object.entries(groupedMatches)) {
+            const dateValue = new Date(`${dateKey}T12:00:00`);
+            const formattedDate = Number.isNaN(dateValue.getTime())
+                ? dateKey
+                : new Intl.DateTimeFormat('cs-CZ', { day: 'numeric', month: 'numeric', year: 'numeric', timeZone: 'Europe/Prague' }).format(dateValue);
+
+            html += `
+            <div class="date-divider date-divider-subtle">
+                <span class="date-badge">📅 ${formattedDate}</span>
+                <div class="date-line"></div>
+            </div>
+            <table class="matches-table">
+                <colgroup>
+                    <col style="width: calc(45%);">
+                    <col style="width: 5%;">
+                    <col style="width: calc(45%);">
+                </colgroup>
+                <thead class="matches-table-header">
+                    <tr><th colspan="3">Výsledky & Tipy</th></tr>
+                </thead>
+                <tbody>`;
+
+            for (const match of matchesOnDate) {
+                const homeTeamObj = teams.find(t => t.id === match.homeTeamId);
+                const awayTeamObj = teams.find(t => t.id === match.awayTeamId);
+
+                const homeTeamName = homeTeamObj?.name || '???';
+                const awayTeamName = awayTeamObj?.name || '???';
+
+                const homeLogoUrl = homeTeamObj?.logo ? `/logoteamu/${homeTeamObj.logo}` : '/images/logo.png';
+                const awayLogoUrl = awayTeamObj?.logo ? `/logoteamu/${awayTeamObj.logo}` : '/images/logo.png';
+
+                const matchTime = match.datetime ? match.datetime.slice(11, 16) : '';
+                const isOvertimeOrShooting = match.result?.ot === true;
+
+                let homeCellItems = "", awayCellItems = "", scoreCellHTML = "";
+                let homeBadge = "", awayBadge = "";
+                let initHomeClass = "", initAwayClass = "";
+
+                usersWithTips.forEach(u => {
+                    const homeRes = renderUserTip(u, match, 'home');
+                    const awayRes = renderUserTip(u, match, 'away');
+
+                    homeCellItems += homeRes.html;
+                    awayCellItems += awayRes.html;
+
+                    if (match.isPlayoff) {
+                        const scoreRes = renderUserTip(u, match, 'score');
+                        scoreCellHTML += scoreRes.html;
+                    }
+
+                    if (u.username === initialUser) {
+                        if (homeRes.isSelected) {
+                            initHomeClass = homeRes.tdStatusClass;
+                            homeBadge = homeRes.pointsBadgeHtml;
+                        }
+                        if (awayRes.isSelected) {
+                            initAwayClass = awayRes.tdStatusClass;
+                            awayBadge = awayRes.pointsBadgeHtml;
+                        }
+                    }
+                });
+
+                html += `
+<tr class="match-row simple-match-row">
+    <td style="width: calc(45%);">
+        <div class="history-team-wrapper">
+            ${homeCellItems}
+            <div class="team-link home-btn ${initHomeClass ? 'selected ' + initHomeClass : ''}" style="cursor: default;">
+                <div class="team-info-row" style="display: flex; align-items: center; justify-content: space-between; width: 100%; min-width: 0;">
+                    <!-- Levá strana: Logo a Název týmu -->
+                    <div style="display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden;">
+                        <div class="team-logo-small-wrap" style="flex-shrink: 0;"><img src="${homeLogoUrl}" alt=""></div>
+                        <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${homeTeamName}</span>
+                    </div>
+                    <!-- Pravá strana: Společný div pro odznaky (drží v jedné řadě) -->
+                    <div style="display: flex; align-items: center; gap: 5px; margin-left: auto; flex-shrink: 0; white-space: nowrap;">
+                        ${homeBadge}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </td>
+    <td class="vs" style="width: 5%; text-align: center; vertical-align: middle;">
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
+            <span class="match-vs" style="font-size: 16px; font-weight: 800; color: #fff; line-height: 1.2;">
+                ${match.result?.scoreHome ?? 0}:${match.result?.scoreAway ?? 0}
+            </span>
+            ${isOvertimeOrShooting ? `<span style="font-size: 11px; color: var(--accent-amber); font-weight: 700; margin-top: 2px;">pp/sn</span>` : ''}
+            ${matchTime ? `<span class="match-time" style="font-size: 11px; margin-top: 2px;">${matchTime}</span>` : ''}
+        </div>
+    </td>
+    <td style="width: calc(45%);">
+        <div class="history-team-wrapper">
+            ${awayCellItems}
+            <div class="team-link away-btn ${initAwayClass ? 'selected ' + initAwayClass : ''}" style="cursor: default;">
+                <div class="team-info-row" style="display: flex; align-items: center; justify-content: space-between; width: 100%; min-width: 0;">
+                    <!-- Levá strana u hostů: Společný div pro odznaky -->
+                    <div style="display: flex; align-items: center; gap: 5px; margin-right: auto; flex-shrink: 0; white-space: nowrap;">
+                        ${awayBadge}
+                    </div>
+                    <!-- Pravá strana u hostů: Název týmu a Logo -->
+                    <div style="display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden;">
+                        <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${awayTeamName}</span>
+                        <div class="team-logo-small-wrap" style="flex-shrink: 0;"><img src="${awayLogoUrl}" alt=""></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </td>
 </tr>`;
-            } else {
-                // NOVÁ "DROPDOWN" VERZE PRO HISTORII
-                let playedMatchesHtml = '';
+
                 if (match.isPlayoff && match.bo > 1 && match.playedMatches && match.playedMatches.length > 0) {
-                    let currentH = 0; let currentA = 0;
+                    let seriesHomeWins = 0;
+                    let seriesAwayWins = 0;
 
                     const detailedRows = match.playedMatches.map((pm, idx) => {
-                        const displayHome = pm.sideSwap ? (teams.find(t => t.id === match.awayTeamId)?.name || '???') : (teams.find(t => t.id === match.homeTeamId)?.name || '???');
-                        const displayAway = pm.sideSwap ? (teams.find(t => t.id === match.homeTeamId)?.name || '???') : (teams.find(t => t.id === match.awayTeamId)?.name || '???');
+                        const displayHome = pm.sideSwap ? awayTeamName : homeTeamName;
+                        const displayAway = pm.sideSwap ? homeTeamName : awayTeamName;
                         const displayScoreH = pm.sideSwap ? pm.scoreAway : pm.scoreHome;
                         const displayScoreA = pm.sideSwap ? pm.scoreHome : pm.scoreAway;
 
-                        const hWinner = (pm.scoreHome > pm.scoreAway && !pm.sideSwap) || (pm.scoreAway > pm.scoreHome && pm.sideSwap);
-                        const aWinner = (pm.scoreAway > pm.scoreHome && !pm.sideSwap) || (pm.scoreHome > pm.scoreAway && pm.sideSwap);
-                        if (hWinner) currentH++; else if (aWinner) currentA++;
+                        const hWinner = pm.scoreHome > pm.scoreAway;
+                        if (hWinner) seriesHomeWins++; else seriesAwayWins++;
 
                         return `
                         <div class="playoff-series-game">
@@ -1935,352 +2043,90 @@ function toggleSeriesDetails(btn) {
                             <span class="playoff-series-game-score">
                                 ${displayScoreH}:${displayScoreA}${pm.ot ? '<small>p</small>' : ''}
                             </span>
-                            <span class="playoff-series-game-team away ${aWinner ? 'winner' : ''}">${displayAway}</span>
+                            <span class="playoff-series-game-team away ${!hWinner ? 'winner' : ''}">${displayAway}</span>
                         </div>`;
                     }).join('');
 
-                    playedMatchesHtml = `
-                <tr class="played-matches-row" style="background: transparent; border-top: none;">
-                    <td colspan="5" style="padding: 0; border-top: none;">
-                        <div class="playoff-series-progress">
-                        <button type="button" class="playoff-series-header" onclick="toggleSeriesDetails(this)" aria-expanded="false" aria-controls="series-details-${match.id}">
-                            <span>Průběh série</span>
-                            <span class="playoff-series-score">${currentH}:${currentA}</span>
-                            <span class="series-toggle-icon" aria-hidden="true">▾</span>
-                        </button>
-                        <div id="series-details-${match.id}" class="series-details playoff-series-matches" hidden>
-                            ${detailedRows}
-                        </div>
-                        </div>
-                    </td>
-                </tr>`;
+                    html += `
+                    <tr class="played-matches-row" style="background: transparent; border-top: none;">
+                        <td colspan="3" style="padding: 0; border-top: none;">
+                            <div class="playoff-series-progress">
+                            <button type="button" class="playoff-series-header" onclick="toggleSeriesDetails(this)" aria-expanded="false" aria-controls="series-details-${match.id}" style="justify-content: center; gap: 15px;">
+                                <span>Průběh série</span>
+                                <span class="playoff-series-score" style="margin: 0;">${seriesHomeWins}:${seriesAwayWins}</span>
+                                <span class="series-toggle-icon" aria-hidden="true">▾</span>
+                            </button>
+                            <div id="series-details-${match.id}" class="series-details playoff-series-matches" hidden>
+                                ${detailedRows}
+                            </div>
+                            </div>
+                        </td>
+                    </tr>`;
                 }
 
-                // Samotné vykreslení (zůstává stejné jako minule)
-                html += `<tr style="border-top: none" class="match-row">
-    <td class="${initHomeClass}" style="position: relative; overflow: hidden; width: 41%;">${watermarkHTML(homeLogoUrl)}${homeCellHTML}</td>
-    <td style="width: 4%;">${match.result.scoreHome}</td>
-    <td class="vs" style="width: 20px;">vs</td>
-    <td style="width: 4%;">${match.result.scoreAway}</td>
-    <td class="${initAwayClass}" style="position: relative; overflow: hidden; width: 41%;">${watermarkHTML(awayLogoUrl)}${awayCellHTML}</td>
-</tr>
-            ${playedMatchesHtml}
-            <tr class="match-row">
-                <td style="height: 25px; position: relative;" colspan="5" class="${initScoreClass}">${scoreCellHTML}</td>
-            </tr>`;
+                // Tento řádek se teď vykresluje pro VŠECHNY ZÁPASY (ZČ i Playoff)
+                html += `
+                <tr class="match-row score-row">
+                    <td colspan="3" style="padding: 8px 12px; background: var(--bg-card); border-top: none; text-align: center;">
+                        <div class="history-score-wrapper">${scoreCellHTML}</div>
+                    </td>
+                </tr>`;
             }
-            }
-        html += `</tbody></table>`;
-    }
+            html += `</tbody></table>`;
+        }
 
-    html += `</section></main>
-    </body></html>`;
-    res.send(html);
+        html += `</section></main></body></html>`;
+        res.send(html);
+    } catch (err) {
+        console.error('Chyba v /history/a:', err);
+        res.status(500).send('Nastala chyba při načítání historie zápasů.');
+    }
 });
 
-router.get('/history/roster', requireLogin, async (req, res) => {
+// =========================================================
+// 4. HISTORIE TIPŮ TABULKY (/history/table)
+// =========================================================
+router.get('/history/table', requireLogin, async (req, res) => {
     try {
-        // 0. Bezpečnostní kontrola adresy
         if (!req.query.liga || !req.query.season) return res.redirect('/history');
 
-        // 1. ZAVOLÁME MOZEK (s parametrem true pro režim historie)
         const data = await prepareDashboardData(req, true);
+        const { username, selectedSeason, selectedLiga, sortedGroupKeys, groupedTeams, globalRealRankMap, allUsers, tableTips, isTipsLocked } = data;
 
-        // 2. VYBALÍME SI PROMĚNNÉ
-        const {
-            username, selectedSeason, selectedLiga, teamsInSelectedLiga,
-        } = data;
+        const { TransferLeagues } = require('../utils/mongoDataAccess');
+        const transferLeaguesData = await TransferLeagues.findAll().catch(() => ({}));
+        const hasTransferLeagues = Array.isArray(transferLeaguesData)
+            ? transferLeaguesData.includes(selectedLiga)
+            : (transferLeaguesData?.[selectedSeason]?.includes(selectedLiga) || false);
 
-        // --- HTML START ---
+        const usersWithTableTips = allUsers.filter(u => tableTips?.[selectedSeason]?.[selectedLiga]?.[u.username]).sort((a, b) => a.username.localeCompare(b.username));
+        const initialUser = usersWithTableTips.find(u => u.username === username) ? username : (usersWithTableTips[0]?.username || "");
+
         let html = `
 <!DOCTYPE html>
 <html lang="cs">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Soupisky – ${selectedLiga} ${selectedSeason}</title>
-<link rel="stylesheet" href="/css/modern-design.css" />
-<script src="/js/version-notification.js"></script>
-<link rel="icon" href="/images/logo.png">
-</head>
-${renderNotificationScript(req.session?.csrfToken || '')}
-<body class="usersite">
-${await renderUserHeader({
-    username: username,
-    selectedLiga: selectedLiga,
-    uniqueLeagues: [],
-    activeTab: 'history',
-    csrfToken: req.session?.csrfToken || '',
-    timeWidgetHtml: await generateTimeWidget()
-})}
-<main class="layout-single-column">
-    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom: 20px;">
-        <div class="segmented-tabs">
-            <a class="segmented-btn" href="/">Aktuální sezóna</a>
-            <a class="segmented-btn" href="/history">← Zpět na výběr</a>
-            <a class="segmented-btn" href="/history/a/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy zápasů</a>
-            <a class="segmented-btn" href="/history/table/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy tabulky</a>
-            <a class="segmented-btn" href="/history/prestupy?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">📜 Přestupy</a>
-            <a class="segmented-btn active" href="/history/roster?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">👥 Soupisky</a>
-        </div>
-    </div>
-
-<div class="section-header">
-    <div class="section-title">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        Soupisky – ${selectedLiga} (${selectedSeason})
-    </div>
-</div>
-
-<div id="allRostersView" style="margin-top: 15px; width: 100%; display: flex; flex-direction: column; gap: 20px;" data-team-ids='${JSON.stringify(teamsInSelectedLiga.map(t => t.id))}' data-teams='${JSON.stringify(teamsInSelectedLiga)}' data-season='${selectedSeason}'></div>
-
-<script>
-    async function showAllRosters() {
-        const allRostersView = document.getElementById('allRostersView');
-        if (!allRostersView) return;
-
-        if (allRostersView) {
-            allRostersView.innerHTML = '<div style="text-align: center; color: #888; font-size: 0.9em;">Načítám všechny soupisky...</div>';
-        }
-
-        try {
-            // Čtení dat z HTML atributů
-            const teamIds = JSON.parse(allRostersView?.dataset.teamIds || '[]');
-            const teams = JSON.parse(allRostersView?.dataset.teams || '[]');
-            const season = allRostersView?.dataset.season;
-
-            let allPlayersHtml = '<div style="display: flex; flex-direction: column; gap: 20px; width: 100%;">';
-
-            for (const teamId of teamIds) {
-                const res = await fetch('/api/players/' + teamId + '?season=' + encodeURIComponent(season));
-                const data = await res.json();
-                const teamData = teams.find(t => t.id === teamId);
-                const teamLogo = teamData && teamData.logo ? teamData.logo : null;
-                const logoUrl = data.logoUrl || (teamLogo ? '/logoteamu/' + teamLogo : '/images/logo.png');
-                const teamName = teamData && teamData.name ? teamData.name : 'Neznámý tým';
-
-                // Generovat layout s logem a podsvícením jako na hlavní stránce
-                allPlayersHtml += '<div style="position: relative; background-color: #000; border: 2px solid #ff4500; overflow: hidden; display: flex; flex-direction: column; min-height: 250px; box-shadow: 0 4px 15px rgba(0,0,0,0.8); width: 100%;">';
-                allPlayersHtml += '<div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-10deg); width: 80%; height: 80%; background-image: url(' + JSON.stringify(logoUrl) + '); background-size: contain; background-repeat: no-repeat; background-position: center; opacity: 0.30; filter: grayscale(50%); pointer-events: none; z-index: 0;"></div>';
-                allPlayersHtml += '<div style="position: relative; z-index: 1; background: linear-gradient(to bottom, #222, #111); border-bottom: 3px solid #ff4500; display: flex; align-items: center; padding: 10px;">';
-                allPlayersHtml += '<img src="' + logoUrl + '" alt="' + teamName + '" style="height: 45px; width: 45px; object-fit: contain; margin-right: 12px; filter: drop-shadow(0 0 5px rgba(255,255,255,0.2));">';
-                allPlayersHtml += '<strong style="color: white; font-size: 1.3em; text-transform: uppercase; letter-spacing: 1px;">' + teamName + '</strong>';
-                allPlayersHtml += '</div>';
-                allPlayersHtml += '<div style="position: relative; z-index: 1; padding: 20px;">';
-
-                // Zobrazení hráčů ve soupisce - stejné jako v přestupech
-                const roster = data.roster || data.players || [];
-                if (roster.length > 0) {
-                    // Rozdělení hráčů podle pozice
-                    const positionList = ['Brankář', 'Obránce', 'Útočník', 'Centr', 'Křídlo', 'Jiné'];
-                    const defaultPos = 'Jiné';
-                    const positions = {};
-                    positionList.forEach(pos => { positions[pos] = []; });
-                    
-                    // Status barvy a ikony
-                    const statusColors = {
-                        'active': '#28a745',
-                        'injured': '#ffc107',
-                        'suspended': '#dc3545',
-                        'loan': '#fd7e14',
-                        'retired': '#6c757d'
-                    };
-
-                    const statusLabels = {
-                        'active': 'Aktivní',
-                        'injured': 'Zraněný',
-                        'suspended': 'Suspendován',
-                        'loan': 'Hostování',
-                        'retired': 'Konec kariéry'
-                    };
-
-                    const statusIcons = {
-                        'active': '✓',
-                        'injured': '🏥',
-                        'suspended': '⚠',
-                        'loan': '↔',
-                        'retired': '🏁'
-                    };
-                    
-                    roster.forEach(p => {
-                        const pos = p.position || defaultPos;
-                        if (positions[pos]) {
-                            positions[pos].push(p);
-                        } else {
-                            positions[defaultPos].push(p);
-                        }
-                        // Přidat status barvy a ikony
-                        p.statusColor = statusColors[p.status] || '#6c757d';
-                        p.statusLabel = statusLabels[p.status] || 'Neznámý';
-                        p.statusIcon = statusIcons[p.status] || '?';
-                    });
-
-                    // Seřadit hráče v každé kategorii podle čísla dresu
-                    positionList.forEach(pos => {
-                        positions[pos].sort((a, b) => (a.number || 999) - (b.number || 999));
-                    });
-
-                    let playersHtml = '';
-                    positionList.forEach(pos => {
-                        const players = positions[pos];
-                        if (players.length > 0) {
-                            playersHtml += '<div style="margin-bottom: 25px;">';
-                            playersHtml += '<h3 style="color: #00d4ff; font-size: 1.2em; margin: 0 0 12px 0; border-bottom: 2px solid #00d4ff; padding-bottom: 8px; display: flex; align-items: center; gap: 10px;">';
-                            playersHtml += '<span style="background: linear-gradient(135deg, #00d4ff, #0099cc); color: #000; padding: 4px 12px; font-size: 0.9em; font-weight: bold;">' + players.length + '</span>';
-                            playersHtml += pos + '</h3>';
-                            playersHtml += '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px;">';
-                            players.forEach(p => {
-                                playersHtml += '<div style="background: linear-gradient(135deg, ' + p.statusColor + '22 0%, #1a1a1a 100%); padding: 15px; border-left: 4px solid ' + p.statusColor + '; box-shadow: 0 2px 8px rgba(0,0,0,0.3); transition: all 0.3s ease; cursor: default; position: relative; overflow: hidden;">';
-                                playersHtml += '<div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-10deg); width: 80%; height: 80%; background-image: url(' + JSON.stringify(logoUrl) + '); background-size: contain; background-repeat: no-repeat; background-position: center; opacity: 0.30; filter: grayscale(50%); pointer-events: none; z-index: 1;"></div>';
-                                playersHtml += '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; position: relative; z-index: 2;">';
-                                playersHtml += '<div style="position: relative; width: 64px; height: 64px; display: inline-flex; justify-content: center; align-items: center;">';
-                                playersHtml += '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;">';
-                                playersHtml += '<path d="M 32 12 C 40 8, 60 8, 68 12 L 86 16 A 8 8 0 0 1 92 24 L 92 65 L 78 65 L 78 78 L 78 92 L 22 92 L 22 78 L 22 65 L 8 65 L 8 24 A 8 8 0 0 1 14 16 Z" fill="url(#jerseyGradient-' + (p.number || '0') + ')" stroke="' + p.statusColor + '" stroke-width="3" stroke-linejoin="round"/>';
-                                playersHtml += '<path d="M 32 12 C 35 24, 65 24, 68 12" fill="transparent" stroke="' + p.statusColor + '" stroke-width="3"/>';
-                                playersHtml += '<path d="M 42 21 L 50 28 L 58 21" fill="transparent" stroke="' + p.statusColor + '" stroke-width="3"/>';
-                                playersHtml += '<defs><linearGradient id="jerseyGradient-' + (p.number || '0') + '" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#333;stop-opacity:1"/><stop offset="100%" style="stop-color:#222;stop-opacity:1"/></linearGradient></defs>';
-                                playersHtml += '</svg>';
-                                playersHtml += '<span style="position: relative; z-index: 2; margin-top: 5px; font-size: 1.3rem; font-weight: bold; font-family: sans-serif; color: #fff; letter-spacing: 0; user-select: none;">' + (p.number || '-') + '</span>';
-                                playersHtml += '</div>';
-                                playersHtml += '<span style="background: ' + p.statusColor + '; color: #000; padding: 4px 10px; font-size: 0.8em; font-weight: bold; display: flex; align-items: center; gap: 4px;">';
-                                playersHtml += '<span style="font-size: 1.1em;">' + p.statusIcon + '</span>';
-                                playersHtml += '<span>' + p.statusLabel + '</span>';
-                                playersHtml += '</span>';
-                                playersHtml += '</div>';
-                                playersHtml += '<div style="color: #fff; font-weight: bold; font-size: 1.1em; margin-bottom: 5px; position: relative; z-index: 2;">' + p.name + '</div>';
-                                if (p.statusDetails) {
-                                    playersHtml += '<div style="color: #888; font-size: 0.8em; margin-top: 8px; padding-top: 8px; border-top: 1px solid #333; position: relative; z-index: 2;">' + p.statusDetails + '</div>';
-                                }
-                                playersHtml += '</div>';
-                            });
-                            playersHtml += '</div></div>';
-                        }
-                    });
-                    allPlayersHtml += playersHtml;
-                } else {
-                    allPlayersHtml += '<div style="text-align: center; color: #888; font-size: 0.9em; margin-top: 15px;">Žádní hráči v soupisce</div>';
-                }
-
-                allPlayersHtml += '</div>'; // Konec padding div
-                allPlayersHtml += '</div>'; // Konec týmové karty
-            }
-
-            allPlayersHtml += '</div>';
-            allRostersView.innerHTML = allPlayersHtml;
-        } catch (error) {
-            console.error('Chyba při načítání soupisek:', error);
-            if (allRostersView) {
-                allRostersView.innerHTML = '<div style="text-align: center; color: #ff4444; font-size: 0.9em;">Chyba při načítání soupisek</div>';
-            }
-        }
-    }
-
-    // Načíst verzi a zobrazit v badge
-    fetch('/api/version')
-        .then(res => res.json())
-        .then(data => {
-            const versionBadge = document.getElementById('current-version');
-            if (versionBadge) {
-                versionBadge.textContent = data.version;
-            }
-        })
-        .catch(err => console.error('Nepodařilo se načíst verzi', err));
-
-    // Automaticky načíst soupisky při načtení stránky
-    showAllRosters();
-</script>
-</main>
-</body>
-</html>`;
-
-        res.send(html);
-    } catch (error) {
-        console.error('Chyba v /history/roster route:', error);
-        await logUserAction(req.session?.user, "HISTORY_ROSTER_ERROR", `Chyba při načítání historických soupisek: ${error.message}`, 'history', null, req, 'error', false);
-        
-        let errorHtml = `
-<!DOCTYPE html>
-<html lang="cs">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Chyba - Tipovačka</title>
-<link rel="stylesheet" href="/css/modern-design.css" />
-<link rel="icon" href="/images/logo.png">
-</head>
-<body class="usersite">
-${await renderUserHeader({
-    username: req.session?.user,
-    selectedLiga: '',
-    uniqueLeagues: [],
-    activeTab: 'history',
-    csrfToken: req.session?.csrfToken || '',
-    timeWidgetHtml: await generateTimeWidget()
-})}
-<main class="layout-single-column">
-<div class="dashboard-section" style="text-align: center; padding: 40px; border-color: rgba(239, 68, 68, 0.4); max-width: 600px; margin: 40px auto;">
-<h2 style="color: var(--accent-red); margin-bottom: 12px; display:flex; align-items:center; justify-content:center; gap:8px;">❌ Došlo k chybě</h2>
-<p style="color: var(--text-muted); margin-bottom: 20px;">Omlouváme se, ale došlo k chybě při načítání stránky. Chyba byla logována.</p>
-<a href="/history" class="nav-pill active" style="padding: 10px 20px;">← Zpět na výběr historie</a>
-</div>
-</main>
-</body>
-</html>`;
-        res.status(500).send(errorHtml);
-    }
-});
-
-router.get('/history/table', requireLogin, async (req, res) => {
-    // 0. Bezpečnostní kontrola adresy
-    if (!req.query.liga || !req.query.season) return res.redirect('/history');
-
-    // 1. ZAVOLÁME MOZEK (s parametrem true pro režim historie)
-    const data = await prepareDashboardData(req, true);
-
-    // 2. VYBALÍME SI PROMĚNNÉ
-    let isTipsLocked;
-    const {
-        username, selectedSeason, selectedLiga, sortedGroupKeys, groupedTeams,
-        globalRealRankMap, allUsers, tableTips,
-    } = data;
-    isTipsLocked = data.isTipsLocked;
-
-    // 3. NAČTENÍ PŘESTUPŮ PRO KONTROLU ZDA EXISTUJÍ
-    const { Transfers, TransferLeagues } = require('../utils/mongoDataAccess');
-    const transfersData = await Transfers.findAll();
-    const seasonTransfers = transfersData?.[selectedSeason]?.[selectedLiga] || {};
-    Object.keys(seasonTransfers).length > 0;
-// KONTROLA ZDA JE LIGA POVOLENA PRO PŘESTUPY
-    const transferLeaguesData = await TransferLeagues.findAll();
-    const hasTransferLeagues = Array.isArray(transferLeaguesData) 
-        ? transferLeaguesData.includes(selectedLiga) 
-        : (transferLeaguesData?.[selectedSeason]?.includes(selectedLiga) || false);
-
-    const usersWithTableTips = allUsers.filter(u => tableTips?.[selectedSeason]?.[selectedLiga]?.[u.username]).sort((a, b) => a.username.localeCompare(b.username));
-    const initialUser = usersWithTableTips.find(u => u.username === username) ? username : (usersWithTableTips[0]?.username || "");
-
-    // --- HTML START ---
-    let html = `
-<!DOCTYPE html>
-<html lang="cs">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+            <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+            <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
 <title>Tipovačka – Historie tabulky ${selectedLiga} ${selectedSeason}</title>
 <link rel="stylesheet" href="/css/modern-design.css" />
 <script src="/js/version-notification.js"></script>
 <link rel="icon" href="/images/logo.png">
 </head>
-${renderNotificationScript(req.session.csrfToken || '')}
+${typeof renderNotificationScript === 'function' ? renderNotificationScript(req.session?.csrfToken || '') : ''}
 <body class="usersite">
 ${await renderUserHeader({
-    username: username,
-    selectedLiga: selectedLiga,
-    uniqueLeagues: [],
-    activeTab: 'history',
-    csrfToken: req.session.csrfToken || '',
-    timeWidgetHtml: await generateTimeWidget()
-})}
+            username: username,
+            selectedLiga: selectedLiga,
+            uniqueLeagues: [],
+            activeTab: 'history',
+            csrfToken: req.session?.csrfToken || '',
+            timeWidgetHtml: typeof generateTimeWidget === 'function' ? await generateTimeWidget() : ''
+        })}
 <main class="main_page">
 <div style="grid-column: 1 / -1; margin-bottom: 12px;">
     <div class="segmented-tabs">
@@ -2295,9 +2141,9 @@ ${await renderUserHeader({
         <a class="segmented-btn" href="/history/roster?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">👥 Soupisky</a>
     </div>
 </div>
-`
-html += await generateLeftPanel(data, true);
-    html += `
+`;
+        html += await generateLeftPanel(data, true);
+        html += `
         <script>
         function showUserTableHistory(username) {
             document.querySelectorAll('.user-history-table-container').forEach(el => el.style.display = 'none');
@@ -2305,178 +2151,362 @@ html += await generateLeftPanel(data, true);
             document.querySelectorAll('.user-table-' + safeName).forEach(el => el.style.display = 'block');
         }
 
-        // Načíst verzi a zobrazit v badge
         fetch('/api/version')
             .then(res => res.json())
             .then(data => {
                 const versionBadge = document.getElementById('current-version');
-                if (versionBadge) {
-                    versionBadge.textContent = data.version;
-                }
+                if (versionBadge) versionBadge.textContent = data.version;
             })
             .catch(err => console.error('Nepodařilo se načíst verzi', err));
         </script>
-        </section>
         <section class="matches-container">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
-                <h2 style="margin: 0;">Historie tipu tabulky</h2>
+            <div class="section-header" style="justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                <div class="section-title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+                    Historie tipů tabulky
+                </div>
                 <div style="display: flex; align-items: center; gap: 10px;">
-                    <label for="historyUserSelect" style="color: lightgrey;">Zobrazit:</label>
-                    <select id="historyUserSelect" onchange="showUserTableHistory(this.value)" style="background-color: black; color: orangered; border: 1px solid orangered; padding: 5px;">`;
+                    <label for="historyUserSelect" style="color: var(--text-muted); font-size: 13px; font-weight: 600;">Zobrazit tipéra:</label>
+                    <select id="historyUserSelect" class="modern-select" onchange="showUserTableHistory(this.value)" style="width: auto; padding: 6px 12px; font-weight: 700;">`;
 
-    if (usersWithTableTips.length === 0) {
-        html += `<option disabled selected>Žádná data</option>`;
-    } else {
-        usersWithTableTips.forEach(u => {
-            const isSelected = u.username === initialUser ? 'selected' : '';
-            html += `<option value="${u.username}" ${isSelected}>${u.username}</option>`;
-        });
-    }
-    html += `</select></div></div>`;
+        if (usersWithTableTips.length === 0) {
+            html += `<option disabled selected>Žádná data</option>`;
+        } else {
+            usersWithTableTips.forEach(u => {
+                const isSelected = u.username === initialUser ? 'selected' : '';
+                html += `<option value="${u.username}" ${isSelected}>${u.username}</option>`;
+            });
+        }
+        html += `</select></div></div>`;
 
-    if (usersWithTableTips.length === 0) {
-        html += `<p style="text-align:center;">V této sezóně nikdo netipoval tabulku.</p>`;
-    } else {
-        usersWithTableTips.forEach(u => {
-            const safeName = u.username.replace(/[^a-zA-Z0-9]/g, '_');
-            const isVisible = u.username === initialUser ? 'block' : 'none';
-            const userTipData = tableTips?.[selectedSeason]?.[selectedLiga]?.[u.username] || {};
+        if (usersWithTableTips.length === 0) {
+            html += `<div class="dashboard-section" style="text-align: center; color: var(--text-muted);">V této sezóně nikdo netipoval tabulku.</div>`;
+        } else {
+            usersWithTableTips.forEach(u => {
+                const safeName = u.username.replace(/[^a-zA-Z0-9]/g, '_');
+                const isVisible = u.username === initialUser ? 'block' : 'none';
+                const userTipData = tableTips?.[selectedSeason]?.[selectedLiga]?.[u.username] || {};
 
-            html += `<div class="user-history-table-container user-table-${safeName}" style="display:${isVisible};">`;
-            for (const gKey of sortedGroupKeys) {
-                const groupLabel = getGroupDisplayLabel(gKey);
+                html += `<div class="user-history-table-container user-table-${safeName}" style="display:${isVisible};">`;
+                for (const gKey of sortedGroupKeys) {
+                    const groupLabel = typeof getGroupDisplayLabel === 'function' ? getGroupDisplayLabel(gKey) : gKey;
+                    const isGroupLocked = (isTipsLocked === true) || (Array.isArray(isTipsLocked) && isTipsLocked.includes(gKey));
 
-                // Výpočet isGroupLocked pro tuto skupinu
-                const isGroupLocked = (isTipsLocked === true) || (Array.isArray(isTipsLocked) && isTipsLocked.includes(gKey));
+                    const teamsForTip = [...groupedTeams[gKey]];
 
-                // KOPIE SKUPINY ABYCHOM NEROZBILI LEVOU STRANU
-                const teamsForTip = [...groupedTeams[gKey]];
-
-                let userGroupTipIds = [];
-                if (Array.isArray(userTipData)) userGroupTipIds = userTipData; else userGroupTipIds = userTipData[gKey] || [];
-                const hasTip = userGroupTipIds.length > 0;
-
-                if (hasTip) {
-                    teamsForTip.sort((a, b) => {
-                        const idxA = userGroupTipIds.indexOf(a.id);
-                        const idxB = userGroupTipIds.indexOf(b.id);
-                        if (idxA === -1) return 1;
-                        if (idxB === -1) return -1;
-                        return idxA - idxB;
-                    });
-                } else {
-                    teamsForTip.sort((a, b) => (globalRealRankMap[a.id] || 99) - (globalRealRankMap[b.id] || 99));
-                }
-
-                html += `<div style="margin-top: 20px;">
-                    ${groupLabel ? `<h3 style="border-bottom:1px solid #555;">${groupLabel}</h3>` : ''}
-                    <ul style="list-style: none; padding: 0;">`;
-
-                teamsForTip.forEach((team, index) => {
-                    const userRank = index + 1;
-                    const realRank = globalRealRankMap[team.id] || '?';
-                    const diff = userRank - realRank;
-
-                    // 1. DEFINICE LOGA
-                    const logoUrl = team.logo ? `/logoteamu/${team.logo}` : '/images/logo.png';
-
-                    let bgStyle = "background-color: #1a1a1a; border: 1px solid #444;";
-                    let diffText;
-                    let diffColor = "gray";
+                    let userGroupTipIds = [];
+                    if (Array.isArray(userTipData)) userGroupTipIds = userTipData; else userGroupTipIds = userTipData[gKey] || [];
+                    const hasTip = userGroupTipIds.length > 0;
 
                     if (hasTip) {
-                        // PŘIDÁNA KONTROLA ZÁMKU: Zobrazí vyhodnocení jen pokud je skupina zamčená
-                        if (isGroupLocked) {
-                            if (diff === 0) {
-                                bgStyle = "background-color: rgba(40, 100, 40, 0.6); border-color: #00ff00;";
-                                diffText = "✔";
-                                diffColor = "#00ff00";
-                            } else {
-                                diffText = `<span style="font-size: 0.8em">Akt.: ${realRank}. (${Math.abs(diff)})</span>`;
-                                diffColor = "orange";
-                            }
-                        } else {
-                            // Tip je uložený, ale tabulka ještě není zamčená z adminu
-                            diffText = `<span style="font-size: 0.7em; color: #aaa;">Uloženo (čeká na uzamčení)</span>` ;
-                            diffColor = "#aaa";
-                        }
+                        teamsForTip.sort((a, b) => {
+                            const idxA = userGroupTipIds.indexOf(a.id);
+                            const idxB = userGroupTipIds.indexOf(b.id);
+                            if (idxA === -1) return 1;
+                            if (idxB === -1) return -1;
+                            return idxA - idxB;
+                        });
                     } else {
-                        diffText = "Netipováno";
+                        teamsForTip.sort((a, b) => (globalRealRankMap[a.id] || 99) - (globalRealRankMap[b.id] || 99));
                     }
 
-                    // 2. UPRAVENÉ LI S WATERMARKEM
-                    html += `
-                    <li style="${bgStyle} display: flex; align-items: center; justify-content: space-between; margin: 5px 0; padding: 15px; color: #fff;
-                                position: relative; overflow: hidden;"> <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-                                    width: 80%; height: 400%; 
-                                    background-image: url('${logoUrl}'); background-size: contain; background-repeat: no-repeat; background-position: center; 
-                                    opacity: 0.30; filter: grayscale(50%); pointer-events: none; z-index: 1;">
-                        </div>
+                    html += `<div style="margin-top: 15px;">
+                        ${groupLabel ? `<h3 style="border-bottom:1px solid var(--border-subtle); padding-bottom: 8px; font-size: 15px; margin-bottom: 12px;">${groupLabel}</h3>` : ''}
+                        <ul class="sortable-list" style="margin-top: 0;">`;
 
-                        <div style="display:flex; align-items:center; position: relative; z-index: 2;">
-                            <span class="rank-number" style="font-weight: bold; color: orangered; margin-right: 15px; width: 30px;">${userRank}.</span>
-                            <span class="team-name" style="font-weight: bold;">${team.name}</span>
-                        </div>
-                        
-                        <div style="display:flex; align-items:center; gap: 15px; position: relative; z-index: 2;">
-                            <span style="color: ${diffColor}; font-weight: normal; margin-right: 10px;">${diffText}</span>
-                        </div>
-                    </li>`;
-                });
-                html += `</ul></div>`;
-            }
-            html += `</div>`;
-        });
+                    teamsForTip.forEach((team, index) => {
+                        const userRank = index + 1;
+                        const realRank = globalRealRankMap[team.id] || '?';
+                        const diff = userRank - realRank;
+                        const isCorrect = (diff === 0);
+                        const logoUrl = team.logo ? `/logoteamu/${team.logo}` : '/images/logo.png';
+
+                        let diffText;
+                        let diffColor = "var(--text-dim)";
+
+                        if (hasTip) {
+                            if (isGroupLocked) {
+                                if (isCorrect) {
+                                    diffText = "✔ Trefa (+1)";
+                                    diffColor = "var(--accent-green)";
+                                } else {
+                                    diffText = `Skutečnost: ${realRank}. (${Math.abs(diff)})`;
+                                    diffColor = "var(--accent-amber)";
+                                }
+                            } else {
+                                diffText = `Uloženo`;
+                                diffColor = "var(--text-muted)";
+                            }
+                        } else {
+                            diffText = "Netipováno";
+                        }
+
+                        html += `
+                        <li class="sortable-item ${isCorrect && isGroupLocked ? 'is-correct' : ''}" style="cursor: default; opacity: 0.95;">
+                            <span class="sortable-rank">${userRank}</span>
+                            <div class="team-cell">
+                                <img src="${logoUrl}" alt="" class="team-logo-small">
+                                <span class="sortable-team-name">${team.name}</span>
+                            </div>
+
+                            <div style="display:flex; align-items:center; gap: 12px; margin-left: auto;">
+                                <span style="color: ${diffColor}; font-weight: 700; font-size: 12px;">${diffText}</span>
+                            </div>
+                        </li>`;
+                    });
+                    html += `</ul></div>`;
+                }
+                html += `</div>`;
+            });
+        }
+
+        html += `</section></main></body></html>`;
+        res.send(html);
+    } catch (err) {
+        console.error('Chyba v /history/table:', err);
+        res.status(500).send('Nastala chyba při načítání historie tabulky.');
     }
+});
 
-    html += `</section></main>
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-    const sidebar = document.querySelector('.left-panel');
-    const container = document.querySelector('.stats-container');
-    
-    if (!sidebar || !container) return;
+// =========================================================
+// 5. HISTORIE SOUPISEK (/history/roster)
+// =========================================================
+router.get('/history/roster', requireLogin, async (req, res) => {
+    try {
+        if (!req.query.liga || !req.query.season) return res.redirect('/history');
 
-    let lastScrollY = window.scrollY;
-    let topOffset = 20; // Výchozí odsazení odshora
-    const margin = 20; // Mezera nahoře i dole
+        const data = await prepareDashboardData(req, true);
+        const { username, selectedSeason, selectedLiga, teamsInSelectedLiga } = data;
+        teamsInSelectedLiga.sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
 
-    window.addEventListener('scroll', () => {
-        // Pokud je obrazovka dostatečně velká, že se tam panel vejde celý, normálně ho přilepíme k vršku
-        if (sidebar.offsetHeight <= window.innerHeight) {
-            sidebar.style.top = margin + 'px';
-            return;
-        }
+        let html = `
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+            <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+            <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
+<title>Soupisky – ${selectedLiga} ${selectedSeason}</title>
+<link rel="stylesheet" href="/css/modern-design.css" />
+<script src="/js/version-notification.js"></script>
+<link rel="icon" href="/images/logo.png">
+</head>
+${typeof renderNotificationScript === 'function' ? renderNotificationScript(req.session?.csrfToken || '') : ''}
+<body class="usersite">
+${await renderUserHeader({
+            username: username,
+            selectedLiga: selectedLiga,
+            uniqueLeagues: [],
+            activeTab: 'history',
+            csrfToken: req.session?.csrfToken || '',
+            timeWidgetHtml: typeof generateTimeWidget === 'function' ? await generateTimeWidget() : ''
+        })}
+<main class="layout-single-column">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom: 20px;">
+        <div class="segmented-tabs">
+            <a class="segmented-btn" href="/">Aktuální sezóna</a>
+            <a class="segmented-btn" href="/history">← Zpět na výběr</a>
+            <a class="segmented-btn" href="/history/a/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy zápasů</a>
+            <a class="segmented-btn" href="/history/table/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy tabulky</a>
+            <a class="segmented-btn" href="/history/prestupy?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">📜 Přestupy</a>
+            <a class="segmented-btn active" href="/history/roster?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">👥 Soupisky</a>
+        </div>
+    </div>
 
-        const currentScrollY = window.scrollY;
-        const scrollDelta = currentScrollY - lastScrollY;
-        const viewportHeight = window.innerHeight;
-        const sidebarHeight = sidebar.offsetHeight;
-        
-        // Minimální hodnota 'top', aby se ukázal spodek panelu (bude to záporné číslo)
-        const minTop = viewportHeight - sidebarHeight - margin;
+    <div class="section-header">
+        <div class="section-title">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Soupisky – ${selectedLiga} (${selectedSeason})
+        </div>
+    </div>
 
-        if (scrollDelta > 0) {
-            // SCROLUJEME DOLŮ
-            topOffset -= scrollDelta;
-            if (topOffset < minTop) {
-                topOffset = minTop; // Zastavíme, když dorazíme na konec panelu (přilepí se ke spodku)
+    <div id="allRostersView" class="all-rosters-grid" data-team-ids='${JSON.stringify(teamsInSelectedLiga.map(t => t.id))}' data-teams='${JSON.stringify(teamsInSelectedLiga)}' data-season='${selectedSeason}'></div>
+
+<script>
+function escapeRosterHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+    })[char]);
+}
+
+const rosterLogoColorCache = new Map();
+
+function getRosterLogoColor(logoUrl) {
+    if (rosterLogoColorCache.has(logoUrl)) return rosterLogoColorCache.get(logoUrl);
+
+    const colorPromise = new Promise(resolve => {
+        const image = new Image();
+        image.onload = () => {
+            try {
+                const canvas = document.createElement('canvas');
+                canvas.width = 40;
+                canvas.height = 40;
+                const context = canvas.getContext('2d', { willReadFrequently: true });
+                context.drawImage(image, 0, 0, canvas.width, canvas.height);
+                const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+                const colors = new Map();
+
+                for (let index = 0; index < pixels.length; index += 4) {
+                    if (pixels[index + 3] < 80) continue;
+                    const red = pixels[index];
+                    const green = pixels[index + 1];
+                    const blue = pixels[index + 2];
+                    const key = [red >> 3, green >> 3, blue >> 3].join(',');
+                    const color = colors.get(key) || { red: 0, green: 0, blue: 0, count: 0 };
+                    color.red += red;
+                    color.green += green;
+                    color.blue += blue;
+                    color.count += 1;
+                    colors.set(key, color);
+                }
+
+                const toHex = value => Math.round(value).toString(16).padStart(2, '0');
+                const rankedColors = [...colors.values()].sort((first, second) => second.count - first.count);
+                if (!rankedColors.length) return resolve(['#53617a']);
+                const isTeamColor = color => {
+                    const red = color.red / color.count;
+                    const green = color.green / color.count;
+                    const blue = color.blue / color.count;
+                    return Math.max(red, green, blue) - Math.min(red, green, blue) >= 40;
+                };
+                const teamColors = rankedColors.filter(isTeamColor);
+                const candidates = teamColors.length ? teamColors : rankedColors;
+                const primary = candidates[0];
+                const secondary = candidates.slice(1).find(color => {
+                    const red = primary.red / primary.count - color.red / color.count;
+                    const green = primary.green / primary.count - color.green / color.count;
+                    const blue = primary.blue / primary.count - color.blue / color.count;
+                    return red * red + green * green + blue * blue >= 32 * 32;
+                });
+                const dominant = secondary ? [primary, secondary] : [primary];
+                resolve(dominant.map(color =>
+                    '#' + toHex(color.red / color.count) + toHex(color.green / color.count) + toHex(color.blue / color.count)
+                ));
+            } catch (error) {
+                console.warn('Barvu dresu se nepodařilo určit z loga.', error);
+                resolve(['#53617a']);
             }
-        } else if (scrollDelta < 0) {
-            // SCROLUJEME NAHORU
-            topOffset -= scrollDelta; // (odčítáme záporné číslo = přičítáme)
-            if (topOffset > margin) {
-                topOffset = margin; // Zastavíme, když dorazíme na začátek panelu (přilepí se k vršku)
-            }
-        }
-
-        sidebar.style.top = topOffset + 'px';
-        lastScrollY = currentScrollY;
+        };
+        image.onerror = () => resolve(['#53617a']);
+        image.src = logoUrl;
     });
+
+    rosterLogoColorCache.set(logoUrl, colorPromise);
+    return colorPromise;
+}
+
+function isLightRosterColor(hexColor) {
+    const match = /^#([0-9a-f]{6})$/i.exec(hexColor || '');
+    if (!match) return false;
+    const value = parseInt(match[1], 16);
+    const channels = [(value >> 16) & 255, (value >> 8) & 255, value & 255].map(channel => {
+        const normalized = channel / 255;
+        return normalized <= 0.04045 ? normalized / 12.92 : Math.pow((normalized + 0.055) / 1.055, 2.4);
+    });
+    return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722 > 0.55;
+}
+
+async function renderRosterContent(data) {
+    const positionList = ['Brankář', 'Obránce', 'Útočník', 'Centr', 'Křídlo', 'Jiné'];
+    const positions = Object.fromEntries(positionList.map(position => [position, []]));
+    const defaultPosition = 'Jiné';
+    const jerseyColors = await getRosterLogoColor(data.logoUrl);
+    const jerseyPrimary = jerseyColors[0];
+    const jerseySecondary = jerseyColors[1] || jerseyPrimary;
+
+    (data.players || data.roster || []).forEach(player => {
+        const position = positions[player.position] ? player.position : defaultPosition;
+        positions[position].push(player);
+    });
+
+    const sections = positionList.map(position => {
+        const players = positions[position].sort((a, b) => (a.number || 999) - (b.number || 999));
+        if (!players.length) return '';
+
+        const cards = players.map(player => {
+            const statusColor = /^#[0-9a-f]{6}$/i.test(player.statusColor || '') ? player.statusColor : '#64748b';
+            const number = escapeRosterHtml(player.number || '-');
+            return '<article class="roster-player-card" style="--roster-status-color:' + statusColor + '">' +
+                '<img class="roster-player-watermark" src="' + escapeRosterHtml(data.logoUrl) + '" alt="" aria-hidden="true">' +
+                '<div class="roster-player-topline"><span class="roster-jersey-number" style="--roster-jersey-color:' + jerseyPrimary + ';--roster-jersey-secondary:' + jerseySecondary + ';--roster-jersey-text:' + (isLightRosterColor(jerseyPrimary) ? '#172033' : '#fff') + '">' +
+                '<svg viewBox="0 0 80 80" aria-hidden="true" focusable="false"><path class="roster-jersey-shape" d="M27 8 36 14h8l9-6 11 5 14 18-11 10-8-8v39H21V33l-8 8L2 31l14-18z"/><path class="roster-jersey-sleeves" d="m16 13 11-5 8 5-9 22-11 5L2 31z M64 13 53 8l-8 5 9 22 11 5 13-9z"/><path class="roster-jersey-collar" d="M34 13q6 8 12 0"/></svg>' +
+                '<span class="roster-jersey-number-label">' + number + '</span></span>' +
+                '<span class="roster-player-status" style="--roster-status-color:' + statusColor + '">' +
+                '<span aria-hidden="true">' + escapeRosterHtml(player.statusIcon || '') + '</span>' +
+                escapeRosterHtml(player.statusLabel || player.status || 'Aktivní') + '</span></div>' +
+                '<div class="roster-player-name">' + escapeRosterHtml(player.name) + '</div>' +
+                (player.statusDetails ? '<div class="roster-player-details">' + escapeRosterHtml(player.statusDetails) + '</div>' : '') +
+                '</article>';
+        }).join('');
+
+        return '<section class="roster-position-section">' +
+            '<h3 class="roster-position-title"><span>' + players.length + '</span>' + escapeRosterHtml(position) + '</h3>' +
+            '<div class="roster-player-grid">' + cards + '</div></section>';
+    }).join('');
+
+    return sections || '<div class="roster-empty-state">Žádní hráči v soupisce</div>';
+}
+
+async function showAllRostersModern() {
+    const allRostersView = document.getElementById('allRostersView');
+    if (!allRostersView) return;
+
+    allRostersView.innerHTML = '<div class="roster-loading">Načítám všechny soupisky...</div>';
+    try {
+        const teamIds = JSON.parse(allRostersView.dataset.teamIds || '[]');
+        const teams = JSON.parse(allRostersView.dataset.teams || '[]');
+        const season = allRostersView.dataset.season;
+
+        const cards = await Promise.all(teamIds.map(async teamId => {
+            const response = await fetch('/api/players/' + encodeURIComponent(teamId) + '?season=' + encodeURIComponent(season));
+            if (!response.ok) throw new Error('Nepodařilo se načíst soupisku týmu ' + teamId + '.');
+            const data = await response.json();
+            const team = teams.find(item => String(item.id) === String(teamId));
+            const logoUrl = data.logoUrl || (team?.logo ? '/logoteamu/' + encodeURIComponent(team.logo) : '/images/logo.png');
+            
+            return '<section class="roster-team-card"><header class="roster-team-header">' +
+                '<div class="roster-team-info"><img src="' + escapeRosterHtml(logoUrl) + '" alt="" class="roster-team-logo">' +
+                '<h2 class="roster-team-title">' + escapeRosterHtml(team?.name || 'Tým') + '</h2></div></header>' +
+                '<div class="roster-team-content">' + await renderRosterContent(data) + '</div></section>';
+        }));
+        allRostersView.innerHTML = '<div class="all-rosters-grid" style="display: grid; gap: 20px; width: 100%;">' + cards.join('') + '</div>';
+    } catch (error) {
+        console.error('Chyba při načítání soupisek:', error);
+        allRostersView.innerHTML = '<div class="roster-empty-state is-error">Chyba při načítání soupisek.</div>';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    fetch('/api/version')
+        .then(res => res.json())
+        .then(data => {
+            const versionBadge = document.getElementById('current-version');
+            if (versionBadge) versionBadge.textContent = data.version;
+        })
+        .catch(err => console.error('Nepodařilo se načíst verzi', err));
+
+    showAllRostersModern();
 });
-    </script></body></html>`;
-    res.send(html);
+</script>
+</main>
+</body>
+</html>`;
+
+        res.send(html);
+    } catch (error) {
+        console.error('Chyba v /history/roster route:', error);
+        res.status(500).send('Chyba při načítání historických soupisek.');
+    }
 });
+
+module.exports = router;
 
 router.get("/prestupy", requireLogin, async (req, res) => {
     try {
@@ -2498,6 +2528,10 @@ router.get("/prestupy", requireLogin, async (req, res) => {
 <!DOCTYPE html>
 <html lang="cs">
 <head>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+            <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+            <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Přestupy – Tipovačka</title>
@@ -3089,6 +3123,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 <!DOCTYPE html>
 <html lang="cs">
 <head>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+            <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+            <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Chyba - Tipovačka</title>
@@ -3724,6 +3762,10 @@ router.get("/image-exporter", requireLogin, async (req, res) => {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+            <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+            <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
 <title>Image Exporter - Tipovačka</title>
 <link rel="stylesheet" href="/css/modern-design.css" />
 <script src="/js/version-notification.js"></script>
@@ -5084,41 +5126,40 @@ router.get("/statistics", requireLogin, async (req, res) => {
     try {
         const username = req.session.user;
         const chosenSeason = await ChosenSeason.findAll();
-        // Use query parameter if provided, otherwise use global chosen season
         const selectedSeason = req.query.season || chosenSeason || 'Neurčeno';
-        
-        // Načtení všech uživatelů
+
         const users = await Users.findAll();
-        
-        // Načtení lig pro aktuální sezónu
         const leaguesData = await Leagues.findAll();
         const leagues = Array.isArray(leaguesData?.[selectedSeason]) ? leaguesData[selectedSeason] : [];
-        
-        // Získání všech sezón z Leagues kolekce (pro dropdown a sezónní porovnání)
+        const teamsList = await Teams.findAll();
+
+        // Mapa pro rychlé zjištění názvu týmu podle ID
+        const teamNameMap = {};
+        if (Array.isArray(teamsList)) {
+            teamsList.forEach(t => {
+                if (t.id !== undefined && t.id !== null) {
+                    teamNameMap[String(t.id)] = t.name;
+                }
+            });
+        }
+
         const allSeasonsFromLeagues = new Set();
         Object.keys(leaguesData || {}).forEach(season => {
-            // Vyhnout se systémovým klíčům MongoDB (_id, __v, atd.) a klíči 'leagues'
             if (!season.startsWith('_') && season !== 'leagues') {
                 allSeasonsFromLeagues.add(season);
             }
         });
-        
-        // Získání názvů lig definovaných v Leagues kolekci pro danou sezónu
         const definedLeagues = new Set();
         if (leaguesData?.[selectedSeason]?.leagues) {
             leaguesData[selectedSeason].leagues.forEach(l => definedLeagues.add(l.name));
         }
-        
-        // Načtení zápasů pro výpočet playoff statistik
+
         const matches = await Matches.findAll();
 
-        // Nejprve zjistíme všechny ligy, které se skutečně používají v user.stats
-        // Ale filtrované podle lig definovaných v Leagues kolekci pro danou sezónu
         const allLeaguesInStats = new Set();
         for (const user of users) {
             const stats = user.stats?.[selectedSeason] || {};
             for (const league of Object.keys(stats)) {
-                // Přidáme jen pokud je liga definovaná v Leagues kolekci pro danou sezónu
                 if (definedLeagues.has(league)) {
                     allLeaguesInStats.add(league);
                 }
@@ -5137,157 +5178,259 @@ router.get("/statistics", requireLogin, async (req, res) => {
             let maxPoints = 0;
             for (const match of leagueMatches) {
                 if (match.isPlayoff && Number(match.bo) === 1) {
-                    maxPoints += 5; // Playoff BO1: max 5 bodů
+                    maxPoints += 5;
                 } else if (match.isPlayoff && Number(match.bo) > 1) {
-                    maxPoints += 3; // Playoff série: max 3 body
+                    maxPoints += 3;
                 } else {
-                    maxPoints += 1; // Základní část: 1 bod
+                    maxPoints += 1;
                 }
             }
             leagueMaxPointsMap[league] = maxPoints;
         }
 
-        // Výpočet statistik pro každého uživatele
+        // Výpočet statistik pro každého uživatele (včetně Srdcovky a Kata po ligách)
         const userStats = users
-            .filter(u => u.username !== 'Admin') // Vynechat admina
+            .filter(u => u.username !== 'Admin')
             .map(user => {
                 const stats = user.stats?.[selectedSeason] || {};
-                
-                // Celkové statistiky napříč všemi ligami
+
                 let totalCorrect = 0;
                 let totalRegular = 0;
                 let totalPlayoff = 0;
                 let totalTableCorrect = 0;
                 let totalTableDeviation = 0;
                 let leagueCount;
-                
-                // Agregace statistik z jednotlivých lig
+
                 const activeLeagues = [];
                 let totalRegularCorrect = 0;
                 let totalPlayoffBO1Correct = 0;
                 let totalPlayoffBO1Tips = 0;
                 let totalPlayoffBOSeriesCorrect = 0;
                 let totalPlayoffBOSeriesTips = 0;
-                
-                // Pokud playoff statistiky neexistují, vypočítáme je ze zápasů
+
+                let userTotalDeviationSum = 0;
+                let userEvaluatedBO1Count = 0;
+
                 let needsPlayoffCalculation = false;
                 for (const league of Object.keys(stats)) {
                     const leagueStats = stats[league];
-                    if (leagueStats.totalPlayoff > 0 && 
+                    if (leagueStats.totalPlayoff > 0 &&
                         (leagueStats.playoffBO1Correct === undefined || leagueStats.playoffBOSeriesCorrect === undefined)) {
                         needsPlayoffCalculation = true;
                         break;
                     }
                 }
-                
-                // Výpočet playoff statistik ze zápasů (pokud chybí)
+
                 if (needsPlayoffCalculation) {
                     for (const league of Object.keys(stats)) {
                         const leagueStats = stats[league];
                         if (leagueStats.totalPlayoff === 0) continue;
-                        
+
                         const tipsInLeague = user.tips?.[selectedSeason]?.[league] || [];
                         let bo1Correct = 0;
                         let bo1Tips = 0;
                         let seriesCorrect = 0;
                         let seriesTips = 0;
-                        
+
                         for (const tip of tipsInLeague) {
                             const match = matches.find(m => m.id === tip.matchId);
                             if (!match?.result || !match.result.winner) continue;
                             if (!match.isPlayoff) continue;
-                            
+
                             if (Number(match.bo) === 1) {
-                                // BO1
                                 bo1Tips++;
                                 const realHome = Number(match.result.scoreHome ?? 0);
                                 const realAway = Number(match.result.scoreAway ?? 0);
                                 let tipHome = Number(tip.scoreHome ?? tip.scoreH ?? tip.homeGoals ?? 0);
                                 let tipAway = Number(tip.scoreAway ?? tip.scoreA ?? tip.awayGoals ?? 0);
-                                
+
                                 if (match.result?.sideSwap === true) {
                                     const temp = tipHome;
                                     tipHome = tipAway;
                                     tipAway = temp;
                                 }
-                                
+
                                 if (Number.isNaN(tipHome) || Number.isNaN(tipAway)) continue;
-                                
+
                                 const realOutcome = Math.sign(realHome - realAway);
                                 const tipOutcome = Math.sign(tipHome - tipAway);
-                                
+
                                 if (realOutcome === tipOutcome) {
                                     bo1Correct++;
                                 }
+
+                                userTotalDeviationSum += Math.abs(tipHome - realHome) + Math.abs(tipAway - realAway);
+                                userEvaluatedBO1Count++;
                             } else {
-                                // BO > 1 (série)
                                 seriesTips++;
                                 const realWinner = match.result.winner;
                                 const tipWinner = tip.winner;
-                                
+
                                 if (tipWinner === realWinner) {
                                     seriesCorrect++;
                                 }
                             }
                         }
-                        
-                        // Uložení vypočítaných statistik do leagueStats
+
                         leagueStats.playoffBO1Correct = bo1Correct;
                         leagueStats.playoffBO1Tips = bo1Tips;
                         leagueStats.playoffBOSeriesCorrect = seriesCorrect;
                         leagueStats.playoffBOSeriesTips = seriesTips;
                     }
+                } else {
+                    const tips = user.tips?.[selectedSeason] || {};
+                    for (const league of Object.keys(tips)) {
+                        const leagueTips = tips[league] || [];
+                        for (const tip of leagueTips) {
+                            const match = matches.find(m => m.id === tip.matchId);
+                            if (!match?.result || !match.result.winner) continue;
+                            if (!match.isPlayoff || Number(match.bo) !== 1) continue;
+
+                            const realHome = Number(match.result.scoreHome ?? 0);
+                            const realAway = Number(match.result.scoreAway ?? 0);
+                            let tipHome = Number(tip.scoreHome ?? tip.scoreH ?? tip.homeGoals ?? 0);
+                            let tipAway = Number(tip.scoreAway ?? tip.scoreA ?? tip.awayGoals ?? 0);
+
+                            if (match.result?.sideSwap === true) {
+                                const temp = tipHome;
+                                tipHome = tipAway;
+                                tipAway = temp;
+                            }
+
+                            if (!Number.isNaN(tipHome) && !Number.isNaN(tipAway)) {
+                                userTotalDeviationSum += Math.abs(tipHome - realHome) + Math.abs(tipAway - realAway);
+                                userEvaluatedBO1Count++;
+                            }
+                        }
+                    }
                 }
-                
+
                 for (const league of Object.keys(stats)) {
                     const leagueStats = stats[league];
                     const leagueTips = (leagueStats.correct || 0) + (leagueStats.totalRegular || 0) + (leagueStats.totalPlayoff || 0) + (leagueStats.tableCorrect || 0);
-                    
+
                     if (leagueTips > 0) {
                         totalCorrect += leagueStats.correct || 0;
                         totalRegular += leagueStats.totalRegular || 0;
                         totalPlayoff += leagueStats.totalPlayoff || 0;
                         totalTableCorrect += leagueStats.tableCorrect || 0;
                         totalTableDeviation += leagueStats.tableDeviation || 0;
-                        
-                        // Statistiky pro základní část - pokud neexistují, odhadneme z celkových bodů
+
                         if (leagueStats.correctRegular !== undefined) {
                             totalRegularCorrect += leagueStats.correctRegular || 0;
                         } else {
-                            // Pokud neexistují, odhadneme: předpokládáme, že všechny body jsou ze základní části
-                            // (pokud má totalRegular > 0, jinak 0)
                             if (leagueStats.totalRegular > 0) {
                                 totalRegularCorrect += Math.min(leagueStats.correct || 0, leagueStats.totalRegular);
                             }
                         }
-                        
-                        // Statistiky pro playoff (pokud neexistují, použijeme 0)
+
                         totalPlayoffBO1Correct += leagueStats.playoffBO1Correct || 0;
                         totalPlayoffBO1Tips += leagueStats.playoffBO1Tips || 0;
                         totalPlayoffBOSeriesCorrect += leagueStats.playoffBOSeriesCorrect || 0;
                         totalPlayoffBOSeriesTips += leagueStats.playoffBOSeriesTips || 0;
-                        
+
                         activeLeagues.push(league);
                     }
                 }
-                
-                // Oprava počtu lig
+
                 leagueCount = activeLeagues.length;
 
-                // Výpočet celkových max. bodů napříč všemi ligami
                 let totalMaxPoints = 0;
                 for (const league of activeLeagues) {
                     totalMaxPoints += leagueMaxPointsMap[league] || 0;
                 }
 
-                // Výpočet úspěšnosti v %
                 const totalTips = totalRegular + totalPlayoff;
                 const successRate = totalMaxPoints > 0 ? ((totalCorrect / totalMaxPoints) * 100).toFixed(1) : 0;
                 const regularSuccessRate = totalRegular > 0 ? ((totalRegularCorrect / totalRegular) * 100).toFixed(1) : 0;
                 const playoffBO1SuccessRate = totalPlayoffBO1Tips > 0 ? ((totalPlayoffBO1Correct / totalPlayoffBO1Tips) * 100).toFixed(1) : 0;
                 const playoffBOSeriesSuccessRate = totalPlayoffBOSeriesTips > 0 ? ((totalPlayoffBOSeriesCorrect / totalPlayoffBOSeriesTips) * 100).toFixed(1) : 0;
-                const tableSuccessRate = leagueCount > 0 ? ((totalTableCorrect / (leagueCount * 10)) * 100).toFixed(1) : 0; // Předpokládáme 10 týmů na ligu
-                
+                const tableSuccessRate = leagueCount > 0 ? ((totalTableCorrect / (leagueCount * 10)) * 100).toFixed(1) : 0;
+                const avgGoalDeviation = userEvaluatedBO1Count > 0 ? (userTotalDeviationSum / userEvaluatedBO1Count).toFixed(2) : null;
+
+                // --- VÝPOČET SRDCOVKY A KATA PRO KAŽDOU LIGU ZVLÁŠŤ ---
+                const leagueTeamStats = {};
+                const userTipsObj = user.tips?.[selectedSeason] || {};
+
+                for (const leagueKey of Object.keys(userTipsObj)) {
+                    let leagueTipsArr = userTipsObj[leagueKey] || [];
+                    if (!Array.isArray(leagueTipsArr) && typeof leagueTipsArr === 'object') {
+                        leagueTipsArr = Object.values(leagueTipsArr);
+                    }
+
+                    const teamPerformance = {};
+
+                    for (const tip of leagueTipsArr) {
+                        const matchId = tip.matchId || tip.id;
+                        const match = matches.find(m => String(m.id || m._id) === String(matchId));
+                        if (!match) continue;
+
+                        const res = match.result || match;
+                        let realWinner = res.winner || match.winner;
+                        const homeScore = res.scoreHome ?? res.score_home ?? res.homeScore ?? match.scoreHome;
+                        const awayScore = res.scoreAway ?? res.score_away ?? res.awayScore ?? match.scoreAway;
+
+                        if (!realWinner && homeScore !== undefined && awayScore !== undefined) {
+                            const sh = Number(homeScore);
+                            const sa = Number(awayScore);
+                            if (sh > sa) realWinner = 'home';
+                            else if (sa > sh) realWinner = 'away';
+                        }
+
+                        if (!realWinner) continue;
+
+                        const hId = String(match.homeTeamId ?? match.home_team_id ?? match.homeId ?? '');
+                        const aId = String(match.awayTeamId ?? match.away_team_id ?? match.awayId ?? '');
+
+                        const homeTeamName = teamNameMap[hId] || match.homeTeam || match.home_team;
+                        const awayTeamName = teamNameMap[aId] || match.awayTeam || match.away_team;
+
+                        if (!homeTeamName || !awayTeamName) continue;
+
+                        let isCorrect = false;
+                        if (match.isPlayoff && Number(match.bo) === 1) {
+                            let tipHome = Number(tip.scoreHome ?? tip.scoreH ?? tip.homeGoals ?? 0);
+                            let tipAway = Number(tip.scoreAway ?? tip.scoreA ?? tip.awayGoals ?? 0);
+
+                            if (res.sideSwap === true) {
+                                const temp = tipHome; tipHome = tipAway; tipAway = temp;
+                            }
+                            if (!Number.isNaN(tipHome) && !Number.isNaN(tipAway)) {
+                                isCorrect = Math.sign(Number(homeScore) - Number(awayScore)) === Math.sign(tipHome - tipAway);
+                            }
+                        } else {
+                            let evaluatedWinner = tip.winner;
+                            if (res.sideSwap === true) {
+                                evaluatedWinner = tip.winner === 'home' ? 'away' : (tip.winner === 'away' ? 'home' : tip.winner);
+                            }
+                            isCorrect = evaluatedWinner === realWinner;
+                        }
+
+                        [homeTeamName, awayTeamName].forEach(tName => {
+                            if (!teamPerformance[tName]) teamPerformance[tName] = { total: 0, correct: 0 };
+                            teamPerformance[tName].total++;
+                            if (isCorrect) teamPerformance[tName].correct++;
+                        });
+                    }
+
+                    const qualifiedTeams = Object.keys(teamPerformance)
+                        .filter(tName => teamPerformance[tName].total >= 2)
+                        .map(tName => ({
+                            name: tName,
+                            rate: (teamPerformance[tName].correct / teamPerformance[tName].total) * 100,
+                            correct: teamPerformance[tName].correct,
+                            total: teamPerformance[tName].total
+                        }));
+
+                    if (qualifiedTeams.length >= 2) {
+                        qualifiedTeams.sort((a, b) => b.rate - a.rate || b.total - a.total);
+                        leagueTeamStats[leagueKey] = {
+                            favorite: qualifiedTeams[0],
+                            kat: qualifiedTeams[qualifiedTeams.length - 1]
+                        };
+                    }
+                }
+
                 return {
                     username: user.username,
                     totalCorrect,
@@ -5301,108 +5444,102 @@ router.get("/statistics", requireLogin, async (req, res) => {
                     playoffBO1SuccessRate: parseFloat(playoffBO1SuccessRate),
                     playoffBOSeriesSuccessRate: parseFloat(playoffBOSeriesSuccessRate),
                     tableSuccessRate: parseFloat(tableSuccessRate),
+                    avgGoalDeviation: avgGoalDeviation ? parseFloat(avgGoalDeviation) : null,
+                    bo1EvaluatedCount: userEvaluatedBO1Count,
                     leagueCount,
                     leagues: activeLeagues,
-                    // Detailní statistiky
                     totalRegularCorrect,
                     totalPlayoffBO1Correct,
                     totalPlayoffBO1Tips,
                     totalPlayoffBOSeriesCorrect,
-                    totalPlayoffBOSeriesTips
+                    totalPlayoffBOSeriesTips,
+                    leagueTeamStats
                 };
             })
-            .filter(u => u.totalTips > 0) // Vyloučit uživatele s 0 zápasy
-            .sort((a, b) => b.totalCorrect - a.totalCorrect); // Seřazení podle celkových bodů
-        
-        // Statistiky pro aktuálního uživatele
+            .filter(u => u.totalTips > 0)
+            .sort((a, b) => b.totalCorrect - a.totalCorrect);
+
         const currentUserStats = userStats.find(u => u.username === username);
         const currentUserRank = userStats.findIndex(u => u.username === username) + 1;
-        
-        // Celkové statistiky aplikace
-        // Oprava: Počet lig počítáme z unikátních lig v userStats, ne z leagues pole
+
+        // Žebříček nejpřesnějších střelců
+        const sniperRankings = [...userStats]
+            .filter(u => u.avgGoalDeviation !== null && u.bo1EvaluatedCount >= 0)
+            .sort((a, b) => a.avgGoalDeviation - b.avgGoalDeviation);
+
         userStats.forEach(u => u.leagues.forEach(l => allLeaguesInStats.add(l)));
 
-        // Výpočet distribuce úspěšnosti
         const successRateDistribution = {};
         const bins = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
-        for (let i = 0; i < bins.length; i++) {
+        for (let i = 0; i < bins.length - 1; i++) {
             const min = bins[i];
-            const max = bins[i + 1] || 100;
+            const max = bins[i + 1];
             const key = `${min}-${max}%`;
             successRateDistribution[key] = userStats.filter(u => u.successRate >= min && u.successRate < max).length;
         }
 
         const appStats = {
             totalUsers: users.filter(u => u.username !== 'Admin').length,
-            activeUsers: userStats.length, // Uživatelé, kteří aspoň jednou tipovali v této sezóně
+            activeUsers: userStats.length,
             totalLeagues: allLeaguesInStats.size,
             totalTips: userStats.reduce((sum, u) => sum + u.totalTips, 0),
             totalCorrect: userStats.reduce((sum, u) => sum + u.totalCorrect, 0),
             avgSuccessRate: userStats.length > 0 ? (userStats.reduce((sum, u) => sum + u.successRate, 0) / userStats.length).toFixed(1) : 0,
             successRateDistribution
         };
-        
-        // Statistiky podle lig
+
         const leagueStats = {};
-        
         for (const league of allLeaguesInStats) {
             const leagueUsers = userStats.filter(u => u.leagues.includes(league));
 
-            // Získání všech zápasů v lize s výsledkem pro výpočet max. bodů
             const leagueMatches = matches.filter(m =>
                 m.liga === league &&
                 m.season === selectedSeason &&
                 m.result?.winner
             );
 
-            // Výpočet max. možných bodů v lize
             let leagueMaxPoints = 0;
             for (const match of leagueMatches) {
                 if (match.isPlayoff && Number(match.bo) === 1) {
-                    leagueMaxPoints += 5; // Playoff BO1: max 5 bodů
+                    leagueMaxPoints += 5;
                 } else if (match.isPlayoff && Number(match.bo) > 1) {
-                    leagueMaxPoints += 3; // Playoff série: max 3 body
+                    leagueMaxPoints += 3;
                 } else {
-                    leagueMaxPoints += 1; // Základní část: 1 bod
+                    leagueMaxPoints += 1;
                 }
             }
 
-            // Výpočet statistik jen pro tuto ligu
             let leagueTotalTips = 0;
             let leagueTotalCorrect = 0;
-            
-            // Výpočet úspěšnosti pro každého uživatele v této lize
+
             const leagueUserStats = [];
             for (const user of users) {
                 if (user.username === 'Admin') continue;
                 const userStat = userStats.find(u => u.username === user.username);
                 if (!userStat || !userStat.leagues.includes(league)) continue;
 
-                // Použijeme data z user.stats, která už jsou vypočítaná
-                const leagueStats = user.stats?.[selectedSeason]?.[league] || {};
-                const userLeaguePoints = leagueStats.correct || 0;
+                const leagueStatsData = user.stats?.[selectedSeason]?.[league] || {};
+                const userLeaguePoints = leagueStatsData.correct || 0;
 
                 const userSuccessRate = leagueMaxPoints > 0 ? ((userLeaguePoints / leagueMaxPoints) * 100).toFixed(1) : 0;
 
-                leagueTotalTips += (leagueStats.totalRegular || 0) + (leagueStats.totalPlayoff || 0);
+                leagueTotalTips += (leagueStatsData.totalRegular || 0) + (leagueStatsData.totalPlayoff || 0);
                 leagueTotalCorrect += userLeaguePoints;
 
                 leagueUserStats.push({
                     username: user.username,
                     successRate: parseFloat(userSuccessRate),
                     totalCorrect: userLeaguePoints,
-                    totalTips: (leagueStats.totalRegular || 0) + (leagueStats.totalPlayoff || 0)
+                    totalTips: (leagueStatsData.totalRegular || 0) + (leagueStatsData.totalPlayoff || 0)
                 });
             }
-            
-            // Seřazení podle úspěšnosti v procentech pro určení nejlepšího/horšího uživatele
-            // Filtrujeme jen uživatele s alespoň 5 tipy v dané lize
+
             const eligibleUsers = leagueUserStats.filter(u => u.totalTips >= 5);
             eligibleUsers.sort((a, b) => b.successRate - a.successRate);
 
             leagueStats[league] = {
                 users: leagueUsers.length,
-                avgSuccessRate: leagueMaxPoints > 0 ? ((leagueTotalCorrect / (leagueMaxPoints * leagueUsers.length)) * 100).toFixed(1) : 0,
+                avgSuccessRate: (leagueMaxPoints > 0 && leagueUsers.length > 0) ? ((leagueTotalCorrect / (leagueMaxPoints * leagueUsers.length)) * 100).toFixed(1) : 0,
                 totalTips: leagueTotalTips,
                 totalCorrect: leagueTotalCorrect,
                 bestUser: eligibleUsers.length > 0 ? eligibleUsers[0].username : null,
@@ -5410,16 +5547,15 @@ router.get("/statistics", requireLogin, async (req, res) => {
             };
         }
 
-        // Výpočet matice úspěšnosti uživatel x liga pro heatmapu
         const leagueHeatmapData = {};
         for (const user of users) {
             if (user.username === 'Admin') continue;
             leagueHeatmapData[user.username] = {};
             const userSeasonStats = user.stats?.[selectedSeason] || {};
             for (const league of Object.keys(userSeasonStats)) {
-                const leagueStats = userSeasonStats[league] || {};
-                const userLeaguePoints = leagueStats.correct || 0;
-                const userLeagueTips = (leagueStats.totalRegular || 0) + (leagueStats.totalPlayoff || 0);
+                const leagueStatsData = userSeasonStats[league] || {};
+                const userLeaguePoints = leagueStatsData.correct || 0;
+                const userLeagueTips = (leagueStatsData.totalRegular || 0) + (leagueStatsData.totalPlayoff || 0);
                 const userLeagueMaxPoints = leagueMaxPointsMap[league] || 0;
                 const userLeagueSuccessRate = userLeagueMaxPoints > 0 ? ((userLeaguePoints / userLeagueMaxPoints) * 100).toFixed(1) : 0;
                 leagueHeatmapData[user.username][league] = {
@@ -5430,92 +5566,115 @@ router.get("/statistics", requireLogin, async (req, res) => {
             }
         }
 
-        // Statistiky sérií pro všechny uživatele
+        // ---------------------------------------------------------
+        // OPRAVENÝ VÝPOČET SÉRIÍ VÝHER A PROHER
+        // ---------------------------------------------------------
         const streakStats = [];
         for (const user of users) {
             if (user.username === 'Admin') continue;
-            // Přeskočit uživatele s 0 zápasy
+
             const userStat = userStats.find(u => u.username === user.username);
             if (!userStat || userStat.totalTips === 0) continue;
-            
-            const allTips = [];
-            const tips = user.tips?.[selectedSeason] || {};
-            for (const league of Object.keys(tips)) {
-                const leagueTips = tips[league] || [];
-                for (const tip of leagueTips) {
-                    const match = matches.find(m => m.id === tip.matchId);
-                    if (!match?.result || !match.result.winner) continue;
-                    
+
+            const userTipsObj = user.tips?.[selectedSeason] || {};
+            const allEvaluatedTips = [];
+
+            for (const leagueKey of Object.keys(userTipsObj)) {
+                let leagueTipsArr = userTipsObj[leagueKey] || [];
+                if (!Array.isArray(leagueTipsArr) && typeof leagueTipsArr === 'object') {
+                    leagueTipsArr = Object.values(leagueTipsArr);
+                }
+
+                for (const tip of leagueTipsArr) {
+                    const matchId = tip.matchId || tip.id;
+                    const match = matches.find(m => String(m.id || m._id) === String(matchId));
+
+                    // Započítáváme POUZE odehrané/vyhodnocené zápasy s vítězem
+                    if (!match) continue;
+                    const res = match.result || match;
+                    let realWinner = res.winner || match.winner;
+                    const homeScore = res.scoreHome ?? res.score_home ?? res.homeScore ?? match.scoreHome;
+                    const awayScore = res.scoreAway ?? res.score_away ?? res.awayScore ?? match.scoreAway;
+
+                    if (!realWinner && homeScore !== undefined && awayScore !== undefined) {
+                        const sh = Number(homeScore);
+                        const sa = Number(awayScore);
+                        if (sh > sa) realWinner = 'home';
+                        else if (sa > sh) realWinner = 'away';
+                    }
+
+                    if (!realWinner) continue; // Zápas ještě neskončil / není vyhodnocený
+
+                    // Vyhodnocení správnosti tipu
                     let isCorrect = false;
                     if (match.isPlayoff && Number(match.bo) === 1) {
-                        const realHome = Number(match.result.scoreHome ?? 0);
-                        const realAway = Number(match.result.scoreAway ?? 0);
                         let tipHome = Number(tip.scoreHome ?? tip.scoreH ?? tip.homeGoals ?? 0);
                         let tipAway = Number(tip.scoreAway ?? tip.scoreA ?? tip.awayGoals ?? 0);
-                        
-                        if (match.result?.sideSwap === true) {
-                            const temp = tipHome;
-                            tipHome = tipAway;
-                            tipAway = temp;
+
+                        if (res.sideSwap === true) {
+                            const temp = tipHome; tipHome = tipAway; tipAway = temp;
                         }
-                        
                         if (!Number.isNaN(tipHome) && !Number.isNaN(tipAway)) {
-                            const realOutcome = Math.sign(realHome - realAway);
-                            const tipOutcome = Math.sign(tipHome - tipAway);
-                            isCorrect = realOutcome === tipOutcome;
+                            isCorrect = Math.sign(Number(homeScore) - Number(awayScore)) === Math.sign(tipHome - tipAway);
                         }
-                    } else if (match.isPlayoff && Number(match.bo) > 1) {
-                        const realWinner = match.result.winner;
-                        const tipWinner = tip.winner;
-                        isCorrect = tipWinner === realWinner;
                     } else {
                         let evaluatedWinner = tip.winner;
-                        if (match.result?.sideSwap === true) {
-                            evaluatedWinner = tip.winner === 'home' ? 'away' : 'home';
+                        if (res.sideSwap === true) {
+                            evaluatedWinner = tip.winner === 'home' ? 'away' : (tip.winner === 'away' ? 'home' : tip.winner);
                         }
-                        isCorrect = evaluatedWinner === match.result.winner;
+                        isCorrect = evaluatedWinner === realWinner;
                     }
-                    
-                    const matchDate = match.datetime || match.date;
-                    if (!matchDate) continue;
 
-                    allTips.push({ matchId: match.id, isCorrect, date: matchDate });
+                    // Určení přesného času zápasu pro chronologické řazení
+                    const rawDate = match.datetime || match.date || match.timestamp;
+                    const parsedTime = rawDate ? new Date(rawDate).getTime() : 0;
+
+                    allEvaluatedTips.push({
+                        matchId: String(match.id || match._id),
+                        timestamp: Number.isNaN(parsedTime) ? 0 : parsedTime,
+                        isCorrect
+                    });
                 }
             }
-            
-            // Seřazení podle data, a při shodném času podle ID zápasu pro konzistentní pořadí
-            allTips.sort((a, b) => {
-                const timeDiff = new Date(a.date).getTime() - new Date(b.date).getTime();
-                if (timeDiff !== 0) return timeDiff;
-                return (a.matchId || 0) - (b.matchId || 0);
+
+            // STRIKTNÍ CHRONOLOGICKÉ SEŘAZENÍ (od nejstaršího po nejnovější zápas)
+            allEvaluatedTips.sort((a, b) => {
+                if (a.timestamp !== b.timestamp) {
+                    return a.timestamp - b.timestamp;
+                }
+                return a.matchId.localeCompare(b.matchId);
             });
-            
-            // Výpočet sérií
+
+            // Výpočet maximální sérií
             let longestWinStreak = 0;
             let longestLoseStreak = 0;
             let currentWinStreak = 0;
             let currentLoseStreak = 0;
-            
-            for (const tip of allTips) {
-                if (tip.isCorrect) {
+
+            for (const item of allEvaluatedTips) {
+                if (item.isCorrect) {
                     currentWinStreak++;
                     currentLoseStreak = 0;
-                    longestWinStreak = Math.max(longestWinStreak, currentWinStreak);
+                    if (currentWinStreak > longestWinStreak) {
+                        longestWinStreak = currentWinStreak;
+                    }
                 } else {
                     currentLoseStreak++;
                     currentWinStreak = 0;
-                    longestLoseStreak = Math.max(longestLoseStreak, currentLoseStreak);
+                    if (currentLoseStreak > longestLoseStreak) {
+                        longestLoseStreak = currentLoseStreak;
+                    }
                 }
             }
-            
+
             streakStats.push({
                 username: user.username,
                 longestWinStreak,
                 longestLoseStreak
             });
         }
-        
-        // Seřazení podle nejdelší série výher, při shodě podle MENŠÍ série proher
+
+        // Seřazení žebříčku sérií (nejdřív podle výher, pak podle méně proher)
         streakStats.sort((a, b) => {
             if (b.longestWinStreak !== a.longestWinStreak) {
                 return b.longestWinStreak - a.longestWinStreak;
@@ -5525,12 +5684,10 @@ router.get("/statistics", requireLogin, async (req, res) => {
             }
             return a.username.localeCompare(b.username);
         });
-        
-        // Trendy v čase (úspěšnost podle měsíce)
+
         const monthlyStats = {};
         for (const user of users) {
             if (user.username === 'Admin') continue;
-            // Přeskočit uživatele s 0 zápasy
             const userStat = userStats.find(u => u.username === user.username);
             if (!userStat || userStat.totalTips === 0) continue;
             const tips = user.tips?.[selectedSeason] || {};
@@ -5539,53 +5696,31 @@ router.get("/statistics", requireLogin, async (req, res) => {
                 for (const tip of leagueTips) {
                     const match = matches.find(m => m.id === tip.matchId);
                     if (!match?.result || !match.result.winner) continue;
-                    
-                    // Zkusíme různé pole pro datum
+
                     const matchDate = match.date || match.datetime || match.timestamp;
                     if (!matchDate) continue;
-                    
-                    const month = new Date(matchDate).toISOString().slice(0, 7); // YYYY-MM
+
+                    const month = new Date(matchDate).toISOString().slice(0, 7);
                     if (!monthlyStats[month]) {
                         monthlyStats[month] = { total: 0, correct: 0 };
                     }
-                    
+
                     monthlyStats[month].total++;
-                    
+
                     let isCorrect = false;
                     if (match.isPlayoff && Number(match.bo) === 1) {
                         const realHome = Number(match.result.scoreHome ?? 0);
                         const realAway = Number(match.result.scoreAway ?? 0);
-                        
-                        // Získání tipovaného skóre - zkusíme různé názvy polí
-                        let tipHome = 0;
-                        let tipAway = 0;
-                        
-                        if (tip.scoreHome !== undefined && tip.scoreAway !== undefined) {
-                            tipHome = Number(tip.scoreHome);
-                            tipAway = Number(tip.scoreAway);
-                        } else if (tip.scoreH !== undefined && tip.scoreA !== undefined) {
-                            tipHome = Number(tip.scoreH);
-                            tipAway = Number(tip.scoreA);
-                        } else if (tip.homeGoals !== undefined && tip.awayGoals !== undefined) {
-                            tipHome = Number(tip.homeGoals);
-                            tipAway = Number(tip.awayGoals);
-                        }
-                        
+                        let tipHome = Number(tip.scoreHome ?? tip.scoreH ?? tip.homeGoals ?? 0);
+                        let tipAway = Number(tip.scoreAway ?? tip.scoreA ?? tip.awayGoals ?? 0);
                         if (match.result?.sideSwap === true) {
-                            const temp = tipHome;
-                            tipHome = tipAway;
-                            tipAway = temp;
+                            const temp = tipHome; tipHome = tipAway; tipAway = temp;
                         }
-                        
                         if (!Number.isNaN(tipHome) && !Number.isNaN(tipAway)) {
-                            const realOutcome = Math.sign(realHome - realAway);
-                            const tipOutcome = Math.sign(tipHome - tipAway);
-                            isCorrect = realOutcome === tipOutcome;
+                            isCorrect = Math.sign(realHome - realAway) === Math.sign(tipHome - tipAway);
                         }
                     } else if (match.isPlayoff && Number(match.bo) > 1) {
-                        const realWinner = match.result.winner;
-                        const tipWinner = tip.winner;
-                        isCorrect = tipWinner === realWinner;
+                        isCorrect = tip.winner === match.result.winner;
                     } else {
                         let evaluatedWinner = tip.winner;
                         if (match.result?.sideSwap === true) {
@@ -5593,22 +5728,18 @@ router.get("/statistics", requireLogin, async (req, res) => {
                         }
                         isCorrect = evaluatedWinner === match.result.winner;
                     }
-                    
-                    if (isCorrect) {
-                        monthlyStats[month].correct++;
-                    }
+
+                    if (isCorrect) monthlyStats[month].correct++;
                 }
             }
         }
-        
-        // Výpočet úspěšnosti pro měsíce
+
         for (const month in monthlyStats) {
             monthlyStats[month].successRate = monthlyStats[month].total > 0
                 ? ((monthlyStats[month].correct / monthlyStats[month].total) * 100).toFixed(1)
                 : 0;
         }
 
-        // Statistiky podle dnů v týdnu
         const dayOfWeekStats = {
             0: { name: 'Neděle', total: 0, correct: 0 },
             1: { name: 'Pondělí', total: 0, correct: 0 },
@@ -5636,11 +5767,10 @@ router.get("/statistics", requireLogin, async (req, res) => {
 
                     let isCorrect = false;
                     if (match.isPlayoff && Number(match.bo) === 1) {
-                        // Playoff BO1
                         const tipHome = tip.scoreHome !== undefined ? tip.scoreHome : tip.home;
                         const tipAway = tip.scoreAway !== undefined ? tip.scoreAway : tip.away;
-                        const realHome = match.result.home;
-                        const realAway = match.result.away;
+                        const realHome = match.result.scoreHome ?? match.result.home;
+                        const realAway = match.result.scoreAway ?? match.result.away;
 
                         if (tipHome === realHome && tipAway === realAway) {
                             isCorrect = true;
@@ -5649,40 +5779,23 @@ router.get("/statistics", requireLogin, async (req, res) => {
                             if (delta <= 3) isCorrect = true;
                         }
                     } else if (match.isPlayoff && Number(match.bo) > 1) {
-                        // Playoff série
-                        const tipWinner = tip.winner;
-                        const realWinner = match.result.winner;
-                        if (tipWinner === realWinner) isCorrect = true;
+                        isCorrect = tip.winner === match.result.winner;
                     } else {
-                        // Základní část
-                        const tipWinner = tip.winner;
-                        const realWinner = match.result.winner;
-                        if (tipWinner === realWinner) isCorrect = true;
+                        isCorrect = tip.winner === match.result.winner;
                     }
 
-                    if (isCorrect) {
-                        dayOfWeekStats[dayOfWeek].correct++;
-                    }
+                    if (isCorrect) dayOfWeekStats[dayOfWeek].correct++;
                 }
             }
         }
 
-        // Výpočet úspěšnosti pro dny v týdnu
         for (const day in dayOfWeekStats) {
             dayOfWeekStats[day].successRate = dayOfWeekStats[day].total > 0
                 ? ((dayOfWeekStats[day].correct / dayOfWeekStats[day].total) * 100).toFixed(1)
                 : 0;
         }
 
-        // Statistiky přesnosti tipů (jen playoff BO1 zápasy, které mají skóre)
-        const tipAccuracyStats = {
-            exact: 0,           // Přesně na skóre
-            offBy1: 0,          // O 1 gól
-            offBy2: 0,          // O 2 góly
-            offBy3: 0,          // O 3 góly
-            offByMore: 0,       // O více než 3 góly
-            total: 0
-        };
+        const tipAccuracyStats = { exact: 0, offBy1: 0, offBy2: 0, offBy3: 0, offByMore: 0, total: 0 };
 
         for (const user of users) {
             if (user.username === 'Admin') continue;
@@ -5692,8 +5805,6 @@ router.get("/statistics", requireLogin, async (req, res) => {
                 for (const tip of leagueTips) {
                     const match = matches.find(m => m.id === tip.matchId);
                     if (!match?.result || !match.result.winner) continue;
-
-                    // Jen playoff BO1 zápasy (mají skóre)
                     if (!match.isPlayoff || Number(match.bo) !== 1) continue;
 
                     const tipHome = tip.scoreHome !== undefined ? tip.scoreHome : tip.home;
@@ -5704,24 +5815,17 @@ router.get("/statistics", requireLogin, async (req, res) => {
                     const totalDelta = Math.abs(tipHome - realHome) + Math.abs(tipAway - realAway);
                     tipAccuracyStats.total++;
 
-                    if (totalDelta === 0) {
-                        tipAccuracyStats.exact++;
-                    } else if (totalDelta === 1) {
-                        tipAccuracyStats.offBy1++;
-                    } else if (totalDelta === 2) {
-                        tipAccuracyStats.offBy2++;
-                    } else if (totalDelta === 3) {
-                        tipAccuracyStats.offBy3++;
-                    } else {
-                        tipAccuracyStats.offByMore++;
-                    }
+                    if (totalDelta === 0) tipAccuracyStats.exact++;
+                    else if (totalDelta === 1) tipAccuracyStats.offBy1++;
+                    else if (totalDelta === 2) tipAccuracyStats.offBy2++;
+                    else if (totalDelta === 3) tipAccuracyStats.offBy3++;
+                    else tipAccuracyStats.offByMore++;
                 }
             }
         }
 
-        // Trend výkonu v průběhu sezóny (moving average)
         const performanceTrend = [];
-        const windowSize = 10; // Klouzavé okno 10 tipů
+        const windowSize = 10;
 
         for (const user of users) {
             if (user.username === 'Admin') continue;
@@ -5738,8 +5842,8 @@ router.get("/statistics", requireLogin, async (req, res) => {
                     if (match.isPlayoff && Number(match.bo) === 1) {
                         const tipHome = tip.scoreHome !== undefined ? tip.scoreHome : tip.home;
                         const tipAway = tip.scoreAway !== undefined ? tip.scoreAway : tip.away;
-                        const realHome = match.result.home;
-                        const realAway = match.result.away;
+                        const realHome = match.result.scoreHome ?? match.result.home;
+                        const realAway = match.result.scoreAway ?? match.result.away;
 
                         if (tipHome === realHome && tipAway === realAway) {
                             isCorrect = true;
@@ -5748,13 +5852,9 @@ router.get("/statistics", requireLogin, async (req, res) => {
                             if (delta <= 3) isCorrect = true;
                         }
                     } else if (match.isPlayoff && Number(match.bo) > 1) {
-                        const tipWinner = tip.winner;
-                        const realWinner = match.result.winner;
-                        if (tipWinner === realWinner) isCorrect = true;
+                        isCorrect = tip.winner === match.result.winner;
                     } else {
-                        const tipWinner = tip.winner;
-                        const realWinner = match.result.winner;
-                        if (tipWinner === realWinner) isCorrect = true;
+                        isCorrect = tip.winner === match.result.winner;
                     }
 
                     allTips.push({
@@ -5764,10 +5864,8 @@ router.get("/statistics", requireLogin, async (req, res) => {
                 }
             }
 
-            // Seřazení podle data
             allTips.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-            // Výpočet moving average
             for (let i = windowSize - 1; i < allTips.length; i++) {
                 const window = allTips.slice(i - windowSize + 1, i + 1);
                 const avg = window.reduce((sum, t) => sum + t.correct, 0) / windowSize;
@@ -5779,68 +5877,51 @@ router.get("/statistics", requireLogin, async (req, res) => {
             }
         }
 
-        // Seřazení podle data
         performanceTrend.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-        // Sezónní porovnání
         const seasonComparison = {};
         const allSeasons = Array.from(allSeasonsFromLeagues).sort();
 
         for (const season of allSeasons) {
-            const seasonStats = {
-                totalTips: 0,
-                totalCorrect: 0,
-                users: {}
-            };
+            const seasonStats = { totalTips: 0, totalCorrect: 0, users: {} };
 
             for (const user of users) {
                 if (user.username === 'Admin') continue;
-                
-                // Pokud má stats pro danou sezónu, použijeme je
-                // Jinak vypočítáme z tips dynamicky (pro aktuální sezónu)
+
                 let userTotalCorrect = 0;
                 let userTotalTips = 0;
 
                 if (user.stats?.[season]) {
                     const userSeasonStats = user.stats[season];
                     for (const league of Object.keys(userSeasonStats)) {
-                        const leagueStats = userSeasonStats[league] || {};
-                        userTotalCorrect += leagueStats.correct || 0;
-                        userTotalTips += (leagueStats.totalRegular || 0) + (leagueStats.totalPlayoff || 0);
+                        const leagueStatsData = userSeasonStats[league] || {};
+                        userTotalCorrect += leagueStatsData.correct || 0;
+                        userTotalTips += (leagueStatsData.totalRegular || 0) + (leagueStatsData.totalPlayoff || 0);
                     }
                 } else {
-                    // Vypočítáme z tips pro danou sezónu
                     const userTips = user.tips?.[season] || {};
                     for (const league of Object.keys(userTips)) {
                         const leagueTips = userTips[league] || [];
                         for (const tip of leagueTips) {
                             const match = matches.find(m => m.id === tip.matchId);
                             if (!match?.result || !match.result.winner) continue;
-                            
+
                             userTotalTips++;
-                            
+
                             let isCorrect = false;
                             if (match.isPlayoff && Number(match.bo) === 1) {
                                 const realHome = Number(match.result.scoreHome ?? 0);
                                 const realAway = Number(match.result.scoreAway ?? 0);
                                 let tipHome = Number(tip.scoreHome ?? tip.scoreH ?? tip.homeGoals ?? 0);
                                 let tipAway = Number(tip.scoreAway ?? tip.scoreA ?? tip.awayGoals ?? 0);
-                                
                                 if (match.result?.sideSwap === true) {
-                                    const temp = tipHome;
-                                    tipHome = tipAway;
-                                    tipAway = temp;
+                                    const temp = tipHome; tipHome = tipAway; tipAway = temp;
                                 }
-                                
                                 if (!Number.isNaN(tipHome) && !Number.isNaN(tipAway)) {
-                                    const realOutcome = Math.sign(realHome - realAway);
-                                    const tipOutcome = Math.sign(tipHome - tipAway);
-                                    isCorrect = realOutcome === tipOutcome;
+                                    isCorrect = Math.sign(realHome - realAway) === Math.sign(tipHome - tipAway);
                                 }
                             } else if (match.isPlayoff && Number(match.bo) > 1) {
-                                const realWinner = match.result.winner;
-                                const tipWinner = tip.winner;
-                                isCorrect = tipWinner === realWinner;
+                                isCorrect = tip.winner === match.result.winner;
                             } else {
                                 let evaluatedWinner = tip.winner;
                                 if (match.result?.sideSwap === true) {
@@ -5848,7 +5929,7 @@ router.get("/statistics", requireLogin, async (req, res) => {
                                 }
                                 isCorrect = evaluatedWinner === match.result.winner;
                             }
-                            
+
                             if (isCorrect) userTotalCorrect++;
                         }
                     }
@@ -5870,100 +5951,35 @@ router.get("/statistics", requireLogin, async (req, res) => {
             seasonComparison[season] = seasonStats;
         }
 
-        // Porovnání uživatele s průměrem
-        const userComparison = currentUserStats ? {
-            successRateDiff: (currentUserStats.successRate - parseFloat(appStats.avgSuccessRate)).toFixed(1),
-            totalCorrectDiff: currentUserStats.totalCorrect - (appStats.totalCorrect / (appStats.totalUsers || 1)).toFixed(0),
-            totalTipsDiff: currentUserStats.totalTips - (appStats.totalTips / (appStats.totalUsers || 1)).toFixed(0),
-            isAboveAverage: currentUserStats.successRate > parseFloat(appStats.avgSuccessRate),
-            rankPercentile: ((currentUserRank / userStats.length) * 100).toFixed(0)
-        } : null;
-        
-        // Detailní statistiky pro aktuálního uživatele (průměrné skóre, odchylka)
-        let detailedStats = null;
+        // Úprava porovnání s průměrem pro přihlášeného uživatele
+        let userComparison = null;
         if (currentUserStats) {
-            const currentUser = users.find(u => u.username === username);
-            if (currentUser) {
-                let totalMatches = 0;
-                
-                // Základní část
-                let regularScoreHome = 0;
-                let regularScoreAway = 0;
-                let regularMatches = 0;
-                let regularDeviation = 0;
-                
-                // Playoff BO1
-                let bo1ScoreHome = 0;
-                let bo1ScoreAway = 0;
-                let bo1Matches = 0;
-                let bo1Deviation = 0;
-                
-                // Playoff série
-                let seriesMatches = 0;
-                
-                const tips = currentUser.tips?.[selectedSeason] || {};
-                for (const league of Object.keys(tips)) {
-                    const leagueTips = tips[league] || [];
-                    for (const tip of leagueTips) {
-                        const match = matches.find(m => m.id === tip.matchId);
-                        if (!match?.result || !match.result.winner) continue;
-                        
-                        if (match.isPlayoff && Number(match.bo) === 1) {
-                            // BO1
-                            bo1Matches++;
-                            const realHome = Number(match.result.scoreHome ?? 0);
-                            const realAway = Number(match.result.scoreAway ?? 0);
-                            let tipHome = Number(tip.scoreHome ?? tip.scoreH ?? tip.homeGoals ?? 0);
-                            let tipAway = Number(tip.scoreAway ?? tip.scoreA ?? tip.awayGoals ?? 0);
-                            
-                            if (match.result?.sideSwap === true) {
-                                const temp = tipHome;
-                                tipHome = tipAway;
-                                tipAway = temp;
-                            }
-                            
-                            if (!Number.isNaN(tipHome) && !Number.isNaN(tipAway)) {
-                                bo1ScoreHome += tipHome;
-                                bo1ScoreAway += tipAway;
-                                bo1Deviation += Math.abs(tipHome - realHome) + Math.abs(tipAway - realAway);
-                            }
-                        } else if (match.isPlayoff && Number(match.bo) > 1) {
-                            // Série
-                            seriesMatches++;
-                        } else {
-                            // Základní část - tipuje se jen vítěz, ne skóre
-                            regularMatches++;
-                            totalMatches++;
-                            
-                            // V základní části se nepočítá skóre, jen vítěz
-                            // Takže zde nepřidáváme žádné skóre do statistik
-                        }
-                    }
-                }
-                
-                detailedStats = {
-                    regular: {
-                        avgScoreHome: regularMatches > 0 ? (regularScoreHome / regularMatches).toFixed(2) : 0,
-                        avgScoreAway: regularMatches > 0 ? (regularScoreAway / regularMatches).toFixed(2) : 0,
-                        avgDeviation: regularMatches > 0 ? (regularDeviation / regularMatches).toFixed(2) : 0,
-                        totalMatches: regularMatches
-                    },
-                    playoffBO1: {
-                        avgScoreHome: bo1Matches > 0 ? (bo1ScoreHome / bo1Matches).toFixed(2) : 0,
-                        avgScoreAway: bo1Matches > 0 ? (bo1ScoreAway / bo1Matches).toFixed(2) : 0,
-                        avgDeviation: bo1Matches > 0 ? (bo1Deviation / bo1Matches).toFixed(2) : 0,
-                        totalMatches: bo1Matches
-                    },
-                    playoffSeries: {
-                        totalMatches: seriesMatches
-                    }
-                };
+            const diff = currentUserStats.successRate - parseFloat(appStats.avgSuccessRate);
+            let statusText = 'Na průměru';
+
+            if (diff > 0.05) {
+                statusText = 'Nad průměrem';
+            } else if (diff < -0.05) {
+                statusText = 'Pod průměrem';
             }
+
+            // FÉROVÝ PERCENTIL: Kolik % hráčů má STŘITNĚ MÉNĚ bodů než přihlášený uživatel
+            const playersWithFewerPoints = userStats.filter(u => u.totalCorrect < currentUserStats.totalCorrect).length;
+            const totalOtherPlayers = userStats.length - 1;
+
+            const rawPercentile = totalOtherPlayers > 0
+                ? (playersWithFewerPoints / totalOtherPlayers) * 100
+                : 100;
+
+            userComparison = {
+                successRateDiff: diff.toFixed(1),
+                statusText,
+                rankPercentile: Math.round(rawPercentile)
+            };
         }
-        
+
         const availableSeasons = Array.from(allSeasonsFromLeagues).sort().reverse();
 
-        // Vytvoření seznamu všech uživatelů pro sezónní porovnání (bez ohledu na vybranou sezónu)
         const allUsersForSeasonComparison = users
             .filter(u => u.username !== 'Admin')
             .map(u => ({ username: u.username }));
@@ -5973,6 +5989,7 @@ router.get("/statistics", requireLogin, async (req, res) => {
             selectedSeason,
             availableSeasons,
             userStats,
+            sniperRankings,
             allUsersForSeasonComparison,
             currentUserStats,
             currentUserRank,
@@ -5985,39 +6002,25 @@ router.get("/statistics", requireLogin, async (req, res) => {
             seasonComparison,
             streakStats,
             userComparison,
-            detailedStats,
             leagues
         };
-        
-        // Pokud je to API request, vrátíme JSON
+
         if (req.headers.accept === 'application/json') {
             return res.json(data);
         }
-        
+
         let html = `
 <!DOCTYPE html>
 <html lang="cs">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+            <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+            <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
 <title>Statistiky – Tipovačka</title>
 <link rel="stylesheet" href="/css/modern-design.css" />
-<style>
-    .highlight-row {
-        background-color: var(--primary-subtle) !important;
-        font-weight: bold;
-    }
-    .charts-grid {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 20px;
-    }
-    @media (max-width: 768px) {
-        .charts-grid {
-            grid-template-columns: 1fr;
-        }
-    }
-</style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script src="/js/version-notification.js"></script>
@@ -6026,19 +6029,43 @@ router.get("/statistics", requireLogin, async (req, res) => {
 ${renderNotificationScript(req.session.csrfToken || '')}
 <body class="usersite">
 ${await renderUserHeader({
-    username: username,
-    selectedLiga: '',
-    uniqueLeagues: [],
-    activeTab: 'statistics',
-    csrfToken: req.session.csrfToken || '',
-    timeWidgetHtml: await generateTimeWidget()
-})}
+            username: username,
+            selectedLiga: '',
+            uniqueLeagues: [],
+            activeTab: 'statistics',
+            csrfToken: req.session.csrfToken || '',
+            timeWidgetHtml: await generateTimeWidget()
+        })}
 
 <main class="layout-single-column">
+    <!-- Podium Pro Top 3 -->
+    ${userStats.length >= 3 ? `
+    <div class="podium-container">
+        <div class="podium-card silver">
+            <div class="medal-icon">🥈</div>
+            <div class="podium-user">${userStats[1].username}</div>
+            <div class="podium-points">${userStats[1].totalCorrect} bodů</div>
+            <span class="user-stat-pct" style="margin-top: 4px;">Úspěšnost ${userStats[1].successRate}%</span>
+        </div>
+        <div class="podium-card gold">
+            <div class="medal-icon">👑</div>
+            <div class="podium-user">${userStats[0].username}</div>
+            <div class="podium-points">${userStats[0].totalCorrect} bodů</div>
+            <span class="user-stat-pct" style="margin-top: 4px;">Úspěšnost ${userStats[0].successRate}%</span>
+        </div>
+        <div class="podium-card bronze">
+            <div class="medal-icon">🥉</div>
+            <div class="podium-user">${userStats[2].username}</div>
+            <div class="podium-points">${userStats[2].totalCorrect} bodů</div>
+            <span class="user-stat-pct" style="margin-top: 4px;">Úspěšnost ${userStats[2].successRate}%</span>
+        </div>
+    </div>
+    ` : ''}
+
     <div class="stats-card">
         <div class="section-header">
             <div class="section-title">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
                 Statistiky tipovačky – Sezóna ${selectedSeason}
             </div>
             <div style="display:flex; align-items:center; gap:10px;">
@@ -6050,882 +6077,601 @@ ${await renderUserHeader({
                 </select>
             </div>
         </div>
-        <p style="color: var(--text-muted); font-size:13px; margin-bottom:20px;">Komplexní přehled výkonů všech uživatelů a žebříčky úspěšnosti.</p>
+        
+        <div class="user-stats-grid" style="margin-bottom: 24px;">
+            <div class="user-stat-box">
+                <span class="user-stat-label">Celkem uživatelů</span>
+                <span class="user-stat-val">${appStats.totalUsers}</span>
+            </div>
+            <div class="user-stat-box highlight">
+                <span class="user-stat-label">Aktivní v sezóně</span>
+                <span class="user-stat-val" style="color: var(--accent-green);">${appStats.activeUsers}</span>
+            </div>
+            <div class="user-stat-box">
+                <span class="user-stat-label">Celkem lig</span>
+                <span class="user-stat-val" style="color: var(--primary);">${appStats.totalLeagues}</span>
+            </div>
+            <div class="user-stat-box">
+                <span class="user-stat-label">Odeslaných tipů</span>
+                <span class="user-stat-val">${appStats.totalTips}</span>
+            </div>
+            <div class="user-stat-box">
+                <span class="user-stat-label">Průměrná úspěšnost</span>
+                <span class="user-stat-val" style="color: var(--accent-amber);">${appStats.avgSuccessRate}%</span>
+            </div>
+        </div>
     
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 24px;" class="stats-overview">
-        <div class="rule-card" style="flex-direction: column; align-items: flex-start; gap: 6px; padding: 14px;">
-            <span style="color: var(--text-dim); font-size: 11px; text-transform: uppercase; font-weight: 700;">Celkem uživatelů</span>
-            <span style="font-size: 22px; font-weight: 800; color: #fff; font-family: 'JetBrains Mono', monospace;">${appStats.totalUsers}</span>
-        </div>
-        <div class="rule-card" style="flex-direction: column; align-items: flex-start; gap: 6px; padding: 14px;">
-            <span style="color: var(--text-dim); font-size: 11px; text-transform: uppercase; font-weight: 700;">Aktivních v sezóně</span>
-            <span style="font-size: 22px; font-weight: 800; color: var(--accent-green); font-family: 'JetBrains Mono', monospace;">${appStats.activeUsers}</span>
-        </div>
-        <div class="rule-card" style="flex-direction: column; align-items: flex-start; gap: 6px; padding: 14px;">
-            <span style="color: var(--text-dim); font-size: 11px; text-transform: uppercase; font-weight: 700;">Celkem lig</span>
-            <span style="font-size: 22px; font-weight: 800; color: var(--primary); font-family: 'JetBrains Mono', monospace;">${appStats.totalLeagues}</span>
-        </div>
-        <div class="rule-card" style="flex-direction: column; align-items: flex-start; gap: 6px; padding: 14px;">
-            <span style="color: var(--text-dim); font-size: 11px; text-transform: uppercase; font-weight: 700;">Odeslaných tipů</span>
-            <span style="font-size: 22px; font-weight: 800; color: #fff; font-family: 'JetBrains Mono', monospace;">${appStats.totalTips}</span>
-        </div>
-        <div class="rule-card" style="flex-direction: column; align-items: flex-start; gap: 6px; padding: 14px;">
-            <span style="color: var(--text-dim); font-size: 11px; text-transform: uppercase; font-weight: 700;">Průměrná úspěšnost</span>
-            <span style="font-size: 22px; font-weight: 800; color: var(--accent-amber); font-family: 'JetBrains Mono', monospace;">${appStats.avgSuccessRate}%</span>
-        </div>
-    </div>
-    
-    <div class="charts-section">
-        <div class="chart-container">
-            <h3>Žebříček uživatelů podle bodů</h3>
-            <canvas id="rankingChart"></canvas>
-        </div>
-        <div class="chart-container">
-            <h3>Úspěšnost tipů (%)</h3>
-            <canvas id="successRateChart"></canvas>
-        </div>
-    </div>
-    
-    <div class="chart-container">
-        <h3>Podrobný žebříček uživatelů</h3>
-        <table class="user-table">
-            <thead>
-                <tr>
-                    <th title="Pořadí v žebříčku">#</th>
-                    <th title="Jméno uživatele">Uživatel</th>
-                    <th title="Celkový počet správně tipovaných zápasů">Celkem bodů</th>
-                    <th title="Základní část - počet správných/celek (úspěšnost)">Základní část</th>
-                    <th title="Playoff BO1 - počet správných/celek (úspěšnost)">Playoff BO1</th>
-                    <th title="Playoff série - počet správných/celek (úspěšnost)">Playoff série</th>
-                    <th title="Tabulka - počet správně tipovaných pozic">Tabulka (trefený pozice)</th>
-                    <th title="Počet lig, ve kterých uživatel tipuje">Ligy</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${userStats.map((user, index) => `
-                    <tr class="${user.username === username ? 'current-user' : ''}">
-                        <td><span class="rank-badge rank-${index + 1}">${index + 1}</span></td>
-                        <td><strong>${user.username}</strong>${user.username === username ? ' (ty)' : ''}</td>
-                        <td>${user.totalCorrect}</td>
-                        <td>${user.totalRegularCorrect}/${user.totalRegular} (${user.regularSuccessRate}%)</td>
-                        <td>${user.totalPlayoffBO1Correct}/${user.totalPlayoffBO1Tips} (${user.playoffBO1SuccessRate}%)</td>
-                        <td>${user.totalPlayoffBOSeriesCorrect}/${user.totalPlayoffBOSeriesTips} (${user.playoffBOSeriesSuccessRate}%)</td>
-                        <td>${user.totalTableCorrect}</td>
-                        <td>${user.leagueCount} lig</td>
-                    </tr>
-                `).join('')}
-            </tbody>
-        </table>
-    </div>
-    
-    ${currentUserStats ? `
-    <div class="chart-container" style="margin-top: 30px;">
-        <h3>Tvé statistiky - ${username} (pořadí: ${currentUserRank}.)</h3>
-        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;">
-            <div class="stat-card">
-                <h3>Celkem bodů</h3>
-                <p class="value">${currentUserStats.totalCorrect}</p>
-                <p class="label">${currentUserStats.totalCorrect}/${currentUserStats.totalTips} tipů</p>
+        <div class="charts-grid" style="margin-bottom: 24px;">
+            <div class="chart-container">
+                <h3>Žebříček podle bodů</h3>
+                <canvas id="rankingChart"></canvas>
             </div>
-            <div class="stat-card">
-                <h3>Základní část</h3>
-                <p class="value">${currentUserStats.totalRegularCorrect}/${currentUserStats.totalRegular}</p>
-                <p class="label">Úspěšnost: ${currentUserStats.regularSuccessRate}%</p>
-            </div>
-            <div class="stat-card">
-                <h3>Playoff BO1</h3>
-                <p class="value">${currentUserStats.totalPlayoffBO1Correct}/${currentUserStats.totalPlayoffBO1Tips}</p>
-                <p class="label">Úspěšnost: ${currentUserStats.playoffBO1SuccessRate}%</p>
-            </div>
-            <div class="stat-card">
-                <h3>Playoff série</h3>
-                <p class="value">${currentUserStats.totalPlayoffBOSeriesCorrect}/${currentUserStats.totalPlayoffBOSeriesTips}</p>
-                <p class="label">Úspěšnost: ${currentUserStats.playoffBOSeriesSuccessRate}%</p>
+            <div class="chart-container">
+                <h3>Úspěšnost tipování (%)</h3>
+                <canvas id="successRateChart"></canvas>
             </div>
         </div>
-        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-top: 20px;">
-            <div class="stat-card">
-                <h3>Tabulka správně</h3>
-                <p class="value">${currentUserStats.totalTableCorrect}</p>
-                <p class="label">Z ${currentUserStats.leagueCount} lig</p>
-            </div>
-            <div class="stat-card">
-                <h3>Celková úspěšnost</h3>
-                <p class="value">${currentUserStats.successRate}%</p>
-                <p class="label">Z ${currentUserStats.totalTips} tipů</p>
-            </div>
-        </div>
-    </div>
-    ` : ''}
-    
-    <div class="chart-container" style="margin-top: 30px;">
-        <h3>Nejdelší série tipů</h3>
-        <p style="color: #888; margin-bottom: 15px;">Nejdelší série správných a špatných tipů za sebou</p>
-        <table class="user-table">
-            <thead>
-                <tr>
-                    <th title="Pořadí v žebříčku">#</th>
-                    <th title="Jméno uživatele">Uživatel</th>
-                    <th title="Nejdelší série správných tipů za sebou">Nejdelší série výher</th>
-                    <th title="Nejdelší série špatných tipů za sebou">Nejdelší série proher</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${streakStats.map((user, index) => `
-                    <tr class="${user.username === username ? 'current-user' : ''}">
-                        <td><span class="rank-badge rank-${index + 1}">${index + 1}</span></td>
-                        <td><strong>${user.username}</strong>${user.username === username ? ' (ty)' : ''}</td>
-                        <td class="success-rate">${user.longestWinStreak}</td>
-                        <td>${user.longestLoseStreak}</td>
-                    </tr>
-                `).join('')}
-            </tbody>
-        </table>
-    </div>
-    
-    ${userComparison ? `
-    <div class="chart-container" style="margin-top: 30px;">
-        <h3>Porovnání s průměrem</h3>
-        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;">
-            <div class="stat-card">
-                <h3>Úspěšnost vs průměr</h3>
-                <p class="value ${userComparison.isAboveAverage ? 'success-rate' : ''}">${userComparison.successRateDiff > 0 ? '+' : ''}${userComparison.successRateDiff}%</p>
-                <p class="label">${userComparison.isAboveAverage ? 'Nad průměrem' : 'Pod průměrem'}</p>
-            </div>
-            <div class="stat-card">
-                <h3>Percentilové pořadí</h3>
-                <p class="value">${userComparison.rankPercentile}%</p>
-                <p class="label">Jsi lepší než ${userComparison.rankPercentile}% uživatelů</p>
-            </div>
-        </div>
-    </div>
-    ` : ''}
-    
-    ${detailedStats ? `
-    <div class="chart-container" style="margin-top: 30px;">
-        <h3>Detailní statistiky tipování</h3>
-        <h4>Základní část</h4>
-        <div style="display: grid; grid-template-columns: repeat(1, 1fr); gap: 20px; margin-bottom: 20px;">
-            <div class="stat-card">
-                <h3>Celkem zápasů</h3>
-                <p class="value">${detailedStats.regular.totalMatches}</p>
-                <p class="label">V základní části se tipuje jen vítěz zápasu</p>
-            </div>
-        </div>
-        <h4>Playoff BO1</h4>
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 20px;">
-            <div class="stat-card">
-                <h3>Průměrné skóre domácí</h3>
-                <p class="value">${detailedStats.playoffBO1.avgScoreHome}</p>
-                <p class="label">Z ${detailedStats.playoffBO1.totalMatches} zápasů</p>
-            </div>
-            <div class="stat-card">
-                <h3>Průměrné skóre hosté</h3>
-                <p class="value">${detailedStats.playoffBO1.avgScoreAway}</p>
-                <p class="label">Z ${detailedStats.playoffBO1.totalMatches} zápasů</p>
-            </div>
-            <div class="stat-card">
-                <h3>Průměrná odchylka</h3>
-                <p class="value">${detailedStats.playoffBO1.avgDeviation}</p>
-                <p class="label">Od skutečného výsledku</p>
-            </div>
-        </div>
-        <h4>Playoff série</h4>
-        <div style="display: grid; grid-template-columns: repeat(1, 1fr); gap: 20px;">
-            <div class="stat-card">
-                <h3>Celkem zápasů</h3>
-                <p class="value">${detailedStats.playoffSeries.totalMatches}</p>
-                <p class="label">V sériích se tipuje počet prohraných zápasů</p>
-            </div>
-        </div>
-    </div>
-    ` : ''}
-    
-    <div class="chart-container" style="margin-top: 30px;">
-        <h3>Statistiky podle lig</h3>
-        <p style="color: #888; margin-bottom: 15px;">Statistiky pro každou ligu zvlášť (úspěšnost uživatelů v dané lize)</p>
-        <table class="user-table">
-            <thead>
-                <tr>
-                    <th title="Název ligy">Liga</th>
-                    <th title="Počet uživatelů, kteří tipují v této lize">Uživatelů</th>
-                    <th title="Průměrná úspěšnost všech uživatelů v této lize">Průměrná úspěšnost</th>
-                    <th title="Celkový počet tipů v této lize">Celkem tipů</th>
-                    <th title="Uživatel s nejvyšší úspěšností v této lize">Nejlepší uživatel</th>
-                    <th title="Uživatel s nejnižší úspěšností v této lize">Nejhorší uživatel</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${Object.keys(leagueStats).map(league => `
+
+        <div class="chart-container" style="margin-bottom: 24px; overflow-x: auto;">
+            <h3>Podrobný žebříček uživatelů</h3>
+            <table class="modern-table stats-overview-table">
+                <thead>
                     <tr>
-                        <td><strong>${league}</strong></td>
-                        <td>${leagueStats[league].users}</td>
-                        <td class="success-rate">${leagueStats[league].avgSuccessRate}%</td>
-                        <td>${leagueStats[league].totalTips}</td>
-                        <td>${leagueStats[league].bestUser || '-'}</td>
-                        <td>${leagueStats[league].worstUser || '-'}</td>
+                        <th class="position">#</th>
+                        <th>Uživatel</th>
+                        <th>Celkem bodů</th>
+                        <th>Základní část</th>
+                        <th>Playoff BO1</th>
+                        <th>Playoff série</th>
+                        <th>Tabulka</th>
+                        <th>Aktivní ligy</th>
                     </tr>
-                `).join('')}
-            </tbody>
-        </table>
-    </div>
-
-    <div class="charts-grid" style="margin-top: 30px;">
-        <div class="chart-container">
-            <h3>Statistiky podle dnů v týdnu</h3>
-            <p style="color: #888; margin-bottom: 15px;">V jaké dny tipuješ lépe</p>
-            <canvas id="dayOfWeekChart"></canvas>
+                </thead>
+                <tbody>
+                    ${userStats.map((u, index) => `
+                        <tr class="${u.username === username ? 'current-user-row' : ''}">
+                            <td class="rank-cell" style="padding-left: 14px !important;">
+                                <span class="rank-badge ${index === 0 ? 'rank-1' : index === 1 ? 'rank-2' : index === 2 ? 'rank-3' : ''}" style="margin-left: 4px;">${index + 1}</span>
+                            </td>
+                            <td><strong>${u.username}</strong>${u.username === username ? ' <span style="color:var(--primary); font-size:11px;">(ty)</span>' : ''}</td>
+                            <td><span class="points-pill">${u.totalCorrect}</span></td>
+                            <td>${u.totalRegularCorrect}/${u.totalRegular} <small style="color:var(--text-dim)">(${u.regularSuccessRate}%)</small></td>
+                            <td>${u.totalPlayoffBO1Correct}/${u.totalPlayoffBO1Tips} <small style="color:var(--text-dim)">(${u.playoffBO1SuccessRate}%)</small></td>
+                            <td>${u.totalPlayoffBOSeriesCorrect}/${u.totalPlayoffBOSeriesTips} <small style="color:var(--text-dim)">(${u.playoffBOSeriesSuccessRate}%)</small></td>
+                            <td>${u.totalTableCorrect} b</td>
+                            <td>${u.leagueCount} lig</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
         </div>
 
-        <div class="chart-container">
-            <h3>Statistiky podle typu zápasu</h3>
-            <p style="color: #888; margin-bottom: 15px;">Rozdělení úspěšnosti podle typu zápasu (Základní část vs Playoff)</p>
-            <canvas id="matchTypeChart"></canvas>
+        <!-- Čistá a samostatná sekce pro Srdcovky a Kat týmy všech hráčů -->
+        <div class="chart-container" style="margin-bottom: 24px;">
+            <h3>❤️ Srdcovky a 🗡️ Kati podle lig</h3>
+            <p style="color: var(--text-dim); font-size: 12px; margin-bottom: 16px;">Přehled týmů, na které mají jednotliví hráči v daných ligách nejlepší a nejhorší úspěšnost tipů.</p>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px;">
+                ${userStats.map(u => {
+            const lKeys = Object.keys(u.leagueTeamStats || {});
+            if (lKeys.length === 0) return '';
+
+            return `
+                    <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 14px;">
+                        <div style="font-weight: 700; font-size: 14px; margin-bottom: 10px; color: var(--text-main); display: flex; align-items: center; justify-content: space-between;">
+                            <span>${u.username}</span>
+                            ${u.username === username ? '<span style="font-size: 10px; background: var(--primary); color: #fff; padding: 2px 6px; border-radius: 4px;">TY</span>' : ''}
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            ${lKeys.map(lKey => {
+                const st = u.leagueTeamStats[lKey];
+                return `
+                                <div style="background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px; font-size: 13px;">
+                                    <div style="font-weight: 700; color: var(--primary); margin-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px;">
+                                        ${lKey}
+                                    </div>
+                                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                                        <div style="color: var(--accent-green); word-break: break-word; line-height: 1.3;">
+                                            ❤️ <strong>Srdcovka:</strong> ${st.favorite.name} <span style="opacity:0.85; font-size:12px;">(${st.favorite.rate.toFixed(0)}%)</span>
+                                        </div>
+                                        <div style="color: var(--accent-red); word-break: break-word; line-height: 1.3;">
+                                            🗡️ <strong>Kat:</strong> ${st.kat.name} <span style="opacity:0.85; font-size:12px;">(${st.kat.rate.toFixed(0)}%)</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                `;
+            }).join('')}
+                        </div>
+                    </div>
+                    `;
+        }).join('')}
+            </div>
         </div>
 
-        <div class="chart-container">
-            <h3>Statistiky přesnosti tipů</h3>
-            <p style="color: #888; margin-bottom: 15px;">Jak přesné jsou tipy (přesně na skóre, o 1 gól, atd.)</p>
-            <canvas id="tipAccuracyChart"></canvas>
-        </div>
+        ${currentUserStats ? `
+        <div class="modern-stats-card">
+            <div class="stats-card-header">
+                <div class="stats-card-title">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    Tvé statistiky (${username}) — ${currentUserRank}. místo
+                </div>
+            </div>
+            <div class="user-stats-grid">
+                <div class="user-stat-box highlight">
+                    <span class="user-stat-label">Celkem bodů</span>
+                    <span class="user-stat-val">${currentUserStats.totalCorrect}</span>
+                    <span class="user-stat-sub">Z ${currentUserStats.totalTips} tipů</span>
+                </div>
+                <div class="user-stat-box">
+                    <span class="user-stat-label">Základní část</span>
+                    <span class="user-stat-val">${currentUserStats.totalRegularCorrect}/${currentUserStats.totalRegular}</span>
+                    <span class="user-stat-pct">${currentUserStats.regularSuccessRate}%</span>
+                </div>
+                <div class="user-stat-box">
+                    <span class="user-stat-label">Playoff BO1</span>
+                    <span class="user-stat-val">${currentUserStats.totalPlayoffBO1Correct}/${currentUserStats.totalPlayoffBO1Tips}</span>
+                    <span class="user-stat-pct">${currentUserStats.playoffBO1SuccessRate}%</span>
+                </div>
+                <div class="user-stat-box">
+                    <span class="user-stat-label">Playoff Série</span>
+                    <span class="user-stat-val">${currentUserStats.totalPlayoffBOSeriesCorrect}/${currentUserStats.totalPlayoffBOSeriesTips}</span>
+                    <span class="user-stat-pct">${currentUserStats.playoffBOSeriesSuccessRate}%</span>
+                </div>
+            </div>
 
-        <div class="chart-container">
-            <h3>Distribuce úspěšnosti</h3>
-            <p style="color: #888; margin-bottom: 15px;">Kolik uživatelů má jakou úspěšnost (tvá úspěšnost: ${currentUserStats?.successRate || 0}%)</p>
-            <canvas id="distributionChart"></canvas>
+            ${Object.keys(currentUserStats.leagueTeamStats || {}).length > 0 ? `
+            <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.08);">
+                <h4 style="margin-bottom: 12px; font-size:14px; color:var(--text-main);">Tvoje Srdcovky a Kati podle lig:</h4>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px;">
+                    ${Object.keys(currentUserStats.leagueTeamStats).map(lKey => {
+            const st = currentUserStats.leagueTeamStats[lKey];
+            return `
+                        <div class="user-stat-box favorite-team" style="height: auto; min-height: 80px; padding: 12px;">
+                            <span class="user-stat-label" style="font-weight:700; color:var(--primary); margin-bottom:4px;">${lKey}</span>
+                            <span class="user-stat-val" style="color:var(--accent-green); font-size:14px; line-height: 1.3; word-break: break-word;">❤️ ${st.favorite.name}</span>
+                            <span class="user-stat-sub" style="margin-top: 4px;">${st.favorite.rate.toFixed(0)}% (${st.favorite.correct}/${st.favorite.total})</span>
+                        </div>
+                        <div class="user-stat-box kat-team" style="height: auto; min-height: 80px; padding: 12px;">
+                            <span class="user-stat-label" style="font-weight:700; color:var(--primary); margin-bottom:4px;">${lKey}</span>
+                            <span class="user-stat-val" style="color:var(--accent-red); font-size:14px; line-height: 1.3; word-break: break-word;">🗡️ ${st.kat.name}</span>
+                            <span class="user-stat-sub" style="margin-top: 4px;">${st.kat.rate.toFixed(0)}% (${st.kat.correct}/${st.kat.total})</span>
+                        </div>
+                        `;
+        }).join('')}
+                </div>
+            </div>
+            ` : ''}
         </div>
-    </div>
+        ` : ''}
 
-    <div class="charts-grid" style="margin-top: 30px;">
-        <div class="chart-container">
-            <h3>Heatmapa úspěšnosti podle lig</h3>
-        <p style="color: #888; margin-bottom: 15px;">Matice zobrazující úspěšnost každého uživatele v každé lize</p>
-        <table class="user-table">
-            <thead>
-                <tr>
-                    <th title="Jméno uživatele">Uživatel</th>
-                    ${Array.from(allLeaguesInStats).map(league => `<th title="${league}">${league}</th>`).join('')}
-                </tr>
-            </thead>
-            <tbody>
-                ${userStats.map(user => `
-                    <tr class="${user.username === username ? 'current-user' : ''}">
-                        <td><strong>${user.username}</strong>${user.username === username ? ' (ty)' : ''}</td>
-                        ${Array.from(allLeaguesInStats).map(league => {
-                            const data = leagueHeatmapData[user.username]?.[league];
-                            if (!data) return '<td style="background-color: #333;">-</td>';
-                            const intensity = Math.min(data.successRate / 100, 1);
-                            const bgColor = `rgba(0, 212, 255, ${intensity * 0.8})`;
-                            return `<td style="background-color: ${bgColor};">${data.successRate}%</td>`;
-                        }).join('')}
+        ${sniperRankings.length > 0 ? `
+        <div class="chart-container" style="margin-top: 24px;">
+            <h3>🎯 Nejpřesnější střelec (Průměrná odchylka gólů u BO1)</h3>
+            <p style="color: var(--text-dim); font-size:12px; margin-bottom: 12px;">Čím nižší číslo, tím přesnější tipy skóre uživatel dává.</p>
+            <table class="modern-table">
+                <thead>
+                    <tr>
+                        <th style="width:40px;">#</th>
+                        <th>Uživatel</th>
+                        <th>Průměrná odchylka na zápas</th>
+                        <th>Hodnocených zápasů</th>
                     </tr>
-                `).join('')}
-            </tbody>
-        </table>
-    </div>
+                </thead>
+                <tbody>
+                    ${sniperRankings.map((u, i) => `
+                        <tr class="${u.username === username ? 'current-user-row' : ''}">
+                            <td style="text-align:center;">${i + 1}</td>
+                            <td><strong>${u.username}</strong></td>
+                            <td><span style="color: var(--accent-amber); font-weight:800;">± ${u.avgGoalDeviation} gólu</span></td>
+                            <td>${u.bo1EvaluatedCount} tipů</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+        ` : ''}
 
-        <div class="chart-container">
-            <h3>Porovnání úspěšnosti v ligách</h3>
-            <p style="color: #888; margin-bottom: 15px;">Srovnání úspěšnosti uživatelů v jednotlivých ligách</p>
-            <canvas id="leagueComparisonChart"></canvas>
+        <div class="charts-grid" style="margin-top:24px;">
+            <div class="chart-container">
+                <h3>Nejdelší série tipů</h3>
+                <table class="modern-table user-table">
+                    <thead>
+                        <tr>
+                            <th style="width:40px;">#</th>
+                            <th>Uživatel</th>
+                            <th>Série výher</th>
+                            <th>Série proher</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${streakStats.map((user, index) => `
+                            <tr class="${user.username === username ? 'current-user-row' : ''}">
+                                <td style="text-align:center;">${index + 1}</td>
+                                <td><strong>${user.username}</strong></td>
+                                <td><span style="color:var(--accent-green); font-weight:800;">🔥 ${user.longestWinStreak}</span></td>
+                                <td><span style="color:var(--accent-red); font-weight:800;">❄️ ${user.longestLoseStreak}</span></td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+
+            ${userComparison ? `
+            <div class="chart-container">
+                <h3>Porovnání s průměrem</h3>
+                <div class="user-stats-grid" style="grid-template-columns: 1fr 1fr; margin-top:20px;">
+                    <div class="user-stat-box ${userComparison.statusText === 'Nad průměrem' ? 'highlight' : ''}">
+                        <span class="user-stat-label">Úspěšnost vs průměr</span>
+                        <span class="user-stat-val" style="color: ${userComparison.statusText === 'Nad průměrem' ? 'var(--accent-green)' : userComparison.statusText === 'Pod průměrem' ? 'var(--accent-red)' : 'var(--accent-amber)'}">
+                            ${userComparison.successRateDiff > 0 ? '+' : ''}${userComparison.successRateDiff}%
+                        </span>
+                        <span class="user-stat-sub">${userComparison.statusText}</span>
+                    </div>
+                    <div class="user-stat-box">
+                        <span class="user-stat-label">Percentilové pořadí</span>
+                        <span class="user-stat-val" style="color:var(--primary);">${userComparison.rankPercentile}%</span>
+                        <span class="user-stat-sub">Jsi lepší než ${userComparison.rankPercentile}% hráčů</span>
+                    </div>
+                </div>
+            </div>
+            ` : ''}
         </div>
 
-        <div class="chart-container">
-            <h3>Trend výkonu v průběhu sezóny</h3>
-            <p style="color: #888; margin-bottom: 15px;">Klouzavý průměr úspěšnosti (okno 10 tipů)</p>
-            <canvas id="performanceTrendChart"></canvas>
+        <div class="chart-container" style="margin-top: 24px; overflow-x: auto;">
+            <h3>Statistiky podle lig</h3>
+            <table class="modern-table">
+                <thead>
+                    <tr>
+                        <th>Liga</th>
+                        <th>Hráčů</th>
+                        <th>Průměrná úspěšnost</th>
+                        <th>Celkem tipů</th>
+                        <th>Nejlepší tipér</th>
+                        <th>Nejhorší tipér</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${Object.keys(leagueStats).map(league => `
+                        <tr>
+                            <td><strong style="color:var(--primary);">${league}</strong></td>
+                            <td>${leagueStats[league].users}</td>
+                            <td><span class="user-stat-pct">${leagueStats[league].avgSuccessRate}%</span></td>
+                            <td>${leagueStats[league].totalTips}</td>
+                            <td><strong style="color:var(--accent-green);">${leagueStats[league].bestUser || '-'}</strong></td>
+                            <td><span style="color:var(--text-dim);">${leagueStats[league].worstUser || '-'}</span></td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
         </div>
 
-        <div class="chart-container">
-            <h3>Sezónní porovnání</h3>
-            <p style="color: #888; margin-bottom: 15px;">Jak se uživatel zlepšuje mezi sezónami</p>
-            <canvas id="seasonComparisonChart"></canvas>
+        <div class="charts-grid" style="margin-top: 24px;">
+            <div class="chart-container">
+                <h3>Statistiky podle dnů v týdnu</h3>
+                <canvas id="dayOfWeekChart"></canvas>
+            </div>
+
+            <div class="chart-container">
+                <h3>Statistiky podle typu zápasu</h3>
+                <canvas id="matchTypeChart"></canvas>
+            </div>
+
+            <div class="chart-container">
+                <h3>Přesnost skóre (Playoff BO1)</h3>
+                <canvas id="tipAccuracyChart"></canvas>
+            </div>
+
+            <div class="chart-container">
+                <h3>Distribuce úspěšnosti v komunitě</h3>
+                <canvas id="distributionChart"></canvas>
+            </div>
         </div>
 
-        <div class="chart-container">
-            <h3>Trendy v čase (úspěšnost podle měsíce)</h3>
-            <p style="color: var(--text-dim); margin-bottom: 15px;">Vývoj úspěšnosti v průběhu sezóny podle měsíců</p>
-            <canvas id="monthlyTrendChart"></canvas>
+        <div class="charts-grid" style="margin-top: 24px;">
+            <div class="chart-container" style="grid-column: 1 / -1;">
+                <h3>Heatmapa úspěšnosti v ligách</h3>
+                <div style="overflow-x:auto;">
+                    <table class="modern-table">
+                        <thead>
+                            <tr>
+                                <th>Uživatel</th>
+                                ${Array.from(allLeaguesInStats).map(league => `<th>${league}</th>`).join('')}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${userStats.map(user => `
+                                <tr class="${user.username === username ? 'current-user-row' : ''}">
+                                    <td><strong>${user.username}</strong></td>
+                                    ${Array.from(allLeaguesInStats).map(league => {
+            const data = leagueHeatmapData[user.username]?.[league];
+            if (!data) return '<td style="color:var(--text-dim);">-</td>';
+            const opacity = Math.min(Math.max(data.successRate / 100, 0.15), 0.85);
+            return `<td style="background-color: rgba(255, 85, 0, ${opacity}); font-weight:700;">${data.successRate}%</td>`;
+        }).join('')}
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <h3>Trend výkonu (Klouzavý průměr 10 zápasů)</h3>
+                <canvas id="performanceTrendChart"></canvas>
+            </div>
+
+            <div class="chart-container">
+                <h3>Sezónní porovnání</h3>
+                <canvas id="seasonComparisonChart"></canvas>
+            </div>
+
+            <div class="chart-container" style="grid-column: 1 / -1;">
+                <h3>Trendy v čase (úspěšnost podle měsíce)</h3>
+                <canvas id="monthlyTrendChart"></canvas>
+            </div>
         </div>
-    </div>
     </div>
 </main>
 
 <script>
-// Registrace chartjs-plugin-datalabels
 Chart.register(ChartDataLabels);
 
-    // Data pro grafy
-    const userStats = ${JSON.stringify(userStats)};
-    
-    // Graf žebříčku podle bodů
-    const rankingCtx = document.getElementById('rankingChart').getContext('2d');
-    new Chart(rankingCtx, {
-        type: 'bar',
-        data: {
-            labels: userStats.map(u => u.username),
-            datasets: [{
-                label: 'Celkem bodů',
-                data: userStats.map(u => u.totalCorrect),
-                backgroundColor: userStats.map(u => u.username === '${username}' ? 'rgba(255, 69, 0, 0.8)' : 'rgba(0, 212, 255, 0.6)'),
-                borderColor: userStats.map(u => u.username === '${username}' ? 'rgba(255, 69, 0, 1)' : 'rgba(0, 212, 255, 1)'),
-                borderWidth: 1
-            }]
+Chart.defaults.color = '#94a3b8';
+Chart.defaults.font.family = "'Plus Jakarta Sans', sans-serif";
+
+const userStats = ${JSON.stringify(userStats)};
+
+// 1. Ranking Chart
+new Chart(document.getElementById('rankingChart').getContext('2d'), {
+    type: 'bar',
+    data: {
+        labels: userStats.map(u => u.username),
+        datasets: [{
+            label: 'Celkem bodů',
+            data: userStats.map(u => u.totalCorrect),
+            backgroundColor: userStats.map(u => u.username === '${username}' ? 'rgba(255, 85, 0, 0.85)' : 'rgba(59, 130, 246, 0.5)'),
+            borderColor: userStats.map(u => u.username === '${username}' ? '#ff5500' : '#3b82f6'),
+            borderWidth: 1,
+            borderRadius: 4
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: { display: false },
+            datalabels: { display: false }
         },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    labels: { color: '#fff' }
-                },
-                datalabels: {
-                    display: false
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: { color: '#fff' },
-                    grid: { color: '#444' }
-                },
-                x: {
-                    ticks: { color: '#fff' },
-                    grid: { color: '#444' }
-                }
-            }
-        }
-    });
-    
-    // Graf úspěšnosti
-    const successRateCtx = document.getElementById('successRateChart').getContext('2d');
-    new Chart(successRateCtx, {
-        type: 'line',
-        data: {
-            labels: userStats.map(u => u.username),
-            datasets: [{
-                label: 'Úspěšnost (%)',
-                data: userStats.map(u => u.successRate),
-                borderColor: '#ff4500',
-                backgroundColor: 'rgba(255, 69, 0, 0.2)',
-                fill: true,
-                tension: 0.4
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    labels: { color: '#fff' }
-                },
-                datalabels: {
-                    display: false
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    max: 100,
-                    ticks: { 
-                        color: '#fff',
-                        callback: function(value) {
-                            return value + '%';
-                        }
-                    },
-                    grid: { color: '#444' }
-                },
-                x: {
-                    ticks: { color: '#fff' },
-                    grid: { color: '#444' }
-                }
-            }
-        }
-    });
-
-    // Graf statistik přesnosti tipů (pie chart)
-    const tipAccuracyCtx = document.getElementById('tipAccuracyChart').getContext('2d');
-    const tipAccuracyData = ${JSON.stringify(tipAccuracyStats)};
-    const tipAccuracyLabels = ['Přesně na skóre', 'O 1 gól', 'O 2 góly', 'O 3 góly', 'O více gólů'];
-    const tipAccuracyValues = [tipAccuracyData.exact, tipAccuracyData.offBy1, tipAccuracyData.offBy2, tipAccuracyData.offBy3, tipAccuracyData.offByMore];
-
-    new Chart(tipAccuracyCtx, {
-        type: 'pie',
-        data: {
-            labels: tipAccuracyLabels,
-            datasets: [{
-                data: tipAccuracyValues,
-                backgroundColor: [
-                    'rgba(0, 212, 255, 0.7)',
-                    'rgba(54, 162, 235, 0.7)',
-                    'rgba(255, 206, 86, 0.7)',
-                    'rgba(255, 99, 132, 0.7)',
-                    'rgba(153, 102, 255, 0.7)'
-                ],
-                borderColor: [
-                    'rgba(0, 212, 255, 1)',
-                    'rgba(54, 162, 235, 1)',
-                    'rgba(255, 206, 86, 1)',
-                    'rgba(255, 99, 132, 1)',
-                    'rgba(153, 102, 255, 1)'
-                ],
-                borderWidth: 1
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    position: 'bottom',
-                    labels: { color: '#fff' }
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                            const percentage = ((context.raw / total) * 100).toFixed(1);
-                            return context.label + ': ' + context.raw + ' (' + percentage + '%)';
-                        }
-                    }
-                },
-                datalabels: {
-                    display: true,
-                    formatter: (value, ctx) => {
-                        const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
-                        const percentage = ((value / total) * 100).toFixed(1);
-                        return percentage + '%';
-                    },
-                    color: '#fff',
-                    font: {
-                        weight: 'bold',
-                        size: 14
-                    }
-                }
-            }
-        }
-    });
-
-    // Graf porovnání úspěšnosti v ligách (grouped bar chart)
-    const leagueComparisonCtx = document.getElementById('leagueComparisonChart').getContext('2d');
-    const leagues = ${JSON.stringify(Array.from(allLeaguesInStats))};
-    const users = ${JSON.stringify(userStats.map(u => u.username))};
-    const leagueHeatmapData = ${JSON.stringify(leagueHeatmapData)};
-
-    const datasets = users.map((username, index) => {
-        const colors = [
-            'rgba(0, 212, 255, 0.7)',
-            'rgba(255, 99, 132, 0.7)',
-            'rgba(54, 162, 235, 0.7)',
-            'rgba(255, 206, 86, 0.7)',
-            'rgba(75, 192, 192, 0.7)',
-            'rgba(153, 102, 255, 0.7)'
-        ];
-        const color = colors[index % colors.length];
-
-        return {
-            label: username,
-            data: leagues.map(league => leagueHeatmapData[username]?.[league]?.successRate || 0),
-            backgroundColor: color,
-            borderColor: color.replace('0.7', '1'),
-            borderWidth: 1
-        };
-    });
-
-    new Chart(leagueComparisonCtx, {
-        type: 'bar',
-        data: {
-            labels: leagues,
-            datasets: datasets
-        },
-        options: {
-            responsive: true,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    max: 100,
-                    ticks: {
-                        color: '#fff',
-                        callback: function(value) {
-                            return value + '%';
-                        }
-                    },
-                    grid: { color: '#444' }
-                },
-                x: {
-                    ticks: { color: '#fff' },
-                    grid: { color: '#444' }
-                }
-            },
-            plugins: {
-                legend: {
-                    labels: { color: '#fff' }
-                },
-                datalabels: {
-                    display: false
-                }
-            }
-        }
-    });
-
-    // Graf distribuce úspěšnosti (bar chart)
-    const distributionCtx = document.getElementById('distributionChart').getContext('2d');
-    const distributionLabels = ${JSON.stringify(Object.keys(appStats.successRateDistribution))};
-    const distributionData = ${JSON.stringify(Object.values(appStats.successRateDistribution))};
-    const currentUserSuccessRate = ${currentUserStats?.successRate || 0};
-
-    // Najdeme index binu, kde se nachází uživatel
-    let currentUserBinIndex = -1;
-    for (let i = 0; i < distributionLabels.length; i++) {
-        const range = distributionLabels[i];
-        const min = parseInt(range.split('-')[0]);
-        const max = parseInt(range.split('-')[1]);
-        if (currentUserSuccessRate >= min && currentUserSuccessRate < max) {
-            currentUserBinIndex = i;
-            break;
+        scales: {
+            y: { beginAtZero: true, grid: { color: 'rgba(255, 255, 255, 0.05)' } },
+            x: { grid: { display: false } }
         }
     }
+});
 
-    const backgroundColors = distributionData.map((_, index) =>
-        index === currentUserBinIndex ? 'rgba(0, 212, 255, 0.8)' : 'rgba(100, 100, 100, 0.6)'
-    );
-
-    new Chart(distributionCtx, {
-        type: 'bar',
-        data: {
-            labels: distributionLabels,
-            datasets: [{
-                label: 'Počet uživatelů',
-                data: distributionData,
-                backgroundColor: backgroundColors,
-                borderColor: backgroundColors.map(color => color.replace('0.6', '1').replace('0.8', '1')),
-                borderWidth: 1
-            }]
+// 2. Success Rate Chart
+new Chart(document.getElementById('successRateChart').getContext('2d'), {
+    type: 'line',
+    data: {
+        labels: userStats.map(u => u.username),
+        datasets: [{
+            label: 'Úspěšnost (%)',
+            data: userStats.map(u => u.successRate),
+            borderColor: '#ff5500',
+            backgroundColor: 'rgba(255, 85, 0, 0.12)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 4
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: { display: false },
+            datalabels: { display: false }
         },
-        options: {
-            responsive: true,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: { color: '#fff' },
-                    grid: { color: '#444' }
-                },
-                x: {
-                    ticks: { color: '#fff' },
-                    grid: { color: '#444' }
-                }
-            },
-            plugins: {
-                legend: {
-                    labels: { color: '#fff' }
-                },
-                datalabels: {
-                    display: false
-                }
-            }
+        scales: {
+            y: { beginAtZero: true, max: 100, grid: { color: 'rgba(255, 255, 255, 0.05)' } },
+            x: { grid: { display: false } }
         }
-    });
-
-    // Graf trendu výkonu v průběhu sezóny (line chart)
-    const performanceTrendCtx = document.getElementById('performanceTrendChart').getContext('2d');
-    const performanceTrendData = ${JSON.stringify(performanceTrend)};
-
-    // Seskupení dat podle data a průměrná hodnota
-    const trendByDate = {};
-    performanceTrendData.forEach(point => {
-        const date = new Date(point.date).toISOString().slice(0, 10);
-        if (!trendByDate[date]) {
-            trendByDate[date] = { total: 0, count: 0 };
-        }
-        trendByDate[date].total += parseFloat(point.movingAverage);
-        trendByDate[date].count++;
-    });
-
-    const trendLabels = Object.keys(trendByDate).sort();
-    const trendValues = trendLabels.map(date => (trendByDate[date].total / trendByDate[date].count).toFixed(1));
-
-    new Chart(performanceTrendCtx, {
-        type: 'line',
-        data: {
-            labels: trendLabels,
-            datasets: [{
-                label: 'Klouzavý průměr úspěšnosti (%)',
-                data: trendValues,
-                borderColor: 'rgba(0, 212, 255, 1)',
-                backgroundColor: 'rgba(0, 212, 255, 0.1)',
-                borderWidth: 2,
-                fill: true,
-                tension: 0.4
-            }]
-        },
-        options: {
-            responsive: true,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    max: 100,
-                    ticks: {
-                        color: '#fff',
-                        callback: function(value) {
-                            return value + '%';
-                        }
-                    },
-                    grid: { color: '#444' }
-                },
-                x: {
-                    ticks: { color: '#fff' },
-                    grid: { color: '#444' }
-                }
-            },
-            plugins: {
-                legend: {
-                    labels: { color: '#fff' }
-                },
-                datalabels: {
-                    display: false
-                }
-            }
-        }
-    });
-
-    // Graf statistik podle dnů v týdnu (bar chart)
-    const dayOfWeekCtx = document.getElementById('dayOfWeekChart').getContext('2d');
-    const dayOfWeekLabels = ${JSON.stringify(Object.values(dayOfWeekStats).map(d => d.name))};
-    const dayOfWeekRates = ${JSON.stringify(Object.values(dayOfWeekStats).map(d => parseFloat(d.successRate)))};
-    const dayOfWeekTotals = ${JSON.stringify(Object.values(dayOfWeekStats).map(d => d.total))};
-
-    // Změna pořadí dnů: pondělí až neděle
-    const dayOrder = [1, 2, 3, 4, 5, 6, 0]; // Pondělí až Neděle
-    const orderedLabels = dayOrder.map(i => dayOfWeekLabels[i]);
-    const orderedRates = dayOrder.map(i => dayOfWeekRates[i]);
-    const orderedTotals = dayOrder.map(i => dayOfWeekTotals[i]);
-
-    new Chart(dayOfWeekCtx, {
-        type: 'bar',
-        data: {
-            labels: orderedLabels,
-            datasets: [{
-                label: 'Úspěšnost (%)',
-                data: orderedRates,
-                backgroundColor: orderedTotals.map(total => total > 0 ? 'rgba(0, 212, 255, 0.7)' : 'rgba(100, 100, 100, 0.3)'),
-                borderColor: orderedTotals.map(total => total > 0 ? 'rgba(0, 212, 255, 1)' : 'rgba(100, 100, 100, 0.5)'),
-                borderWidth: 1
-            }]
-        },
-        options: {
-            responsive: true,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    max: 100,
-                    ticks: {
-                        color: '#fff',
-                        callback: function(value) {
-                            return value + '%';
-                        }
-                    },
-                    grid: { color: '#444' }
-                },
-                x: {
-                    ticks: { color: '#fff' },
-                    grid: { color: '#444' }
-                }
-            },
-            plugins: {
-                legend: {
-                    labels: { color: '#fff' }
-                },
-                datalabels: {
-                    display: false
-                }
-            }
-        }
-    });
-
-    // Graf statistik podle typu zápasu (radar chart)
-    const matchTypeCtx = document.getElementById('matchTypeChart').getContext('2d');
-    new Chart(matchTypeCtx, {
-        type: 'radar',
-        data: {
-            labels: ['Základní část', 'Playoff BO1', 'Playoff série', 'Tipování tabulky'],
-            datasets: [{
-                label: 'Úspěšnost (%)',
-                data: [
-                    ${currentUserStats?.regularSuccessRate || 0},
-                    ${currentUserStats?.playoffBO1SuccessRate || 0},
-                    ${currentUserStats?.playoffBOSeriesSuccessRate || 0},
-                    ${currentUserStats?.tableSuccessRate || 0}
-                ],
-                backgroundColor: 'rgba(0, 212, 255, 0.2)',
-                borderColor: 'rgba(0, 212, 255, 1)',
-                borderWidth: 2,
-                pointBackgroundColor: 'rgba(0, 212, 255, 1)',
-                pointBorderColor: '#fff',
-                pointHoverBackgroundColor: '#fff',
-                pointHoverBorderColor: 'rgba(0, 212, 255, 1)'
-            }]
-        },
-        options: {
-            responsive: true,
-            scales: {
-                r: {
-                    beginAtZero: true,
-                    max: 100,
-                    ticks: {
-                        color: '#fff',
-                        backdropColor: 'transparent',
-                        callback: function(value) {
-                            return value + '%';
-                        }
-                    },
-                    grid: { color: '#444' },
-                    angleLines: { color: '#444' },
-                    pointLabels: { color: '#fff' }
-                }
-            },
-            plugins: {
-                legend: {
-                    labels: { color: '#fff' }
-                },
-                datalabels: {
-                    display: false
-                }
-            }
-        }
-    });
-
-    // Graf sezónního porovnání (line chart)
-    const seasonComparisonCtx = document.getElementById('seasonComparisonChart').getContext('2d');
-    const seasonComparisonData = ${JSON.stringify(seasonComparison)};
-    const seasonLabels = Object.keys(seasonComparisonData).sort();
-    const allUsersForSeasonComparison = ${JSON.stringify(allUsersForSeasonComparison)};
-
-    // Vytvoření datasetů pro každého uživatele
-    const seasonDatasets = [];
-    const colors = [
-        'rgba(0, 212, 255, 1)',
-        'rgba(255, 99, 132, 1)',
-        'rgba(54, 162, 235, 1)',
-        'rgba(255, 206, 86, 1)',
-        'rgba(75, 192, 192, 1)',
-        'rgba(153, 102, 255, 1)'
-    ];
-
-    let colorIndex = 0;
-    for (const user of allUsersForSeasonComparison) {
-        const userSeasonData = seasonLabels.map(season => {
-            return seasonComparisonData[season]?.users[user.username]?.successRate || 0;
-        });
-
-        seasonDatasets.push({
-            label: user.username,
-            data: userSeasonData,
-            borderColor: colors[colorIndex % colors.length],
-            backgroundColor: colors[colorIndex % colors.length].replace('1', '0.1'),
-            borderWidth: 2,
-            tension: 0.4
-        });
-        colorIndex++;
     }
+});
 
-    new Chart(seasonComparisonCtx, {
-        type: 'line',
-        data: {
-            labels: seasonLabels,
-            datasets: seasonDatasets
-        },
-        options: {
-            responsive: true,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    max: 100,
-                    ticks: {
-                        color: '#fff',
-                        callback: function(value) {
-                            return value + '%';
-                        }
-                    },
-                    grid: { color: '#444' }
-                },
-                x: {
-                    ticks: { color: '#fff' },
-                    grid: { color: '#444' }
-                }
-            },
-            plugins: {
-                legend: {
-                    labels: { color: '#fff' }
-                },
-                datalabels: {
-                    display: false
+// 3. Tip Accuracy
+const tipAccuracyData = ${JSON.stringify(tipAccuracyStats)};
+new Chart(document.getElementById('tipAccuracyChart').getContext('2d'), {
+    type: 'doughnut',
+    data: {
+        labels: ['Přesně skóre', 'O 1 gól', 'O 2 góly', 'O 3 góly', 'O 4+ gólů'],
+        datasets: [{
+            data: [tipAccuracyData.exact, tipAccuracyData.offBy1, tipAccuracyData.offBy2, tipAccuracyData.offBy3, tipAccuracyData.offByMore],
+            backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#64748b'],
+            borderWidth: 0
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: { position: 'bottom', labels: { boxWidth: 12 } },
+            datalabels: {
+                color: '#fff',
+                formatter: (val, ctx) => {
+                    const sum = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                    return sum > 0 ? ((val / sum) * 100).toFixed(0) + '%' : '';
                 }
             }
         }
-    });
+    }
+});
 
-    // Graf trendů v čase (úspěšnost podle měsíce - line chart)
-    const monthlyTrendCtx = document.getElementById('monthlyTrendChart').getContext('2d');
-    const monthlyStatsData = ${JSON.stringify(monthlyStats)};
-    const monthLabels = Object.keys(monthlyStatsData).sort();
-    const monthRates = monthLabels.map(month => parseFloat(monthlyStatsData[month].successRate));
+// 4. Distribution Chart
+const distributionLabels = ${JSON.stringify(Object.keys(appStats.successRateDistribution))};
+const distributionData = ${JSON.stringify(Object.values(appStats.successRateDistribution))};
+new Chart(document.getElementById('distributionChart').getContext('2d'), {
+    type: 'bar',
+    data: {
+        labels: distributionLabels,
+        datasets: [{
+            label: 'Počet hráčů',
+            data: distributionData,
+            backgroundColor: '#ff5500',
+            borderRadius: 4
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { display: false }, datalabels: { display: false } },
+        scales: {
+            y: { beginAtZero: true, grid: { color: 'rgba(255, 255, 255, 0.05)' } },
+            x: { grid: { display: false } }
+        }
+    }
+});
 
-    new Chart(monthlyTrendCtx, {
-        type: 'line',
-        data: {
-            labels: monthLabels,
-            datasets: [{
-                label: 'Úspěšnost (%)',
-                data: monthRates,
-                borderColor: 'rgba(0, 212, 255, 1)',
-                backgroundColor: 'rgba(0, 212, 255, 0.1)',
-                borderWidth: 2,
-                tension: 0.4,
-                fill: true
-            }]
-        },
-        options: {
-            responsive: true,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    max: 100,
-                    ticks: {
-                        color: '#fff',
-                        callback: function(value) {
-                            return value + '%';
-                        }
-                    },
-                    grid: { color: '#444' }
-                },
-                x: {
-                    ticks: { color: '#fff' },
-                    grid: { color: '#444' }
-                }
-            },
-            plugins: {
-                legend: {
-                    labels: { color: '#fff' }
-                },
-                datalabels: {
-                    display: false
-                }
+// 5. Moving Average / Trend
+const performanceTrendData = ${JSON.stringify(performanceTrend)};
+const trendByDate = {};
+performanceTrendData.forEach(p => {
+    const d = new Date(p.date).toISOString().slice(0, 10);
+    if (!trendByDate[d]) trendByDate[d] = { sum: 0, count: 0 };
+    trendByDate[d].sum += parseFloat(p.movingAverage);
+    trendByDate[d].count++;
+});
+const trendLabels = Object.keys(trendByDate).sort();
+const trendValues = trendLabels.map(d => (trendByDate[d].sum / trendByDate[d].count).toFixed(1));
+
+new Chart(document.getElementById('performanceTrendChart').getContext('2d'), {
+    type: 'line',
+    data: {
+        labels: trendLabels,
+        datasets: [{
+            label: 'Průměrná úspěšnost (%)',
+            data: trendValues,
+            borderColor: '#10b981',
+            backgroundColor: 'rgba(16, 185, 129, 0.12)',
+            fill: true,
+            tension: 0.3
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { display: false }, datalabels: { display: false } },
+        scales: {
+            y: { beginAtZero: true, max: 100, grid: { color: 'rgba(255, 255, 255, 0.05)' } },
+            x: { grid: { display: false } }
+        }
+    }
+});
+
+// 6. Day of Week Chart
+const dayOfWeekData = ${JSON.stringify(dayOfWeekStats)};
+const dayOrder = [1, 2, 3, 4, 5, 6, 0];
+new Chart(document.getElementById('dayOfWeekChart').getContext('2d'), {
+    type: 'bar',
+    data: {
+        labels: dayOrder.map(i => dayOfWeekData[i].name),
+        datasets: [{
+            label: 'Úspěšnost (%)',
+            data: dayOrder.map(i => parseFloat(dayOfWeekData[i].successRate)),
+            backgroundColor: '#3b82f6',
+            borderRadius: 4
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { display: false }, datalabels: { display: false } },
+        scales: {
+            y: { beginAtZero: true, max: 100, grid: { color: 'rgba(255, 255, 255, 0.05)' } },
+            x: { grid: { display: false } }
+        }
+    }
+});
+
+// 7. Radar Chart
+new Chart(document.getElementById('matchTypeChart').getContext('2d'), {
+    type: 'radar',
+    data: {
+        labels: ['Základní část', 'Playoff BO1', 'Playoff Série', 'Tabulka'],
+        datasets: [{
+            label: 'Úspěšnost (%)',
+            data: [
+                ${currentUserStats?.regularSuccessRate || 0},
+                ${currentUserStats?.playoffBO1SuccessRate || 0},
+                ${currentUserStats?.playoffBOSeriesSuccessRate || 0},
+                ${currentUserStats?.tableSuccessRate || 0}
+            ],
+            backgroundColor: 'rgba(255, 85, 0, 0.25)',
+            borderColor: '#ff5500',
+            pointBackgroundColor: '#ff5500'
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { display: false }, datalabels: { display: false } },
+        scales: {
+            r: {
+                beginAtZero: true,
+                max: 100,
+                grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                angleLines: { color: 'rgba(255, 255, 255, 0.1)' },
+                pointLabels: { color: '#f1f5f9' }
             }
         }
-    });
+    }
+});
 
-    // Fetch and display version
-    fetch('/api/version')
-        .then(res => res.json())
-        .then(data => {
-            const versionBadge = document.getElementById('current-version');
-            if (versionBadge) {
-                versionBadge.textContent = data.version;
-            }
-        })
-        .catch(err => console.error('Failed to fetch version:', err));
+// 8. Season Comparison Chart
+const seasonComparisonData = ${JSON.stringify(seasonComparison)};
+const seasonLabels = Object.keys(seasonComparisonData).sort();
+const colors = ['#ff5500', '#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899'];
+const seasonDatasets = userStats.map((u, i) => ({
+    label: u.username,
+    data: seasonLabels.map(s => seasonComparisonData[s]?.users[u.username]?.successRate || 0),
+    borderColor: colors[i % colors.length],
+    tension: 0.3
+}));
+
+new Chart(document.getElementById('seasonComparisonChart').getContext('2d'), {
+    type: 'line',
+    data: { labels: seasonLabels, datasets: seasonDatasets },
+    options: {
+        responsive: true,
+        plugins: { datalabels: { display: false } },
+        scales: {
+            y: { beginAtZero: true, max: 100, grid: { color: 'rgba(255, 255, 255, 0.05)' } },
+            x: { grid: { display: false } }
+        }
+    }
+});
+
+// 9. Monthly Trend Chart
+const monthlyStatsData = ${JSON.stringify(monthlyStats)};
+const monthLabels = Object.keys(monthlyStatsData).sort();
+new Chart(document.getElementById('monthlyTrendChart').getContext('2d'), {
+    type: 'line',
+    data: {
+        labels: monthLabels,
+        datasets: [{
+            label: 'Úspěšnost (%)',
+            data: monthLabels.map(m => parseFloat(monthlyStatsData[m].successRate)),
+            borderColor: '#f59e0b',
+            backgroundColor: 'rgba(245, 158, 11, 0.12)',
+            fill: true,
+            tension: 0.3
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { display: false }, datalabels: { display: false } },
+        scales: {
+            y: { beginAtZero: true, max: 100, grid: { color: 'rgba(255, 255, 255, 0.05)' } },
+            x: { grid: { display: false } }
+        }
+    }
+});
 </script>
-<script src="/js/version-notification.js"></script>
 </body>
 </html>`;
-        
+
         res.send(html);
     } catch (error) {
         console.error('Chyba při načítání statistik:', error);

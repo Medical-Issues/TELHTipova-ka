@@ -19,8 +19,8 @@ const { Users } = require('./utils/mongoDataAccess');
 
 // MongoDB připojení
 const { connectToDatabase } = require('./config/database');
-const {backupJsonFilesToGitHub} = require("./utils/githubBackup");
-const {restoreFromGitHub, fullRestoreFromGitHub} = require("./utils/githubRestore");
+const { backupJsonFilesToGitHub } = require("./utils/githubBackup");
+const { restoreFromGitHub, fullRestoreFromGitHub } = require("./utils/githubRestore");
 const app = express();
 
 // Nastavit debug mód pro všechny routy
@@ -30,7 +30,7 @@ app.locals.debugNoImages = DEBUG_NO_IMAGES;
 if (DEBUG_NO_IMAGES) {
     console.log('⚡ [DEBUG] DEBUG_NO_IMAGES je aktivní - stahování obrázků z GitHubu je vypnuté (použijí se již stažené lokální obrázky)');
 
-    // Injektovat pouze fixní plovoucí odznak (žádný posun layoutu ani mezera nad stránkou)
+    // Injektovat pouze fixní plovoucí odznak
     app.use((req, res, next) => {
         const originalSend = res.send;
         res.send = function (body) {
@@ -47,13 +47,13 @@ if (DEBUG_NO_IMAGES) {
     });
 }
 
-// Serve static files (CSS, images, etc.) - MUSÍ BÝT PRVNÍ!
-// CSS a JS z public
+// Serve static files (CSS, images, etc.)
+app.use(express.static(path.join(__dirname, 'public')));
 app.use('/css', express.static(path.join(__dirname, 'public', 'css')));
 app.use('/js', express.static(path.join(__dirname, 'public', 'js')));
-// Google Search Console ověření (přidej pod statické složky)
+
+// Google Search Console ověření
 app.get(/\/google.*\.html$/, (req, res) => {
-    // Získáme název souboru přímo z URL
     const fileName = req.path.replace(/^\//, '');
     const filePath = path.join(__dirname, 'public', fileName);
 
@@ -63,12 +63,13 @@ app.get(/\/google.*\.html$/, (req, res) => {
         res.status(404).send('Verification file not found');
     }
 });
+
 // Obrázky - zkusíme nejprve public/images, pak data/images
 app.use('/images', (req, res, next) => {
     const filename = req.path.replace(/^\//, '');
     const publicPath = path.join(__dirname, 'public', 'images', filename);
     const dataPath = path.join(__dirname, 'data', 'images', filename);
-    
+
     if (fs.existsSync(publicPath)) {
         return res.sendFile(publicPath);
     }
@@ -78,7 +79,7 @@ app.use('/images', (req, res, next) => {
     next();
 });
 
-// Service Worker file - musí být dostupný na kořenové cestě pro push notifikace
+// Service Worker file
 app.get('/sw.js', (req, res) => {
     const swPath = path.join(__dirname, 'public', 'sw.js');
     if (fs.existsSync(swPath)) {
@@ -89,7 +90,7 @@ app.get('/sw.js', (req, res) => {
     }
 });
 
-// Favicon endpoint - prohlížeče automaticky hledají /favicon.ico
+// Favicon endpoint
 app.get('/favicon.ico', (req, res) => {
     const logoPath = path.join(__dirname, 'data', 'images', 'logo.png');
     if (fs.existsSync(logoPath)) {
@@ -104,7 +105,7 @@ app.use('/logoteamu', (req, res, next) => {
     const filename = req.path.replace(/^\//, '');
     const dataPath = path.join(__dirname, 'data', 'images', filename);
     const publicPath = path.join(__dirname, 'public', 'images', filename);
-    
+
     if (fs.existsSync(dataPath)) {
         return res.sendFile(dataPath);
     }
@@ -120,7 +121,7 @@ app.use('/logoteamu', (req, res, next) => {
     next();
 });
 
-// Helmet-like security headers (bez balíčku)
+// Security headers s plnou podporou pro Google Fonts i CDNs (povoluje style-src-elem i font-src)
 app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
@@ -128,7 +129,14 @@ app.use((req, res, next) => {
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'");
+    res.setHeader('Content-Security-Policy',
+        "default-src 'self'; " +
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; " +
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+        "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+        "font-src 'self' https://fonts.gstatic.com; " +
+        "img-src 'self' data: blob:;"
+    );
     next();
 });
 
@@ -138,39 +146,30 @@ function generateCsrfToken() {
 }
 
 function csrfMiddleware(req, res, next) {
-    // Vytvořit token pokud neexistuje
     if (!req.session.csrfToken) {
         req.session.csrfToken = generateCsrfToken();
     }
-    
-    // Přidat token do res.locals pro EJS/views
+
     res.locals.csrfToken = req.session.csrfToken;
-    
-    // Přidat funkci pro vložení CSRF token do HTML
     res.locals.csrfField = `<input type="hidden" name="_csrf" value="${req.session.csrfToken}">`;
-    
-    // Kontrolovat POST/PUT/DELETE requesty - token je POVINNÝ
+
     if (['POST', 'PUT', 'DELETE'].includes(req.method)) {
         const token = req.body?._csrf || req.headers['x-csrf-token'] || req.query._csrf;
-        
-        // Token je povinný pro všechny modifikující requesty
+
         if (!token) {
             return res.status(403).json({ error: 'CSRF token missing' });
         }
-        
-        // Kontrola validity tokenu
+
         if (token !== req.session.csrfToken) {
             return res.status(403).json({ error: 'CSRF token invalid' });
         }
     }
-    
+
     next();
 }
-// Důvěřovat proxy hlavičkám (X-Forwarded-For) pro získání reálné IP klienta
+
 app.set('trust proxy', true);
 
-// Detekce jestli běžíme na produkčním serveru (Render) nebo lokálně
-// RENDER env var je nastaveno automaticky na Render.com, nikdy lokálně
 const isProductionServer = process.env.RENDER === 'true';
 
 const sessionStore = MongoStore.create({
@@ -180,18 +179,17 @@ const sessionStore = MongoStore.create({
     autoCreate: true
 });
 
-// Logování chyb session store pro debugování
 sessionStore.on('error', (err) => {
     console.error('❌ MongoDB Session Store Error:', err.message);
 });
 
 app.use(session({
     store: sessionStore,
-    secret: 'tajnyklic',
+    secret: process.env.SESSION_SECRET || 'tajnyklic',
     resave: false,
     saveUninitialized: true,
     cookie: {
-        maxAge: 1000 * 60 * 60 * 24 * 30,
+        maxAge: 1000 * 60 * 60 * 24 * 30, // 30 dní
         httpOnly: true,
         secure: isProductionServer,
         sameSite: 'lax'
@@ -199,14 +197,13 @@ app.use(session({
 }));
 
 // Body parser middleware
-app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
-app.use(bodyParser.json({ limit: '10mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
+app.use(bodyParser.json({ limit: '50mb' }));
 
 app.get('/health', (req, res) => {
-    Date.now();
     const uptime = process.uptime();
     const memoryUsage = process.memoryUsage();
-    
+
     res.status(200).json({
         status: 'OK',
         timestamp: new Date().toISOString(),
@@ -228,44 +225,26 @@ app.get('/health', (req, res) => {
     });
 });
 
-// DDOS ochrana ODSTRANĚNA - Render má vlastní ochranu
-
 // Keep-alive endpointy
 app.get('/wake', async (req, res) => {
     try {
         const startTime = Date.now();
-        
-        // 1. Připojení k databáze
-        const { connectToDatabase } = require('./config/database');
         const db = await connectToDatabase();
-        
-        // 2. Provést skutečnou operaci v databázi
         const collections = await db.listCollections().toArray();
-        
-        // 3. Více databázových operací pro meaningful activity
-        const operations = [];
-        
-        // Ping
-        operations.push(db.admin().ping());
-        
-        // List collections
-        operations.push(db.listCollections().toArray());
-        
-        // Zkusit číst z různých kolekcí
+        const operations = [db.admin().ping(), db.listCollections().toArray()];
+
         try {
             operations.push(db.collection('users').findOne({}));
             operations.push(db.collection('matches').findOne({}));
             operations.push(db.collection('ligy').findOne({}));
         } catch (e) {
-            // Ignorovat pokud kolekce neexistuje
             console.error('Chyba při přístupu k kolekcím v wake endpoint:', e);
         }
-        
-        // Zápis do log kolekce (pokud existuje) - pouze pro externí IP
+
         try {
             const clientIP = req.ip || req.connection.remoteAddress;
             const isLocalhost = clientIP === '::1' || clientIP === '127.0.0.1' || clientIP === 'localhost';
-            
+
             if (!isLocalhost) {
                 const logsCollection = db.collection('wake_logs');
                 await logsCollection.insertOne({
@@ -277,33 +256,27 @@ app.get('/wake', async (req, res) => {
                 });
             }
         } catch (logError) {
-            // Pokud kolekce neexistuje, ignorujeme chybu
             console.error('Chyba při zápisu do wake_logs:', logError);
         }
-        
-        // Čekat na všechny operace
+
         await Promise.all(operations);
-        
-        // 4. CPU aktivita - intenzivnější výpočet
+
         let result = 0;
         for (let i = 0; i < 500000; i++) {
             result += Math.sin(i) * Math.cos(i);
         }
-        
-        // 5. Memory operace
+
         const testArray = [];
         for (let i = 0; i < 10000; i++) {
             testArray.push(Math.random() * i);
         }
         testArray.sort();
-        
+
         const responseTime = Date.now() - startTime;
-        
-        // 6. Log do konzole
         console.log(`✅ Wake endpoint called at: ${new Date().toISOString()}, Response time: ${responseTime}ms, Collections: ${collections.length}`);
-        
-        res.json({ 
-            status: 'OK', 
+
+        res.json({
+            status: 'OK',
             message: 'Application is awake and active',
             timestamp: new Date().toISOString(),
             responseTime: responseTime,
@@ -311,11 +284,11 @@ app.get('/wake', async (req, res) => {
             computationResult: Math.round(result),
             memoryTest: testArray.length
         });
-        
+
     } catch (error) {
         console.error('❌ Wake endpoint error:', error);
-        res.status(500).json({ 
-            status: 'ERROR', 
+        res.status(500).json({
+            status: 'ERROR',
             message: 'Error keeping app awake',
             error: error.message,
             timestamp: new Date().toISOString()
@@ -323,63 +296,36 @@ app.get('/wake', async (req, res) => {
     }
 });
 
-// Další endpoint pro intenzivnější warm-up
 app.get('/warm', async (req, res) => {
     try {
         const startTime = Date.now();
-        
-        // 1. Připojení k databáze
-        const { connectToDatabase } = require('./config/database');
         const db = await connectToDatabase();
-        
-        // 2. Různé databázové operace
-        const operations = [];
-        
-        // Ping
-        operations.push(db.admin().ping());
-        
-        // List collections
-        operations.push(db.listCollections().toArray());
-        
-        // Zkusit číst z users kolekce
-        try {
-            operations.push(db.collection('users').findOne({}));
-        } catch (e) {
-            console.error('Chyba při čtení users kolekce:', e);
-            operations.push(Promise.resolve(null));
-        }
-        
-        // Zkusit číst z ligy kolekce
-        try {
-            operations.push(db.collection('ligy').findOne({}));
-        } catch (e) {
-            console.error('Chyba při čtení ligy kolekce:', e);
-            operations.push(Promise.resolve(null));
-        }
-        
-        // Čekat na všechny operace
+        const operations = [db.admin().ping(), db.listCollections().toArray()];
+
+        try { operations.push(db.collection('users').findOne({})); } catch (e) {}
+        try { operations.push(db.collection('ligy').findOne({})); } catch (e) {}
+
         await Promise.all(operations);
-        
-        // 3. CPU aktivita - jednoduchý výpočet
+
         let result = 0;
         for (let i = 0; i < 100000; i++) {
             result += Math.random();
         }
-        
+
         console.log(`🔥 Warm endpoint called at: ${new Date().toISOString()}, Response time: ${Date.now() - startTime}ms`);
-        
-        res.json({ 
-            status: 'WARM', 
+
+        res.json({
+            status: 'WARM',
             message: 'Application is fully warmed up',
             timestamp: new Date().toISOString(),
             responseTime: Date.now() - startTime,
             computationResult: result
         });
-        
+
     } catch (error) {
         console.error('❌ Warm endpoint error:', error);
-        res.status(500).json({ 
-            status: 'ERROR', 
+        res.status(500).json({
+            status: 'ERROR',
             message: 'Error warming up app',
             error: error.message,
             timestamp: new Date().toISOString()
@@ -387,7 +333,7 @@ app.get('/warm', async (req, res) => {
     }
 });
 
-// Admin endpoint pro manuální restore z GitHubu
+// Admin restore endpointy
 app.post('/admin/restore-from-github', async (req, res) => {
     const csrfToken = req.headers['x-csrf-token'] || req.body._csrf;
     if (!csrfToken || csrfToken !== req.session.csrfToken) {
@@ -415,7 +361,6 @@ app.post('/admin/restore-from-github', async (req, res) => {
     });
 });
 
-// Admin endpoint pro kompletní restore (JSON + obrázky) - pro nouzové případy
 app.post('/admin/full-restore-from-github', async (req, res) => {
     const csrfToken = req.headers['x-csrf-token'] || req.body._csrf;
     if (!csrfToken || csrfToken !== req.session.csrfToken) {
@@ -447,15 +392,12 @@ app.use('/auth', authRoutes);
 app.use('/health', healthRoutes);
 app.use('/security', securityRoutes);
 
-// Admin routy bez CSRF middleware (bude aplikováno v endpointu)
 app.use('/admin', express.json({ limit: '50mb' }), express.urlencoded({ extended: true, limit: '50mb' }), adminRoutes);
 
 app.use('/api', csrfMiddleware, versionRoutes);
-app.use('/', csrfMiddleware, userRoutes)
+app.use('/', csrfMiddleware, userRoutes);
 
-// API endpoint pro CSRF token
 app.get('/api/csrf-token', (req, res) => {
-    // Vygenerovat token pokud neexistuje (např. po odhlášení)
     if (!req.session.csrfToken) {
         req.session.csrfToken = generateCsrfToken();
     }
@@ -469,9 +411,7 @@ app.get('/api/vapid-public-key', (req, res) => {
     res.send(process.env.VAPID_PUBLIC_KEY);
 });
 
-// 2. Uložení odběru k uživateli
 app.post('/api/subscribe', async (req, res) => {
-    // 1. Kontrola přihlášení
     if (!req.session.user) {
         return res.status(401).json({ error: "Pro zapnutí notifikací musíš být přihlášen." });
     }
@@ -482,7 +422,6 @@ app.post('/api/subscribe', async (req, res) => {
     }
 
     const subscription = req.body;
-    // Základní validace dat z prohlížeče
     if (!subscription || !subscription.endpoint) {
         return res.status(400).json({ error: "Neplatná data odběru." });
     }
@@ -496,8 +435,6 @@ app.post('/api/subscribe', async (req, res) => {
         return res.status(500).json({ error: "Chyba databáze." });
     }
 
-    // --- KLÍČOVÁ ČÁST: VYČIŠTĚNÍ STARÝCH VAZEB ---
-    // Projdeme všechny uživatele a pokud někdo jiný používá tento prohlížeč (endpoint), smažeme mu ho
     users = users.map(u => {
         if (u.subscriptions) {
             u.subscriptions = u.subscriptions.filter(sub => sub.endpoint !== subscription.endpoint);
@@ -505,14 +442,12 @@ app.post('/api/subscribe', async (req, res) => {
         return u;
     });
 
-    // --- PŘIŘAZENÍ AKTUÁLNÍMU UŽIVATELI ---
     const userIndex = users.findIndex(u => u.username === req.session.user);
     if (userIndex !== -1) {
         if (!users[userIndex].subscriptions) {
             users[userIndex].subscriptions = [];
         }
 
-        // Přidáme nový odběr aktuálnímu uživateli
         users[userIndex].subscriptions.push(subscription);
 
         try {
@@ -547,9 +482,7 @@ app.post('/api/check-subscription', async (req, res) => {
 
         if (!user) return res.json({ belongsToMe: false });
 
-        // DŮLEŽITÉ: Kontrola v poli subscriptions
         const hasIt = user.subscriptions && user.subscriptions.some(s => s.endpoint === endpoint);
-
         res.json({ belongsToMe: !!hasIt });
     } catch (e) {
         console.error("Chyba check-subscription:", e);
@@ -557,7 +490,6 @@ app.post('/api/check-subscription', async (req, res) => {
     }
 });
 
-// Kontrola, jestli uživatel už má tento endpoint (používalo tvé staré user.js)
 app.post('/api/check-subscription-legacy', async (req, res) => {
     const { endpoint } = req.body;
     const users = await Users.findAll();
@@ -572,7 +504,6 @@ app.post('/api/check-subscription-legacy', async (req, res) => {
     res.json({ belongsToMe });
 });
 
-// Odhlášení z notifikací
 app.post('/api/unsubscribe', async (req, res) => {
     const { endpoint } = req.body;
 
@@ -591,12 +522,16 @@ app.post('/api/unsubscribe', async (req, res) => {
     res.json({ success: true });
 });
 
-// 404 Handler - Zachytí vše, co nebylo vyřešeno výše
+// 404 Handler
 app.use((req, res) => {
     res.status(404).send(`
         <!DOCTYPE html>
         <html lang="cs">
         <head>
+            <link rel="preconnect" href="https://fonts.googleapis.com">
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+            <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+            <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
             <title>Stránka nenalezena</title>
@@ -621,12 +556,49 @@ app.use((req, res) => {
     `);
 });
 
-// app.listen(...)
+// JEDNOTNÝ KEEP-ALIVE SYSTÉM
+function startUnifiedKeepAlive() {
+    const WAKE_URL = process.env.WAKE_URL || 'https://telhtipova-ka.onrender.com/wake';
+    console.log(`💓 Starting unified keep-alive system (every 45s), WAKE_URL: ${WAKE_URL}`);
+
+    const axios = require('axios');
+    let counter = 0;
+
+    setInterval(async () => {
+        counter++;
+        try {
+            const wakePromise = axios.get(WAKE_URL, {
+                timeout: 8000,
+                headers: {
+                    'User-Agent': 'Render-Keep-Alive',
+                    'Cache-Control': 'no-cache'
+                }
+            });
+
+            let dbPromise = Promise.resolve();
+            if (counter % 6 === 0) {
+                const { connectToDatabase } = require('./config/database');
+                dbPromise = connectToDatabase().then(db => db.admin().ping());
+            }
+
+            const [wakeResponse] = await Promise.all([wakePromise, dbPromise]);
+
+            if (counter % 10 === 0) {
+                console.log(`💓 Keep-alive #${counter}: wake=${wakeResponse.status}, db=${counter % 6 === 0 ? 'pinged' : 'skipped'}`);
+            }
+
+        } catch (error) {
+            console.error(`❌ Keep-alive #${counter} error:`, error.message);
+            if (error.response) {
+                console.error(`   Status: ${error.response.status}, URL: ${WAKE_URL}`);
+            }
+        }
+    }, 45 * 1000);
+}
+
 async function startServer() {
-    // Připojení k MongoDB
     await connectToDatabase();
 
-    // Automatický restore obrázků z GitHubu při startu
     if (DEBUG_NO_IMAGES) {
         console.log('⚡ [DEBUG] DEBUG_NO_IMAGES je aktivní -> Automatický restore obrázků z GitHubu přeskočen');
     } else if (process.env.GITHUB_TOKEN) {
@@ -642,81 +614,25 @@ async function startServer() {
     }
 
     app.listen(3000, () => {
-        console.log('Server běží.');
-        
-        // Spustit monitoring service po 10 sekundách
+        console.log('Server běží na portu 3000.');
+
         setTimeout(() => {
-            // Monitoring vypnut - unified keep-alive už zajišťuje probuzení
             console.log('🔄 Monitoring service skipped (unified keep-alive handles this)');
-            
-            // Spustit security monitoring po dalších 5 sekundách
             setTimeout(() => {
                 console.log('🔒 Security monitoring disabled - using Render protection');
-                
-                // Spustit jednotný keep-alive systém
                 startUnifiedKeepAlive();
             }, 5000);
         }, 10000);
     });
 
-    // Záloha každých 24 hodin
     setInterval(() => {
         console.log('⏰ Spouštím automatickou zálohu...');
         backupJsonFilesToGitHub();
-    }, 60*60*1000*24);
+    }, 60 * 60 * 1000 * 24);
 }
 
-// Export middleware pro použití v jiných souborech
-module.exports.csrfMiddleware = csrfMiddleware;
+startServer().catch(err => {
+    console.error('❌ Selhal start serveru:', err);
+});
 
-    // JEDNOTNÝ KEEP-ALIVE SYSTÉM - kombinuje všechny mechanismy
-    function startUnifiedKeepAlive() {
-        const WAKE_URL = process.env.WAKE_URL || 'https://telhtipova-ka.onrender.com/wake';
-        console.log(`💓 Starting unified keep-alive system (every 45s), WAKE_URL: ${WAKE_URL}`);
-        
-        const axios = require('axios');
-        let counter = 0;
-        
-        setInterval(async () => {
-            counter++;
-            new Date().toISOString();
-            try {
-                // 1. Externí HTTP wake - reálná aktivita pro Render (každých 45s)
-                const wakePromise = axios.get(WAKE_URL, {
-                    timeout: 8000,
-                    headers: {
-                        'User-Agent': 'Render-Keep-Alive',
-                        'Cache-Control': 'no-cache'
-                    }
-                });
-                
-                // 2. Interní MongoDB ping (každé 3 minuty = every 6th run)
-                let dbPromise = Promise.resolve();
-                if (counter % 6 === 0) {
-                    const { connectToDatabase } = require('./config/database');
-                    dbPromise = connectToDatabase().then(db => db.admin().ping());
-                }
-                
-                // Spustit paralelně
-                const [wakeResponse] = await Promise.all([wakePromise, dbPromise]);
-                
-                // Logovat jen každý 10. úspěšný běh
-                if (counter % 10 === 0) {
-                    console.log(`💓 Keep-alive #${counter}: wake=${wakeResponse.status}, db=${counter % 6 === 0 ? 'pinged' : 'skipped'}`);
-                }
-                
-            } catch (error) {
-                // Logovat každý error s detaily pro diagnostiku
-                console.error(`❌ Keep-alive #${counter} error:`, error.message);
-                if (error.response) {
-                    console.error(`   Status: ${error.response.status}, URL: ${WAKE_URL}`);
-                }
-            }
-        }, 45 * 1000); // Každých 45 sekund
-    }
-
-
-startServer().then(() => {});
-
-// Export middleware pro použití v jiných souborech
 module.exports.csrfMiddleware = csrfMiddleware;
