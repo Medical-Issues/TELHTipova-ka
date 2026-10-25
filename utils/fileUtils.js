@@ -1794,9 +1794,10 @@ async function prepareDashboardData(req, isHistory = false, isImageExporter = fa
 async function generateStatsHtml(username, currentUserStats, userStats, isRegularSeasonFinished) {
     if (!username) return ''; // Pokud není uživatel přihlášený, statistiky se neukazují
 
-    const statusStyle = isRegularSeasonFinished ? "color: var(--text-main); font-weight: 700;" : "color: var(--text-muted);";
+    const isTableEvaluated = currentUserStats?.tableCorrect > 0 || currentUserStats?.tableDeviation > 0;
 
     let html = `
+    <!-- 1. MOJE STATISTIKY -->
     <section class="user_stats modern-stats-card">
         <div class="stats-card-header">
             <div class="stats-card-title">
@@ -1807,36 +1808,44 @@ async function generateStatsHtml(username, currentUserStats, userStats, isRegula
         
         ${currentUserStats ? `
             <div class="user-stats-grid">
+                <!-- Zápasy box 1 -->
                 <div class="user-stat-box">
                     <div class="user-stat-label">Vyhodnocené zápasy</div>
                     <div class="user-stat-val">${currentUserStats.correct} <span class="user-stat-sub">/ ${currentUserStats.total}</span></div>
-                    <div class="user-stat-pct">${(currentUserStats.total > 0 ? (currentUserStats.correct / currentUserStats.total * 100).toFixed(1) : '0.0')}% úspěšnost</div>
+                    <div class="user-stat-pct">${(currentUserStats.total > 0 ? ((currentUserStats.correct / currentUserStats.total) * 100).toFixed(1) : '0.0')}% úspěšnost</div>
                 </div>
+                
+                <!-- Zápasy box 2 (Volitelný) -->
                 ${currentUserStats.total !== currentUserStats.maxFromTips ? `
                 <div class="user-stat-box">
                     <div class="user-stat-label">Z tipovaných zápasů</div>
                     <div class="user-stat-val">${currentUserStats.correct} <span class="user-stat-sub">/ ${currentUserStats.maxFromTips}</span></div>
-                    <div class="user-stat-pct">${(currentUserStats.maxFromTips > 0 ? (currentUserStats.correct / currentUserStats.maxFromTips * 100).toFixed(1) : '0.0')}% úspěšnost</div>
+                    <div class="user-stat-pct">${(currentUserStats.maxFromTips > 0 ? ((currentUserStats.correct / currentUserStats.maxFromTips) * 100).toFixed(1) : '0.0')}% úspěšnost</div>
                 </div>` : ''}
-                ${currentUserStats?.tableCorrect > 0 || currentUserStats?.tableDeviation > 0 ? `
-                <div class="user-stat-box highlight">
-                    <div class="user-stat-label">Tipovačka tabulky</div>
-                    <div class="user-stat-val">${currentUserStats?.tableCorrect} <span class="user-stat-sub">bodů</span></div>
-                    <div class="user-stat-pct">Odchylka: ${currentUserStats?.tableDeviation}</div>
-                </div>` : ''}
+
+                <!-- Tabulka ZČ Box 1: Body za přesné pozice -->
+                <div class="user-stat-box ${isTableEvaluated ? 'highlight' : ''}">
+                    <div class="user-stat-label">Tabulka ZČ — Pozice</div>
+                    <div class="user-stat-val">${isTableEvaluated ? currentUserStats.tableCorrect : '-'} <span class="user-stat-sub">bodů</span></div>
+                    <div class="user-stat-pct">${isTableEvaluated ? 'Přesné zásahy týmů' : 'Čeká na vyhodnocení'}</div>
+                </div>
+
+                <!-- Tabulka ZČ Box 2: Celková odchylka -->
+                <div class="user-stat-box ${isTableEvaluated ? 'highlight' : ''}">
+                    <div class="user-stat-label">Tabulka ZČ — Odchylka</div>
+                    <div class="user-stat-val">${isTableEvaluated ? currentUserStats.tableDeviation : '-'} <span class="user-stat-sub">b</span></div>
+                    <div class="user-stat-pct">${isTableEvaluated ? 'Celková chyba tipu (Méně = lépe)' : 'Čeká na vyhodnocení'}</div>
+                </div>
             </div>
         ` : `<p style="color: var(--text-dim); padding: 10px 0;">Nemáš pro tuto sezónu/ligu žádná data.</p>`}
-        
-        ${!(currentUserStats?.tableCorrect > 0 || currentUserStats?.tableDeviation > 0) ? `
-            <div style="font-size: 11px; color: var(--text-dim); margin-top: 8px;"><em>Tipovačka tabulky zatím nebyla vyhodnocena.</em></div>
-        ` : ''}
     </section>
     
+    <!-- 2. HLAVNÍ ŽEBŘÍČEK: ZÁPASY -->
     <section class="global_stats modern-stats-card" style="margin-top: 20px;">
         <div class="stats-card-header">
             <div class="stats-card-title">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
-                Statistiky všech tipérů
+                Statistiky zápasů (Živý žebříček)
             </div>
         </div>
         <div class="table-responsive-wrapper">
@@ -1846,35 +1855,29 @@ async function generateStatsHtml(username, currentUserStats, userStats, isRegula
                         <th class="position">Místo</th>
                         <th>Uživatel</th>
                         <th style="text-align: center;">Úspěšnost</th>
-                        <th style="text-align: center;">Body</th>
+                        <th style="text-align: center;">Body Zápasy</th>
                         <th style="text-align: center;">ZČ</th>
                         <th style="text-align: center;">PO</th>
-                        <th style="text-align: center;">Pozice</th>
-                        <th style="text-align: center;">Odchylka</th>
                     </tr>
                 </thead>
                 <tbody>`;
 
-    userStats.sort((a, b) => {
-        if (b.correct !== a.correct) return b.correct - a.correct;
-        if (b.tableCorrect !== a.tableCorrect) return b.tableCorrect - a.tableCorrect;
-        return a.tableDeviation - b.tableDeviation;
-    }).forEach((user, index) => {
+    // Řazení pro zápasový žebříček
+    const matchStatsList = [...userStats].sort((a, b) => b.correct - a.correct);
+
+    matchStatsList.forEach((user, index) => {
         const successRate = user.total > 0 ? ((user.correct / user.total) * 100).toFixed(1) : '0.0';
         const successRateOverall = user.maxFromTips > 0 ? ((user.correct / user.maxFromTips) * 100).toFixed(1) : '0.0';
-        const isTableEvaluated = user.tableCorrect > 0 || user.tableDeviation > 0;
         const isCurrent = user.username === username;
 
         html += `
             <tr class="${isCurrent ? 'current-user-row' : ''}">
                 <td class="rank-cell"><span class="rank-badge rank-${index + 1}">${index + 1}.</span></td>
                 <td><strong style="color: ${isCurrent ? 'var(--primary)' : '#fff'};">${user.username}${isCurrent ? ' (ty)' : ''}</strong></td>
-                <td class="numbers" style="color: var(--accent-green); font-weight: 700;">${successRateOverall}%${user.total !== user.maxFromTips ? `<span style="font-size:10px; color:var(--text-dim); margin-left:2px;">(${successRate}%)</span>` : ''}</td>
-                <td class="points numbers" style="text-align: center;"><span class="points-pill">${user.correct}</span></td>
-                <td class="numbers" style="text-align: center;">${user.totalRegular}</td>
-                <td class="numbers" style="text-align: center;">${user.totalPlayoff}</td>
-                <td class="numbers" style="text-align: center; ${statusStyle}">${isTableEvaluated ? user.tableCorrect : '-'}</td>
-                <td class="numbers" style="text-align: center; ${statusStyle}">${isTableEvaluated ? user.tableDeviation : '-'}</td>
+                <td class="numbers" style="text-align: center; color: var(--accent-green); font-weight: 700;">${successRateOverall}%${user.total !== user.maxFromTips ? `<span style="font-size:10px; color:var(--text-dim); margin-left:2px;">(${successRate}%)</span>` : ''}</td>
+                <td class="points numbers" style="text-align: center;"><span class="points-pill">${user.correct} b</span></td>
+                <td class="numbers" style="text-align: center;">${user.totalRegular ?? 0}</td>
+                <td class="numbers" style="text-align: center;">${user.totalPlayoff ?? 0}</td>
             </tr>`;
     });
 
@@ -1882,42 +1885,161 @@ async function generateStatsHtml(username, currentUserStats, userStats, isRegula
                 </tbody>
             </table>
         </div>
-        <div class="rules-grid" style="margin-top: 18px;">
-            <div class="rule-card">
-                <span>Za správný tip zápasu v ZČ</span>
-                <span class="pts-tag pts-green">+1 bod</span>
+    </section>
+
+    <!-- 3. DRUHÁ TABULKA: VYHODNOCENÍ TABULKY ZČ -->
+    <section class="global_stats modern-stats-card" style="margin-top: 20px;">
+        <div class="stats-card-header">
+            <div class="stats-card-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+                Vyhodnocení tipů na Celkovou Tabulku ZČ
             </div>
-            <div class="rule-card">
-                <span>Vítěz série PO (špatný počet zápasů)</span>
-                <span class="pts-tag pts-amber">+1 bod</span>
+        </div>
+        <div class="table-responsive-wrapper">
+            <table class="points-table stats-overview-table">
+                <thead>
+                    <tr>
+                        <th class="position">Místo</th>
+                        <th>Uživatel</th>
+                        <th style="text-align: center;">Body (Přesné pozice)</th>
+                        <th style="text-align: center;">Celková odchylka</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+
+    // Řazení pro Tipovačku tabulky: Nejdřív přesné body (b.tableCorrect - a.tableCorrect), pak odchylka (a.tableDeviation - b.tableDeviation)
+    const tableStatsList = [...userStats].sort((a, b) => {
+        if ((b.tableCorrect || 0) !== (a.tableCorrect || 0)) {
+            return (b.tableCorrect || 0) - (a.tableCorrect || 0);
+        }
+        return (a.tableDeviation || 0) - (b.tableDeviation || 0);
+    });
+
+    tableStatsList.forEach((user, index) => {
+        const isCurrent = user.username === username;
+        const hasEvaluated = user.tableCorrect > 0 || user.tableDeviation > 0;
+
+        html += `
+            <tr class="${isCurrent ? 'current-user-row' : ''}">
+                <td class="rank-cell"><span class="rank-badge rank-${index + 1}">${index + 1}.</span></td>
+                <td><strong style="color: ${isCurrent ? 'var(--primary)' : '#fff'};">${user.username}${isCurrent ? ' (ty)' : ''}</strong></td>
+                <td class="points numbers" style="text-align: center;">
+                    ${hasEvaluated ? `<span class="pts-pill pts-purple">+${user.tableCorrect || 0} b</span>` : '<span style="color:var(--text-dim);">-</span>'}
+                </td>
+                <td class="numbers" style="text-align: center; color: ${hasEvaluated ? 'var(--text-main)' : 'var(--text-dim)'}; font-weight: 600;">
+                    ${hasEvaluated ? `${user.tableDeviation} <span style="font-size:10px; color:var(--text-dim);">(chyba)</span>` : '-'}
+                </td>
+            </tr>`;
+    });
+
+    html += `
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- 4. PRAVIDLA BODODVÁNÍ -->
+    <section class="modern-stats-card" style="margin-top: 20px;">
+        <div class="scoring-rules-wrapper">
+            <!-- 1. PRAVIDLA PRO ZÁPASY -->
+            <div class="section-title" style="margin-bottom: 16px;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                Bodování zápasů
             </div>
-            <div class="rule-card">
-                <span>Vítěz série PO + přesný počet zápasů</span>
-                <span class="pts-tag pts-green">+3 body</span>
+
+            <div class="scoring-cards-grid" style="margin-bottom: 24px;">
+                <!-- Základní část -->
+                <div class="scoring-card">
+                    <div class="scoring-card-header">
+                        <span class="scoring-icon">🏒</span>
+                        <h4>Základní část</h4>
+                    </div>
+                    <ul class="scoring-list">
+                        <li>
+                            <span>Správný tip vítěze zápasu</span>
+                            <span class="pts-pill pts-blue">+1 b</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Playoff BO1 -->
+                <div class="scoring-card highlight-card">
+                    <div class="scoring-card-header">
+                        <span class="scoring-icon">🎯</span>
+                        <h4>Playoff — Zápas (BO1)</h4>
+                    </div>
+                    <ul class="scoring-list">
+                        <li>
+                            <span>Vítěz + přesné skóre</span>
+                            <span class="pts-pill pts-gold">+5 b</span>
+                        </li>
+                        <li>
+                            <span>Vítěz + odchylka 1 gól</span>
+                            <span class="pts-pill pts-green">+4 b</span>
+                        </li>
+                        <li>
+                            <span>Vítěz + odchylka 2 góly</span>
+                            <span class="pts-pill pts-amber">+3 b</span>
+                        </li>
+                        <li>
+                            <span>Vítěz + odchylka 3+ gólů</span>
+                            <span class="pts-pill pts-blue">+1 b</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Playoff Série -->
+                <div class="scoring-card">
+                    <div class="scoring-card-header">
+                        <span class="scoring-icon">🏆</span>
+                        <h4>Playoff — Série</h4>
+                    </div>
+                    <ul class="scoring-list">
+                        <li>
+                            <span>Vítěz série + přesné skóre zápasů</span>
+                            <span class="pts-pill pts-amber">+3 b</span>
+                        </li>
+                        <li>
+                            <span>Vítěz série (špatný počet zápasů)</span>
+                            <span class="pts-pill pts-blue">+1 b</span>
+                        </li>
+                    </ul>
+                </div>
             </div>
-            <div class="rule-card">
-                <span>Vítěz zápasu v PO + přesné skóre</span>
-                <span class="pts-tag pts-green">+5 bodů</span>
+
+            <!-- 2. PRAVIDLA PRO CELKOVOU TABULKU -->
+            <div class="section-title" style="margin-bottom: 16px;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+                Vyhodnocení celkové tabulky (Sezónní bonus)
             </div>
-            <div class="rule-card">
-                <span>Vítěz zápasu v PO (chyba o 1 gól)</span>
-                <span class="pts-tag pts-amber">+4 body</span>
-            </div>
-            <div class="rule-card">
-                <span>Vítěz zápasu v PO (chyba o 2 góly)</span>
-                <span class="pts-tag pts-amber">+3 body</span>
-            </div>
-            <div class="rule-card">
-                <span>Vítěz zápasu v PO (chyba o 3+ gólů)</span>
-                <span class="pts-tag pts-red">+1 bod</span>
-            </div>
-            <div class="rule-card">
-                <span>Přesná pozice v konečné tabulce</span>
-                <span class="pts-tag pts-blue">+1 bod</span>
-            </div>
-            <div class="rule-card">
-                <span>Odchylka tipu tabulky</span>
-                <span class="pts-tag pts-amber">Sčítá se (menší je lepší)</span>
+
+            <div class="table-scoring-container">
+                <div class="scoring-card table-card">
+                    <div class="scoring-card-header">
+                        <span class="scoring-icon">📊</span>
+                        <h4>Tip na konečné pořadí základní části</h4>
+                        <span class="season-badge">Vyhodnocuje se po ZČ</span>
+                    </div>
+                    <div class="table-scoring-content">
+                        <div class="table-score-item">
+                            <div class="table-score-info">
+                                <strong>Přesná pozice týmu v tabulce</strong>
+                                <small>Uděluje se za každý tým, jehož přesné konečné umístění uhádneš.</small>
+                            </div>
+                            <span class="pts-pill pts-purple">+1 b / tým</span>
+                        </div>
+                        
+                        <div class="table-score-divider"></div>
+
+                        <div class="table-score-item">
+                            <div class="table-score-info">
+                                <strong>Celková odchylka tipu (Kritérium pro remízy)</strong>
+                                <small>Součet absolutních rozdílů mezi tvým tipem a reálným umístěním všech týmů. Nižší číslo znamená přesnější tip.</small>
+                            </div>
+                            <span class="pts-pill pts-subtle">Sčítá se (Méně = Lépe)</span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </section>`;
@@ -2003,12 +2125,12 @@ async function generateLeftPanel(data, isHistory = false) {
             const opponentName = teams.find(opponent => Number(opponent.id) === Number(opponentId))?.name || 'Soupeř';
             const won = teamScore > opponentScore;
             const overtime = Boolean(match.result.ot);
-            const outcome = won ? overtime ? 'overtime-win' : 'win' : overtime ? 'overtime-loss' : 'loss';
-            const resultTitle = won ? overtime ? 'Výhra po prodloužení' : 'Výhra' : overtime ? 'Prohra po prodloužení' : 'Prohra';
+            const outcome = won ? (overtime ? 'overtime-win' : 'win') : (overtime ? 'overtime-loss' : 'loss');
+            const resultTitle = won ? (overtime ? 'Výhra po prodloužení' : 'Výhra') : (overtime ? 'Prohra po prodloužení' : 'Prohra');
 
             return {
                 outcome,
-                label: overtime ? won ? 'Vp' : 'Pp' : won ? 'V' : 'P',
+                label: overtime ? (won ? 'Vp' : 'Pp') : (won ? 'V' : 'P'),
                 overtime,
                 score: `${teamScore}:${opponentScore}`,
                 title: `vs ${opponentName} · ${teamScore}:${opponentScore} · ${resultTitle}`
@@ -2020,16 +2142,9 @@ async function generateLeftPanel(data, isHistory = false) {
     // ==========================================
     for (const group of sortedGroups) {
         const teamsInGroup = teamsByGroup[group];
-        
-        // Levý panel (tabulka základní části) VŽDY zobrazí tabulky
-        // Je to přehled reálného stavu, nezávisí na tipování
-        // Kontrola zamčení se týká POUZE pravého panelu (tipování)
-        // ŽÁDNÁ PODMÍNKA - levý panel vždy zobrazí
-        
-        // Pro levý panel vždy vyhodnotíme clinching pro přehled
+
         await evaluateRegularSeasonTable(selectedSeason, selectedLiga, group, true);
 
-        // ULOŽENÍ TÝMU DO CROSS-TABLE
         if (leagueObj.crossGroupTable && leagueObj.crossGroupPosition > 0) {
             const targetIndex = leagueObj.crossGroupPosition - 1;
             if (teamsInGroup[targetIndex]) crossGroupTeams.push(teamsInGroup[targetIndex]);
@@ -2050,7 +2165,7 @@ async function generateLeftPanel(data, isHistory = false) {
             <col style="width: 5%">
         </colgroup>
         <thead>
-        <tr><th scope="col" id="points-table-header" colspan="10"><h2>Týmy - ${selectedLiga} ${selectedSeason} - Základní část ${leagueObj?.isMultigroup ? `(Skupina ${group})` : ''}</h2></th></tr>
+        <tr><th scope="col" id="points-table-header" colspan="10"><h2>Týmy - ${selectedLiga} ${selectedSeason} Základní část ${leagueObj?.isMultigroup ? `(Skupina ${group})` : ''}</h2></th></tr>
         <tr id="points-table-second-header"><th class="position">Místo</th><th style="text-align: left; padding-left: 25px">Tým</th><th class="points">Body</th><th>Skóre</th><th>Rozdíl</th><th>Z</th><th>V</th><th>Vpp</th><th>Ppp</th><th>P</th></tr>
         </thead>
         <tbody>`;
@@ -2081,33 +2196,31 @@ async function generateLeftPanel(data, isHistory = false) {
         const thresholdPlayin = getMaxPotentialOfZone(totalAdvancing);
         let safetyPoints = (relegationLimit > 0 && safeZoneIndex >= 0 && sorted.length > safeZoneIndex) ? (sorted[safeZoneIndex].stats?.[selectedSeason]?.points || 0) : 0;
 
-        // Helper function to check head-to-head result between two teams
         const getHeadToHeadResult = (teamId1, teamId2) => {
-            // Pokud je priority goalDiff, nepoužíváme H2H
             if (leagueObj?.tiebreakerPriority === 'goalDiff') return null;
             if (!matches || !selectedLiga) return null;
             const directMatch = matches.find(m =>
-                m.season === selectedSeason && 
-                m.liga === selectedLiga && 
-                m.result && 
+                m.season === selectedSeason &&
+                m.liga === selectedLiga &&
+                m.result &&
                 !m.isPlayoff &&
                 ((Number(m.homeTeamId) === Number(teamId1) && Number(m.awayTeamId) === Number(teamId2)) ||
                     (Number(m.homeTeamId) === Number(teamId2) && Number(m.awayTeamId) === Number(teamId1)))
             );
             if (!directMatch) return null;
-            
+
             const isTeam1Home = Number(directMatch.homeTeamId) === Number(teamId1);
             let sH = directMatch.result?.scoreHome ?? directMatch.scoreHome ?? 0;
             let sA = directMatch.result?.scoreAway ?? directMatch.scoreAway ?? 0;
-            
+
             if (isTeam1Home) {
-                if (sH > sA) return 1; // team1 won
-                if (sA > sH) return -1; // team1 lost
-                return 0; // draw
+                if (sH > sA) return 1;
+                if (sA > sH) return -1;
+                return 0;
             } else {
-                if (sA > sH) return 1; // team1 won (as away)
-                if (sH > sA) return -1; // team1 lost (as away)
-                return 0; // draw
+                if (sA > sH) return 1;
+                if (sH > sA) return -1;
+                return 0;
             }
         };
 
@@ -2145,7 +2258,6 @@ async function generateLeftPanel(data, isHistory = false) {
                 else if (myMaxPoints === leaderPoints) {
                     if (myTie > 0 && leadTie > 0 && myTie > leadTie) canRise = false;
                     else if (remaining > 0) {
-                        // Check head-to-head if points would be equal
                         const h2hResult = getHeadToHeadResult(team.id, sorted[index - 1].id);
                         canRise = h2hResult !== -1;
                     }
@@ -2186,80 +2298,54 @@ async function generateLeftPanel(data, isHistory = false) {
                     else clinchedNeutral = true;
                 } else {
                     if (qfLimit > 0 && myPoints > thresholdQF) clinchedQF = true;
-                    // Pokud máme stejně bodů jako tým na QF hranici, ale vyhráli jsme head-to-head, máme jistotu QF
                     if (qfLimit > 0 && index >= qfLimit && myPoints === thresholdQF) {
                         const qfGatekeeperTeam = sorted[qfLimit - 1];
                         if (qfGatekeeperTeam) {
                             const h2hResult = getHeadToHeadResult(team.id, qfGatekeeperTeam.id);
-                            if (h2hResult === 1) {
-                                // Vyhráli jsme head-to-head proti týmu na QF hranici
-                                clinchedQF = true;
-                            }
+                            if (h2hResult === 1) clinchedQF = true;
                         }
                     }
-                    // Kaskádový mód: playin POUZE pokud není již clinched QF
                     if (!clinchedQF && totalAdvancing > 0 && (myPoints > thresholdPlayin || totalAdvancing >= sorted.length)) {
                         clinchedPlayin = true;
                     }
-                    // Pokud máme stejně bodů jako tým na playin hranici, ale vyhráli jsme head-to-head, máme jistotu playin
                     if (totalAdvancing > 0 && index >= totalAdvancing && myPoints === thresholdPlayin) {
                         const playinGatekeeperTeam = sorted[totalAdvancing - 1];
                         if (playinGatekeeperTeam) {
                             const h2hResult = getHeadToHeadResult(team.id, playinGatekeeperTeam.id);
-                            if (h2hResult === 1) {
-                                // Vyhráli jsme head-to-head proti týmu na playin hranici
-                                clinchedPlayin = true;
-                            }
+                            if (h2hResult === 1) clinchedPlayin = true;
                         }
                     }
-                    // Kaskádový mód: obarví neutral POUZE pokud už není clinched QF nebo playin
                     if (!clinchedQF && !clinchedPlayin) {
                         if (relegationLimit > 0 && myPoints > thresholdRelegation) clinchedNeutral = true;
                         else if (relegationLimit === 0) clinchedNeutral = true;
-                        // Pokud máme stejně bodů jako tým v relegation zóně, ale vyhráli jsme head-to-head, máme jistotu neutralu
                         if (relegationLimit > 0 && index <= safeZoneIndex && myPoints === thresholdRelegation) {
                             const relegationZoneTeam = sorted[safeZoneIndex + 1];
                             if (relegationZoneTeam) {
                                 const h2hResult = getHeadToHeadResult(team.id, relegationZoneTeam.id);
-                                if (h2hResult === 1) {
-                                    // Vyhráli jsme head-to-head proti týmu v relegation zóně
-                                    clinchedNeutral = true;
-                                }
+                                if (h2hResult === 1) clinchedNeutral = true;
                             }
                         }
                     }
                     if (relegationLimit > 0 && index > safeZoneIndex && myMaxPoints < safetyPoints) clinchedRelegation = true;
-                    // Pokud máme stejně bodů jako tým na safe zone, ale prohráli jsme head-to-head, tak je sestup jistý
                     if (relegationLimit > 0 && index > safeZoneIndex && myMaxPoints === safetyPoints) {
                         const safeZoneTeam = sorted[safeZoneIndex];
                         if (safeZoneTeam) {
                             const h2hResult = getHeadToHeadResult(team.id, safeZoneTeam.id);
-                            if (h2hResult === -1) {
-                                // Prohráli jsme head-to-head proti týmu na safe zone
-                                clinchedRelegation = true;
-                            }
+                            if (h2hResult === -1) clinchedRelegation = true;
                         }
                     }
-                    // Pokud máme stejně bodů jako tým na QF hranici, ale prohráli jsme head-to-head, nemůžeme postoupit do QF
                     if (qfLimit > 0 && index >= qfLimit && myMaxPoints === thresholdQF) {
                         const qfGatekeeperTeam = sorted[qfLimit - 1];
                         if (qfGatekeeperTeam) {
                             const h2hResult = getHeadToHeadResult(team.id, qfGatekeeperTeam.id);
-                            if (h2hResult === -1) {
-                                // Prohráli jsme head-to-head proti týmu na QF hranici
-                                clinchedQF = false;
-                            }
+                            if (h2hResult === -1) clinchedQF = false;
                         }
                     }
-                    // Pokud máme stejně bodů jako tým na playin hranici, ale prohráli jsme head-to-head, nemůžeme postoupit do playin
                     if (totalAdvancing > 0 && index >= totalAdvancing && myMaxPoints === thresholdPlayin) {
                         const playinGatekeeperTeam = sorted[totalAdvancing - 1];
                         if (playinGatekeeperTeam) {
                             const h2hResult = getHeadToHeadResult(team.id, playinGatekeeperTeam.id);
-                            if (h2hResult === -1) {
-                                // Prohráli jsme head-to-head proti týmu na playin hranici
-                                clinchedPlayin = false;
-                            }
+                            if (h2hResult === -1) clinchedPlayin = false;
                         }
                     }
                 }
@@ -2330,9 +2416,7 @@ async function generateLeftPanel(data, isHistory = false) {
             const tieB = bStats.tiebreaker || 0;
             if (tieB !== tieA) return tieA - tieB;
 
-            // Podle priority tiebreaker určíme pořadí kritérií
             if (leagueObj?.tiebreakerPriority === 'goalDiff') {
-                // Priorita: Celkové skóre před H2H
                 const sA = scores[a.id] || {gf:0, ga:0};
                 const sB = scores[b.id] || {gf:0, ga:0};
                 const diffA = sA.gf - sA.ga;
@@ -2340,7 +2424,6 @@ async function generateLeftPanel(data, isHistory = false) {
                 if (diffA !== diffB) return diffB - diffA;
                 if (sA.gf !== sB.gf) return sB.gf - sA.gf;
 
-                // H2H kontrola (jen pokud není goalDiff priority)
                 const directMatch = matches.find(m =>
                     m.season === selectedSeason && m.liga === selectedLiga && m.result && !m.isPlayoff &&
                     ((Number(m.homeTeamId) === Number(a.id) && Number(m.awayTeamId) === Number(b.id)) ||
@@ -2354,7 +2437,6 @@ async function generateLeftPanel(data, isHistory = false) {
                     else { if (sA > sH) return -1; if (sH > sA) return 1; }
                 }
             } else {
-                // Priorita: H2H před celkovým skórem (výchozí)
                 const sA = scores[a.id] || {gf:0, ga:0};
                 const sB = scores[b.id] || {gf:0, ga:0};
                 const diffA = sA.gf - sA.ga;
@@ -2484,11 +2566,9 @@ async function generateLeftPanel(data, isHistory = false) {
                     else cNeutralLocked = true;
                 } else {
                     if (cQfLimit > 0 && myPoints > cThresholdQF) cSafeQF = true;
-                    // Kaskádový mód: playin POUZE pokud není již clinched QF
                     if (!cSafeQF && cTotalAdvancing > 0 && (myPoints > cThresholdPlayin || cTotalAdvancing >= crossGroupTeams.length)) {
                         cSafePlayin = true;
                     }
-                    // Kaskádový mód: obarví neutral POUZE pokud už není clinched QF nebo playin
                     if (!cSafeQF && !cSafePlayin) {
                         if (cRelLimit > 0 && myPoints > cThresholdRelegation) cNeutralLocked = true;
                         else if (cRelLimit === 0) cNeutralLocked = true;
@@ -2534,7 +2614,7 @@ async function generateLeftPanel(data, isHistory = false) {
     html += `</div>`; // Ukončení divu regularTable
 
     // ==========================================
-    // 3. PLAYOFF TABULKA (NOVÝ AUTOMATICKÝ PAVOUK)
+    // 3. PLAYOFF TABULKA (PAVOUK)
     // ==========================================
     const format = leagueObj?.playoffFormat || 'none';
     const savedSlots = playoffData || {};
@@ -2542,20 +2622,19 @@ async function generateLeftPanel(data, isHistory = false) {
     async function getSeriesInfo(slotKey) {
         const seriesIdStr = savedSlots[slotKey];
 
-        // Pokud admin nevybral hotovou sérii, zjistíme, jestli nenaklikal čekající týmy
         if (!seriesIdStr) {
             const t1 = savedSlots[`${slotKey}_t1`];
             const t2 = savedSlots[`${slotKey}_t2`];
             if (t1 || t2) {
                 return {
-                    isWaiting: true, // Značka, že jde o čekací mezistav
+                    isWaiting: true,
                     home: t1 || 'TBD',
                     away: t2 || 'TBD',
                     scoreH: '-', scoreA: '-',
                     hWinner: false, aWinner: false
                 };
             }
-            return null; // Slot je úplně prázdný
+            return null;
         }
 
         const mId = parseInt(seriesIdStr.replace('series-', ''));
@@ -2593,13 +2672,10 @@ async function generateLeftPanel(data, isHistory = false) {
         const isFinished = homeWins || awayWins;
         const isOngoing = !isFinished && (scoreH > 0 || scoreA > 0);
 
-        // Výpočet seedingu (pořadí z tabulky základní části - nyní v rámci skupiny)
         const getTeamSeed = (teamId) => {
-            // 1. Najdeme aktuální tým, abychom znali jeho skupinu
             const currentTeam = teams.find(t => t.id === teamId);
             if (!currentTeam) return null;
 
-            // 2. Filtrujeme týmy ze stejné ligy A STEJNÉ SKUPINY
             const allTeamsInGroup = teams.filter(t => t.liga === selectedLiga && t.group === currentTeam.group);
 
             const sortedTeams = allTeamsInGroup.sort((a, b) => {
@@ -2613,7 +2689,6 @@ async function generateLeftPanel(data, isHistory = false) {
                 const tieB = bStats.tiebreaker || 0;
                 if (tieB !== tieA) return tieA - tieB;
 
-                // Podle priority tiebreaker určíme pořadí kritérií
                 if (leagueObj?.tiebreakerPriority === 'goalDiff') {
                     const sA = scores[a.id] || {gf: 0, ga: 0};
                     const sB = scores[b.id] || {gf: 0, ga: 0};
@@ -2692,7 +2767,6 @@ async function generateLeftPanel(data, isHistory = false) {
         const info = await getSeriesInfo(slotKey);
         const seriesId = `series-${slotKey}`;
 
-        // Zcela prázdný slot (TBD vs TBD)
         if (!info) {
             return `
             <div class="playoff-series waiting" ${extraStyle}>
@@ -2719,7 +2793,6 @@ async function generateLeftPanel(data, isHistory = false) {
             </div>`;
         }
 
-        // Čekající mezistav (např. Sparta vs TBD)
         if (info.isWaiting) {
             return `
             <div class="playoff-series waiting" onclick="togglePlayoffDropdown('${seriesId}')" ${extraStyle}>
@@ -2753,13 +2826,11 @@ async function generateLeftPanel(data, isHistory = false) {
             </div>`;
         }
 
-        // Klasický vyhodnocovaný zápas (Série)
         const isCompleted = info.isFinished;
         const isInProgress = info.isOngoing;
         const statusClass = isCompleted ? 'completed' : (isInProgress ? 'in-progress' : 'waiting');
         const statusIcon = isCompleted ? '🔥' : (isInProgress ? '⏳' : '⏸️');
-        
-        // Progress bar - zapnuto pro BO3 a výše
+
         const showProgressBar = info.bo > 1;
         const currentWins = Math.max(info.scoreH, info.scoreA);
         const progressPercent = info.winsNeeded > 0 ? (currentWins / info.winsNeeded) * 100 : 0;
@@ -2793,7 +2864,6 @@ async function generateLeftPanel(data, isHistory = false) {
         </div>`;
     }
 
-    // Nová funkce pro vykreslení jednotlivých zápasů v dropdownu
     async function renderPlayoffMatches(slotKey) {
         const seriesIdStr = savedSlots[slotKey];
         if (!seriesIdStr) return '<div class="playoff-match"><span style="color: #888;">Žádné zápasy</span></div>';
@@ -2807,7 +2877,6 @@ async function generateLeftPanel(data, isHistory = false) {
 
         let matchesHtml;
 
-        // BO1 speciální případ
         if (match.bo === 1) {
             const result = match.result;
             const winnerId = result ? (result.scoreHome > result.scoreAway ? match.homeTeamId : (result.scoreAway > result.scoreHome ? match.awayTeamId : null)) : null;
@@ -2819,7 +2888,6 @@ async function generateLeftPanel(data, isHistory = false) {
                     <span class="playoff-match-team ${winnerId === awayTeam.id ? 'winner' : ''}">${awayTeam.name}</span>
                 </div>`;
         }
-        // BO3+ případ s playedMatches
         else if (match.playedMatches && match.playedMatches.length > 0) {
             matchesHtml = match.playedMatches.map((pm) => {
                 const displayHome = pm.sideSwap ? awayTeam.name : homeTeam.name;
@@ -2828,8 +2896,7 @@ async function generateLeftPanel(data, isHistory = false) {
                 const displayScoreA = pm.sideSwap ? pm.scoreHome : pm.scoreAway;
                 const hWinner = (pm.scoreHome > pm.scoreAway && !pm.sideSwap) || (pm.scoreAway > pm.scoreHome && pm.sideSwap);
                 const aWinner = (pm.scoreAway > pm.scoreHome && !pm.sideSwap) || (pm.scoreHome > pm.scoreAway && pm.sideSwap);
-                
-                // PP/SN indikace
+
                 let otIndicator = '';
                 if (pm.ot) {
                     otIndicator = ' <span style="color: #ff9800; font-size: 0.65em;">p</span>';
@@ -2844,8 +2911,7 @@ async function generateLeftPanel(data, isHistory = false) {
                     </div>
                 </div>`;
             }).join('');
-        } 
-        // Jiný případ (čekající zápas)
+        }
         else {
             matchesHtml = `
             <div class="playoff-match">
@@ -2862,33 +2928,25 @@ async function generateLeftPanel(data, isHistory = false) {
 
     html += `<div class="playoff-bracket" id="playoffTablePreview" style="display:${tableMode === 'playoff' ? 'block' : 'none'};">`;
 
-    // Načtení šablony z MongoDB
     const allTemplates = await PlayoffTemplates.findAll();
     const currentTemplate = allTemplates?.[format] || {};
 
     if (currentTemplate && currentTemplate.columns) {
         html += `<h2 style="text-align:center; color:white; margin-bottom: 30px;">Playoff - ${selectedLiga} ${selectedSeason}</h2>`;
 
-        // Flex container - zarovnáno nahoru aby všechny sloupce začínaly stejně
         html += `<div style="display: flex; gap: 15px; justify-content: flex-start; align-items: center; overflow-x: auto; padding-bottom: 10px; scrollbar-width: thin; scrollbar-color: orangered #1a1a1a;">`;
 
         for (const col of currentTemplate.columns) {
-            // Podpora pro title2 (druhý titul pro sloupce s více zápasy)
             const hasTitle2 = col.title2 && col.slots.length === 2;
             const normalGap = col.gap || '20px';
 
-            // Pro title2: první box na úroveň druhého boxu v jiných sloupcích
-            // Transform posune celý sloupec dolů aby se zarovnání počítalo od prvního boxu
             const boxes = await Promise.all(col.slots.map((slotId, index) => {
                 if (hasTitle2 && index === 1) {
-                    // Druhý box 60px pod prvním
                     return renderBox(slotId, 'style="margin-top: 70px;"');
                 }
                 return renderBox(slotId, '');
             }));
 
-            // Pro title2 sloupce přidáme data-atribut pro JavaScript identifikaci
-            // Transform bude nastaven automaticky JS místo pevné hodnoty
             const dataAttr = hasTitle2 ? 'data-title2="true"' : '';
 
             html += `
@@ -2898,16 +2956,16 @@ async function generateLeftPanel(data, isHistory = false) {
                 ${hasTitle2 ? `<div class="playoff-column-title" style="margin-top: auto;">${col.title2}</div>` : `<div class="playoff-column-title">${col.title}</div>`}
             </div>`;
         }
-        
-        html += `</div>`; // Zavření flex kontejneru
+
+        html += `</div>`;
     } else {
         html += `<h2 style="text-align:center; color:gray; margin-bottom: 30px;">Pro ligu ${selectedLiga} není nastaven formát pavouka.</h2>`;
     }
 
-    html += `</div>`; // Zavření playoff-bracket
+    html += `</div>`;
 
     // ==========================================
-    // 4. PROGRESS BAR (Zobrazí se jen když NENÍ isHistory)
+    // 4. PROGRESS BAR
     // ==========================================
     if (!isHistory) {
         let filledMatches = matches.filter(m => m.result && m.isPlayoff === false && m.liga === selectedLiga && m.season === selectedSeason).length;
@@ -2937,9 +2995,6 @@ async function generateLeftPanel(data, isHistory = false) {
     // ==========================================
     html += await generateStatsHtml(username, currentUserStats, userStats, isRegularSeasonFinished);
 
-    // ==========================================
-    // DŮLEŽITÉ: UZAVŘENÍ LEVÉHO PANELU
-    // ==========================================
     html += `
     </div> </section> `;
 

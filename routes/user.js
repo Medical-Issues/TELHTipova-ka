@@ -1763,31 +1763,46 @@ ${await renderUserHeader({
             .catch(err => console.error('Nepodařilo se načíst verzi', err));
 
         function showUserHistory(username) {
-            const safeName = username.replace(/[^a-zA-Z0-9]/g, '_');
+    const safeName = username.replace(/[^a-zA-Z0-9]/g, '_');
 
-            document.querySelectorAll('.history-team-wrapper').forEach(wrapper => {
-                const activeItem = wrapper.querySelector('.user-' + safeName);
-                const parentBtn = wrapper.querySelector('.team-link');
-                if (!parentBtn) return;
+    document.querySelectorAll('.history-team-wrapper').forEach(wrapper => {
+        // 1. Najdeme skrytý span s informací o třídě (right-selected / wrong-selected)
+        const activeItem = wrapper.querySelector('span.history-item.user-' + safeName + ':not(.badge)');
+        const parentBtn = wrapper.querySelector('.team-link');
+        if (!parentBtn) return;
 
-                parentBtn.classList.remove('selected', 'right-selected', 'wrong-selected');
+        // Resetujeme předchozí výběry
+        parentBtn.classList.remove('selected', 'right-selected', 'wrong-selected');
 
-                if (activeItem) {
-                    const statusClass = activeItem.dataset.tdClass;
-                    if (statusClass) {
-                        parentBtn.classList.add('selected', statusClass);
-                    }
-                }
-            });
-
-            document.querySelectorAll('.history-score-wrapper').forEach(wrapper => {
-                wrapper.querySelectorAll('.history-score-item').forEach(el => el.style.display = 'none');
-                const activeScore = wrapper.querySelector('.user-' + safeName);
-                if (activeScore) {
-                    activeScore.style.display = 'flex';
-                }
-            });
+        // Pokud daný uživatel tipoval tento tým
+        if (activeItem) {
+            const statusClass = activeItem.dataset.tdClass;
+            if (statusClass) {
+                parentBtn.classList.add('selected', statusClass);
+            }
         }
+
+        // 2. Schováme VŠECHNY bodové odznaky v tomto týmu
+        wrapper.querySelectorAll('span.badge.history-item').forEach(badge => {
+            badge.style.display = 'none';
+        });
+
+        // 3. Zobrazíme POUZE bodový odznak nově vybraného uživatele
+        const activeBadge = wrapper.querySelector('span.badge.history-item.user-' + safeName);
+        if (activeBadge) {
+            activeBadge.style.display = 'inline-flex';
+        }
+    });
+
+    // 4. Přepnutí skóre pro Playoff
+    document.querySelectorAll('.history-score-wrapper').forEach(wrapper => {
+        wrapper.querySelectorAll('.history-score-item').forEach(el => el.style.display = 'none');
+        const activeScore = wrapper.querySelector('.user-' + safeName);
+        if (activeScore) {
+            activeScore.style.display = 'flex';
+        }
+    });
+}
 
         function toggleSeriesDetails(btn) {
             const details = btn.nextElementSibling;
@@ -1872,9 +1887,10 @@ ${await renderUserHeader({
                 }
 
                 // Badge s body pro ZČ (s mezerou od fajfky/textu)
-                const pointsBadgeHtml = (isSelected && !match.isPlayoff) ? `
+                // Místo staré podmínky (isSelected && !match.isPlayoff)
+                const pointsBadgeHtml = (!match.isPlayoff && isSelected) ? `
                     <span class="badge history-item user-${safeUser}" style="display:${isInitial ? 'inline-flex' : 'none'}; ${badgeStyle} font-weight: 800; padding: 2px 7px; border-radius: var(--radius-md); font-size: 11px; flex-shrink: 0; margin-left: 5px; margin-right: 5px;">
-                        ${earnedPoints > 0 ? `+${earnedPoints} b.` : '0 b.'}
+                    ${earnedPoints > 0 ? `+${earnedPoints} b.` : '0 b.'}
                     </span>
                 ` : '';
 
@@ -1947,15 +1963,15 @@ ${await renderUserHeader({
                 const isOvertimeOrShooting = match.result?.ot === true;
 
                 let homeCellItems = "", awayCellItems = "", scoreCellHTML = "";
-                let homeBadge = "", awayBadge = "";
                 let initHomeClass = "", initAwayClass = "";
 
                 usersWithTips.forEach(u => {
                     const homeRes = renderUserTip(u, match, 'home');
                     const awayRes = renderUserTip(u, match, 'away');
 
-                    homeCellItems += homeRes.html;
-                    awayCellItems += awayRes.html;
+                    // Přidáváme JAK skrytý element se stavem, TAK bodový badge pro VŠECHNY uživatele
+                    homeCellItems += homeRes.html + homeRes.pointsBadgeHtml;
+                    awayCellItems += awayRes.html + awayRes.pointsBadgeHtml;
 
                     if (match.isPlayoff) {
                         const scoreRes = renderUserTip(u, match, 'score');
@@ -1965,11 +1981,9 @@ ${await renderUserHeader({
                     if (u.username === initialUser) {
                         if (homeRes.isSelected) {
                             initHomeClass = homeRes.tdStatusClass;
-                            homeBadge = homeRes.pointsBadgeHtml;
                         }
                         if (awayRes.isSelected) {
                             initAwayClass = awayRes.tdStatusClass;
-                            awayBadge = awayRes.pointsBadgeHtml;
                         }
                     }
                 });
@@ -1978,7 +1992,6 @@ ${await renderUserHeader({
 <tr class="match-row simple-match-row">
     <td style="width: calc(45%);">
         <div class="history-team-wrapper">
-            ${homeCellItems}
             <div class="team-link home-btn ${initHomeClass ? 'selected ' + initHomeClass : ''}" style="cursor: default;">
                 <div class="team-info-row" style="display: flex; align-items: center; justify-content: space-between; width: 100%; min-width: 0;">
                     <!-- Levá strana: Logo a Název týmu -->
@@ -1986,9 +1999,9 @@ ${await renderUserHeader({
                         <div class="team-logo-small-wrap" style="flex-shrink: 0;"><img src="${homeLogoUrl}" alt=""></div>
                         <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${homeTeamName}</span>
                     </div>
-                    <!-- Pravá strana: Společný div pro odznaky (drží v jedné řadě) -->
+                    <!-- Pravá strana: Všechny připravené odznaky (drží v jedné řadě) -->
                     <div style="display: flex; align-items: center; gap: 5px; margin-left: auto; flex-shrink: 0; white-space: nowrap;">
-                        ${homeBadge}
+                        ${homeCellItems}
                     </div>
                 </div>
             </div>
@@ -2005,12 +2018,11 @@ ${await renderUserHeader({
     </td>
     <td style="width: calc(45%);">
         <div class="history-team-wrapper">
-            ${awayCellItems}
             <div class="team-link away-btn ${initAwayClass ? 'selected ' + initAwayClass : ''}" style="cursor: default;">
                 <div class="team-info-row" style="display: flex; align-items: center; justify-content: space-between; width: 100%; min-width: 0;">
-                    <!-- Levá strana u hostů: Společný div pro odznaky -->
+                    <!-- Levá strana u hostů: Všechny připravené odznaky -->
                     <div style="display: flex; align-items: center; gap: 5px; margin-right: auto; flex-shrink: 0; white-space: nowrap;">
-                        ${awayBadge}
+                        ${awayCellItems}
                     </div>
                     <!-- Pravá strana u hostů: Název týmu a Logo -->
                     <div style="display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden;">
