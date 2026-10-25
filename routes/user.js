@@ -3707,8 +3707,6 @@ router.get("/image-exporter", requireLogin, async (req, res) => {
         ? req.query.liga
         : (allowedLeagues.find(l => uniqueLeagues.includes(l)) || uniqueLeagues[0] || "Neurčeno");
     
-    const isPublicLeague = allowedLeagues.includes(selectedLiga);
-    
     // EXPORTER: Filtrování týmů podle vybrané ligy/sezóny v dropdownu (default: všechny)
     const exporterLiga = req.query.exporterLiga || "all";
     const exporterSeason = req.query.exporterSeason || "all";
@@ -3721,8 +3719,6 @@ router.get("/image-exporter", requireLogin, async (req, res) => {
         teamsList = teamsList.filter(t => t.season === exporterSeason);
     }
     
-    // CSS pro disabled tlačítka
-    const disabledStyle = "background-color: #555; color: #888; cursor: not-allowed; pointer-events: none;";
     let html = `<!DOCTYPE html>
 <html lang="cs">
 <head>
@@ -3975,7 +3971,10 @@ function updateExportFormatDescription() {
 async function loadGlobalExporterBranding() {
     try {
         const response = await fetch('/image-exporter/branding');
-        if (!response.ok) throw new Error('Společný branding se nepodařilo načíst.');
+        if (!response.ok) {
+            console.error('Společný branding se nepodařilo načíst.');
+            return;
+        }
         const settings = await response.json();
         if (!settings || Object.keys(settings).length === 0) return;
 
@@ -4025,7 +4024,11 @@ async function saveGlobalExporterBranding() {
             body: JSON.stringify(settings)
         });
         const result = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(result.error || 'Společný branding se nepodařilo uložit.');
+        if (!response.ok) {
+            console.error(result.error || 'Společný branding se nepodařilo uložit.');
+            status.textContent = result.error || 'Společný branding se nepodařilo uložit.';
+            return;
+        }
         status.textContent = 'Branding exportů a automatických notifikací je uložený.';
     } catch (error) {
         console.error('Společný branding se nepodařilo uložit.', error);
@@ -4371,7 +4374,10 @@ async function generateImage(type) {
 
     try {
         const form = document.getElementById(type + '-form');
-        if (!form) throw new Error('Formulář pro export nebyl nalezen.');
+        if (!form) {
+            console.error('Formulář pro export nebyl nalezen.');
+            return;
+        }
         const formData = new FormData(form);
         const data = Object.fromEntries(formData);
         data.type = type;
@@ -4396,7 +4402,8 @@ async function generateImage(type) {
         try {
             customImages = JSON.parse(localStorage.getItem('customExporterImages') || '{}');
         } catch (error) {
-            throw new Error('Uložené vlastní obrázky se nepodařilo načíst.');
+            console.error('Uložené vlastní obrázky se nepodařilo načíst.', error);
+            customImages = {};
         }
         ['customHomeLogo', 'customAwayLogo'].forEach(field => {
             const imageName = data[field];
@@ -4442,7 +4449,10 @@ async function generateImage(type) {
             preview.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         } else {
             const response = await res.json().catch(() => ({}));
-            throw new Error(response.error || 'Obrázek se nepodařilo vygenerovat.');
+            console.error(response.error || 'Obrázek se nepodařilo vygenerovat.');
+            errorMessage.textContent = response.error || 'Obrázek se nepodařilo vygenerovat.';
+            errorMessage.hidden = false;
+            return;
         }
     } catch (error) {
         console.error('Chyba při generování obrázku:', error);

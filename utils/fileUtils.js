@@ -3923,8 +3923,7 @@ async function createStatisticsImage(usersStats, title, withWatermark = true, cu
         ctx.fillStyle = 'rgba(255, 255, 255, 0.07)';
         ctx.fillRect(30, rowY + rowHeight - 1, width - 60, 1);
 
-        const positionColor = ['#f5c451', '#c3ccd8', '#cd8c60'][index] || '#aab4c3';
-        ctx.fillStyle = positionColor;
+        ctx.fillStyle = ['#f5c451', '#c3ccd8', '#cd8c60'][index] || '#aab4c3';
         ctx.font = 'bold 16px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
