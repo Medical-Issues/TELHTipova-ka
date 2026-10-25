@@ -6018,7 +6018,7 @@ router.get("/statistics", requireLogin, async (req, res) => {
 <link rel="preconnect" href="https://fonts.googleapis.com">
             <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
             <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
-            <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
+            <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
 <title>Statistiky – Tipovačka</title>
 <link rel="stylesheet" href="/css/modern-design.css" />
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -6613,7 +6613,11 @@ new Chart(document.getElementById('matchTypeChart').getContext('2d'), {
                 max: 100,
                 grid: { color: 'rgba(255, 255, 255, 0.1)' },
                 angleLines: { color: 'rgba(255, 255, 255, 0.1)' },
-                pointLabels: { color: '#f1f5f9' }
+                ticks: {
+                    color: '#94a3b8',
+                    backdropColor: 'transparent'
+                    },
+                pointLabels: { color: '#94a3b8' }
             }
         }
     }
