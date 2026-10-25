@@ -4,7 +4,49 @@ const fs = require('fs');
 const path = require('path');
 const { createCanvas, loadImage } = require('canvas');
 const { Users, Matches, Teams } = require('../utils/mongoDataAccess');
+const { Settings } = require('../utils/mongoDataAccess');
+const { drawBrandedBackground } = require('../utils/imageBranding');
 require('dotenv').config();
+
+async function getNotificationImageBranding() {
+    const collection = await Settings.getCollection();
+    const settings = await collection.findOne({});
+    return {
+        bgColor: '#1a1a1a',
+        accentColor: '#ff4500',
+        textColor: '#ffffff',
+        watermarkColor: '#888888',
+        watermarkText: 'Tipovačka',
+        ...(settings?.imageBranding || {})
+    };
+}
+
+async function drawNotificationBranding(ctx, width, height, settings) {
+    const { watermarkText, watermarkColor = '#888888', watermarkLogo } = settings;
+    const padding = 14;
+    let logo;
+    try {
+        logo = watermarkLogo && watermarkLogo.startsWith('data:image/')
+            ? await loadImage(Buffer.from(watermarkLogo.split(',')[1], 'base64'))
+            : await loadImage(path.join(__dirname, '../public/images/logo.png'));
+    } catch (error) {
+        console.error('[notificationService] Logo watermark se nepodařilo načíst:', error);
+    }
+
+    if (logo) {
+        const size = 34;
+        const scale = Math.min(size / logo.width, size / logo.height);
+        const logoWidth = logo.width * scale;
+        const logoHeight = logo.height * scale;
+        ctx.drawImage(logo, width - logoWidth - padding, height - logoHeight - padding, logoWidth, logoHeight);
+    }
+
+    ctx.fillStyle = watermarkColor;
+    ctx.font = '12px Arial';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(watermarkText || 'Tipovačka', padding, height - padding);
+}
 
 // --- NASTAVENÍ KLÍČŮ ---
 const publicVapidKey = process.env.VAPID_PUBLIC_KEY;
@@ -94,13 +136,12 @@ async function processCustomImageForNotification(imageUrl) {
         // Vytvořit canvas s paddingem
         const canvas = createCanvas(canvasWidth, canvasHeight);
         const ctx = canvas.getContext('2d');
-        
-        // Vyplnit pozadí tmavou barvou
-        ctx.fillStyle = '#1a1a1a';
-        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+        const branding = await getNotificationImageBranding();
+        await drawBrandedBackground(ctx, canvasWidth, canvasHeight, branding);
         
         // Vykreslit obrázek uprostřed
         ctx.drawImage(img, drawX, drawY, imgWidth, imgHeight);
+        await drawNotificationBranding(ctx, canvasWidth, canvasHeight, branding);
         
         // Uložit výsledek
         const outDir = path.join(process.cwd(), 'public/images/notifications');
@@ -138,16 +179,12 @@ async function createVersusImage(homeTeam, awayTeam, matchId, scoreHome = null, 
     const width = 800; const height = 500;
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext('2d');
+    const branding = await getNotificationImageBranding();
 
-    // 1. POZADÍ - Moderní tmavý gradient
-    const grad = ctx.createLinearGradient(0, 0, 0, height);
-    grad.addColorStop(0, '#1a1a1a');
-    grad.addColorStop(1, '#000000');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, width, height);
+    await drawBrandedBackground(ctx, width, height, branding);
 
     // 2. DEKORACE - Oranžové dynamické linky
-    ctx.strokeStyle = 'rgba(255, 69, 0, 0.15)';
+    ctx.strokeStyle = branding.accentColor + '26';
     ctx.lineWidth = 3;
     for (let i = -100; i < width; i += 40) {
         ctx.beginPath();
@@ -217,8 +254,9 @@ async function createVersusImage(homeTeam, awayTeam, matchId, scoreHome = null, 
     };
 
     // Barvy týmů: domácí = oranžová, hosté = modrá
-    const homeColor = '#ff4500';
+    const homeColor = branding.accentColor;
     const awayColor = '#0064ff';
+    const textColor = branding.textColor || '#ffffff';
 
     await drawLogo(homeTeam, 40, 60, homeColor, 200);   // Domácí vlevo s oranžovým podsvícením
     await drawLogo(awayTeam, 560, 60, awayColor, 200);  // Hosté vpravo s modrým podsvícením
@@ -235,16 +273,16 @@ async function createVersusImage(homeTeam, awayTeam, matchId, scoreHome = null, 
     ctx.beginPath();
     ctx.roundRect(width/2 - 100, height/2 - 60, 200, 120, 20);
     ctx.fill();
-    ctx.strokeStyle = 'rgba(255, 69, 0, 0.5)';
+    ctx.strokeStyle = branding.accentColor + '80';
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    ctx.shadowColor = 'rgba(255, 69, 0, 0.5)';
+    ctx.shadowColor = branding.accentColor + '80';
     ctx.shadowBlur = 10;
 
     if (isResult) {
         // Vykreslení SKÓRE
-        ctx.fillStyle = '#ffffff';
+        ctx.fillStyle = textColor;
         ctx.font = 'bold 90px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -255,7 +293,7 @@ async function createVersusImage(homeTeam, awayTeam, matchId, scoreHome = null, 
 
         // Pokud je zápas po prodloužení/nájezdech, vykreslíme "pp/sn" menším písmem vpravo
         if (ot) {
-            ctx.fillStyle = '#ff4500'; // Oranžová barva pro dodatečný text
+            ctx.fillStyle = branding.accentColor;
             ctx.font = 'bold 24px Arial'; // Menší velikost písma
             ctx.textAlign = 'left'; // Zarovnání vlevo, aby se text rozšiřoval doprava
             ctx.textBaseline = 'middle';
@@ -263,14 +301,14 @@ async function createVersusImage(homeTeam, awayTeam, matchId, scoreHome = null, 
             ctx.fillText('pp/sn', width / 2 + 105, height / 2 + 5);
         }
 
-        ctx.fillStyle = '#ff4500';
+        ctx.fillStyle = branding.accentColor;
         ctx.font = 'bold 20px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('KONEČNÝ VÝSLEDEK', width / 2, height / 2 + 85);
     } else {
         // Vykreslení VS - lepší centrování
-        ctx.fillStyle = '#ff4500';
+        ctx.fillStyle = branding.accentColor;
         ctx.font = 'bold 100px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -312,7 +350,7 @@ async function createVersusImage(homeTeam, awayTeam, matchId, scoreHome = null, 
             ctx.stroke();
 
             // Skóre se zobrazuje tak jak je v databázi - z pohledu domácího týmu v daném zápase
-            ctx.fillStyle = '#ffffff';
+            ctx.fillStyle = textColor;
             ctx.font = 'bold 18px Arial';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
@@ -323,12 +361,14 @@ async function createVersusImage(homeTeam, awayTeam, matchId, scoreHome = null, 
         // Stav série pod boxy
         const seriesWinsH = seriesMatches.filter(m => m.sideSwap ? m.scoreAway > m.scoreHome : m.scoreHome > m.scoreAway).length;
         const seriesWinsA = seriesMatches.filter(m => m.sideSwap ? m.scoreHome > m.scoreAway : m.scoreAway > m.scoreHome).length;
-        ctx.fillStyle = '#ff4500';
+        ctx.fillStyle = branding.accentColor;
         ctx.font = 'bold 18px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(`Stav série: ${seriesWinsH}:${seriesWinsA}`, width / 2, startY + boxHeight + 25);
     }
+
+    await drawNotificationBranding(ctx, width, height, branding);
 
     let buffer;
     try {
@@ -371,173 +411,131 @@ async function createVersusImageForExport(homeTeam, awayTeam, customSettings = {
     const ctx = canvas.getContext('2d');
 
     // Custom nastavení barev
-    const bgColor = customSettings.bgColor || '#1a1a1a';
     const accentColor = customSettings.accentColor || '#ff4500';
+    const textColor = customSettings.textColor || '#ffffff';
     const customHomeLogo = customSettings.customHomeLogo || null;
     const customAwayLogo = customSettings.customAwayLogo || null;
-
-    const grad = ctx.createLinearGradient(0, 0, 0, height);
-    grad.addColorStop(0, bgColor);
-    grad.addColorStop(1, '#000000');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, width, height);
-
-    ctx.strokeStyle = accentColor + '26'; // 15% opacity
-    ctx.lineWidth = 3;
-    for (let i = -100; i < width; i += 40) {
-        ctx.beginPath();
-        ctx.moveTo(i, 0);
-        ctx.lineTo(i + 200, height);
-        ctx.stroke();
-    }
-
-    const drawLogo = async (team, teamColor, isLeft, customLogoData = null) => {
-        const logoName = team?.logo;
-        const teamName = team?.name || '???';
-        const leagueName = team?.liga || '';
-        const isCustom = team?.isCustom || false;
-        const logoHeight = 450;
-        const visibleWidth = 220;
-        const y = (height - logoHeight) / 2;
-
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-        ctx.shadowBlur = 20;
-        ctx.shadowOffsetX = 5;
-        ctx.shadowOffsetY = 10;
-
-        const offset = 0;
-        const visibleX = isLeft ? offset : 800 - offset - visibleWidth;
-
-        ctx.fillStyle = teamColor + '40';
-        ctx.beginPath();
-        ctx.roundRect(visibleX - 10, y - 10, visibleWidth + 20, logoHeight + 20, 20);
-        ctx.fill();
-
-        ctx.strokeStyle = teamColor;
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.roundRect(visibleX - 10, y - 10, visibleWidth + 20, logoHeight + 20, 20);
-        ctx.stroke();
-
-        // Použít custom logo pokud je k dispozici
-        if (customLogoData && customLogoData.startsWith('data:image')) {
-            try {
-                const img = await loadImage(Buffer.from(customLogoData.split(',')[1], 'base64'));
-                const ratio = logoHeight / img.height;
-                const nw = img.width * ratio;
-                const nh = logoHeight;
-                const drawX = isLeft ? offset + visibleWidth - nw : 800 - offset - visibleWidth;
-                ctx.drawImage(img, drawX, y, nw, nh);
-                ctx.shadowBlur = 0;
-
-                // Zobrazit název ligy pro custom týmy i s custom logem
-                if (isCustom && leagueName) {
-                    ctx.fillStyle = teamColor;
-                    ctx.font = 'bold 28px Arial';
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'top';
-                    ctx.fillText(leagueName, isLeft ? visibleWidth/2 : 800 - visibleWidth/2, y + logoHeight + 30);
-                }
-                return;
-            } catch (e) {
-                console.error('Chyba při načítání custom loga:', e);
-            }
-        }
-
-        // Pro custom týmy vždy zobrazit iniciály a ligu (bez pokusu o načtení loga)
-        if (isCustom || !logoName) {
-            ctx.fillStyle = teamColor;
-            ctx.beginPath();
-            ctx.arc(isLeft ? visibleWidth/2 : 800 - visibleWidth/2, y + logoHeight/2, logoHeight/2, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 100px Arial';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            const initials = teamName.split(' ').map(w => w[0]).join('').slice(0, 3).toUpperCase();
-            const textX = isLeft ? visibleWidth/2 : 800 - visibleWidth/2;
-            ctx.fillText(initials, textX, y + logoHeight/2);
-
-            // Zobrazit název ligy pro custom týmy
-            if (leagueName) {
-                ctx.fillStyle = teamColor;
-                ctx.font = 'bold 28px Arial';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'top';
-                ctx.fillText(leagueName, textX, y + logoHeight + 30);
-            }
-            ctx.shadowBlur = 0;
-            return;
-        }
-
-        // Výchozí logo z disku
-        if (logoName) {
-            try {
-                const imgPath = path.join(__dirname, '../data/images', logoName);
-                const img = await loadImage(imgPath);
-                const ratio = logoHeight / img.height;
-                const nw = img.width * ratio;
-                const nh = logoHeight;
-                const drawX = isLeft ? offset + visibleWidth - nw : 800 - offset - visibleWidth;
-                ctx.drawImage(img, drawX, y, nw, nh);
-                ctx.shadowBlur = 0;
-
-                // Zobrazit název ligy i pro normální týmy pokud je k dispozici
-                if (leagueName) {
-                    ctx.fillStyle = teamColor;
-                    ctx.font = 'bold 28px Arial';
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'top';
-                    ctx.fillText(leagueName, isLeft ? visibleWidth/2 : 800 - visibleWidth/2, y + logoHeight + 30);
-                }
-            } catch (e) {
-                console.error('Chyba při načítání loga, používám iniciály:', e);
-                // Fallback na iniciály
-                ctx.fillStyle = teamColor;
-                ctx.beginPath();
-                ctx.arc(isLeft ? visibleWidth/2 : 800 - visibleWidth/2, y + logoHeight/2, logoHeight/2, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.fillStyle = '#ffffff';
-                ctx.font = 'bold 100px Arial';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                const initials = teamName.split(' ').map(w => w[0]).join('').slice(0, 3).toUpperCase();
-                const textX = isLeft ? visibleWidth/2 : 800 - visibleWidth/2;
-                ctx.fillText(initials, textX, y + logoHeight/2);
-
-                if (leagueName) {
-                    ctx.fillStyle = teamColor;
-                    ctx.font = 'bold 28px Arial';
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'top';
-                    ctx.fillText(leagueName, textX, y + logoHeight + 30);
-                }
-            }
-        }
-        ctx.shadowBlur = 0;
-    };
+    await drawBrandedBackground(ctx, width, height, customSettings);
 
     const homeColor = accentColor;
     const awayColor = '#0064ff';
+    const drawTeam = async (team, color, x, customLogoData) => {
+        const cardX = x - 142;
+        const cardY = 58;
+        const cardWidth = 284;
+        const cardHeight = 370;
+        const centerX = x;
+        const logoBox = { x: x - 92, y: 105, width: 184, height: 184 };
+        const teamName = team?.name || '???';
+        const leagueName = team?.liga || '';
+        const initials = teamName.split(/\s+/).filter(Boolean).map(word => word[0]).join('').slice(0, 3).toUpperCase();
 
-    await drawLogo(homeTeam, homeColor, true, customHomeLogo);
-    await drawLogo(awayTeam, awayColor, false, customAwayLogo);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.035)';
+        ctx.beginPath();
+        ctx.roundRect(cardX, cardY, cardWidth, cardHeight, 18);
+        ctx.fill();
+        ctx.fillStyle = color;
+        ctx.fillRect(cardX + 22, cardY, cardWidth - 44, 3);
 
+        let logo = null;
+        if (customLogoData && customLogoData.startsWith('data:image/')) {
+            try {
+                logo = await loadImage(Buffer.from(customLogoData.split(',')[1], 'base64'));
+            } catch (error) {
+                console.error('[createVersusImageForExport] Chyba při načítání vlastního loga:', error);
+            }
+        }
+        if (!logo && !team?.isCustom && team?.logo) {
+            try {
+                logo = await loadImage(path.join(__dirname, '../data/images', team.logo));
+            } catch (error) {
+                console.error('[createVersusImageForExport] Chyba při načítání týmového loga:', error);
+            }
+        }
+
+        if (logo) {
+            const scale = Math.min(logoBox.width / logo.width, logoBox.height / logo.height);
+            const logoWidth = logo.width * scale;
+            const logoHeight = logo.height * scale;
+            ctx.drawImage(logo, centerX - logoWidth / 2, logoBox.y + (logoBox.height - logoHeight) / 2, logoWidth, logoHeight);
+        } else {
+            ctx.fillStyle = color + '24';
+            ctx.beginPath();
+            ctx.arc(centerX, logoBox.y + logoBox.height / 2, 72, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = color + '90';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.fillStyle = textColor;
+            ctx.font = 'bold 42px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(initials || '?', centerX, logoBox.y + logoBox.height / 2);
+        }
+
+        ctx.fillStyle = textColor;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        let nameFontSize = 25;
+        while (nameFontSize > 15) {
+            ctx.font = `bold ${nameFontSize}px Arial`;
+            if (ctx.measureText(teamName).width <= cardWidth - 36) break;
+            nameFontSize -= 1;
+        }
+        ctx.fillText(teamName, centerX, 330, cardWidth - 36);
+        if (leagueName) {
+            ctx.fillStyle = color;
+            ctx.font = 'bold 12px Arial';
+            ctx.letterSpacing = '1px';
+            ctx.fillText(leagueName.toUpperCase(), centerX, 361, cardWidth - 36);
+            ctx.letterSpacing = '0px';
+        }
+    };
+
+    const leftGlow = ctx.createRadialGradient(180, 230, 20, 180, 230, 340);
+    leftGlow.addColorStop(0, homeColor + '28');
+    leftGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = leftGlow;
+    ctx.fillRect(0, 0, width / 2, height);
+    const rightGlow = ctx.createRadialGradient(620, 230, 20, 620, 230, 340);
+    rightGlow.addColorStop(0, awayColor + '28');
+    rightGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = rightGlow;
+    ctx.fillRect(width / 2, 0, width / 2, height);
+
+    await drawTeam(homeTeam, homeColor, 205, customHomeLogo);
+    await drawTeam(awayTeam, awayColor, 595, customAwayLogo);
+
+    ctx.fillStyle = 'rgba(10, 12, 18, 0.92)';
+    ctx.beginPath();
+    ctx.arc(width / 2, 242, 39, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = textColor;
+    ctx.font = 'bold 22px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
-    ctx.beginPath();
-    ctx.roundRect(width/2 - 100, height/2 - 60, 200, 120, 20);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255, 69, 0, 0.5)';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.shadowColor = 'rgba(255, 69, 0, 0.5)';
-    ctx.shadowBlur = 10;
-    ctx.fillStyle = '#ff4500';
-    ctx.font = 'bold 100px Arial';
-    ctx.fillText('VS', width / 2, height / 2 + 5);
-    ctx.shadowBlur = 0;
+    ctx.fillText('VS', width / 2, 242);
+
+    if (customSettings.withWatermark !== false) {
+        ctx.fillStyle = customSettings.watermarkColor || '#888888';
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(customSettings.watermarkText || 'Tipovačka', width - 20, height - 12);
+        if (customSettings.watermarkLogo && customSettings.watermarkLogo.startsWith('data:image/')) {
+            try {
+                const logo = await loadImage(Buffer.from(customSettings.watermarkLogo.split(',')[1], 'base64'));
+                const size = 34;
+                const scale = Math.min(size / logo.width, size / logo.height);
+                ctx.drawImage(logo, 16, height - size - 12, logo.width * scale, logo.height * scale);
+            } catch (error) {
+                console.error('[createVersusImageForExport] Logo watermark se nepodařilo načíst:', error);
+            }
+        }
+    }
 
     let buffer;
     try {
@@ -558,7 +556,7 @@ async function createVersusImageForExport(homeTeam, awayTeam, customSettings = {
 // ... TVOJE ODESÍLACÍ FUNKCE A NOTIFY FUNKCE TADY ZŮSTÁVAJÍ (nechal jsem je beze změny) ...
 
 // --- FUNKCE PRO VYTVOŘENÍ OBRÁZKU VÍTĚZE LIGY ---
-async function createLeagueWinnerImage(winnerTeam, liga) {
+async function createLeagueWinnerImage(winnerTeam, liga, branding = {}) {
     if (!winnerTeam) return null;
     
     const outDir = path.join(__dirname, '../public/images/notifications');
@@ -571,17 +569,14 @@ async function createLeagueWinnerImage(winnerTeam, liga) {
     const width = 800; const height = 400;
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext('2d');
+    const imageBranding = { ...(await getNotificationImageBranding()), ...branding };
+    const accentColor = imageBranding.accentColor || '#ff4500';
+    const textColor = imageBranding.textColor || '#ffffff';
 
-    // 1. POZADÍ - Zlatý vítězný gradient
-    const grad = ctx.createLinearGradient(0, 0, 0, height);
-    grad.addColorStop(0, '#1a0f00');
-    grad.addColorStop(0.5, '#2d1f00');
-    grad.addColorStop(1, '#0d0d0d');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, width, height);
+    await drawBrandedBackground(ctx, width, height, imageBranding);
 
     // 2. DEKORACE - Zlaté zářící linky
-    ctx.strokeStyle = 'rgba(255, 215, 0, 0.2)';
+    ctx.strokeStyle = accentColor + '33';
     ctx.lineWidth = 3;
     for (let i = -100; i < width; i += 50) {
         ctx.beginPath();
@@ -592,17 +587,17 @@ async function createLeagueWinnerImage(winnerTeam, liga) {
     
     // Radiální záře za logem
     const glowGrad = ctx.createRadialGradient(width/2, height/2, 50, width/2, height/2, 250);
-    glowGrad.addColorStop(0, 'rgba(255, 215, 0, 0.15)');
-    glowGrad.addColorStop(1, 'rgba(255, 215, 0, 0)');
+    glowGrad.addColorStop(0, accentColor + '26');
+    glowGrad.addColorStop(1, accentColor + '00');
     ctx.fillStyle = glowGrad;
     ctx.fillRect(0, 0, width, height);
 
     // 3. NÁPIS VÍTĚZ
-    ctx.fillStyle = '#ffd700';
+    ctx.fillStyle = accentColor;
     ctx.font = 'bold 30px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.shadowColor = 'rgba(255, 215, 0, 0.8)';
+    ctx.shadowColor = accentColor + 'cc';
     ctx.shadowBlur = 20;
     ctx.fillText(`🏆 VÍTĚZ ${liga}`, width / 2, 50);
     ctx.shadowBlur = 0;
@@ -616,7 +611,7 @@ async function createLeagueWinnerImage(winnerTeam, liga) {
         const size = 260;
         
         // Zlatý stín pod logem
-        ctx.shadowColor = 'rgba(255, 215, 0, 0.5)';
+        ctx.shadowColor = accentColor + '80';
         ctx.shadowBlur = 30;
         ctx.shadowOffsetX = 0;
         ctx.shadowOffsetY = 10;
@@ -636,7 +631,7 @@ async function createLeagueWinnerImage(winnerTeam, liga) {
                 const centerY = y + size / 2;
                 const initials = teamName.split(' ').map(w => w[0]).join('').slice(0, 3).toUpperCase();
                 
-                ctx.fillStyle = '#ffd700';
+                ctx.fillStyle = accentColor;
                 ctx.beginPath();
                 ctx.arc(centerX, centerY, 100, 0, Math.PI * 2);
                 ctx.fill();
@@ -653,7 +648,7 @@ async function createLeagueWinnerImage(winnerTeam, liga) {
             const centerY = y + size / 2;
             const initials = teamName.split(' ').map(w => w[0]).join('').slice(0, 3).toUpperCase();
             
-            ctx.fillStyle = '#ffd700';
+            ctx.fillStyle = accentColor;
             ctx.beginPath();
             ctx.arc(centerX, centerY, 100, 0, Math.PI * 2);
             ctx.fill();
@@ -670,11 +665,12 @@ async function createLeagueWinnerImage(winnerTeam, liga) {
     await drawWinnerLogo();
 
     // 5. NÁZEV TÝMU DOLE
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = textColor;
     ctx.font = 'bold 36px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(winnerTeam.name.toUpperCase(), width / 2, 360);
+    await drawNotificationBranding(ctx, width, height, imageBranding);
 
     let buffer;
     try {
@@ -955,7 +951,7 @@ const notifyLeagueEnd = async (liga, winnerTeam = null) => {
     let heroImageUrl = null;
     if (winnerTeam) {
         try {
-            heroImageUrl = await createLeagueWinnerImage(winnerTeam, liga);
+            heroImageUrl = await createLeagueWinnerImage(winnerTeam, liga, await getNotificationImageBranding());
         } catch (err) {
             console.error("Chyba při generování obrázku vítěze:", err);
         }

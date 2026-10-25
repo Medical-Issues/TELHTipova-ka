@@ -8,6 +8,18 @@ const {
 } = require("../utils/fileUtils");
 const { Users, Matches, Leagues, TableTips, ChosenSeason, Players, Settings} = require('../utils/mongoDataAccess');
 
+function toPragueDateTime(value) {
+    if (!value) return null;
+    const rawValue = value instanceof Date ? value.toISOString() : String(value);
+    if (!/[zZ]|[+-]\d{2}:\d{2}$/.test(rawValue)) {
+        return rawValue.replace(' ', 'T').slice(0, 16);
+    }
+
+    const date = new Date(rawValue);
+    if (Number.isNaN(date.getTime())) return null;
+    return date.toLocaleString('sv-SE', { timeZone: 'Europe/Prague', hour12: false }).replace(' ', 'T').slice(0, 16);
+}
+
 // Jednoduchá XSS ochrana - sanitizace HTML tagů
 function sanitizeInput(input) {
     if (typeof input !== 'string') return input;
@@ -44,44 +56,204 @@ router.use((req, res, next) => {
     next();
 });
 
-router.get("/table-tip", requireLogin, async (req, res) => {
-    // Kontrola jest je liga veřejná
-    const chosenSeason = await ChosenSeason.findAll();
-    const userSelectedSeason = req.query.season || chosenSeason;
-    const allowedLeagues = await getAllowedLeagues(userSelectedSeason);
-    const requestedLiga = req.query.liga;
-    if (requestedLiga && !allowedLeagues.includes(requestedLiga)) {
-        // Přesměruj na první veřejnou ligu
-        const firstPublic = allowedLeagues[0] || 'Neurčeno';
-        return res.redirect(`/table-tip?liga=${encodeURIComponent(firstPublic)}`);
-    }
-    
-    // 1. ZAVOLÁME MOZEK, KTERÝ VŠE VYPOČÍTÁ BĚHEM MILISEKUNDY
-    const data = await prepareDashboardData(req);
-    const {
-        username, selectedSeason, selectedLiga, uniqueLeagues, isTipsLocked, userTipData,
-        sortedGroups, teamsByGroup, globalRealRankMap, sortedGroupKeys, groupedTeams,
-    } = data;
+async function renderUserHeader({ username, selectedLiga, uniqueLeagues = [], activeTab = 'matches', csrfToken = '', timeWidgetHtml = '' }) {
+    const initials = (username ? username.substring(0, 2).toUpperCase() : 'U');
+    const escapeHtml = (value = '') => String(value).replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+    })[char]);
+    return `
+    <header class="app-header">
+        <script>
+            (() => {
+                const beginNavigation = () => document.body.classList.add('is-navigating');
 
-// --- HTML START ---
-    let html = `
-<!DOCTYPE html>
-<html lang="cs">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Tipovačka</title>
-<link rel="stylesheet" href="/css/styles.css" />
-<script src="/js/version-notification.js"></script>
-<link rel="icon" href="/images/logo.png">
-</head>
-<script>
-function showTable(which) { 
-    document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none'; 
-    const p = document.getElementById('playoffTablePreview'); p.style.display = which === 'playoff' ? 'block' : 'none'; 
+                document.addEventListener('click', (event) => {
+                    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+                    const target = event.target instanceof Element ? event.target : event.target.parentElement;
+                    const link = target?.closest('a[href]');
+                    if (!link || (link.target && link.target !== '_self') || link.hasAttribute('download')) return;
+
+                    const destination = new URL(link.href, window.location.href);
+                    if (destination.origin !== window.location.origin || destination.href === window.location.href) return;
+                    if (destination.pathname === window.location.pathname && destination.search === window.location.search && destination.hash) return;
+
+                    beginNavigation();
+                });
+
+                document.addEventListener('submit', (event) => {
+                    if (event.defaultPrevented) return;
+                    if (event.target instanceof HTMLFormElement && event.target.method.toLowerCase() === 'get') beginNavigation();
+                });
+
+                document.addEventListener('click', (event) => {
+                    const target = event.target instanceof Element ? event.target : event.target.parentElement;
+                    const trigger = target?.closest('.league-select-trigger');
+                    const openDropdown = document.querySelector('.league-select-wrap.is-open');
+
+                    if (trigger) {
+                        const dropdown = trigger.closest('.league-select-wrap');
+                        const willOpen = !dropdown.classList.contains('is-open');
+                        openDropdown?.classList.remove('is-open');
+                        openDropdown?.querySelector('.league-select-trigger')?.setAttribute('aria-expanded', 'false');
+                        if (openDropdown) openDropdown.querySelector('.league-select-menu').hidden = true;
+                        dropdown.classList.toggle('is-open', willOpen);
+                        trigger.setAttribute('aria-expanded', String(willOpen));
+                        dropdown.querySelector('.league-select-menu').hidden = !willOpen;
+                        if (willOpen) dropdown.querySelector('[role="option"]')?.focus();
+                        return;
+                    }
+
+                    if (openDropdown && !openDropdown.contains(target)) {
+                        openDropdown.classList.remove('is-open');
+                        openDropdown.querySelector('.league-select-trigger')?.setAttribute('aria-expanded', 'false');
+                        openDropdown.querySelector('.league-select-menu').hidden = true;
+                    }
+                });
+
+                document.addEventListener('keydown', (event) => {
+                    const dropdown = event.target.closest?.('.league-select-wrap.is-open');
+                    if (!dropdown) return;
+                    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                        const options = [...dropdown.querySelectorAll('[role="option"]')];
+                        const currentIndex = options.indexOf(document.activeElement);
+                        const nextIndex = event.key === 'ArrowDown'
+                            ? (currentIndex + 1) % options.length
+                            : (currentIndex - 1 + options.length) % options.length;
+                        event.preventDefault();
+                        options[nextIndex]?.focus();
+                        return;
+                    }
+                    if (event.key !== 'Escape') return;
+                    dropdown.classList.remove('is-open');
+                    dropdown.querySelector('.league-select-menu').hidden = true;
+                    const trigger = dropdown.querySelector('.league-select-trigger');
+                    trigger?.setAttribute('aria-expanded', 'false');
+                    trigger?.focus();
+                });
+
+                const sizeLeagueDropdowns = () => {
+                    document.querySelectorAll('.league-select-wrap').forEach((dropdown) => {
+                        const trigger = dropdown.querySelector('.league-select-trigger');
+                        const label = dropdown.querySelector('.league-select-label');
+                        const options = [...dropdown.querySelectorAll('.league-select-option')];
+                        if (!trigger || !label || options.length === 0) return;
+
+                        const probe = document.createElement('span');
+                        const optionStyle = getComputedStyle(options[0]);
+                        Object.assign(probe.style, {
+                            position: 'fixed',
+                            visibility: 'hidden',
+                            whiteSpace: 'nowrap',
+                            fontFamily: optionStyle.fontFamily,
+                            fontSize: optionStyle.fontSize,
+                            fontWeight: optionStyle.fontWeight,
+                            letterSpacing: optionStyle.letterSpacing,
+                        });
+                        document.body.append(probe);
+
+                        const longestOptionWidth = Math.max(...options.map((option) => {
+                            probe.textContent = option.textContent.replace('✓', '').trim();
+                            return probe.getBoundingClientRect().width;
+                        }));
+                        probe.remove();
+
+                        const triggerStyle = getComputedStyle(trigger);
+                        const labelWidth = label.getBoundingClientRect().width;
+                        const horizontalPadding = parseFloat(triggerStyle.paddingLeft) + parseFloat(triggerStyle.paddingRight);
+                        const gaps = 16;
+                        const chevron = 7;
+                        const border = parseFloat(triggerStyle.borderLeftWidth) + parseFloat(triggerStyle.borderRightWidth);
+                        const width = Math.ceil(longestOptionWidth + labelWidth + horizontalPadding + gaps + chevron + border);
+                        dropdown.style.width = width + 'px';
+                    });
+                };
+
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', sizeLeagueDropdowns, { once: true });
+                } else {
+                    sizeLeagueDropdowns();
+                }
+                window.addEventListener('resize', sizeLeagueDropdowns);
+
+                window.addEventListener('pageshow', () => document.body.classList.remove('is-navigating'));
+            })();
+        </script>
+        <div class="header-top">
+            <a href="/?liga=${encodeURIComponent(selectedLiga || '')}" class="brand">
+                <img class="brand-logo-img" src="/images/logo.png" alt="Logo">
+                <div class="brand-title">Tipovačka<span>.</span></div>
+            </a>
+
+            <nav class="nav-pills">
+                <a href="/?liga=${encodeURIComponent(selectedLiga || '')}" class="nav-pill ${activeTab === 'matches' ? 'active' : ''}">Zápasy</a>
+                <a href="/table-tip?liga=${encodeURIComponent(selectedLiga || '')}" class="nav-pill ${activeTab === 'table-tip' ? 'active' : ''}">Základní část</a>
+                <a href="/prestupy?liga=${encodeURIComponent(selectedLiga || '')}" class="nav-pill ${activeTab === 'prestupy' ? 'active' : ''}">Přestupy</a>
+                <a href="/image-exporter?liga=${encodeURIComponent(selectedLiga || '')}" class="nav-pill ${activeTab === 'exporter' ? 'active' : ''}">Exportér</a>
+                <a href="/statistics" class="nav-pill ${activeTab === 'statistics' ? 'active' : ''}">Statistiky</a>
+                <a href="/history" class="nav-pill ${activeTab === 'history' ? 'active' : ''}">Historie</a>
+            </nav>
+
+            <div class="user-menu">
+                ${uniqueLeagues && uniqueLeagues.length > 0 ? `
+                <form class="league-dropdown" method="GET" style="margin:0;">
+                    <div class="league-select-wrap">
+                        <button type="button" class="league-select-trigger" aria-haspopup="listbox" aria-expanded="false" aria-controls="league-select-menu">
+                            <span class="league-select-label">Liga</span>
+                            <span class="league-select-value">${escapeHtml(selectedLiga)}</span>
+                            <span class="league-select-chevron" aria-hidden="true"></span>
+                        </button>
+                        <div class="league-select-menu" id="league-select-menu" role="listbox" aria-label="Vyber ligu" hidden>
+                            ${uniqueLeagues.map(l => `<button type="submit" class="league-select-option${l === selectedLiga ? ' is-selected' : ''}" role="option" aria-selected="${l === selectedLiga}" name="liga" value="${escapeHtml(l)}">${escapeHtml(l)}${l === selectedLiga ? '<span class="league-option-check" aria-hidden="true">✓</span>' : ''}</button>`).join('')}
+                        </div>
+                    </div>
+                </form>` : ''}
+
+                <button type="button" class="bell-btn" id="notify-toggle-btn" onclick="toggleNotifications()" title="Push notifikace">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                    </svg>
+                </button>
+
+                <div class="user-avatar">
+                    <div class="avatar-circle">${initials}</div>
+                    <span class="user-name">${username || 'Uživatel'}</span>
+                    ${username ? `<a href="/auth/logout" class="logout-link" title="Odhlásit se">Odhlásit</a>` : `<a href="/auth/login" class="logout-link">Přihlásit</a>`}
+                </div>
+            </div>
+        </div>
+
+        <div class="time-bar">
+            <div class="time-bar-inner">
+                <div class="time-badge">
+                    <div class="live-dot"></div>
+                    <span>${timeWidgetHtml}</span>
+                </div>
+                <div>
+                    <a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" class="version-link">v<span id="current-version">...</span></a>
+                </div>
+            </div>
+        </div>
+    </header>
+    <input type="hidden" id="globalCsrfToken" value="${csrfToken}">
+    `;
 }
 
- // Převod klíče
+function renderNotificationScript(csrfToken = '') {
+    return `
+<script>
+function showTable(which) { 
+    const reg = document.getElementById('regularTable');
+    if (reg) reg.style.display = which === 'regular' ? 'block' : 'none'; 
+    const p = document.getElementById('playoffTablePreview');
+    if (p) p.style.display = which === 'playoff' ? 'block' : 'none'; 
+}
+
 function urlBase64ToUint8Array(base64String) {
     const padding = '='.repeat((4 - base64String.length % 4) % 4);
     const base64 = (base64String + padding).replace(/\\-/g, '+').replace(/_/g, '/');
@@ -98,7 +270,6 @@ async function toggleNotifications() {
     if (!btn) return;
     
     btn.disabled = true;
-    btn.textContent = "Pracuji...";
 
     try {
         let registration = await navigator.serviceWorker.getRegistration();
@@ -129,13 +300,13 @@ async function toggleNotifications() {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
-                    'X-CSRF-Token': '${req.session.csrfToken || ''}'
+                    'X-CSRF-Token': '${csrfToken}'
                 },
                 body: JSON.stringify({ endpoint: subscription.endpoint })
             });
             if (res.ok) {
                 await subscription.unsubscribe();
-                alert('Notifikace vypnuty.');
+                alert('Notifikace byly vypnuty.');
                 await checkSubscriptionStatus();
             }
         } else {
@@ -158,13 +329,13 @@ async function toggleNotifications() {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
-                    'X-CSRF-Token': '${req.session.csrfToken || ''}'
+                    'X-CSRF-Token': '${csrfToken}'
                 },
                 body: JSON.stringify(newSub)
             });
             
             if (saveRes.ok) {
-                alert('Notifikace zapnuty!');
+                alert('Notifikace byly zapnuty!');
                 await checkSubscriptionStatus();
             } else {
                 alert('Nepodařilo se uložit odběr na server.');
@@ -184,62 +355,73 @@ async function checkSubscriptionStatus() {
     if (!btn) return;
 
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-        btn.textContent = "Nepodporováno";
+        btn.title = "Notifikace nejsou podporovány";
         btn.disabled = true;
         return;
     }
 
     try {
-        // Kontrola stavu bez zbytečného čekání
         const registration = await navigator.serviceWorker.getRegistration();
         const subscription = registration ? await registration.pushManager.getSubscription() : null;
 
         if (subscription) {
-            btn.textContent = "Vypnout notifikace 🔕";
-            btn.style.backgroundColor = "#555";
+            btn.classList.add('active');
+            btn.title = "Notifikace jsou zapnuté (kliknutím vypnete)";
         } else {
-            btn.textContent = "Zapnout notifikace 🔔";
-            btn.style.backgroundColor = "#ff4500";
+            btn.classList.remove('active');
+            btn.title = "Notifikace jsou vypnuté (kliknutím zapnete)";
         }
     } catch (e) {
-        btn.textContent = "Klikni pro stav";
+        btn.title = "Klikněte pro zjištění stavu notifikací";
     }
 }
 
 document.addEventListener('DOMContentLoaded', checkSubscriptionStatus);
 </script>
+`;
+}
+
+router.get("/table-tip", requireLogin, async (req, res) => {
+    // Kontrola jest je liga veřejná
+    const chosenSeason = await ChosenSeason.findAll();
+    const userSelectedSeason = req.query.season || chosenSeason;
+    const allowedLeagues = await getAllowedLeagues(userSelectedSeason);
+    const requestedLiga = req.query.liga;
+    if (requestedLiga && !allowedLeagues.includes(requestedLiga)) {
+        // Přesměruj na první veřejnou ligu
+        const firstPublic = allowedLeagues[0] || 'Neurčeno';
+        return res.redirect(`/table-tip?liga=${encodeURIComponent(firstPublic)}`);
+    }
+    
+    // 1. ZAVOLÁME MOZEK, KTERÝ VŠE VYPOČÍTÁ BĚHEM MILISEKUNDY
+    const data = await prepareDashboardData(req);
+    const {
+        username, selectedSeason, selectedLiga, uniqueLeagues, isTipsLocked, userTipData,
+        sortedGroups, teamsByGroup, globalRealRankMap, sortedGroupKeys, groupedTeams,
+    } = data;
+
+// --- HTML START ---
+    let html = `
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Tipování tabulky – Tipovačka</title>
+<link rel="stylesheet" href="/css/modern-design.css?v=standings-layout-20261024" />
+<script src="/js/version-notification.js"></script>
+<link rel="icon" href="/images/logo.png">
+</head>
+${renderNotificationScript(req.session.csrfToken || '')}
 <body class="usersite">
-<header class="header">
-<div class="header-main">
-<div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
-<div class="header-user">
-<p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
-</div>
-</div>
-<div class="header-controls">
-<form class="league-dropdown" method="GET">
-<label class="league-select-name">
-Liga:
-<select id="league-select" name="liga" required onchange="this.form.submit()">
-${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected' : ''}>${l}</option>`).join('')}
-</select>
-</label>
-<a class="history-btn" href="/history">Historie</a>
-<a class="history-btn changed" href="/?liga=${encodeURIComponent(selectedLiga)}">Tipovačka</a>
-<a class="history-btn changed" href="/prestupy?liga=${encodeURIComponent(selectedLiga)}">Přestupy</a>
-<a class="history-btn changed" href="/image-exporter?liga=${encodeURIComponent(selectedLiga)}">Exportér</a>
-<a class="history-btn changed" href="/statistics">Statistiky</a>
-<div style="text-align: center; margin: 0;">
-    <button type="button" id="notify-toggle-btn" onclick="toggleNotifications()"
-        style="width: 220px; height: 38px; cursor: pointer; font-weight: bold; border: none; color: white; background-color: #444;">
-        Zjišťuji stav...
-    </button>
-</div>
-<input type="hidden" id="globalCsrfToken" value="${req.session.csrfToken || ''}">
-</form>
-</div>
-</header>
-<header class="time-header">${await generateTimeWidget()}<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a></header>
+${await renderUserHeader({
+    username,
+    selectedLiga,
+    uniqueLeagues,
+    activeTab: 'table-tip',
+    csrfToken: req.session.csrfToken || '',
+    timeWidgetHtml: await generateTimeWidget()
+})}
 <main class="main_page">`;
 
 html += await generateLeftPanel(data);
@@ -247,8 +429,6 @@ html += await generateLeftPanel(data);
     // =========================================================
     // 1. ZÍSKÁNÍ SKUTEČNÉHO POŘADÍ Z LEVÉ TABULKY
     // =========================================================
-    // Levá tabulka už pole v teamsByGroup správně seřadila podle IIHF,
-    // takže si jen uložíme výsledné pozice každého týmu, abychom je vpravo nemuseli složitě počítat.
     for (const group of sortedGroups) {
         teamsByGroup[group].forEach((t, i) => {
             globalRealRankMap[t.id] = i + 1;
@@ -258,8 +438,13 @@ html += await generateLeftPanel(data);
     // --- PRAVÝ PANEL: TIPOVÁNÍ TABULKY ---
     html += `
         <section class="matches-container">
-            <h2 style="text-align:center;">Seřaď týmy v tabulce</h2>
-            <p style="text-align:center;">Chyť tým myší a přetáhni ho na požadovanou pozici.</p>
+            <div class="section-header">
+                <div class="section-title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+                    Tipování pořadí základní části
+                </div>
+            </div>
+            <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 16px;">Chyťte tým a přetáhněte jej na požadovanou pozici. Pořadí nezapomeňte dole uložit.</p>
             
             <form id="sortForm">
                 <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
@@ -286,7 +471,6 @@ html += await generateLeftPanel(data);
 
         // Seřadíme týmy pro zobrazení v pravém panelu:
         if (hasTipForGroup) {
-            // A) Pokud uživatel už tipoval, seřadíme podle jeho tipu
             teamsForTip.sort((a, b) => {
                 const indexA = currentGroupTipIds.indexOf(a.id);
                 const indexB = currentGroupTipIds.indexOf(b.id);
@@ -295,7 +479,6 @@ html += await generateLeftPanel(data);
                 return indexA - indexB;
             });
         } else {
-            // B) Pokud ještě netipoval, ukážeme mu výchozí správné pořadí (vezmeme ho z naší mapy levé tabulky)
             teamsForTip.sort((a, b) => {
                 const rankA = globalRealRankMap[a.id] || 99;
                 const rankB = globalRealRankMap[b.id] || 99;
@@ -304,66 +487,55 @@ html += await generateLeftPanel(data);
         }
 
         html += `
-            <div style="margin-top: 30px;">
-                ${groupLabel ? `<h3 style="border-bottom:1px solid #555;">${groupLabel}</h3>` : ''}
+            <div style="margin-top: 20px;">
+                ${groupLabel ? `<h3 style="padding-bottom: 8px; border-bottom: 1px solid var(--border-subtle); margin-bottom: 12px; font-size: 15px;">${groupLabel}</h3>` : ''}
                 
-                ${isGroupLocked ? `<div style="background-color:#330000; color:#ffcccc; padding:5px; border:1px solid red; font-size:0.8em; margin-bottom:5px;">Skupina uzamčena</div>` : ''}
+                ${isGroupLocked ? `<div style="background: var(--accent-red-bg); color: var(--accent-red); padding: 8px 14px; border: 1px solid rgba(239,68,68,0.3); border-radius: var(--radius-md); font-size: 12px; font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">🔒 Skupina je uzamčena pro tipování</div>` : ''}
                 
                 <ul class="sortable-list" id="list-${gKey}" data-group="${gKey}">
                     ${teamsForTip.map((team, index) => {
             const userRank = index + 1;
-            // ZDE se bere to jediné oficiální a správné pořadí
             const realRank = globalRealRankMap[team.id] || '?';
             const diff = userRank - realRank;
             const isCorrect = (diff === 0);
             const logoUrl = team.logo ? `/logoteamu/${team.logo}` : '/images/logo.png';
 
-            let bgStyle = "background-color: #1a1a1a; border: 1px solid #444;";
             let diffText;
-            let diffColor = "gray";
+            let diffColor = "var(--text-dim)";
 
             if (hasTipForGroup) {
-                // PŘIDÁNA KONTROLA ZÁMKU: Zobrazí vyhodnocení jen pokud je skupina zamčená
                 if (isGroupLocked) {
                     if (isCorrect) {
-                        bgStyle = "background-color: rgba(40, 100, 40, 0.6); border-color: #00ff00;";
-                        diffText = "✔";
-                        diffColor = "#00ff00";
+                        diffText = "✔ Trefa (+1)";
+                        diffColor = "var(--accent-green)";
                     } else {
-                        diffText = `<span style="font-size: 0.8em">Akt.: ${realRank}. (${Math.abs(diff)})</span>`;
-                        diffColor = "orange";
+                        diffText = `Skutečnost: ${realRank}. (${Math.abs(diff)})`;
+                        diffColor = "var(--accent-amber)";
                     }
                 } else {
-                    // Tip je uložený, ale tabulka ještě není zamčená z adminu
-                    diffText = `<span style="font-size: 0.7em; color: #aaa;">Uloženo (čeká na uzamčení)</span>` ;
-                    diffColor = "#aaa";
+                    diffText = `Uloženo`;
+                    diffColor = "var(--text-muted)";
                 }
             } else {
-                diffText = `<span style="font-size: 0.7em; color: #666;">Neuloženo</span>`;
+                diffText = `Netipováno`;
             }
 
             return `
-                        <li class="sortable-item" 
+                        <li class="sortable-item ${isCorrect && isGroupLocked ? 'is-correct' : ''}" 
                             draggable="${!isGroupLocked}" 
                             data-id="${team.id}"
                             data-group="${gKey}"
-                            style="${bgStyle} ${isGroupLocked ? 'cursor: default; opacity: 0.9;' : 'cursor: grab;'} 
-                           display: flex; align-items: center; justify-content: space-between; margin: 5px 0; padding: 15px; color: #fff;
-                           position: relative; overflow: hidden;"> 
-                           <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-                                width: 80%; height: 400%; 
-                                background-image: url('${logoUrl}'); background-size: contain; background-repeat: no-repeat; background-position: center; 
-                                opacity: 0.30; filter: grayscale(50%); pointer-events: none; z-index: 1;">
-                           </div>
+                            style="${isGroupLocked ? 'cursor: default; opacity: 0.85;' : 'cursor: grab;'}"> 
                             
-                            <div style="display:flex; align-items:center; position: relative; z-index: 2;">
-                                <span class="rank-number" style="font-weight: bold; color: orangered; margin-right: 15px; width: 30px;">${userRank}.</span>
-                                <span class="team-name" style="font-weight: bold;">${team.name}</span>
+                            <span class="sortable-rank">${userRank}</span>
+                            <div class="team-cell">
+                                <img src="${logoUrl}" alt="" class="team-logo-small">
+                                <span class="sortable-team-name">${team.name}</span>
                             </div>
 
-                            <div style="display:flex; align-items:center; gap: 15px; position: relative; z-index: 2;">
-                                <span style="color: ${diffColor}; font-weight: normal; margin-right: 10px;">${diffText}</span>
-                                <span style="font-size:20px;">${isGroupLocked ? '🔒' : '☰'}</span>
+                            <div style="display:flex; align-items:center; gap: 12px; margin-left: auto;">
+                                <span style="color: ${diffColor}; font-weight: 700; font-size: 12px;">${diffText}</span>
+                                <span class="drag-handle">${isGroupLocked ? '🔒' : '☰'}</span>
                             </div>
                         </li>
                         `;
@@ -374,7 +546,7 @@ html += await generateLeftPanel(data);
     }
 
     if (isTipsLocked !== true) {
-        html += `<button type="button" id="saveBtn" class="save-btn" style="margin-top:20px;">Uložit všechny tipy</button>`;
+        html += `<button type="button" id="saveBtn" class="login_button" style="margin-top:24px; width: 100%;">💾 Uložit všechny tipy</button>`;
     }
     // language=HTML
     html += `
@@ -645,7 +817,10 @@ router.post("/tip", requireLogin, async (req, res) => {
         return res.status(403).json({ error: 'Neplatný CSRF token' });
     }
 
-    const matchId = parseInt(req.body.matchId);
+    const matchId = Number.parseInt(req.body.matchId, 10);
+    if (!Number.isSafeInteger(matchId)) {
+        return res.status(400).send("Neplatný zápas.");
+    }
     const winner = req.body.winner;
     const loserWins = parseInt(req.body.loserWins);
     const scoreHome = req.body.scoreHome ? parseInt(req.body.scoreHome) : null;
@@ -659,20 +834,19 @@ router.post("/tip", requireLogin, async (req, res) => {
         return res.status(500).send("Nastala chyba při čtení dat zápasů.");
     }
 
-    const match = matches.find(m => m.id === matchId);
+    const match = matches.find(m => Number(m.id) === matchId);
     if (!match) return res.status(400).send("Neplatný zápas.");
 
-    // Bezpečnostní kontrola času: Převedeme aktuální čas na český ISO formát pro přesné porovnání
-    // Bezpečnostní kontrola času: Převedeme aktuální čas na český ISO formát pro přesné porovnání
-    const currentPragueTimeISO = new Date().toLocaleString('sv-SE', {timeZone: 'Europe/Prague'}).replace(' ', 'T');
+    const matchStartPrague = toPragueDateTime(match.datetime || match.date);
+    const currentPragueTimeISO = toPragueDateTime(new Date());
 
     // 1. Ochrana proti manuálnímu zamčení
-    if (match.locked) {
-        return res.status(403).send("Tento zápas je manuálně uzamčen, nelze na něj tipovat.");
+    if (match.locked || match.postponed) {
+        return res.status(403).send("Na uzamčený nebo odložený zápas nelze tipovat.");
     }
 
     // 2. Porovnáváme dva textové řetězce (např. "2024-03-10T18:00" <= "2024-03-10T18:05")
-    if (match.datetime <= currentPragueTimeISO) {
+    if (matchStartPrague && matchStartPrague <= currentPragueTimeISO) {
         return res.status(403).send("Tipování na tento zápas již není možné, zápas už začal.");
     }
 
@@ -698,7 +872,7 @@ router.post("/tip", requireLogin, async (req, res) => {
     if (!user.tips[season]) user.tips[season] = {};
     if (!user.tips[season][league]) user.tips[season][league] = [];
 
-    const existing = user.tips[season][league].find(t => t.matchId === matchId);
+    const existing = user.tips[season][league].find(t => Number(t.matchId) === matchId);
 
     if (existing) {
         if (typeof winner !== 'undefined') existing.winner = winner;
@@ -784,226 +958,107 @@ router.get('/', requireLogin, async (req, res) => {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Tipovačka</title>
-<link rel="stylesheet" href="/css/styles.css" />
+<link rel="stylesheet" href="/css/modern-design.css" />
 <script src="/js/version-notification.js"></script>
 <link rel="icon" href="/images/logo.png">
 </head>
-<script>
-function showTable(which) { 
-    document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none'; 
-    const p = document.getElementById('playoffTablePreview'); p.style.display = which === 'playoff' ? 'block' : 'none'; 
-}
-
-// Převod klíče
-function urlBase64ToUint8Array(base64String) {
-    const padding = '='.repeat((4 - base64String.length % 4) % 4);
-    const base64 = (base64String + padding).replace(/\\-/g, '+').replace(/_/g, '/');
-    const rawData = window.atob(base64);
-    const outputArray = new Uint8Array(rawData.length);
-    for (let i = 0; i < rawData.length; ++i) {
-        outputArray[i] = rawData.charCodeAt(i);
-    }
-    return outputArray;
-}
-
-async function toggleNotifications() {
-    const btn = document.getElementById('notify-toggle-btn');
-    if (!btn) return;
-    
-    btn.disabled = true;
-    btn.textContent = "Pracuji...";
-
-    try {
-        let registration = await navigator.serviceWorker.getRegistration();
-        
-        if (!registration) {
-            registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
-        }
-
-        let retry = 0;
-        while (!registration.active && retry < 10) {
-            await new Promise(res => setTimeout(res, 500));
-            registration = await navigator.serviceWorker.getRegistration();
-            retry++;
-        }
-
-        if (!registration.active) {
-            alert("Service Worker se nepodařilo aktivovat.");
-            btn.disabled = false;
-            await checkSubscriptionStatus();
-            return;
-        }
-
-        const subscription = await registration.pushManager.getSubscription();
-
-        if (subscription) {
-            // ODHLÁŠENÍ
-            const res = await fetch('/api/unsubscribe', {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'X-CSRF-Token': '${req.session.csrfToken || ''}'
-                },
-                body: JSON.stringify({ endpoint: subscription.endpoint })
-            });
-            if (res.ok) {
-                await subscription.unsubscribe();
-                alert('Notifikace vypnuty.');
-                await checkSubscriptionStatus();
-            }
-        } else {
-            // PŘIHLÁŠENÍ
-            const vapidRes = await fetch('/api/vapid-public-key');
-            if (!vapidRes.ok) {
-                alert('Server neodpovídá (chyba při získávání klíče).');
-                btn.disabled = false;
-                await checkSubscriptionStatus();
-                return;
-            }
-            const vapidPublicKey = await vapidRes.text();
-
-            const newSub = await registration.pushManager.subscribe({
-                userVisibleOnly: true,
-                applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
-            });
-
-            const saveRes = await fetch('/api/subscribe', {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'X-CSRF-Token': '${req.session.csrfToken || ''}'
-                },
-                body: JSON.stringify(newSub)
-            });
-            
-            if (saveRes.ok) {
-                alert('Notifikace zapnuty!');
-                await checkSubscriptionStatus();
-            } else {
-                alert('Nepodařilo se uložit odběr na server.');
-            }
-        }
-    } catch (e) {
-        console.error("Kritická chyba notifikací:", e);
-        alert('Došlo k nečekané chybě: ' + e.message);
-    }
-    
-    await checkSubscriptionStatus();
-    btn.disabled = false;
-}
-
-async function checkSubscriptionStatus() {
-    const btn = document.getElementById('notify-toggle-btn');
-    if (!btn) return;
-
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-        btn.textContent = "Nepodporováno";
-        btn.disabled = true;
-        return;
-    }
-
-    try {
-        // Kontrola stavu bez zbytečného čekání
-        const registration = await navigator.serviceWorker.getRegistration();
-        const subscription = registration ? await registration.pushManager.getSubscription() : null;
-
-        if (subscription) {
-            btn.textContent = "Vypnout notifikace 🔕";
-            btn.style.backgroundColor = "#555";
-        } else {
-            btn.textContent = "Zapnout notifikace 🔔";
-            btn.style.backgroundColor = "#ff4500";
-        }
-    } catch (e) {
-        btn.textContent = "Klikni pro stav";
-    }
-}
-
-document.addEventListener('DOMContentLoaded', checkSubscriptionStatus);
-</script>
+${renderNotificationScript(req.session.csrfToken || '')}
 <body class="usersite">
-<header class="header">
-<div class="header-main">
-<div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
-<div class="header-user">
-<p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
-</div>
-</div>
-<div class="header-controls">
-<form class="league-dropdown" method="GET">
-<label class="league-select-name">
-Liga:
-<select id="league-select" name="liga" required onchange="this.form.submit()">
-${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected' : ''}>${l}</option>`).join('')}
-</select>
-</label>
-<a class="history-btn" href="/history">Historie</a>
-<a class="history-btn changed" href="/table-tip?liga=${encodeURIComponent(selectedLiga)}">Základní část</a>
-<a class="history-btn changed" href="/prestupy?liga=${encodeURIComponent(selectedLiga)}">Přestupy</a>
-<a class="history-btn changed" href="/image-exporter?liga=${encodeURIComponent(selectedLiga)}">Exportér</a>
-<a class="history-btn changed" href="/statistics">Statistiky</a>
-<div style="text-align: center; margin: 0;">
-    <button type="button" id="notify-toggle-btn" onclick="toggleNotifications()"
-        style="width: 220px; height: 38px; cursor: pointer; font-weight: bold; border: none; color: white; background-color: #444;">
-        Zjišťuji stav...
-    </button>
-</div>
-<input type="hidden" id="globalCsrfToken" value="${req.session.csrfToken || ''}">
-</form>
-</div>
-</header>
-<header class="time-header">${await generateTimeWidget()}<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a></header>
+${await renderUserHeader({
+    username,
+    selectedLiga,
+    uniqueLeagues,
+    activeTab: 'matches',
+    csrfToken: req.session.csrfToken || '',
+    timeWidgetHtml: await generateTimeWidget()
+})}
 <main class="main_page">`;
 
     html += await generateLeftPanel(data);
     // ZAČÁTEK PRAVÉHO PANELU SE ZÁPASY
     html += `
     <section class="matches-container">
-    <h2>Aktuální zápasy k tipování</h2>
+        <div class="section-header">
+            <div class="section-title">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/></svg>
+                Aktuální zápasy k tipování
+            </div>
+        </div>
     `;
 
     const matchesData = (await Matches.findAll())
             .filter(m => m.liga === selectedLiga && !m.result)
             .filter(m => m.season === selectedSeason)
             .sort((a, b) => new Date(a.datetime) - new Date(b.datetime));
-        const groupedMatches = {};
-        const postponedMatches = matchesData.filter(m => m.postponed);
-        const normalMatches = matchesData.filter(m => !m.postponed).sort((a, b) => new Date(a.datetime) - new Date(b.datetime));
+    const postponedMatches = matchesData.filter(m => m.postponed);
+    const normalMatches = matchesData.filter(m => !m.postponed);
+    const LABEL_POSTPONED = "Odložené zápasy";
+    const groupedByDate = {};
 
-        const LABEL_POSTPONED = "Odložené zápasy";
+    if (postponedMatches.length) {
+        groupedByDate[LABEL_POSTPONED] = { postponed: true, matches: postponedMatches };
+    }
 
-        if (postponedMatches.length) {
-            groupedMatches[LABEL_POSTPONED] = postponedMatches;
-        }
+    normalMatches.forEach(match => {
+        const dateTime = match.datetime || match.date || "Neznámý čas";
+        const datePart = dateTime.includes('T') ? dateTime.split('T')[0] : dateTime.split(' ')[0];
+        if (!groupedByDate[datePart]) groupedByDate[datePart] = { postponed: false, matches: [] };
+        groupedByDate[datePart].matches.push(match);
+    });
 
-        normalMatches.forEach(match => {
-            const dateTime = match.datetime || match.date || "Neznámý čas";
-            if (!groupedMatches[dateTime]) groupedMatches[dateTime] = [];
-            groupedMatches[dateTime].push(match);
-        });
+    const currentPragueTimeISO = toPragueDateTime(new Date());
 
-        const currentPragueTimeISO = new Date().toLocaleString('sv-SE', {timeZone: 'Europe/Prague'}).replace(' ', 'T');
+        for (const [dateKey, dateGroup] of Object.entries(groupedByDate)) {
+            if (dateGroup.postponed) {
+                // Show postponed matches with divider
+                html += `
+                <div class="date-divider">
+                    <span class="date-badge">📅 ${LABEL_POSTPONED}</span>
+                    <div class="date-line"></div>
+                </div>
+                <table class="matches-table">
+                    <colgroup>
+                        <col style="width: calc(45%);">
+                        <col style="width: 5%;">
+                        <col style="width: calc(45%);">
+                    </colgroup>
+                    <thead class="matches-table-header">
+                        <tr><th colspan="3">Zápasy</th></tr>
+                    </thead>
+                    <tbody>`;
+                
+                for (const match of dateGroup.matches) {
+                    const homeTeamName = teams.find(t => t.id === match.homeTeamId)?.name || '???';
+                    const awayTeamName = teams.find(t => t.id === match.awayTeamId)?.name || '???';
+                    html += `<tr class="match-row postponed"><td colspan="3" style="text-align:center; padding:12px; color:var(--accent-amber);"><strong>${homeTeamName} vs ${awayTeamName} (Odloženo)</strong></td></tr>`;
+                }
+                html += `</tbody></table>`;
+                continue;
+            }
 
-        for (const [dateTime, matchesAtSameTime] of Object.entries(groupedMatches)) {
-            let formattedDateTime = (matchesAtSameTime.some(m => m.postponed) || dateTime === "Neznámý čas") ? "Odložené zápasy" : (() => {
-                const [dPart, tPart] = dateTime.split('T');
-                const [year, month, day] = dPart.split('-');
-                return `${day}. ${month}. ${year} ${tPart}`;
-            })();
+            const dateValue = new Date(`${dateKey}T12:00:00`);
+            const formattedDate = Number.isNaN(dateValue.getTime())
+                ? dateKey
+                : new Intl.DateTimeFormat('cs-CZ', { day: 'numeric', month: 'numeric', year: 'numeric', timeZone: 'Europe/Prague' }).format(dateValue);
+            
+            html += `
+            <div class="date-divider date-divider-subtle">
+                <span class="date-badge">📅 ${formattedDate}</span>
+                <div class="date-line"></div>
+            </div>`;
 
-            html += `<h3>${formattedDateTime}</h3>
-<table class="matches-table">
-    <colgroup>
-        <col style="width: calc(50% - 10px);">
-        <col style="width: 20px;">
-        <col style="width: calc(50% - 10px);">
-    </colgroup>
-    <thead class="matches-table-header">
-        <tr><th colspan="3">Zápasy</th></tr>
-    </thead>
-    <tbody>`;
+            html += `<table class="matches-table">
+                    <colgroup>
+                        <col style="width: calc(45%);">
+                        <col style="width: 5%;">
+                        <col style="width: calc(45%);">
+                    </colgroup>
+                    <thead class="matches-table-header">
+                        <tr><th colspan="3">Zápasy</th></tr>
+                    </thead>
+                    <tbody>`;
 
-            for (const match of matchesAtSameTime) {
+            for (const match of dateGroup.matches) {
                 // Najdeme objekty týmů, abychom měli přístup k logům
                 const homeTeamObj = teams.find(t => t.id === match.homeTeamId);
                 const awayTeamObj = teams.find(t => t.id === match.awayTeamId);
@@ -1011,44 +1066,41 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
                 const homeTeamName = homeTeamObj?.name || '???';
                 const awayTeamName = awayTeamObj?.name || '???';
 
-                // Definice log (Watermark)
                 const homeLogoUrl = homeTeamObj?.logo ? `/logoteamu/${homeTeamObj.logo}` : '/images/logo.png';
                 const awayLogoUrl = awayTeamObj?.logo ? `/logoteamu/${awayTeamObj.logo}` : '/images/logo.png';
 
-                // HTML PRO WATERMARK (vložíme ho do tlačítek)
-                const watermarkHTML = (url) => `
-                    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-10deg); 
-                                width: 120%; height: 400%; 
-                                background-image: url('${url}'); background-size: contain; background-repeat: no-repeat; background-position: center; 
-                                opacity: 0.50; filter: grayscale(50%); pointer-events: none; z-index: 5;">
-                    </div>`;
-
-                const existingTip = currentUserMatchTips.find(t => t.matchId === match.id);
+                const existingTip = currentUserMatchTips.find(t => String(t.matchId) === String(match.id));
                 const selectedWinner = existingTip?.winner;
 
                 // Zjištění, zda je zápas zamčen (buď manuálně, odložením, nebo časem)
                 const isLockedManually = match.locked === true;
-                const matchStarted = isLockedManually ? true : (match.postponed ? true : (match.datetime <= currentPragueTimeISO));
-                const vsText = isLockedManually ? '🔒' : 'vs'; // Pokud je zamčeno, ukáže se zámek
+                const matchStartPrague = toPragueDateTime(match.datetime || match.date);
+                const matchStarted = isLockedManually || match.postponed || Boolean(matchStartPrague && matchStartPrague <= currentPragueTimeISO);
+                const vsText = isLockedManually ? '🔒' : 'vs';
+                const matchTime = matchStartPrague?.slice(11, 16) || '';
                 const isPlayoff = match.isPlayoff;
 
                 if (match.postponed) {
-                    html += `<tr class="match-row postponed"><td colspan="3"><strong>${homeTeamName} vs ${awayTeamName}</strong></td></tr>`;
+                    html += `<tr class="match-row postponed"><td colspan="3" style="text-align:center; padding:12px; color:var(--accent-amber);"><strong>${homeTeamName} vs ${awayTeamName} (Odloženo)</strong></td></tr>`;
                 } else if (!isPlayoff) {
                     // --- ZÁKLADNÍ ČÁST (Simple Match) ---
                     html += `
                     <tr class="match-row simple-match-row" data-match-id="${match.id}">
-    <td style="position: relative; overflow: hidden; width: 47%;">${watermarkHTML(homeLogoUrl)}
-        <button type="button" class="team-link home-btn ${selectedWinner === "home" ? "selected" : ""}" data-winner="home" ${matchStarted ? 'disabled' : ''} 
-                style="overflow: hidden;">
-            <div style="z-index: 5;">${homeTeamName}</div>
+    <td style="width: calc(45%);">
+        <button type="button" class="team-link home-btn ${selectedWinner === "home" ? "selected" : ""}" data-winner="home" ${matchStarted ? 'disabled' : ''}>
+            <div class="team-info-row">
+                <div class="team-logo-small-wrap"><img src="${homeLogoUrl}" alt=""></div>
+                <span>${homeTeamName}</span>
+            </div>
         </button>
     </td>
-    <td class="vs" style="width: 20px;">${vsText}</td> 
-    <td style="position: relative; overflow: hidden; width: 47%;">${watermarkHTML(awayLogoUrl)}
-        <button type="button" class="team-link away-btn ${selectedWinner === "away" ? "selected" : ""}" data-winner="away" ${matchStarted ? 'disabled' : ''}
-                style="overflow: hidden;">
-            <div style="z-index: 5;">${awayTeamName}</div>
+    <td class="vs" style="width: 5%;"><span class="match-vs">${vsText}</span>${matchTime ? `<span class="match-time">${matchTime}</span>` : ''}</td> 
+    <td style="width: calc(45%);">
+        <button type="button" class="team-link away-btn ${selectedWinner === "away" ? "selected" : ""}" data-winner="away" ${matchStarted ? 'disabled' : ''}>
+            <div class="team-info-row" style="justify-content: flex-end; width:100%;">
+                <span>${awayTeamName}</span>
+                <div class="team-logo-small-wrap"><img src="${awayLogoUrl}" alt=""></div>
+            </div>
         </button>
     </td>
 </tr>`;
@@ -1064,8 +1116,6 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 
                         // Generování řádků pro jednotlivé zápasy série
                         const detailedRows = match.playedMatches.map((pm, idx) => {
-                            if (pm.scoreHome > pm.scoreAway) currentH++; else currentA++;
-
                             // Pokud je v adminu nastaven sideSwap, vizuálně prohodíme jména v řádku
                             const displayHome = pm.sideSwap ? awayTeamName : homeTeamName;
                             const displayAway = pm.sideSwap ? homeTeamName : awayTeamName;
@@ -1074,27 +1124,31 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
                             const hWinnerClass = (pm.scoreHome > pm.scoreAway && !pm.sideSwap) || (pm.scoreAway > pm.scoreHome && pm.sideSwap);
                             const aWinnerClass = (pm.scoreAway > pm.scoreHome && !pm.sideSwap) || (pm.scoreHome > pm.scoreAway && pm.sideSwap);
 
+                            if (hWinnerClass) currentH++; else if (aWinnerClass) currentA++;
+
                             return `
-                                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 5px 10px; border-bottom: 1px solid #222; font-size: 0.8em; background: #0c0c0c;">
-                                    <span style="color: #555; width: 15px; font-weight: bold;">${idx + 1}.</span>
-                                    <span style="flex: 1; text-align: right; ${hWinnerClass ? 'color: #00ff00; font-weight: bold;' : 'color: #888;'}">${displayHome}</span>
-                                    <span style="background: #222; padding: 2px 6px; font-family: monospace; min-width: 35px; text-align: center; border: 1px solid #333;">
-                                        ${displayScoreH}:${displayScoreA}${pm.ot ? '<small style="font-size:0.7em">p</small>' : ''}
+                                <div class="playoff-series-game">
+                                    <span class="playoff-series-game-number">${idx + 1}.</span>
+                                    <span class="playoff-series-game-team home ${hWinnerClass ? 'winner' : ''}">${displayHome}</span>
+                                    <span class="playoff-series-game-score">
+                                        ${displayScoreH}:${displayScoreA}${pm.ot ? '<small>p</small>' : ''}
                                     </span>
-                                    <span style="flex: 1; text-align: left; ${aWinnerClass ? 'color: #00ff00; font-weight: bold;' : 'color: #888;'}">${displayAway}</span>
-                                    <span style="color: #555; width: 15px; font-weight: bold;">${idx + 1}.</span>
+                                    <span class="playoff-series-game-team away ${aWinnerClass ? 'winner' : ''}">${displayAway}</span>
                                 </div>
                             `;
                         }).join('');
 
                         playedMatchesHtml = `
-                            <tr style="background: #111; border-top: none;">
+                            <tr class="played-matches-row" style="background: transparent; border-top: none;">
                                 <td colspan="3" style="padding: 0; border-top: none;">
-                                    <div style="background: #ff4500; color: white; font-size: 0.7em; font-weight: bold; text-align: center; padding: 2px 0; text-transform: uppercase;">
-                                        Stav série: ${currentH}:${currentA}
-                                    </div>
-                                    <div style="max-height: 200px; overflow-y: auto; border: 1px solid #ff4500; border-top: none;">
-                                        ${detailedRows}
+                                    <div class="playoff-series-progress">
+                                        <div class="playoff-series-header">
+                                            <span>Průběh série</span>
+                                            <span class="playoff-series-score">${currentH}:${currentA}</span>
+                                        </div>
+                                        <div class="playoff-series-matches">
+                                            ${detailedRows}
+                                        </div>
                                     </div>
                                 </td>
                             </tr>
@@ -1103,15 +1157,21 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
 
                     html += `
         <tr class="match-row playoff-parent-row" data-match-id="${match.id}">
-    <td style="position: relative; overflow: hidden; width: 47%;">${watermarkHTML(homeLogoUrl)}
-        <button type="button" class="team-link home-btn ${selectedWinner === "home" ? "selected" : ""}" data-winner="home" ${matchStarted ? 'disabled' : ''} style="overflow: hidden;">
-            <span style="z-index: 5;">${homeTeamName}</span>
+    <td style="width: calc(45%);">
+        <button type="button" class="team-link home-btn ${selectedWinner === "home" ? "selected" : ""}" data-winner="home" ${matchStarted ? 'disabled' : ''}>
+            <div class="team-info-row">
+                <div class="team-logo-small-wrap"><img src="${homeLogoUrl}" alt=""></div>
+                <span>${homeTeamName}</span>
+            </div>
         </button>
     </td>
-    <td class="vs" style="width: 20px;">${vsText}</td>
-    <td style="position: relative; overflow: hidden; width: 47%;">${watermarkHTML(awayLogoUrl)}
-        <button type="button" class="team-link away-btn ${selectedWinner === "away" ? "selected" : ""}" data-winner="away" ${matchStarted ? 'disabled' : ''} style="overflow: hidden;">
-            <span style="z-index: 5;">${awayTeamName}</span>
+    <td class="vs" style="width: 5%;"><span class="match-vs">${vsText}</span>${matchTime ? `<span class="match-time">${matchTime}</span>` : ''}</td>
+    <td style="width: calc(45%);">
+        <button type="button" class="team-link away-btn ${selectedWinner === "away" ? "selected" : ""}" data-winner="away" ${matchStarted ? 'disabled' : ''}>
+            <div class="team-info-row" style="justify-content: flex-end; width:100%;">
+                <span>${awayTeamName}</span>
+                <div class="team-logo-small-wrap"><img src="${awayLogoUrl}" alt=""></div>
+            </div>
         </button>
     </td>
 </tr>
@@ -1134,7 +1194,7 @@ ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected'
             html += `</tbody></table>`;
         }
 
-        html += `</section></main></body><script>
+        html += `</section></main><script>
 document.addEventListener('DOMContentLoaded', () => {
 function sendTip(formData, homeBtn, awayBtn, loserRow) {
 const winner = formData.get('winner');
@@ -1147,14 +1207,18 @@ fetch('/tip', {
         'Content-Type': 'application/x-www-form-urlencoded',
         'X-CSRF-Token': csrfToken
     }, 
-    body: formData 
+    body: formData.toString()
 })
-.then(res => { if (res.ok) { 
+.then(async res => {
+    if (!res.ok) {
+        const message = await res.text();
+        throw new Error(message || 'Chyba při ukládání tipu.');
+    }
     if(homeBtn) { homeBtn.classList.toggle('selected', winner === 'home'); if(winner === 'home' && awayBtn) awayBtn.classList.remove('selected'); }
     if(awayBtn) { awayBtn.classList.toggle('selected', winner === 'away'); if(winner === 'away' && homeBtn) homeBtn.classList.remove('selected'); }
     if(loserRow) loserRow.style.display = 'table-row';
-} else { alert('Chyba při ukládání.'); } })
-.catch(err => { console.error(err); alert('Chyba připojení.'); });
+})
+.catch(err => { console.error('Tip se nepodařilo uložit:', err); alert(err.message || 'Chyba připojení.'); });
 }
 document.querySelectorAll('button[data-winner]').forEach(btn => {
                 btn.addEventListener('click', (e) => {
@@ -1212,46 +1276,7 @@ sendTip(formData, null, null, null); }); }
 });
 document.addEventListener('DOMContentLoaded', () => {
     const sidebar = document.querySelector('.left-panel');
-    const container = document.querySelector('.stats-container');
-
-    if (!sidebar || !container) return;
-
-    let lastScrollY = window.scrollY;
-    let topOffset = 20; // Výchozí odsazení odshora
-    const margin = 20; // Mezera nahoře i dole
-
-    window.addEventListener('scroll', () => {
-        // Pokud je obrazovka dostatečně velká, že se tam panel vejde celý, normálně ho přilepíme k vršku
-        if (sidebar.offsetHeight <= window.innerHeight) {
-            sidebar.style.top = margin + 'px';
-            return;
-        }
-
-        const currentScrollY = window.scrollY;
-        const scrollDelta = currentScrollY - lastScrollY;
-        const viewportHeight = window.innerHeight;
-        const sidebarHeight = sidebar.offsetHeight;
-
-        // Minimální hodnota 'top', aby se ukázal spodek panelu (bude to záporné číslo)
-        const minTop = viewportHeight - sidebarHeight - margin;
-
-        if (scrollDelta > 0) {
-            // SCROLUJEME DOLŮ
-            topOffset -= scrollDelta;
-            if (topOffset < minTop) {
-                topOffset = minTop; // Zastavíme, když dorazíme na konec panelu (přilepí se ke spodku)
-            }
-        } else if (scrollDelta < 0) {
-            // SCROLUJEME NAHORU
-            topOffset -= scrollDelta; // (odčítáme záporné číslo = přičítáme)
-            if (topOffset > margin) {
-                topOffset = margin; // Zastavíme, když dorazíme na začátek panelu (přilepí se k vršku)
-            }
-        }
-
-        sidebar.style.top = topOffset + 'px';
-        lastScrollY = currentScrollY;
-    });
+    if (!sidebar) return;
 
     // Načíst verzi a zobrazit v badge
     fetch('/api/version')
@@ -1264,7 +1289,7 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         .catch(err => console.error('Nepodařilo se načíst verzi', err));
 });
-</script></html>`;
+</script></body></html>`;
         res.send(html);
 });
 
@@ -1336,22 +1361,22 @@ router.get('/history', requireLogin, async (req, res) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Historie lig a sezón</title>
-        <link rel="stylesheet" href="/css/styles.css">
+        <title>Historie lig a sezón – Tipovačka</title>
+        <link rel="stylesheet" href="/css/modern-design.css">
         <script src="/js/version-notification.js"></script>
         <link rel="icon" href="/images/logo.png">
     </head>
+    ${renderNotificationScript(req.session.csrfToken || '')}
     <body class="usersite">
-        <header class="header">
-            <div class="header-main">
-                <div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Historie sezón a lig</h1></div>
-                <div class="header-user">
-                    <a href="/" class="history-btn">← Zpět na hlavní stránku</a>
-                </div>
-            </div>
-        </header>
-        <header class="time-header">${await generateTimeWidget()}<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a></header>
-        <main class="main_page">
+        ${await renderUserHeader({
+            username: req.session.user,
+            selectedLiga: '',
+            uniqueLeagues: [],
+            activeTab: 'history',
+            csrfToken: req.session.csrfToken || '',
+            timeWidgetHtml: await generateTimeWidget()
+        })}
+        <main class="layout-single-column">
             <div class="history-container">
     `;
 
@@ -1458,34 +1483,39 @@ router.get('/history/prestupy', requireLogin, async (req, res) => {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Přestupy - ${selectedLiga} ${selectedSeason}</title>
-<link rel="stylesheet" href="/css/styles.css" />
+<link rel="stylesheet" href="/css/modern-design.css" />
 <script src="/js/version-notification.js"></script>
 <link rel="icon" href="/images/logo.png">
 </head>
+${renderNotificationScript(req.session?.csrfToken || '')}
 <body class="usersite">
-<header class="header">
-<div class="header-main">
-<div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Přestupy - ${selectedLiga} ${selectedSeason}</h1></div>
-<div class="header-user">
-<p id="logged_user">${req.session?.user ? `Přihlášený jako: <strong>${req.session.user}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
-</div>
-</div>
-<div class="header-controls">
-<div class="league-dropdown">
-<a class="history-btn" href="/">Aktuální</a>
-<a class="history-btn" href="/history">Zpět na výběr</a>
-<a class="history-btn" href="/history/a/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy zápasů</a>
-<a class="history-btn" href="/history/table/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy tabulky</a>
-<a class="history-btn" style="background:#00d4ff; color:black;" href="/history/prestupy?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">📜 Přestupy</a>
-<a class="history-btn" href="/history/roster?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">👥 Soupisky</a>
-</div>
-</div>
-</header>
-<header class="time-header">${await generateTimeWidget()}<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a></header>
-<main class="main_page">
+${await renderUserHeader({
+    username: req.session?.user,
+    selectedLiga: selectedLiga,
+    uniqueLeagues: [],
+    activeTab: 'history',
+    csrfToken: req.session?.csrfToken || '',
+    timeWidgetHtml: await generateTimeWidget()
+})}
+<main class="layout-single-column">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom: 20px;">
+        <div class="segmented-tabs">
+            <a class="segmented-btn" href="/">Aktuální sezóna</a>
+            <a class="segmented-btn" href="/history">← Zpět na výběr</a>
+            <a class="segmented-btn" href="/history/a/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy zápasů</a>
+            <a class="segmented-btn" href="/history/table/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy tabulky</a>
+            <a class="segmented-btn active" href="/history/prestupy?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">📜 Přestupy</a>
+            <a class="segmented-btn" href="/history/roster?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">👥 Soupisky</a>
+        </div>
+    </div>
 
-<div style="display: grid; gap: 15px; margin-top: 15px; width: 100%;">
-<h2 style="margin-top: 0; text-align: center; border-bottom: 2px solid orangered; padding-bottom: 10px;">Přestupy a Spekulace - ${selectedLiga} (${selectedSeason})</h2>
+<div style="display: grid; gap: 16px; width: 100%;">
+<div class="section-header">
+    <div class="section-title">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M16 3h5v5"/><path d="M4 20L21 3"/><path d="M21 16v5h-5"/><path d="M15 15l6 6"/><path d="M4 4l5 5"/></svg>
+        Přestupy a Spekulace – ${selectedLiga} (${selectedSeason})
+    </div>
+</div>
 `;
 
     // FUNKCE PRO OBARVOVÁNÍ (stejné jako v aktuálních přestupech)
@@ -1546,7 +1576,7 @@ router.get('/history/prestupy', requireLogin, async (req, res) => {
 
     // VYKRESLENÍ KARET TÝMŮ
     if (teamsInSelectedLiga.length === 0) {
-        html += `<div style="text-align: center; padding: 40px; color: #888;">Žádné týmy v lize ${selectedLiga} pro sezónu ${selectedSeason}</div>`;
+        html += `<div style="text-align: center; padding: 40px; color: var(--text-dim);">Žádné týmy v lize ${selectedLiga} pro sezónu ${selectedSeason}</div>`;
     } else {
         teamsInSelectedLiga.sort((a, b) => a.id - b.id).forEach(team => {
             const tId = String(team.id);
@@ -1554,34 +1584,34 @@ router.get('/history/prestupy', requireLogin, async (req, res) => {
             const logoUrl = team.logo ? `/logoteamu/${team.logo}` : '/images/logo.png';
 
             html += `
-    <div style="position: relative; background-color: #000; border: 2px solid #ff4500; overflow: hidden; display: flex; flex-direction: column; min-height: 250px; box-shadow: 0 4px 15px rgba(0,0,0,0.8);">
-        
-        <div style="position: relative; z-index: 1; background: linear-gradient(to bottom, #222, #111); border-bottom: 3px solid #ff4500; display: flex; align-items: center; padding: 10px;">
-            <img src="${logoUrl}" alt="${team.name}" style="height: 45px; width: 45px; object-fit: contain; margin-right: 12px; filter: drop-shadow(0 0 5px rgba(255,255,255,0.2));">
-            <strong style="color: white; font-size: 1.3em; text-transform: uppercase; letter-spacing: 1px;">${team.name}</strong>
+    <div class="transfer-team-card">
+        <div class="transfer-team-header">
+            <div class="transfer-team-info">
+                <img src="${logoUrl}" alt="${team.name}" class="transfer-team-logo">
+                <div class="transfer-team-title">${team.name}</div>
+            </div>
         </div>
 
-        <div style="position: relative; z-index: 1; display: flex; flex-direction: row; flex: 1;">
+        <div class="transfer-cols-grid">
+            <div class="transfer-watermark" style="background-image: url('${logoUrl}');"></div>
             
-            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-10deg); width: 80%; height: 80%; background-image: url('${logoUrl}'); background-size: contain; background-repeat: no-repeat; background-position: center; opacity: 0.30; filter: grayscale(50%); z-index: -50; pointer-events: none;"></div>
-            
-            <div style="flex: 1; padding: 8px; border-right: 1px solid #333; background-color: rgba(0, 50, 80, 0.3);">
-                <div style="color: #00d4ff; font-size: 0.7em; font-weight: 900; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;">Spekulace IN</div>
+            <div class="transfer-col col-spec-in">
+                <div class="transfer-col-header">⚡ Spekulace IN</div>
                 ${renderList(tData.specIn)}
             </div>
 
-            <div style="flex: 1; padding: 8px; border-right: 1px solid #333; background-color: rgba(0, 50, 80, 0.3);">
-                <div style="color: #00d4ff; font-size: 0.7em; font-weight: 900; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;">Spekulace OUT</div>
+            <div class="transfer-col col-spec-out">
+                <div class="transfer-col-header">⚡ Spekulace OUT</div>
                 ${renderList(tData.specOut)}
             </div>
 
-            <div style="flex: 1; padding: 8px; border-right: 1px solid #333; background-color: rgba(0, 100, 0, 0.2);">
-                <div style="color: #00ff00; font-size: 0.7em; font-weight: 900; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;">Příchody</div>
+            <div class="transfer-col col-conf-in">
+                <div class="transfer-col-header">✓ Příchody</div>
                 ${renderList(tData.confIn)}
             </div>
 
-            <div style="flex: 1; padding: 8px; background-color: rgba(100, 0, 0, 0.2);">
-                <div style="color: #ff4444; font-size: 0.7em; font-weight: 900; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;">Odchody</div>
+            <div class="transfer-col col-conf-out">
+                <div class="transfer-col-header">✕ Odchody</div>
                 ${renderList(tData.confOut)}
             </div>
         </div>
@@ -1648,42 +1678,36 @@ router.get('/history/a', requireLogin, async (req, res) => {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Tipovačka</title>
-<link rel="stylesheet" href="/css/styles.css" />
+<title>Tipovačka – Historie ${selectedLiga} ${selectedSeason}</title>
+<link rel="stylesheet" href="/css/modern-design.css" />
 <script src="/js/version-notification.js"></script>
 <link rel="icon" href="/images/logo.png">
 </head>
-<script>
-function showTable(which) {
-document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none';
-const p = document.getElementById('playoffTablePreview');
-p.style.display = which === 'playoff' ? 'block' : 'none';
-}
-</script>
+${renderNotificationScript(req.session.csrfToken || '')}
 <body class="usersite">
-<header class="header">
-<div class="header-main">
-<div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
-<div class="header-user">
-<p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
+${await renderUserHeader({
+    username: username,
+    selectedLiga: selectedLiga,
+    uniqueLeagues: [],
+    activeTab: 'history',
+    csrfToken: req.session.csrfToken || '',
+    timeWidgetHtml: await generateTimeWidget()
+})}
+<main class="main_page">
+<div style="grid-column: 1 / -1; margin-bottom: 12px;">
+    <div class="segmented-tabs">
+        <a class="segmented-btn" href="/">Aktuální sezóna</a>
+        <a class="segmented-btn" href="/history">← Zpět na výběr</a>
+        <a class="segmented-btn active" href="/history/a/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy zápasů</a>
+        <a class="segmented-btn" href="/history/table/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy tabulky</a>
+        ${hasTransferLeagues
+            ? `<a class="segmented-btn" href="/history/prestupy?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">📜 Přestupy</a>`
+            : ''
+        }
+        <a class="segmented-btn" href="/history/roster?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">👥 Soupisky</a>
+    </div>
 </div>
-</div>
-<div class="header-controls">
-<div class="league-dropdown">
-<a class="history-btn" href="/">Aktuální</a>
-<a class="history-btn" href="/history">Zpět na výběr</a>
-<a class="history-btn" style="background:orangered; color:black;" href="/history/a/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy zápasů</a>
-<a class="history-btn" href="/history/table/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy tabulky</a>
-${hasTransferLeagues
-    ? `<a class="history-btn" style="background:#00d4ff; color:black;" href="/history/prestupy?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">📜 Přestupy</a>`
-    : `<span class="history-btn" style="background:#333; color:#666; cursor:not-allowed;" title="Pro tuto sezónu/ligu nejsou dostupné přestupy">📜 Přestupy</span>`
-}
-<a class="history-btn" href="/history/roster?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">👥 Soupisky</a>
-</div>
-</div>
-</header>
-<header class="time-header">${await generateTimeWidget()}<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a></header>
-<main class="main_page">`
+`
 html += await generateLeftPanel(data, true);
     html += `<script>
         const globalStatsData = ${JSON.stringify(userStats)};
@@ -1727,17 +1751,10 @@ html += await generateLeftPanel(data, true);
         // Přidej do <script> v proměnné html v user.js
 function toggleSeriesDetails(btn) {
     const details = btn.nextElementSibling;
-    if (details.style.display === "none") {
-        details.style.display = "block";
-        btn.innerText = btn.innerText.replace("▼", "▲").replace("Zobrazit", "Skrýt");
-        btn.style.background = "#ff4500";
-        btn.style.color = "black";
-    } else {
-        details.style.display = "none";
-        btn.innerText = btn.innerText.replace("▲", "▼").replace("Skrýt", "Zobrazit");
-        btn.style.background = "#222";
-        btn.style.color = "#ff4500";
-    }
+    const expanded = btn.getAttribute('aria-expanded') === 'true';
+    details.hidden = expanded;
+    btn.setAttribute('aria-expanded', String(!expanded));
+    btn.querySelector('.series-toggle-icon').textContent = expanded ? '▾' : '▴';
 }
         </script>
         <section class="matches-container">
@@ -1851,7 +1868,7 @@ function toggleSeriesDetails(btn) {
         html += `<h3>${formattedDateTime}</h3>
 <table class="matches-table">
     <colgroup>
-        <col style="width: calc(50% - 50px);"> <col style="width: 30px;">             <col style="width: 40px;">             <col style="width: 30px;">             <col style="width: calc(50% - 50px);"> </colgroup>
+        <col style="width: calc(45%);"> <col style="width: 1.5%;">             <col style="width: 2%;">             <col style="width: 1.5%;">             <col style="width: calc(45%);"> </colgroup>
     <thead class="matches-table-header">
         <tr><th colspan="5">Zápasy</th></tr>
     </thead>
@@ -1902,8 +1919,6 @@ function toggleSeriesDetails(btn) {
                     let currentH = 0; let currentA = 0;
 
                     const detailedRows = match.playedMatches.map((pm, idx) => {
-                        if (pm.scoreHome > pm.scoreAway) currentH++; else currentA++;
-
                         const displayHome = pm.sideSwap ? (teams.find(t => t.id === match.awayTeamId)?.name || '???') : (teams.find(t => t.id === match.homeTeamId)?.name || '???');
                         const displayAway = pm.sideSwap ? (teams.find(t => t.id === match.homeTeamId)?.name || '???') : (teams.find(t => t.id === match.awayTeamId)?.name || '???');
                         const displayScoreH = pm.sideSwap ? pm.scoreAway : pm.scoreHome;
@@ -1911,27 +1926,31 @@ function toggleSeriesDetails(btn) {
 
                         const hWinner = (pm.scoreHome > pm.scoreAway && !pm.sideSwap) || (pm.scoreAway > pm.scoreHome && pm.sideSwap);
                         const aWinner = (pm.scoreAway > pm.scoreHome && !pm.sideSwap) || (pm.scoreHome > pm.scoreAway && pm.sideSwap);
+                        if (hWinner) currentH++; else if (aWinner) currentA++;
 
                         return `
-                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 4px 10px; border-bottom: 1px solid #222; font-size: 0.85em; background: #0c0c0c;">
-                            <span style="color: #555; width: 15px; font-weight: bold;">${idx + 1}.</span>
-                            <span style="flex: 1; text-align: right; ${hWinner ? 'color: #00ff00; font-weight: bold;' : 'color: #888;'}">${displayHome}</span>
-                            <span style="background: #222; padding: 1px 6px; font-family: monospace; min-width: 35px; text-align: center; border: 1px solid #333;">
+                        <div class="playoff-series-game">
+                            <span class="playoff-series-game-number">${idx + 1}.</span>
+                            <span class="playoff-series-game-team home ${hWinner ? 'winner' : ''}">${displayHome}</span>
+                            <span class="playoff-series-game-score">
                                 ${displayScoreH}:${displayScoreA}${pm.ot ? '<small>p</small>' : ''}
                             </span>
-                            <span style="flex: 1; text-align: left; ${aWinner ? 'color: #00ff00; font-weight: bold;' : 'color: #888;'}">${displayAway}</span>
-                            <span style="color: #555; width: 15px; font-weight: bold;">${idx + 1}.</span>
+                            <span class="playoff-series-game-team away ${aWinner ? 'winner' : ''}">${displayAway}</span>
                         </div>`;
                     }).join('');
 
                     playedMatchesHtml = `
-                <tr style="background: #111; border-top: none;">
+                <tr class="played-matches-row" style="background: transparent; border-top: none;">
                     <td colspan="5" style="padding: 0; border-top: none;">
-                        <div onclick="toggleSeriesDetails(this)" style="cursor: pointer; background: #222; color: #ff4500; font-size: 0.65em; font-weight: bold; text-align: center; padding: 5px 0; text-transform: uppercase; border-bottom: 1px solid #333; transition: 0.3s;">
-                            ▼ Zobrazit průběh série (${currentH}:${currentA}) ▼
-                        </div>
-                        <div class="series-details" style="display: none; max-height: 300px; overflow-y: auto; border-bottom: 2px solid #ff4500; transition: all 0.5s ease;">
+                        <div class="playoff-series-progress">
+                        <button type="button" class="playoff-series-header" onclick="toggleSeriesDetails(this)" aria-expanded="false" aria-controls="series-details-${match.id}">
+                            <span>Průběh série</span>
+                            <span class="playoff-series-score">${currentH}:${currentA}</span>
+                            <span class="series-toggle-icon" aria-hidden="true">▾</span>
+                        </button>
+                        <div id="series-details-${match.id}" class="series-details playoff-series-matches" hidden>
                             ${detailedRows}
+                        </div>
                         </div>
                     </td>
                 </tr>`;
@@ -1955,47 +1974,7 @@ function toggleSeriesDetails(btn) {
     }
 
     html += `</section></main>
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-    const sidebar = document.querySelector('.left-panel');
-    const container = document.querySelector('.stats-container');
-    
-    if (!sidebar || !container) return;
-
-    let lastScrollY = window.scrollY;
-    let topOffset = 20; 
-    const margin = 20; 
-
-    window.addEventListener('scroll', () => {
-        if (sidebar.offsetHeight <= window.innerHeight) {
-            sidebar.style.top = margin + 'px';
-            return;
-        }
-
-        const currentScrollY = window.scrollY;
-        const scrollDelta = currentScrollY - lastScrollY;
-        const viewportHeight = window.innerHeight;
-        const sidebarHeight = sidebar.offsetHeight;
-        
-        const minTop = viewportHeight - sidebarHeight - margin;
-
-        if (scrollDelta > 0) {
-            topOffset -= scrollDelta;
-            if (topOffset < minTop) {
-                topOffset = minTop; 
-            }
-        } else if (scrollDelta < 0) {
-            topOffset -= scrollDelta; 
-            if (topOffset > margin) {
-                topOffset = margin; 
-            }
-        }
-
-        sidebar.style.top = topOffset + 'px';
-        lastScrollY = currentScrollY;
-    });
-});
-    </script></body></html>`;
+    </body></html>`;
     res.send(html);
 });
 
@@ -2019,35 +1998,38 @@ router.get('/history/roster', requireLogin, async (req, res) => {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Soupisky - ${selectedLiga} ${selectedSeason}</title>
-<link rel="stylesheet" href="/css/styles.css" />
+<title>Soupisky – ${selectedLiga} ${selectedSeason}</title>
+<link rel="stylesheet" href="/css/modern-design.css" />
 <script src="/js/version-notification.js"></script>
 <link rel="icon" href="/images/logo.png">
 </head>
+${renderNotificationScript(req.session?.csrfToken || '')}
 <body class="usersite">
-<header class="header">
-<div class="header-main">
-<div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
-<div class="header-user">
-<p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
-</div>
-</div>
-<div class="header-controls">
-<div class="league-dropdown">
-<a class="history-btn" href="/">Aktuální</a>
-<a class="history-btn" href="/history">Zpět na výběr</a>
-<a class="history-btn" href="/history/a/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy zápasů</a>
-<a class="history-btn" href="/history/table/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy tabulky</a>
-<a class="history-btn" style="background:#00d4ff; color:black;" href="/history/prestupy?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">📜 Přestupy</a>
-<a class="history-btn" style="background:orangered; color:black;" href="/history/roster?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">👥 Soupisky</a>
-</div>
-</div>
-</header>
-<header class="time-header">${await generateTimeWidget()}<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a></header>
-<main class="main_page" style="flex-direction: column; width: 100%; max-width: 1400px; margin: 0 auto; padding: 15px; box-sizing: border-box;">
+${await renderUserHeader({
+    username: username,
+    selectedLiga: selectedLiga,
+    uniqueLeagues: [],
+    activeTab: 'history',
+    csrfToken: req.session?.csrfToken || '',
+    timeWidgetHtml: await generateTimeWidget()
+})}
+<main class="layout-single-column">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom: 20px;">
+        <div class="segmented-tabs">
+            <a class="segmented-btn" href="/">Aktuální sezóna</a>
+            <a class="segmented-btn" href="/history">← Zpět na výběr</a>
+            <a class="segmented-btn" href="/history/a/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy zápasů</a>
+            <a class="segmented-btn" href="/history/table/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy tabulky</a>
+            <a class="segmented-btn" href="/history/prestupy?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">📜 Přestupy</a>
+            <a class="segmented-btn active" href="/history/roster?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">👥 Soupisky</a>
+        </div>
+    </div>
 
-<div style="text-align: center; margin-bottom: 20px; width: 100%;">
-<h2 style="margin-top: 0; text-align: center; border-bottom: 2px solid orangered; padding-bottom: 10px; width: 100%;">Soupisky - ${selectedLiga} (${selectedSeason})</h2>
+<div class="section-header">
+    <div class="section-title">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Soupisky – ${selectedLiga} (${selectedSeason})
+    </div>
 </div>
 
 <div id="allRostersView" style="margin-top: 15px; width: 100%; display: flex; flex-direction: column; gap: 20px;" data-team-ids='${JSON.stringify(teamsInSelectedLiga.map(t => t.id))}' data-teams='${JSON.stringify(teamsInSelectedLiga)}' data-season='${selectedSeason}'></div>
@@ -2214,35 +2196,32 @@ router.get('/history/roster', requireLogin, async (req, res) => {
         res.send(html);
     } catch (error) {
         console.error('Chyba v /history/roster route:', error);
-        await logUserAction(req.session.user, "HISTORY_ROSTER_ERROR", `Chyba při načítání historických soupisek: ${error.message}`, 'history', null, req, 'error', false);
+        await logUserAction(req.session?.user, "HISTORY_ROSTER_ERROR", `Chyba při načítání historických soupisek: ${error.message}`, 'history', null, req, 'error', false);
         
         let errorHtml = `
 <!DOCTYPE html>
 <html lang="cs">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width; initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Chyba - Tipovačka</title>
-<link rel="stylesheet" href="/css/styles.css" />
+<link rel="stylesheet" href="/css/modern-design.css" />
 <link rel="icon" href="/images/logo.png">
 </head>
 <body class="usersite">
-<header class="header">
-<div class="header-main">
-<div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
-<div class="header-user">
-<p id="logged_user">${req.session?.user ? `Přihlášený jako: <strong>${req.session.user}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
-</div>
-</div>
-<div class="header-controls">
-<a class="history-btn" href="/">← Zpět na hlavní stránku</a>
-</div>
-</header>
-<main class="main_page">
-<div style="text-align: center; padding: 40px; background: #1a1a1a; border-radius: 8px; margin: 20px; border: 2px solid #ff4444;">
-<h1 style="color: #ff4444; margin-bottom: 20px;">❌ Došlo k chybě</h1>
-<p style="color: #ccc; margin-bottom: 20px;">Omlouváme se, ale došlo k chybě při načítání stránky. Chyba byla logována.</p>
-<a href="/history" style="display: inline-block; margin-top: 20px; padding: 10px 20px; background: #444; color: white; text-decoration: none; border-radius: 4px;">Zpět na výběr historie</a>
+${await renderUserHeader({
+    username: req.session?.user,
+    selectedLiga: '',
+    uniqueLeagues: [],
+    activeTab: 'history',
+    csrfToken: req.session?.csrfToken || '',
+    timeWidgetHtml: await generateTimeWidget()
+})}
+<main class="layout-single-column">
+<div class="dashboard-section" style="text-align: center; padding: 40px; border-color: rgba(239, 68, 68, 0.4); max-width: 600px; margin: 40px auto;">
+<h2 style="color: var(--accent-red); margin-bottom: 12px; display:flex; align-items:center; justify-content:center; gap:8px;">❌ Došlo k chybě</h2>
+<p style="color: var(--text-muted); margin-bottom: 20px;">Omlouváme se, ale došlo k chybě při načítání stránky. Chyba byla logována.</p>
+<a href="/history" class="nav-pill active" style="padding: 10px 20px;">← Zpět na výběr historie</a>
 </div>
 </main>
 </body>
@@ -2287,41 +2266,36 @@ router.get('/history/table', requireLogin, async (req, res) => {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Tipovačka</title>
-<link rel="stylesheet" href="/css/styles.css" />
+<title>Tipovačka – Historie tabulky ${selectedLiga} ${selectedSeason}</title>
+<link rel="stylesheet" href="/css/modern-design.css" />
 <script src="/js/version-notification.js"></script>
 <link rel="icon" href="/images/logo.png">
 </head>
-<script>
-function showTable(which) { 
-    document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none'; 
-    const p = document.getElementById('playoffTablePreview'); p.style.display = which === 'playoff' ? 'block' : 'none'; 
-}
-</script>
+${renderNotificationScript(req.session.csrfToken || '')}
 <body class="usersite">
-<header class="header">
-<div class="header-main">
-<div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
-<div class="header-user">
-<p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
+${await renderUserHeader({
+    username: username,
+    selectedLiga: selectedLiga,
+    uniqueLeagues: [],
+    activeTab: 'history',
+    csrfToken: req.session.csrfToken || '',
+    timeWidgetHtml: await generateTimeWidget()
+})}
+<main class="main_page">
+<div style="grid-column: 1 / -1; margin-bottom: 12px;">
+    <div class="segmented-tabs">
+        <a class="segmented-btn" href="/">Aktuální sezóna</a>
+        <a class="segmented-btn" href="/history">← Zpět na výběr</a>
+        <a class="segmented-btn" href="/history/a/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy zápasů</a>
+        <a class="segmented-btn active" href="/history/table/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy tabulky</a>
+        ${hasTransferLeagues
+            ? `<a class="segmented-btn" href="/history/prestupy?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">📜 Přestupy</a>`
+            : ''
+        }
+        <a class="segmented-btn" href="/history/roster?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">👥 Soupisky</a>
+    </div>
 </div>
-</div>
-<div class="header-controls">
-<div class="league-dropdown">
-<a class="history-btn" href="/">Aktuální</a>
-<a class="history-btn" href="/history">Zpět na výběr</a>
-<a class="history-btn" href="/history/a/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy zápasů</a>
-<a class="history-btn" style="background:orangered; color:black;" href="/history/table/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy tabulky</a>
-${hasTransferLeagues
-    ? `<a class="history-btn" style="background:#00d4ff; color:black;" href="/history/prestupy?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">📜 Přestupy</a>`
-    : `<span class="history-btn" style="background:#333; color:#666; cursor:not-allowed;" title="Pro tuto sezónu/ligu nejsou dostupné přestupy">📜 Přestupy</span>`
-}
-<a class="history-btn" href="/history/roster?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">👥 Soupisky</a>
-</div>
-</div>
-</header>
-    <header class="time-header">${await generateTimeWidget()}<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a></header>
-<main class="main_page">`
+`
 html += await generateLeftPanel(data, true);
     html += `
         <script>
@@ -2526,232 +2500,21 @@ router.get("/prestupy", requireLogin, async (req, res) => {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Tipovačka</title>
-<link rel="stylesheet" href="/css/styles.css" />
+<title>Přestupy – Tipovačka</title>
+<link rel="stylesheet" href="/css/modern-design.css" />
 <script src="/js/version-notification.js"></script>
 <link rel="icon" href="/images/logo.png">
 </head>
-<script>
-function showTable(which) { 
-    document.getElementById('regularTable').style.display = which === 'regular' ? 'block' : 'none'; 
-    const p = document.getElementById('playoffTablePreview'); p.style.display = which === 'playoff' ? 'block' : 'none'; 
-}
-
-// Převod klíče
-function urlBase64ToUint8Array(base64String) {
-    const padding = '='.repeat((4 - base64String.length % 4) % 4);
-    const base64 = (base64String + padding).replace(/\\-/g, '+').replace(/_/g, '/');
-    const rawData = window.atob(base64);
-    const outputArray = new Uint8Array(rawData.length);
-    for (let i = 0; i < rawData.length; ++i) {
-        outputArray[i] = rawData.charCodeAt(i);
-    }
-    return outputArray;
-}
-
-async function toggleNotifications() {
-    const btn = document.getElementById('notify-toggle-btn');
-    if (!btn) return;
-    
-    btn.disabled = true;
-    btn.textContent = "Pracuji...";
-
-    try {
-        let registration = await navigator.serviceWorker.getRegistration();
-        
-        if (!registration) {
-            registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
-        }
-
-        let retry = 0;
-        while (!registration.active && retry < 10) {
-            await new Promise(res => setTimeout(res, 500));
-            registration = await navigator.serviceWorker.getRegistration();
-            retry++;
-        }
-
-        if (!registration.active) {
-            alert("Service Worker se nepodařilo aktivovat.");
-            btn.disabled = false;
-            await checkSubscriptionStatus();
-            return;
-        }
-
-        const subscription = await registration.pushManager.getSubscription();
-
-        if (subscription) {
-            // ODHLÁŠENÍ
-            const res = await fetch('/api/unsubscribe', {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'X-CSRF-Token': '${req.session.csrfToken || ''}'
-                },
-                body: JSON.stringify({ endpoint: subscription.endpoint })
-            });
-            if (res.ok) {
-                await subscription.unsubscribe();
-                alert('Notifikace vypnuty.');
-                await checkSubscriptionStatus();
-            }
-        } else {
-            // PŘIHLÁŠENÍ
-            const vapidRes = await fetch('/api/vapid-public-key');
-            if (!vapidRes.ok) {
-                alert('Server neodpovídá (chyba při získávání klíče).');
-                btn.disabled = false;
-                await checkSubscriptionStatus();
-                return;
-            }
-            const vapidPublicKey = await vapidRes.text();
-
-            const newSub = await registration.pushManager.subscribe({
-                userVisibleOnly: true,
-                applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
-            });
-
-            const saveRes = await fetch('/api/subscribe', {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'X-CSRF-Token': '${req.session.csrfToken || ''}'
-                },
-                body: JSON.stringify(newSub)
-            });
-            
-            if (saveRes.ok) {
-                alert('Notifikace zapnuty!');
-                await checkSubscriptionStatus();
-            } else {
-                alert('Nepodařilo se uložit odběr na server.');
-            }
-        }
-    } catch (e) {
-        console.error("Kritická chyba notifikací:", e);
-        alert('Došlo k nečekané chybě: ' + e.message);
-    }
-    
-    await checkSubscriptionStatus();
-    btn.disabled = false;
-}
-
-async function checkSubscriptionStatus() {
-    const btn = document.getElementById('notify-toggle-btn');
-    if (!btn) return;
-
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-        btn.textContent = "Nepodporováno";
-        btn.disabled = true;
-        return;
-    }
-
-    try {
-        // Kontrola stavu bez zbytečného čekání
-        const registration = await navigator.serviceWorker.getRegistration();
-        const subscription = registration ? await registration.pushManager.getSubscription() : null;
-
-        if (subscription) {
-            btn.textContent = "Vypnout notifikace 🔕";
-            btn.style.backgroundColor = "#555";
-        } else {
-            btn.textContent = "Zapnout notifikace 🔔";
-            btn.style.backgroundColor = "#ff4500";
-        }
-    } catch (e) {
-        btn.textContent = "Klikni pro stav";
-    }
-}
-
-document.addEventListener('DOMContentLoaded', checkSubscriptionStatus);
-</script>
+${renderNotificationScript(req.session.csrfToken || '')}
 <body class="usersite">
-<header class="header">
-<div class="header-main">
-<div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
-<div class="header-user">
-<p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
-</div>
-</div>
-<div class="header-controls">
-<form class="league-dropdown" method="GET">
-<label class="league-select-name">
-Liga:
-<select id="league-select" name="liga" required onchange="this.form.submit()">
-${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected' : ''}>${l}</option>`).join('')}
-</select>
-</label>
-<a class="history-btn" href="/history">Historie</a>
-<a class="history-btn changed" href="/?liga=${encodeURIComponent(selectedLiga)}">Tipovačka</a>
-<a class="history-btn changed" href="/table-tip?liga=${encodeURIComponent(selectedLiga)}">Základní část</a>
-<a class="history-btn changed" href="/image-exporter?liga=${encodeURIComponent(selectedLiga)}">Exportér</a>
-<a class="history-btn changed" href="/statistics">Statistiky</a>
-<div style="text-align: center; margin: 0;">
-    <button type="button" id="notify-toggle-btn" onclick="toggleNotifications()"
-        style="width: 220px; height: 38px; cursor: pointer; font-weight: bold; border: none; color: white; background-color: #444;">
-        Zjišťuji stav...
-    </button>
-</div>
-<input type="hidden" id="globalCsrfToken" value="${req.session.csrfToken || ''}">
-</form>
-</div>
-</header>
-<header class="time-header">${await generateTimeWidget()}<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a></header>
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-    const sidebar = document.querySelector('.left-panel');
-    const container = document.querySelector('.stats-container');
-    
-    if (!sidebar || !container) return;
-
-    let lastScrollY = window.scrollY;
-    let topOffset = 20; // Výchozí odsazení odshora
-    const margin = 20; // Mezera nahoře i dole
-
-    window.addEventListener('scroll', () => {
-        // Pokud je obrazovka dostatečně velká, že se tam panel vejde celý, normálně ho přilepíme k vršku
-        if (sidebar.offsetHeight <= window.innerHeight) {
-            sidebar.style.top = margin + 'px';
-            return;
-        }
-
-        const currentScrollY = window.scrollY;
-        const scrollDelta = currentScrollY - lastScrollY;
-        const viewportHeight = window.innerHeight;
-        const sidebarHeight = sidebar.offsetHeight;
-        
-        // Minimální hodnota 'top', aby se ukázal spodek panelu (bude to záporné číslo)
-        const minTop = viewportHeight - sidebarHeight - margin;
-
-        if (scrollDelta > 0) {
-            // SCROLUJEME DOLŮ
-            topOffset -= scrollDelta;
-            if (topOffset < minTop) {
-                topOffset = minTop; // Zastavíme, když dorazíme na konec panelu (přilepí se ke spodku)
-            }
-        } else if (scrollDelta < 0) {
-            // SCROLUJEME NAHORU
-            topOffset -= scrollDelta; // (odčítáme záporné číslo = přičítáme)
-            if (topOffset > margin) {
-                topOffset = margin; // Zastavíme, když dorazíme na začátek panelu (přilepí se k vršku)
-            }
-        }
-
-        sidebar.style.top = topOffset + 'px';
-        lastScrollY = currentScrollY;
-    });
-
-    // Načíst verzi a zobrazit v badge
-    fetch('/api/version')
-        .then(res => res.json())
-        .then(data => {
-            const versionBadge = document.getElementById('current-version');
-            if (versionBadge) {
-                versionBadge.textContent = data.version;
-            }
-        })
-        .catch(err => console.error('Nepodařilo se načíst verzi', err));
-});
-</script>
+${await renderUserHeader({
+    username: username,
+    selectedLiga: selectedLiga,
+    uniqueLeagues: uniqueLeagues,
+    activeTab: 'prestupy',
+    csrfToken: req.session.csrfToken || '',
+    timeWidgetHtml: await generateTimeWidget()
+})}
 <main class="main_page">
 `
 html += await generateLeftPanel(data);
@@ -2764,18 +2527,16 @@ html += await generateLeftPanel(data);
         
         if (!hasTransferLeagues) {
             // Pokud nejsou přestupy, zobrazit všechny soupisky
-            html += `<div style="text-align: center; margin-bottom: 10px;">
-                <a href="/history/prestupy" style="color: #00d4ff; text-decoration: none; font-size: 0.9em;">📜 Historie přestupů</a>
+            html += `<div class="transfer-page-actions transfer-page-actions-rosters">
+                <a href="/history/prestupy" class="transfer-history-link">📜 Historie přestupů</a>
             </div>
             <h2 style="margin-top: 0; text-align: center; border-bottom: 2px solid orangered; padding-bottom: 10px;">Soupisky - ${selectedLiga}</h2>
             <div id="allRostersView" style="margin-top: 15px;" data-team-ids='${JSON.stringify(teamsInSelectedLiga.map(t => t.id))}' data-teams='${JSON.stringify(teamsInSelectedLiga)}'></div>`;
         } else {
             // --- SEKCE PŘESTUPŮ ---
-            html += `<div style="text-align: center; margin-bottom: 10px;">
-                <a href="/history/prestupy" style="color: #00d4ff; text-decoration: none; font-size: 0.9em;">📜 Historie přestupů</a>
-            </div>
-            <div style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 15px;">
-                <button onclick="toggleView()" id="toggleViewBtn" style="background: #ff4500; color: white; border: none; padding: 8px 16px; cursor: pointer; font-size: 0.9em; font-weight: bold;">🔄 Zobrazit všechny soupisky</button>
+            html += `<div class="transfer-page-actions">
+                <a href="/history/prestupy" class="transfer-history-link">📜 Historie přestupů</a>
+                <button onclick="toggleView()" id="toggleViewBtn" class="transfer-view-toggle" type="button">👥 Zobrazit soupisky</button>
             </div>
             <h2 id="viewTitle" style="margin-top: 0; text-align: center; border-bottom: 2px solid orangered; padding-bottom: 10px;">Přestupy a Spekulace - ${selectedLiga}</h2>
             
@@ -2845,47 +2606,45 @@ html += await generateLeftPanel(data);
 // 3. VYKRESLENÍ KARET (Zůstává podobné, jen volá vylepšený renderList)
             teamsInSelectedLiga.sort((a, b) => a.id - b.id).forEach(team => {
                 const tId = String(team.id);
-                const tData = currentTransfers[tId] || { specIn: [], specOut: [], confIn: [], confOut: [] }; // Zde už používáme sjednocené názvy confIn/confOut
+                const tData = currentTransfers[tId] || { specIn: [], specOut: [], confIn: [], confOut: [] };
                 const logoUrl = team.logo ? `/logoteamu/${team.logo}` : '/images/logo.png';
 
                 html += `
-    <div style="position: relative; background-color: #000; border: 2px solid #ff4500; overflow: hidden; display: flex; flex-direction: column; min-height: 250px; box-shadow: 0 4px 15px rgba(0,0,0,0.8);">
-
-        <div style="position: relative; z-index: 1; background: linear-gradient(to bottom, #222, #111); border-bottom: 3px solid #ff4500; display: flex; align-items: center; justify-content: space-between; padding: 10px;">
-            <div style="display: flex; align-items: center;">
-                <img src="${logoUrl}" alt="${team.name}" style="height: 45px; width: 45px; object-fit: contain; margin-right: 12px; filter: drop-shadow(0 0 5px rgba(255,255,255,0.2));">
-                <strong style="color: white; font-size: 1.3em; text-transform: uppercase; letter-spacing: 1px;">${team.name}</strong>
+    <div class="transfer-team-card">
+        <div class="transfer-team-header">
+            <div class="transfer-team-info">
+                <img src="${logoUrl}" alt="${team.name}" class="transfer-team-logo">
+                <div class="transfer-team-title">${team.name}</div>
             </div>
-            <button onclick="toggleRoster(${team.id})" style="background: #ff4500; color: white; border: none; padding: 8px 12px; cursor: pointer; font-size: 0.85em; font-weight: bold;">👥 Soupiska</button>
+            <button onclick="toggleRosterModern(${team.id})" class="nav-pill active" style="padding: 6px 14px; font-size: 12px; cursor: pointer;">👥 Soupiska</button>
         </div>
 
-        <div id="roster-${team.id}" style="display: none; background: #1a1a1a; padding: 15px; border-bottom: 1px solid #333;">
-            <div style="text-align: center; color: #888; font-size: 0.9em;">Načítám soupisku...</div>
+        <div id="roster-${team.id}" style="display: none; background: var(--bg-card); padding: 20px; border-bottom: 1px solid var(--border-subtle);">
+            <div style="text-align: center; color: var(--text-dim); font-size: 0.9em;">Načítám soupisku...</div>
         </div>
 
-        <div id="transfers-${team.id}" style="position: relative; z-index: 1; display: flex; flex-direction: row; flex: 1;">
+        <div id="transfers-${team.id}" class="transfer-cols-grid">
+            <div class="transfer-watermark" style="background-image: url('${logoUrl}');"></div>
             
-            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-10deg); width: 80%; height: 80%; background-image: url('${logoUrl}'); background-size: contain; background-repeat: no-repeat; background-position: center; opacity: 0.30; filter: grayscale(50%); z-index: -50; pointer-events: none;"></div>
-            <div style="flex: 1; padding: 8px; border-right: 1px solid #333; background-color: rgba(0, 50, 80, 0.3);">
-                <div style="color: #00d4ff; font-size: 0.7em; font-weight: 900; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;">Spekulace IN</div>
+            <div class="transfer-col col-spec-in">
+                <div class="transfer-col-header">⚡ Spekulace IN</div>
                 ${renderList(tData.specIn)}
             </div>
 
-            <div style="flex: 1; padding: 8px; border-right: 1px solid #333; background-color: rgba(0, 50, 80, 0.3);">
-                <div style="color: #00d4ff; font-size: 0.7em; font-weight: 900; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;">Spekulace OUT</div>
+            <div class="transfer-col col-spec-out">
+                <div class="transfer-col-header">⚡ Spekulace OUT</div>
                 ${renderList(tData.specOut)}
             </div>
 
-            <div style="flex: 1; padding: 8px; border-right: 1px solid #333; background-color: rgba(0, 100, 0, 0.2);">
-                <div style="color: #00ff00; font-size: 0.7em; font-weight: 900; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;">Příchody</div>
+            <div class="transfer-col col-conf-in">
+                <div class="transfer-col-header">✓ Příchody</div>
                 ${renderList(tData.confIn)}
             </div>
 
-            <div style="flex: 1; padding: 8px; background-color: rgba(100, 0, 0, 0.2);">
-                <div style="color: #ff4444; font-size: 0.7em; font-weight: 900; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;">Odchody</div>
+            <div class="transfer-col col-conf-out">
+                <div class="transfer-col-header">✕ Odchody</div>
                 ${renderList(tData.confOut)}
             </div>
-
         </div>
     </div>`;
             });
@@ -2914,14 +2673,191 @@ async function toggleView() {
         allRostersView.style.display = 'block';
         toggleViewBtn.textContent = '🔄 Zobrazit přestupy';
         viewTitle.textContent = 'Soupisky - ${selectedLiga}';
-        await showAllRosters();
+        await showAllRostersModern();
     } else {
         // Přepnout na přestupy
         currentView = 'transfers';
         allRostersView.style.display = 'none';
         individualTeamsView.style.display = 'grid';
-        toggleViewBtn.textContent = '🔄 Zobrazit všechny soupisky';
+        toggleViewBtn.textContent = '👥 Zobrazit soupisky';
         viewTitle.textContent = 'Přestupy a Spekulace - ${selectedLiga}';
+    }
+}
+
+function escapeRosterHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+    })[char]);
+}
+
+const rosterLogoColorCache = new Map();
+
+function getRosterLogoColor(logoUrl) {
+    if (rosterLogoColorCache.has(logoUrl)) return rosterLogoColorCache.get(logoUrl);
+
+    const colorPromise = new Promise(resolve => {
+        const image = new Image();
+        image.onload = () => {
+            try {
+                const canvas = document.createElement('canvas');
+                canvas.width = 40;
+                canvas.height = 40;
+                const context = canvas.getContext('2d', { willReadFrequently: true });
+                context.drawImage(image, 0, 0, canvas.width, canvas.height);
+                const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+                const colors = new Map();
+
+                for (let index = 0; index < pixels.length; index += 4) {
+                    if (pixels[index + 3] < 80) continue;
+                    const red = pixels[index];
+                    const green = pixels[index + 1];
+                    const blue = pixels[index + 2];
+                    const key = [red >> 3, green >> 3, blue >> 3].join(',');
+                    const color = colors.get(key) || { red: 0, green: 0, blue: 0, count: 0 };
+                    color.red += red;
+                    color.green += green;
+                    color.blue += blue;
+                    color.count += 1;
+                    colors.set(key, color);
+                }
+
+                const toHex = value => Math.round(value).toString(16).padStart(2, '0');
+                const rankedColors = [...colors.values()].sort((first, second) => second.count - first.count);
+                if (!rankedColors.length) return resolve(['#53617a']);
+                const isTeamColor = color => {
+                    const red = color.red / color.count;
+                    const green = color.green / color.count;
+                    const blue = color.blue / color.count;
+                    return Math.max(red, green, blue) - Math.min(red, green, blue) >= 40;
+                };
+                const teamColors = rankedColors.filter(isTeamColor);
+                const candidates = teamColors.length ? teamColors : rankedColors;
+                const primary = candidates[0];
+                const secondary = candidates.slice(1).find(color => {
+                    const red = primary.red / primary.count - color.red / color.count;
+                    const green = primary.green / primary.count - color.green / color.count;
+                    const blue = primary.blue / primary.count - color.blue / color.count;
+                    return red * red + green * green + blue * blue >= 32 * 32;
+                });
+                const dominant = secondary ? [primary, secondary] : [primary];
+                resolve(dominant.map(color =>
+                    '#' + toHex(color.red / color.count) + toHex(color.green / color.count) + toHex(color.blue / color.count)
+                ));
+            } catch (error) {
+                console.warn('Barvu dresu se nepodařilo určit z loga.', error);
+                resolve(['#53617a']);
+            }
+        };
+        image.onerror = () => resolve(['#53617a']);
+        image.src = logoUrl;
+    });
+
+    rosterLogoColorCache.set(logoUrl, colorPromise);
+    return colorPromise;
+}
+
+async function renderRosterContent(data) {
+    const positionList = ['Brankář', 'Obránce', 'Útočník', 'Centr', 'Křídlo', 'Jiné'];
+    const positions = Object.fromEntries(positionList.map(position => [position, []]));
+    const defaultPosition = 'Jiné';
+    const jerseyColors = await getRosterLogoColor(data.logoUrl);
+    const jerseyPrimary = jerseyColors[0];
+    const jerseySecondary = jerseyColors[1] || jerseyPrimary;
+
+    (data.players || []).forEach(player => {
+        const position = positions[player.position] ? player.position : defaultPosition;
+        positions[position].push(player);
+    });
+
+    const sections = positionList.map(position => {
+        const players = positions[position].sort((a, b) => (a.number || 999) - (b.number || 999));
+        if (!players.length) return '';
+
+        const cards = players.map(player => {
+            const statusColor = /^#[0-9a-f]{6}$/i.test(player.statusColor || '') ? player.statusColor : '#64748b';
+            const number = escapeRosterHtml(player.number || '-');
+            return '<article class="roster-player-card" style="--roster-status-color:' + statusColor + '">' +
+                '<img class="roster-player-watermark" src="' + escapeRosterHtml(data.logoUrl) + '" alt="" aria-hidden="true">' +
+                '<div class="roster-player-topline"><span class="roster-jersey-number" style="--roster-jersey-color:' + jerseyPrimary + ';--roster-jersey-secondary:' + jerseySecondary + ';--roster-jersey-text:' + (isLightRosterColor(jerseyPrimary) ? '#172033' : '#fff') + '">' +
+                '<svg viewBox="0 0 80 80" aria-hidden="true" focusable="false"><path class="roster-jersey-shape" d="M27 8 36 14h8l9-6 11 5 14 18-11 10-8-8v39H21V33l-8 8L2 31l14-18z"/><path class="roster-jersey-sleeves" d="m16 13 11-5 8 5-9 22-11 5L2 31z M64 13 53 8l-8 5 9 22 11 5 13-9z"/><path class="roster-jersey-collar" d="M34 13q6 8 12 0"/></svg>' +
+                '<span class="roster-jersey-number-label">' + number + '</span></span>' +
+                '<span class="roster-player-status" style="--roster-status-color:' + statusColor + '">' +
+                '<span aria-hidden="true">' + escapeRosterHtml(player.statusIcon || '') + '</span>' +
+                escapeRosterHtml(player.statusLabel || player.status || 'Aktivní') + '</span></div>' +
+                '<div class="roster-player-name">' + escapeRosterHtml(player.name) + '</div>' +
+                (player.statusDetails ? '<div class="roster-player-details">' + escapeRosterHtml(player.statusDetails) + '</div>' : '') +
+                '</article>';
+        }).join('');
+
+        return '<section class="roster-position-section">' +
+            '<h3 class="roster-position-title"><span>' + players.length + '</span>' + escapeRosterHtml(position) + '</h3>' +
+            '<div class="roster-player-grid">' + cards + '</div></section>';
+    }).join('');
+
+    return sections || '<div class="roster-empty-state">Žádní hráči v soupisce</div>';
+}
+
+function isLightRosterColor(hexColor) {
+    const match = /^#([0-9a-f]{6})$/i.exec(hexColor || '');
+    if (!match) return false;
+    const value = parseInt(match[1], 16);
+    const channels = [(value >> 16) & 255, (value >> 8) & 255, value & 255].map(channel => {
+        const normalized = channel / 255;
+        return normalized <= 0.04045 ? normalized / 12.92 : Math.pow((normalized + 0.055) / 1.055, 2.4);
+    });
+    return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722 > 0.55;
+}
+
+async function toggleRosterModern(teamId) {
+    const rosterDiv = document.getElementById('roster-' + teamId);
+    const transfersDiv = document.getElementById('transfers-' + teamId);
+
+    if (rosterDiv.style.display === 'none' || rosterDiv.style.display === '') {
+        rosterDiv.style.display = 'block';
+        transfersDiv.style.display = 'none';
+        rosterDiv.innerHTML = '<div class="roster-loading">Načítám soupisku...</div>';
+
+        try {
+            const response = await fetch('/api/players/' + encodeURIComponent(teamId));
+            if (!response.ok) throw new Error('Soupisku se nepodařilo načíst.');
+            rosterDiv.innerHTML = await renderRosterContent(await response.json());
+        } catch (error) {
+            console.error('Chyba při načítání soupisky:', error);
+            rosterDiv.innerHTML = '<div class="roster-empty-state is-error">Chyba při načítání soupisky</div>';
+        }
+    } else {
+        rosterDiv.style.display = 'none';
+        transfersDiv.style.display = 'grid';
+    }
+}
+
+async function showAllRostersModern() {
+    const allRostersView = document.getElementById('allRostersView');
+    if (!allRostersView) return;
+
+    allRostersView.innerHTML = '<div class="roster-loading">Načítám všechny soupisky...</div>';
+    try {
+        const teamIds = JSON.parse(allRostersView.dataset.teamIds || '[]');
+        const teams = JSON.parse(allRostersView.dataset.teams || '[]');
+        const cards = await Promise.all(teamIds.map(async teamId => {
+            const response = await fetch('/api/players/' + encodeURIComponent(teamId));
+            if (!response.ok) throw new Error('Nepodařilo se načíst soupisku týmu ' + teamId + '.');
+            const data = await response.json();
+            const team = teams.find(item => String(item.id) === String(teamId));
+            const logoUrl = team?.logo ? '/logoteamu/' + encodeURIComponent(team.logo) : '/images/logo.png';
+            return '<section class="roster-team-card"><header class="roster-team-header">' +
+                '<div class="roster-team-info"><img src="' + escapeRosterHtml(logoUrl) + '" alt="" class="roster-team-logo">' +
+                '<h2 class="roster-team-title">' + escapeRosterHtml(team?.name || 'Tým') + '</h2></div></header>' +
+                '<div class="roster-team-content">' + await renderRosterContent(data) + '</div></section>';
+        }));
+        allRostersView.innerHTML = '<div class="all-rosters-grid">' + cards.join('') + '</div>';
+    } catch (error) {
+        console.error('Chyba při načítání soupisek:', error);
+        allRostersView.innerHTML = '<div class="roster-empty-state is-error">Chyba při načítání soupisek.</div>';
     }
 }
 
@@ -3007,7 +2943,7 @@ async function toggleRoster(teamId) {
     } else {
         // Skrýt soupisku, zobrazit přestupy
         rosterDiv.style.display = 'none';
-        transfersDiv.style.display = 'flex';
+        transfersDiv.style.display = 'grid';
     }
 }
 
@@ -3124,7 +3060,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Pokud nejsou přestupy zapnuté, zobrazit soupisky
     if (allRostersView && !individualTeamsView) {
-        await showAllRosters();
+        await showAllRostersModern();
     } 
     // Pokud jsou přestupy zapnuté, respektovat nastavení defaultView
     else if (allRostersView && individualTeamsView && toggleViewBtn) {
@@ -3147,7 +3083,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     res.send(html)
     } catch (error) {
         console.error('Chyba v /prestupy route:', error);
-        await logUserAction(req.session.user, "PRESTUPY_ERROR", `Chyba při načítání přestupů: ${error.message}`, 'prestupy', null, req, 'error', false);
+        await logUserAction(req.session?.user, "PRESTUPY_ERROR", `Chyba při načítání přestupů: ${error.message}`, 'prestupy', null, req, 'error', false);
         
         let errorHtml = `
 <!DOCTYPE html>
@@ -3156,26 +3092,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Chyba - Tipovačka</title>
-<link rel="stylesheet" href="/css/styles.css" />
+<link rel="stylesheet" href="/css/modern-design.css" />
 <link rel="icon" href="/images/logo.png">
 </head>
 <body class="usersite">
-<header class="header">
-<div class="header-main">
-<div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
-<div class="header-user">
-<p id="logged_user">${req.session?.user ? `Přihlášený jako: <strong>${req.session.user}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
-</div>
-</div>
-<div class="header-controls">
-<a class="history-btn" href="/">← Zpět na hlavní stránku</a>
-</div>
-</header>
-<main class="main_page">
-<div style="text-align: center; padding: 40px; background: #1a1a1a; border-radius: 8px; margin: 20px; border: 2px solid #ff4444;">
-<h1 style="color: #ff4444; margin-bottom: 20px;">❌ Došlo k chybě</h1>
-<p style="color: #ccc; margin-bottom: 20px;">Omlouváme se, ale došlo k chybě při načítání stránky. Chyba byla logována a bude opravena.</p>
-<a href="/" style="display: inline-block; margin-top: 20px; padding: 10px 20px; background: #444; color: white; text-decoration: none; border-radius: 4px;">Zpět na hlavní stránku</a>
+${await renderUserHeader({
+    username: req.session?.user,
+    selectedLiga: '',
+    uniqueLeagues: [],
+    activeTab: 'prestupy',
+    csrfToken: req.session?.csrfToken || '',
+    timeWidgetHtml: await generateTimeWidget()
+})}
+<main class="layout-single-column">
+<div class="dashboard-section" style="text-align: center; padding: 40px; border-color: rgba(239, 68, 68, 0.4); max-width: 600px; margin: 40px auto;">
+<h2 style="color: var(--accent-red); margin-bottom: 12px; display:flex; align-items:center; justify-content:center; gap:8px;">❌ Došlo k chybě</h2>
+<p style="color: var(--text-muted); margin-bottom: 20px;">Omlouváme se, ale došlo k chybě při načítání stránky. Chyba byla logována a bude opravena.</p>
+<a href="/" class="nav-pill active" style="padding: 10px 20px;">← Zpět na hlavní stránku</a>
 </div>
 </main>
 </body>
@@ -3185,6 +3118,73 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 
+
+router.get('/image-exporter/branding', requireLogin, async (req, res) => {
+    try {
+        const collection = await Settings.getCollection();
+        const settings = await collection.findOne({});
+        res.json(settings?.imageBranding || {});
+    } catch (error) {
+        console.error('Chyba při načítání společného brandingu exportu:', error);
+        res.status(500).json({ error: 'Společný branding se nepodařilo načíst.' });
+    }
+});
+
+router.post('/image-exporter/branding', requireLogin, express.json({ limit: '20mb' }), async (req, res) => {
+    if (req.session.role !== 'admin') {
+        return res.status(403).json({ error: 'Společný branding může měnit pouze administrátor.' });
+    }
+
+    const csrfToken = req.headers['x-csrf-token'] || req.body._csrf;
+    if (!csrfToken || csrfToken !== req.session.csrfToken) {
+        return res.status(403).json({ error: 'Neplatný CSRF token' });
+    }
+
+    try {
+        const {
+            bgColor, textColor, accentColor, watermarkColor,
+            watermarkText, bgImage, watermarkLogo
+        } = req.body;
+        const validColor = value => typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value);
+        const validImage = value => !value || (
+            typeof value === 'string' &&
+            value.length <= 7 * 1024 * 1024 &&
+            /^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/]+=*$/i.test(value)
+        );
+
+        if (![bgColor, textColor, accentColor, watermarkColor].every(validColor)) {
+            return res.status(400).json({ error: 'Některá barva brandingu není platná.' });
+        }
+        if (!validImage(bgImage) || !validImage(watermarkLogo)) {
+            return res.status(400).json({ error: 'Obrázek brandingu není platný nebo je příliš velký.' });
+        }
+        if (typeof watermarkText !== 'string' || watermarkText.length > 80) {
+            return res.status(400).json({ error: 'Text watermarku může mít nejvýše 80 znaků.' });
+        }
+
+        const imageBranding = {
+            bgColor,
+            textColor,
+            accentColor,
+            watermarkColor,
+            watermarkText,
+            bgImage: bgImage || '',
+            watermarkLogo: watermarkLogo || ''
+        };
+        const collection = await Settings.getCollection();
+        const currentSettings = await collection.findOne({});
+        if (currentSettings) {
+            await collection.updateOne({ _id: currentSettings._id }, { $set: { imageBranding } });
+        } else {
+            await collection.insertOne({ imageBranding });
+        }
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Chyba při ukládání společného brandingu exportu:', error);
+        res.status(500).json({ error: 'Společný branding se nepodařilo uložit.' });
+    }
+});
 
 // POST routa pro generování obrázků
 router.post("/image-exporter/generate", requireLogin, express.json({ limit: '50mb' }), async (req, res) => {
@@ -3198,7 +3198,16 @@ router.post("/image-exporter/generate", requireLogin, express.json({ limit: '50m
     }
 
     try {
-        const { type, homeTeamId, awayTeamId, fromTeamId, toTeamId, winnerTeamId, scoreHome, scoreAway, title, winnerTitle, playerName, playerPhoto, watermark, isPlayoff, seriesHomeWins, seriesAwayWins, season: customBgColor, customTextColor, customAccentColor, customWatermarkColor, customBgImage, customWatermarkText, customHomeLogo, customAwayLogo, customFromTeamName, customFromLeague, customToTeamName, customToLeague, customHomeTeamName, customHomeLeague, customAwayTeamName, customAwayLeague, customHomeLogoBase64, customAwayLogoBase64, customFromLogoBase64, customToLogoBase64 } = req.body;
+        const { type, homeTeamId, awayTeamId, fromTeamId, toTeamId, winnerTeamId, scoreHome, scoreAway, title, winnerTitle, playerName, playerPhoto, watermark, isPlayoff, seriesHomeWins, seriesAwayWins, customBgColor, customTextColor, customAccentColor, customWatermarkColor, customBgImage, customWatermarkText, customWatermarkLogo, customHomeLogo, customAwayLogo, customFromTeamName, customFromLeague, customToTeamName, customToLeague, customHomeTeamName, customHomeLeague, customAwayTeamName, customAwayLeague, customHomeLogoBase64, customAwayLogoBase64, customFromLogoBase64, customToLogoBase64 } = req.body;
+
+        const validBrandingImage = image => !image || (
+            typeof image === 'string' &&
+            image.length <= 7 * 1024 * 1024 &&
+            /^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/]+=*$/i.test(image)
+        );
+        if (!validBrandingImage(customBgImage) || !validBrandingImage(customWatermarkLogo)) {
+            return res.status(400).json({ error: 'Obrázek brandingu není platný nebo je příliš velký.' });
+        }
 
         const { Teams } = require('../utils/mongoDataAccess');
         await getChosenSeason();
@@ -3214,6 +3223,8 @@ router.post("/image-exporter/generate", requireLogin, express.json({ limit: '50m
             watermarkColor: customWatermarkColor || '#888888',
             bgImage: customBgImage || null,
             watermarkText: customWatermarkText || null,
+            watermarkLogo: customWatermarkLogo || null,
+            withWatermark: watermark !== 'false',
             customHomeLogo: customHomeLogo || null,
             customAwayLogo: customAwayLogo || null
         };
@@ -3244,7 +3255,7 @@ router.post("/image-exporter/generate", requireLogin, express.json({ limit: '50m
 
                 if (!homeTeam || !awayTeam) return res.status(400).json({ error: 'Týmy nenalezeny' });
 
-                // Použít base64 loga z nahrání přímo u custom týmu, pokud jsou k dispozici
+                // Nahrané logo přepíše výchozí logo týmu, pokud je k dispozici.
                 if (customHomeLogoBase64) {
                     customSettings.customHomeLogo = customHomeLogoBase64;
                 }
@@ -3316,7 +3327,7 @@ router.post("/image-exporter/generate", requireLogin, express.json({ limit: '50m
 
                 const titleText = winnerTitle || `VÍTĚZ`;
                 const winnerOptions = {
-                    accentColor: winnerColor || '#ffd700',
+                    accentColor: winnerColor || customSettings.accentColor || '#ff4500',
                     showTrophy: showTrophy === 'true' || showTrophy === true
                 };
                 buffer = await createWinnerImage(winnerTeam, titleText, watermark !== 'false', winnerOptions, customSettings);
@@ -3592,14 +3603,75 @@ router.post("/image-exporter/generate", requireLogin, express.json({ limit: '50m
                 return res.status(400).json({ error: 'Neznámý typ obrázku' });
         }
 
+        const outputScale = req.body.outputScale === '2' || req.body.outputScale === 2 ? 2 : 1;
+        const outputFormat = ['square', 'portrait', 'story', 'landscape'].includes(req.body.outputFormat)
+            ? req.body.outputFormat
+            : 'original';
+        const safeFilenameBase = String(filename || 'export')
+            .replace(/\.png$/i, '')
+            .replace(/[^a-zA-Z0-9_-]+/g, '-')
+            .replace(/-+/g, '-')
+            .replace(/^-|-$/g, '') || 'export';
+        filename = safeFilenameBase +
+            (outputFormat !== 'original' ? `-${outputFormat}` : '') +
+            (outputScale === 2 ? '@2x' : '') + '.png';
+        const { loadImage } = require('canvas');
+        const generatedImage = await loadImage(buffer);
         const outPath = path.join(outDir, filename);
+        if (outputScale === 2 || outputFormat !== 'original') {
+            const { createCanvas, loadImage } = require('canvas');
+            const sourceImage = await loadImage(buffer);
+            const dimensions = {
+                square: [1080, 1080],
+                portrait: [1080, 1350],
+                story: [1080, 1920],
+                landscape: [1920, 1080]
+            }[outputFormat];
+            const outputWidth = dimensions ? dimensions[0] * outputScale : sourceImage.width * outputScale;
+            const outputHeight = dimensions ? dimensions[1] * outputScale : sourceImage.height * outputScale;
+            const scaledCanvas = createCanvas(outputWidth, outputHeight);
+            const scaledContext = scaledCanvas.getContext('2d');
+            scaledContext.imageSmoothingEnabled = true;
+            scaledContext.imageSmoothingQuality = 'high';
+            if (dimensions) {
+                const gradient = scaledContext.createLinearGradient(0, 0, 0, scaledCanvas.height);
+                gradient.addColorStop(0, customSettings.bgColor);
+                gradient.addColorStop(1, '#000000');
+                scaledContext.fillStyle = gradient;
+                scaledContext.fillRect(0, 0, scaledCanvas.width, scaledCanvas.height);
+                let backgroundImage = sourceImage;
+                if (customSettings.bgImage) {
+                    try {
+                        backgroundImage = await loadImage(Buffer.from(customSettings.bgImage.split(',')[1], 'base64'));
+                    } catch (error) {
+                        console.error('Vlastní pozadí formátu exportu se nepodařilo načíst:', error);
+                    }
+                }
+                const coverScale = Math.max(scaledCanvas.width / backgroundImage.width, scaledCanvas.height / backgroundImage.height);
+                const backgroundWidth = backgroundImage.width * coverScale;
+                const backgroundHeight = backgroundImage.height * coverScale;
+                scaledContext.drawImage(backgroundImage, (scaledCanvas.width - backgroundWidth) / 2, (scaledCanvas.height - backgroundHeight) / 2, backgroundWidth, backgroundHeight);
+                scaledContext.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                scaledContext.fillRect(0, 0, scaledCanvas.width, scaledCanvas.height);
+                const fitScale = Math.min(scaledCanvas.width / sourceImage.width, scaledCanvas.height / sourceImage.height);
+                const imageWidth = sourceImage.width * fitScale;
+                const imageHeight = sourceImage.height * fitScale;
+                scaledContext.drawImage(sourceImage, (scaledCanvas.width - imageWidth) / 2, (scaledCanvas.height - imageHeight) / 2, imageWidth, imageHeight);
+            } else {
+                scaledContext.drawImage(sourceImage, 0, 0, scaledCanvas.width, scaledCanvas.height);
+            }
+            buffer = scaledCanvas.toBuffer('image/png');
+        }
         fs.writeFileSync(outPath, buffer);
 
         await logUserAction(req.session.user, "IMAGE_EXPORT", `Generování obrázku typu: ${type}, soubor: ${filename}`, 'image_export', filename, req, 'info', true);
 
         res.json({
             url: `/images/exports/${filename}`,
-            filename: filename
+            filename,
+            width: generatedImage.width,
+            height: generatedImage.height,
+            sizeBytes: buffer.length
         });
 
     } catch (err) {
@@ -3657,17 +3729,108 @@ router.get("/image-exporter", requireLogin, async (req, res) => {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Image Exporter - Tipovačka</title>
-<link rel="stylesheet" href="/css/styles.css" />
+<link rel="stylesheet" href="/css/modern-design.css" />
 <script src="/js/version-notification.js"></script>
 <link rel="icon" href="/images/logo.png">
 </head>
 <script>
+let activeExporterType = 'match';
+
 function showImageType(type) {
-    document.querySelectorAll('.image-type-btn').forEach(btn => btn.classList.remove('active'));
+    activeExporterType = type;
+    document.querySelector('.exporter-config-heading .exporter-reset-btn').hidden = false;
+    document.querySelectorAll('.image-type-btn').forEach(btn => {
+        const selected = btn.dataset.type === type;
+        btn.classList.toggle('active', selected);
+        btn.setAttribute('aria-selected', String(selected));
+    });
     document.querySelectorAll('.form-section').forEach(section => section.classList.remove('active'));
-    document.getElementById(type + '-section').classList.add('active');
-    event.target.classList.add('active');
-    document.getElementById('preview-container').classList.remove('active');
+    document.getElementById(type + '-section')?.classList.add('active');
+    document.querySelectorAll('.exporter-tool-btn').forEach(btn => {
+        btn.classList.remove('active');
+        btn.setAttribute('aria-expanded', 'false');
+    });
+    document.getElementById('exporter-config-step').textContent = '02';
+}
+
+function showExporterTool(type, toggle = false) {
+    if (toggle && document.getElementById(type + '-section')?.classList.contains('active')) {
+        showImageType(activeExporterType);
+        return;
+    }
+    document.querySelectorAll('.image-type-btn').forEach(btn => {
+        btn.classList.remove('active');
+        btn.setAttribute('aria-selected', 'false');
+    });
+    document.querySelectorAll('.form-section').forEach(section => section.classList.remove('active'));
+    document.getElementById(type + '-section')?.classList.add('active');
+    document.querySelector('.exporter-config-heading .exporter-reset-btn').hidden = true;
+    document.querySelectorAll('.exporter-tool-btn').forEach(btn => {
+        const selected = btn.dataset.tool === type;
+        btn.classList.toggle('active', selected);
+        btn.setAttribute('aria-expanded', String(selected));
+    });
+    document.getElementById('exporter-config-step').textContent = 'N';
+}
+
+function resetActiveExporterForm() {
+    const activeSection = document.querySelector('.image-type-btn.active')?.dataset.type;
+    if (!activeSection) return;
+    const form = document.getElementById(activeSection + '-form');
+    if (!form) return;
+    form.reset();
+    localStorage.removeItem('imageExporterDraft-' + activeSection);
+    if (activeSection === 'match') {
+        ['home', 'away'].forEach(toggleCustomTeam);
+        ['home', 'away'].forEach(updateCustomLogoPreview);
+        document.getElementById('match-logo-overrides').open = false;
+    }
+    if (activeSection === 'transfer') ['from', 'to'].forEach(toggleCustomTeam);
+    if (activeSection === 'result') document.getElementById('series-row').style.display = 'none';
+    if (activeSection === 'standings') document.getElementById('clinch-mode-row').style.display = 'block';
+}
+
+function swapTeams(type) {
+    const pairs = type === 'match'
+        ? [['homeTeamId', 'awayTeamId'], ['customHomeTeamName', 'customAwayTeamName'], ['customHomeLeague', 'customAwayLeague'], ['customHomeLogoBase64', 'customAwayLogoBase64'], ['customHomeLogo', 'customAwayLogo']]
+        : [['fromTeamId', 'toTeamId'], ['customFromTeamName', 'customToTeamName'], ['customFromLeague', 'customToLeague'], ['customFromLogoBase64', 'customToLogoBase64']];
+    const form = document.getElementById(type + '-form');
+    pairs.forEach(([leftName, rightName]) => {
+        const left = form.elements.namedItem(leftName);
+        const right = form.elements.namedItem(rightName);
+        if (!left || !right) return;
+        const value = left.value;
+        left.value = right.value;
+        right.value = value;
+    });
+    if (type === 'match') {
+        ['home', 'away'].forEach(toggleCustomTeam);
+        ['home', 'away'].forEach(side => {
+            const sideName = side.charAt(0).toUpperCase() + side.slice(1);
+            const fileInput = document.getElementById('custom' + sideName + 'LogoInput');
+            if (fileInput) fileInput.value = '';
+        });
+        ['home', 'away'].forEach(renderCustomLogoPreview);
+    }
+    else ['from', 'to'].forEach(toggleCustomTeam);
+    saveExporterDrafts();
+}
+
+function validateExporterForm(type) {
+    const form = document.getElementById(type + '-form');
+    if (!form || !form.reportValidity()) return false;
+    const names = type === 'match' ? ['homeTeamId', 'awayTeamId'] :
+        type === 'transfer' ? ['fromTeamId', 'toTeamId'] :
+        type === 'result' ? ['homeTeamId', 'awayTeamId'] : null;
+    if (!names) return true;
+    const [left, right] = names.map(name => form.elements.namedItem(name));
+    if (left.value && left.value === right.value && left.value !== 'custom') {
+        right.setCustomValidity('Vyber dva různé týmy.');
+        right.reportValidity();
+        right.setCustomValidity('');
+        return false;
+    }
+    return true;
 }
 
 function handlePlayerPhoto(input) {
@@ -3696,6 +3859,36 @@ function handleCustomBg(input) {
     const reader = new FileReader();
     reader.onload = function(e) {
         document.getElementById("customBgBase64").value = e.target.result;
+        document.getElementById('use-custom-settings').checked = true;
+        const select = document.getElementById('custom-bg-image-select');
+        if (select) select.value = '';
+        savedExporterBackgroundName = '';
+        const preview = document.getElementById('exporter-bg-preview');
+        if (preview) preview.replaceChildren();
+        saveCustomSettings();
+    };
+    reader.readAsDataURL(file);
+}
+
+function handleWatermarkLogoUpload(input) {
+    const file = input.files[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+        alert('Logo watermarku je příliš velké. Maximum je 5MB.');
+        input.value = '';
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = function(event) {
+        document.getElementById('customWatermarkLogoBase64').value = event.target.result;
+        document.getElementById('use-custom-settings').checked = true;
+        const preview = document.getElementById('exporter-watermark-logo-preview');
+        preview.replaceChildren();
+        const image = document.createElement('img');
+        image.src = event.target.result;
+        image.alt = 'Náhled loga watermarku';
+        preview.appendChild(image);
+        saveCustomSettings();
     };
     reader.readAsDataURL(file);
 }
@@ -3707,11 +3900,21 @@ function saveCustomSettings() {
         accentColor: document.querySelector('input[name="customAccentColor"]').value,
         watermarkColor: document.querySelector('input[name="customWatermarkColor"]').value,
         bgImage: document.getElementById("customBgBase64").value,
+        bgImageName: document.getElementById('custom-bg-image-select').value,
         watermarkText: document.querySelector('input[name="customWatermarkText"]').value,
-        useCustom: document.getElementById("use-custom-settings").checked
+        watermarkLogo: document.getElementById('customWatermarkLogoBase64').value,
+        useCustom: document.getElementById("use-custom-settings").checked,
+        outputScale: document.getElementById('export-output-scale').value,
+        outputFormat: document.getElementById('export-output-format').value
     };
-    localStorage.setItem('imageExporterSettings', JSON.stringify(settings));
-    alert('Custom nastavení uloženo!');
+    const status = document.getElementById('exporter-settings-status');
+    try {
+        localStorage.setItem('imageExporterSettings', JSON.stringify(settings));
+        if (status) status.textContent = 'Vzhled je uložený pro další návštěvu.';
+    } catch (error) {
+        console.error('Vzhled exportu se nepodařilo uložit.', error);
+        if (status) status.textContent = 'Vzhled se nepodařilo uložit. Zkontroluj místo v úložišti prohlížeče.';
+    }
 }
 
 function resetCustomSettings() {
@@ -3721,33 +3924,189 @@ function resetCustomSettings() {
     document.querySelector('input[name="customAccentColor"]').value = '#ff4500';
     document.querySelector('input[name="customWatermarkColor"]').value = '#888888';
     document.getElementById("customBgBase64").value = '';
+    document.getElementById('customWatermarkLogoBase64').value = '';
+    document.getElementById('customWatermarkLogoInput').value = '';
+    document.getElementById('exporter-watermark-logo-preview').replaceChildren();
     document.querySelector('input[name="customWatermarkText"]').value = '';
     document.getElementById("use-custom-settings").checked = false;
     document.getElementById("customBgInput").value = '';
-    alert('Nastavení resetováno na výchozí hodnoty.');
+    document.getElementById('export-output-scale').value = '1';
+    document.getElementById('export-output-format').value = 'original';
+    document.getElementById('custom-bg-image-select').value = '';
+    savedExporterBackgroundName = '';
+    document.getElementById('exporter-bg-preview').replaceChildren();
+    document.querySelectorAll('.exporter-preset-btn').forEach(button => button.classList.remove('active'));
+    saveCustomSettings();
+    const status = document.getElementById('exporter-settings-status');
+    if (status) status.textContent = 'Výchozí vzhled je obnovený.';
+}
+
+function applyExporterPreset(preset, event) {
+    const presets = {
+        arena: { bgColor: '#101820', textColor: '#ffffff', accentColor: '#ff6b35', watermarkColor: '#aeb9c4' },
+        ice: { bgColor: '#0b2330', textColor: '#e8f8ff', accentColor: '#39b8e6', watermarkColor: '#9ab9c7' },
+        night: { bgColor: '#111018', textColor: '#f5f1ff', accentColor: '#9a78ff', watermarkColor: '#aaa4b8' }
+    };
+    const colors = presets[preset];
+    if (!colors) return;
+
+    Object.entries(colors).forEach(([key, value]) => {
+        document.querySelector('input[name="custom' + key.charAt(0).toUpperCase() + key.slice(1) + '"]').value = value;
+    });
+    const winnerColor = document.querySelector('input[name="winnerColor"]');
+    if (winnerColor) winnerColor.value = colors.accentColor;
+    document.getElementById('use-custom-settings').checked = true;
+    document.querySelectorAll('.exporter-preset-btn').forEach(button => button.classList.toggle('active', button === event.currentTarget));
+    saveCustomSettings();
+}
+
+function updateExportFormatDescription() {
+    const format = document.getElementById('export-output-format').value;
+    const descriptions = {
+        original: 'Zachová se přirozený poměr stran dané grafiky.',
+        square: 'Čtvercový výstup 1080 × 1080 px; původní grafika se neořízne.',
+        portrait: 'Portrét 1080 × 1350 px; obsah zůstane celý a doplní se pozadí.',
+        story: 'Stories 1080 × 1920 px; obsah zůstane celý a doplní se pozadí.',
+        landscape: 'Krajina 1920 × 1080 px; obsah zůstane celý a doplní se pozadí.'
+    };
+    document.getElementById('export-format-description').textContent = descriptions[format] || descriptions.original;
+}
+
+async function loadGlobalExporterBranding() {
+    try {
+        const response = await fetch('/image-exporter/branding');
+        if (!response.ok) throw new Error('Společný branding se nepodařilo načíst.');
+        const settings = await response.json();
+        if (!settings || Object.keys(settings).length === 0) return;
+
+        document.querySelector('input[name="customBgColor"]').value = settings.bgColor || '#1a1a1a';
+        document.querySelector('input[name="customTextColor"]').value = settings.textColor || '#ffffff';
+        document.querySelector('input[name="customAccentColor"]').value = settings.accentColor || '#ff4500';
+        document.querySelector('input[name="customWatermarkColor"]').value = settings.watermarkColor || '#888888';
+        document.getElementById('customBgBase64').value = settings.bgImage || '';
+        document.querySelector('input[name="customWatermarkText"]').value = settings.watermarkText || '';
+        document.getElementById('customWatermarkLogoBase64').value = settings.watermarkLogo || '';
+        if (settings.watermarkLogo) {
+            const image = document.createElement('img');
+            image.src = settings.watermarkLogo;
+            image.alt = 'Náhled loga watermarku';
+            document.getElementById('exporter-watermark-logo-preview').replaceChildren(image);
+        }
+        document.getElementById('use-custom-settings').checked = true;
+        if (settings.bgImage) {
+            const image = document.createElement('img');
+            image.src = settings.bgImage;
+            image.alt = 'Náhled vlastního pozadí';
+            document.getElementById('exporter-bg-preview').replaceChildren(image);
+        }
+        const winnerColor = document.querySelector('input[name="winnerColor"]');
+        if (winnerColor) winnerColor.value = settings.accentColor || '#ff4500';
+    } catch (error) {
+        console.error('Společný branding exportu se nepodařilo načíst.', error);
+    }
+}
+
+async function saveGlobalExporterBranding() {
+    const csrfToken = document.getElementById('globalCsrfToken')?.value || '';
+    const settings = {
+        bgColor: document.querySelector('input[name="customBgColor"]').value,
+        textColor: document.querySelector('input[name="customTextColor"]').value,
+        accentColor: document.querySelector('input[name="customAccentColor"]').value,
+        watermarkColor: document.querySelector('input[name="customWatermarkColor"]').value,
+        watermarkText: document.querySelector('input[name="customWatermarkText"]').value,
+        bgImage: document.getElementById('customBgBase64').value,
+        watermarkLogo: document.getElementById('customWatermarkLogoBase64').value
+    };
+    const status = document.getElementById('exporter-settings-status');
+    try {
+        const response = await fetch('/image-exporter/branding', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify(settings)
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || 'Společný branding se nepodařilo uložit.');
+        status.textContent = 'Branding exportů a automatických notifikací je uložený.';
+    } catch (error) {
+        console.error('Společný branding se nepodařilo uložit.', error);
+        status.textContent = error.message || 'Společný branding se nepodařilo uložit.';
+    }
 }
 
 // Načíst uložená nastavení při načtení stránky
 document.addEventListener('DOMContentLoaded', function() {
     const savedSettings = localStorage.getItem('imageExporterSettings');
+    let useLocalCustomAppearance = false;
     if (savedSettings) {
-        const settings = JSON.parse(savedSettings);
-        document.querySelector('input[name="customBgColor"]').value = settings.bgColor || '#1a1a1a';
-        document.querySelector('input[name="customTextColor"]').value = settings.textColor || '#ffffff';
-        document.querySelector('input[name="customAccentColor"]').value = settings.accentColor || '#ff4500';
-        document.querySelector('input[name="customWatermarkColor"]').value = settings.watermarkColor || '#888888';
-        document.getElementById("customBgBase64").value = settings.bgImage || '';
-        document.querySelector('input[name="customWatermarkText"]').value = settings.watermarkText || '';
-        // Automaticky zaškrtnout checkbox pokud existují uložená nastavení
-        document.getElementById("use-custom-settings").checked = settings.useCustom !== undefined ? settings.useCustom : true;
+        try {
+            const settings = JSON.parse(savedSettings);
+            useLocalCustomAppearance = settings.useCustom === true;
+            document.querySelector('input[name="customBgColor"]').value = settings.bgColor || '#1a1a1a';
+            document.querySelector('input[name="customTextColor"]').value = settings.textColor || '#ffffff';
+            document.querySelector('input[name="customAccentColor"]').value = settings.accentColor || '#ff4500';
+            document.querySelector('input[name="customWatermarkColor"]').value = settings.watermarkColor || '#888888';
+            document.getElementById("customBgBase64").value = settings.bgImage || '';
+            savedExporterBackgroundName = settings.bgImageName || '';
+            document.querySelector('input[name="customWatermarkText"]').value = settings.watermarkText || '';
+            document.getElementById('customWatermarkLogoBase64').value = settings.watermarkLogo || '';
+            if (settings.watermarkLogo) {
+                const image = document.createElement('img');
+                image.src = settings.watermarkLogo;
+                image.alt = 'Náhled loga watermarku';
+                document.getElementById('exporter-watermark-logo-preview').replaceChildren(image);
+            }
+            document.getElementById("use-custom-settings").checked = settings.useCustom === true;
+            document.getElementById('export-output-scale').value = settings.outputScale === '2' ? '2' : '1';
+            document.getElementById('export-output-format').value =
+                ['square', 'portrait', 'story', 'landscape'].includes(settings.outputFormat) ? settings.outputFormat : 'original';
+        } catch (error) {
+            console.error('Uložené nastavení exportéru se nepodařilo načíst.', error);
+        }
     }
+    if (!useLocalCustomAppearance) loadGlobalExporterBranding();
     
     // Načíst custom obrázky
     loadCustomImages();
+    restoreExporterDrafts();
+    ['home', 'away'].forEach(renderCustomLogoPreview);
+    document.getElementById('match-logo-overrides').open = Boolean(
+        document.getElementById('custom-home-logo-select').value ||
+        document.getElementById('custom-away-logo-select').value
+    );
+    applyCustomLogoSelection('from');
+    applyCustomLogoSelection('to');
+    ['home', 'away', 'from', 'to'].forEach(toggleCustomTeam);
+    document.getElementById('series-row').style.display =
+        document.getElementById('is-playoff').checked ? 'grid' : 'none';
+    document.getElementById('clinch-mode-row').style.display =
+        document.getElementById('standings-type').value === 'regular' ? 'block' : 'none';
+    document.querySelectorAll('.image-type-btn').forEach(button => {
+        const form = document.getElementById(button.dataset.type + '-form');
+        if (!form) return;
+        form.addEventListener('input', saveExporterDrafts);
+        form.addEventListener('change', saveExporterDrafts);
+    });
+    document.getElementById('export-output-scale').addEventListener('change', saveCustomSettings);
+    document.getElementById('export-output-format').addEventListener('change', () => {
+        updateExportFormatDescription();
+        saveCustomSettings();
+    });
+    updateExportFormatDescription();
+    document.querySelectorAll('#custom-section input, #custom-section select').forEach(input => {
+        const updateSettings = () => {
+            if (input.id !== 'use-custom-settings' && input.type !== 'file') {
+                document.getElementById('use-custom-settings').checked = true;
+            }
+            saveCustomSettings();
+        };
+        input.addEventListener('input', updateSettings);
+        input.addEventListener('change', updateSettings);
+    });
 });
 
 // Custom obrázky - proměnná pro uložený obrázek
 let uploadedCustomImageBase64 = null;
+let savedExporterBackgroundName = '';
 
 function handleCustomImageUpload(input) {
     const file = input.files[0];
@@ -3799,44 +4158,184 @@ function uploadCustomImage() {
 }
 
 function loadCustomImages() {
-    const customImages = JSON.parse(localStorage.getItem('customExporterImages') || '{}');
+    let customImages;
     const grid = document.getElementById('custom-images-grid');
-    
-    if (Object.keys(customImages).length === 0) {
+    try {
+        customImages = JSON.parse(localStorage.getItem('customExporterImages') || '{}');
+    } catch (error) {
+        console.error('Uložené vlastní obrázky mají neplatný formát.', error);
+        customImages = {};
+    }
+
+    if (!customImages || typeof customImages !== 'object' || Array.isArray(customImages)) {
+        customImages = {};
+    }
+
+    const validImages = Object.fromEntries(Object.entries(customImages).filter(([, image]) =>
+        image && typeof image.data === 'string' && image.data.startsWith('data:image/')
+    ));
+
+    updateCustomLogoSelects(Object.keys(validImages));
+    if (Object.keys(validImages).length === 0) {
         grid.innerHTML = '<p style="color: #888; grid-column: 1/-1;">Žádné uložené obrázky</p>';
-        updateCustomLogoSelects([]);
         return;
     }
     
-    grid.innerHTML = Object.entries(customImages).map(([name, imgData]) => {
+    grid.innerHTML = Object.entries(validImages).map(([name, imgData]) => {
         return '<div style="background: #222; padding: 10px; border: 1px solid #444;">' +
-            '<img src="' + imgData.data + '" alt="' + name + '" style="width: 100%; height: 100px; object-fit: contain; margin-bottom: 8px;">' +
-            '<div style="font-size: 0.85em; color: #aaa; word-break: break-all; margin-bottom: 8px;">' + name + '</div>' +
-            '<div style="display: flex; gap: 5px;">' +
-                '<button onclick="useCustomImage(&apos;' + name + '&apos;)" style="flex: 1; padding: 5px; background: #00d4ff; color: #000; border: none; cursor: pointer; font-size: 0.8em;">Použít</button>' +
-                '<button onclick="deleteCustomImage(&apos;' + name + '&apos;)" style="flex: 1; padding: 5px; background: #ff4444; color: white; border: none; cursor: pointer; font-size: 0.8em;">Smazat</button>' +
-            '</div>' +
+        '<img src="' + imgData.data + '" alt="" style="width: 100%; height: 100px; object-fit: contain; margin-bottom: 8px;">' +
+        '<div style="font-size: 0.85em; color: #aaa; word-break: break-all; margin-bottom: 8px;"></div>' +
+        '<div style="display: flex; gap: 5px;">' +
+            '<button type="button" style="flex: 1; padding: 5px; background: #00d4ff; color: #000; border: none; cursor: pointer; font-size: 0.8em;">Jako pozadí</button>' +
+            '<button type="button" style="flex: 1; padding: 5px; background: #ff4444; color: white; border: none; cursor: pointer; font-size: 0.8em;">Smazat</button>' +
+        '</div>' +
         '</div>';
     }).join('');
-    
-    // Aktualizovat selecty ve formulářích
-    updateCustomLogoSelects(Object.keys(customImages));
+
+    Array.from(grid.children).forEach((card, index) => {
+        const name = Object.keys(validImages)[index];
+        card.querySelector('div').textContent = name;
+        card.querySelectorAll('button')[0].addEventListener('click', () => useCustomImage(name));
+        card.querySelectorAll('button')[1].addEventListener('click', () => deleteCustomImage(name));
+    });
 }
 
 function updateCustomLogoSelects(imageNames) {
-    const homeSelect = document.getElementById('custom-home-logo-select');
-    const awaySelect = document.getElementById('custom-away-logo-select');
+    const selects = [
+        [document.getElementById('custom-home-logo-select'), 'Použít výchozí logo týmu'],
+        [document.getElementById('custom-away-logo-select'), 'Použít výchozí logo týmu'],
+        [document.getElementById('transfer-from-logo-select'), 'Použít logo z nahraného souboru'],
+        [document.getElementById('transfer-to-logo-select'), 'Použít logo z nahraného souboru'],
+        [document.getElementById('custom-bg-image-select'), 'Použít barevné pozadí']
+    ];
 
-    if (homeSelect && awaySelect) {
-        const options = imageNames.map(name => '<option value="' + name + '">' + name + '</option>').join('');
-        homeSelect.innerHTML = '<option value="">Použít výchozí logo týmu</option>' + options;
-        awaySelect.innerHTML = '<option value="">Použít výchozí logo týmu</option>' + options;
+    selects.filter(([select]) => select).forEach(([select, placeholder]) => {
+        const previousValue = select.value;
+        const emptyLabel = imageNames.length === 0 &&
+            (select.id === 'custom-home-logo-select' || select.id === 'custom-away-logo-select')
+            ? 'Výchozí logo (nebo nahraj vlastní níže)'
+            : placeholder;
+        select.replaceChildren(new Option(emptyLabel, ''));
+        imageNames.forEach(name => select.add(new Option(name, name)));
+        if (imageNames.includes(previousValue)) select.value = previousValue;
+        else if (previousValue) {
+            if (select.id === 'custom-bg-image-select') {
+                document.getElementById('customBgBase64').value = '';
+                savedExporterBackgroundName = '';
+            }
+            if (select.id === 'transfer-from-logo-select') document.getElementById('customFromLogoBase64').value = '';
+            if (select.id === 'transfer-to-logo-select') document.getElementById('customToLogoBase64').value = '';
+        }
+    });
+    const backgroundSelect = document.getElementById('custom-bg-image-select');
+    if (backgroundSelect && imageNames.includes(savedExporterBackgroundName)) {
+        backgroundSelect.value = savedExporterBackgroundName;
+    } else if (savedExporterBackgroundName) {
+        savedExporterBackgroundName = '';
+    }
+    renderCustomLogoPreview('home');
+    renderCustomLogoPreview('away');
+    applyCustomLogoSelection('from');
+    applyCustomLogoSelection('to');
+    applyCustomBackgroundSelection();
+}
+
+function applyCustomLogoSelection(side, clearWhenEmpty = false) {
+    const select = document.getElementById('transfer-' + side + '-logo-select');
+    const hidden = document.getElementById('custom' + side.charAt(0).toUpperCase() + side.slice(1) + 'LogoBase64');
+    if (!select || !hidden) return;
+    const imageName = select.value;
+    if (!imageName) {
+        const fileInput = document.getElementById('custom' + side.charAt(0).toUpperCase() + side.slice(1) + 'LogoInput');
+        if (clearWhenEmpty && !fileInput?.files.length) hidden.value = '';
+        return;
+    }
+    try {
+        const images = JSON.parse(localStorage.getItem('customExporterImages') || '{}');
+        hidden.value = images[imageName]?.data || '';
+    } catch (error) {
+        console.error('Vlastní logo týmu se nepodařilo načíst.', error);
+        hidden.value = '';
+    }
+}
+
+function applyCustomBackgroundSelection(clearWhenEmpty = false) {
+    const select = document.getElementById('custom-bg-image-select');
+    const preview = document.getElementById('exporter-bg-preview');
+    if (!select) return;
+    const imageName = select.value;
+    if (!imageName) {
+        savedExporterBackgroundName = '';
+        if (clearWhenEmpty) document.getElementById('customBgBase64').value = '';
+        if (preview) preview.replaceChildren();
+        if (clearWhenEmpty) saveCustomSettings();
+        return;
+    }
+    try {
+        const images = JSON.parse(localStorage.getItem('customExporterImages') || '{}');
+        const imageData = images[imageName]?.data;
+        if (!imageData || !imageData.startsWith('data:image/')) return;
+        document.getElementById('customBgBase64').value = imageData;
+        savedExporterBackgroundName = imageName;
+        if (clearWhenEmpty) document.getElementById('use-custom-settings').checked = true;
+        if (preview) {
+            preview.replaceChildren();
+            const thumbnail = document.createElement('img');
+            thumbnail.src = imageData;
+            thumbnail.alt = '';
+            const label = document.createElement('span');
+            label.textContent = imageName;
+            preview.append(thumbnail, label);
+        }
+        if (clearWhenEmpty) saveCustomSettings();
+    } catch (error) {
+        console.error('Vlastní pozadí se nepodařilo načíst.', error);
     }
 }
 
 function updateCustomLogoPreview(side) {
-    // Tato funkce může v budoucnu zobrazovat náhled vybraného custom loga
-    // Prozatím je prázdná, protože náhled není nutný
+    const select = document.getElementById('custom-' + side + '-logo-select');
+    const preview = document.getElementById('custom-' + side + '-logo-preview');
+    if (!select || !preview) return;
+
+    const sideName = side.charAt(0).toUpperCase() + side.slice(1);
+    const base64Input = document.getElementById('custom' + sideName + 'LogoBase64');
+    const fileInput = document.getElementById('custom' + sideName + 'LogoInput');
+    if (base64Input) base64Input.value = '';
+    if (fileInput) fileInput.value = '';
+    renderCustomLogoPreview(side);
+}
+
+function renderCustomLogoPreview(side) {
+    const select = document.getElementById('custom-' + side + '-logo-select');
+    const preview = document.getElementById('custom-' + side + '-logo-preview');
+    if (!select || !preview) return;
+
+    const sideName = side.charAt(0).toUpperCase() + side.slice(1);
+    const uploadedImage = document.getElementById('custom' + sideName + 'LogoBase64')?.value;
+    let image = uploadedImage
+        ? { data: uploadedImage }
+        : null;
+    const selectedName = select.value;
+    if (!image && selectedName) {
+        try {
+            const customImages = JSON.parse(localStorage.getItem('customExporterImages') || '{}');
+            image = customImages[selectedName];
+        } catch (error) {
+            console.error('Náhled vlastního loga se nepodařilo načíst.', error);
+        }
+    }
+
+    preview.replaceChildren();
+    if (!image || typeof image.data !== 'string' || !image.data.startsWith('data:image/')) return;
+    const thumbnail = document.createElement('img');
+    thumbnail.src = image.data;
+    thumbnail.alt = '';
+    const label = document.createElement('span');
+    label.textContent = uploadedImage
+        ? document.getElementById('custom' + sideName + 'LogoInput')?.files[0]?.name || 'Nahrané logo'
+        : selectedName;
+    preview.append(thumbnail, label);
 }
 
 function deleteCustomImage(name) {
@@ -3850,52 +4349,65 @@ function deleteCustomImage(name) {
 }
 
 function useCustomImage(name) {
-    const customImages = JSON.parse(localStorage.getItem('customExporterImages') || '{}');
-    const imgData = customImages[name];
-
-    if (imgData) {
-        // Zkopírovat do schránky jako base64
-        navigator.clipboard.writeText(imgData.data).then(() => {
-            alert('Obrázek "' + name + '" zkopírován do schránky jako base64. Můžeš ho použít v formulářích.');
-        }).catch(() => {
-            alert('Obrázek "' + name + '" vybrán. Base64 data: ' + imgData.data.substring(0, 50) + '...');
-        });
+    const select = document.getElementById('custom-bg-image-select');
+    if (!select || !Array.from(select.options).some(option => option.value === name)) {
+        alert('Nejprve vyber obrázek pozadí v nástroji Vzhled a branding.');
+        return;
     }
+    showExporterTool('custom');
+    select.value = name;
+    applyCustomBackgroundSelection(true);
+    document.getElementById('custom-section').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 async function generateImage(type) {
     const btn = document.getElementById('generate-btn-' + type);
+    if (!btn) return;
+    if (!validateExporterForm(type)) return;
+    const errorMessage = document.getElementById('exporter-error');
+    errorMessage.hidden = true;
     btn.disabled = true;
     btn.textContent = 'Generuji...';
 
-    const formData = new FormData(document.getElementById(type + '-form'));
-    const data = Object.fromEntries(formData);
-    data.type = type;
-
-    // Přidat custom nastavení pokud je povoleno
-    const useCustom = document.getElementById("use-custom-settings").checked;
-    if (useCustom) {
-        data.customBgColor = document.querySelector('input[name="customBgColor"]').value;
-        data.customTextColor = document.querySelector('input[name="customTextColor"]').value;
-        data.customAccentColor = document.querySelector('input[name="customAccentColor"]').value;
-        data.customWatermarkColor = document.querySelector('input[name="customWatermarkColor"]').value;
-        data.customBgImage = document.getElementById("customBgBase64").value;
-        data.customWatermarkText = document.querySelector('input[name="customWatermarkText"]').value;
-    }
-
-    // Přidat custom loga pokud jsou vybrány
-    const customImages = JSON.parse(localStorage.getItem('customExporterImages') || '{}');
-    const homeLogoName = data.customHomeLogo;
-    const awayLogoName = data.customAwayLogo;
-
-    if (homeLogoName && customImages[homeLogoName]) {
-        data.customHomeLogo = customImages[homeLogoName].data;
-    }
-    if (awayLogoName && customImages[awayLogoName]) {
-        data.customAwayLogo = customImages[awayLogoName].data;
-    }
-    
     try {
+        const form = document.getElementById(type + '-form');
+        if (!form) throw new Error('Formulář pro export nebyl nalezen.');
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData);
+        data.type = type;
+        data.outputScale = document.getElementById('export-output-scale').value;
+        data.outputFormat = document.getElementById('export-output-format').value;
+        const watermarkInput = form.querySelector('input[name="watermark"]');
+        if (watermarkInput) data.watermark = watermarkInput.checked ? 'true' : 'false';
+
+        const useCustom = document.getElementById("use-custom-settings").checked;
+        if (useCustom) {
+            data.customBgColor = document.querySelector('input[name="customBgColor"]').value;
+            data.customTextColor = document.querySelector('input[name="customTextColor"]').value;
+            data.customAccentColor = document.querySelector('input[name="customAccentColor"]').value;
+            data.customWatermarkColor = document.querySelector('input[name="customWatermarkColor"]').value;
+            data.customBgImage = document.getElementById("customBgBase64").value;
+            data.customWatermarkText = document.querySelector('input[name="customWatermarkText"]').value;
+            data.customWatermarkLogo = document.getElementById('customWatermarkLogoBase64').value;
+            if (type === 'winner') data.winnerColor = data.customAccentColor;
+        }
+
+        let customImages;
+        try {
+            customImages = JSON.parse(localStorage.getItem('customExporterImages') || '{}');
+        } catch (error) {
+            throw new Error('Uložené vlastní obrázky se nepodařilo načíst.');
+        }
+        ['customHomeLogo', 'customAwayLogo'].forEach(field => {
+            const imageName = data[field];
+            if (!imageName) return;
+            const image = customImages[imageName];
+            if (!image || typeof image.data !== 'string' || !image.data.startsWith('data:image/')) {
+                throw new Error('Vybraný vlastní obrázek "' + imageName + '" už není dostupný. Obnov výběr loga.');
+            }
+            data[field] = image.data;
+        });
+
         const csrfToken = document.getElementById('globalCsrfToken')?.value || '';
         const res = await fetch('/image-exporter/generate', {
             method: 'POST',
@@ -3911,39 +4423,89 @@ async function generateImage(type) {
             const preview = document.getElementById('preview-container');
             const img = document.getElementById('preview-img');
             const downloadBtn = document.getElementById('download-btn');
-            
+            const typeLabel = document.querySelector('.image-type-btn[data-type="' + type + '"] span:not(.exporter-tab-icon)');
+
+            img.onerror = () => {
+                document.getElementById('preview-meta').textContent = 'Náhled se nepodařilo zobrazit.';
+            };
             img.src = result.url + '?t=' + Date.now();
             downloadBtn.href = result.url;
             downloadBtn.download = result.filename;
+            document.getElementById('open-preview-btn').href = result.url;
+            document.getElementById('preview-generated-type').textContent =
+                (typeLabel?.textContent || 'Export') + ' · ' + new Date().toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' });
             preview.classList.add('active');
-            preview.scrollIntoView({ behavior: 'smooth' });
+            preview.classList.add('has-image');
+            const dimensions = result.width && result.height ? result.width + ' × ' + result.height + ' px' : 'PNG';
+            const size = result.sizeBytes ? ' · ' + (result.sizeBytes / 1024 / 1024).toFixed(2) + ' MB' : '';
+            document.getElementById('preview-meta').textContent = dimensions + size;
+            preview.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         } else {
-            alert('Chyba při generování obrázku');
+            const response = await res.json().catch(() => ({}));
+            throw new Error(response.error || 'Obrázek se nepodařilo vygenerovat.');
         }
-    } catch (e) {
-        console.error('Chyba:', e);
-        alert('Chyba při generování obrázku');
+    } catch (error) {
+        console.error('Chyba při generování obrázku:', error);
+        errorMessage.textContent = error.message || 'Chyba při generování obrázku.';
+        errorMessage.hidden = false;
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Vygenerovat obrázek';
     }
-    
-    btn.disabled = false;
-    btn.textContent = 'Vygenerovat obrázek';
+}
+
+function saveExporterDrafts() {
+    document.querySelectorAll('.image-type-btn').forEach(button => {
+        const type = button.dataset.type;
+        const form = document.getElementById(type + '-form');
+        if (!form) return;
+        const values = {};
+        form.querySelectorAll('input:not([type="file"]):not([type="hidden"]), select, textarea').forEach(field => {
+            if (!field.name) return;
+            values[field.name] = field.type === 'checkbox' ? field.checked : field.value;
+        });
+        try {
+            localStorage.setItem('imageExporterDraft-' + type, JSON.stringify(values));
+        } catch (error) {
+            console.warn('Rozpracované nastavení exportu se nepodařilo uložit.', error);
+        }
+    });
+}
+
+function restoreExporterDrafts() {
+    document.querySelectorAll('.image-type-btn').forEach(button => {
+        const type = button.dataset.type;
+        const form = document.getElementById(type + '-form');
+        if (!form) return;
+        try {
+            const values = JSON.parse(localStorage.getItem('imageExporterDraft-' + type) || '{}');
+            Object.entries(values).forEach(([name, value]) => {
+                const field = form.elements.namedItem(name);
+                if (!field || field instanceof RadioNodeList) return;
+                if (field.type === 'checkbox') field.checked = Boolean(value);
+                else if (Array.from(field.options || []).some(option => option.value === value) || field.tagName !== 'SELECT') {
+                    field.value = value;
+                }
+            });
+        } catch (error) {
+            console.warn('Rozpracovaný export ' + type + ' se nepodařilo obnovit.', error);
+        }
+    });
 }
 
 function toggleCustomTeam(side) {
     const select = document.getElementById(side + 'TeamSelect');
     const customDiv = document.getElementById('custom' + side.charAt(0).toUpperCase() + side.slice(1) + 'Team');
-    const logoUploadDiv = document.getElementById('custom' + side.charAt(0).toUpperCase() + side.slice(1) + 'LogoUpload');
+    if (!select || !customDiv) return;
     
     if (select.value === 'custom') {
         customDiv.style.display = 'flex';
-        if (logoUploadDiv) {
-            logoUploadDiv.style.display = 'block';
-        }
+        const nameInput = customDiv.querySelector('input[type="text"]');
+        if (nameInput) nameInput.required = true;
     } else {
         customDiv.style.display = 'none';
-        if (logoUploadDiv) {
-            logoUploadDiv.style.display = 'none';
-        }
+        const nameInput = customDiv.querySelector('input[type="text"]');
+        if (nameInput) nameInput.required = false;
     }
 }
 
@@ -3957,91 +4519,91 @@ function handleCustomLogoUpload(side, input) {
     }
     const reader = new FileReader();
     reader.onload = function(e) {
-        const base64Input = document.getElementById('custom' + side.charAt(0).toUpperCase() + side.slice(1) + 'LogoBase64');
+        const sideName = side.charAt(0).toUpperCase() + side.slice(1);
+        const base64Input = document.getElementById('custom' + sideName + 'LogoBase64');
+        if (!base64Input) return;
         base64Input.value = e.target.result;
+        const select = document.getElementById('custom-' + side + '-logo-select');
+        if (select) select.value = '';
+        renderCustomLogoPreview(side);
     };
     reader.readAsDataURL(file);
 }
 
 </script>
+${renderNotificationScript(req.session.csrfToken || '')}
 <body class="usersite">
-<header class="header">
-<div class="header-main">
-<div class="logo_title"><img alt="Logo" class="image_logo" src="/images/logo.png"><h1 id="title">Tipovačka</h1></div>
-<div class="header-user">
-<p id="logged_user">${username ? `Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a>` : '<a href="/login">Přihlásit</a> / <a href="/register">Registrovat</a>'}</p>
-</div>
-</div>
-<div class="header-controls">
-<form class="league-dropdown" method="GET">
-<label class="league-select-name">
-Liga:
-<select id="league-select" name="liga" required onchange="this.form.submit()">
-${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected' : ''}>${l}</option>`).join('')}
-</select>
-</label>
-<a class="history-btn" href="/history">Historie</a>
-<a class="history-btn changed" ${!isPublicLeague ? `style="${disabledStyle}" onclick="return false;"` : `href="/?liga=${encodeURIComponent(selectedLiga)}"`}>Tipovačka</a>
-<a class="history-btn changed" ${!isPublicLeague ? `style="${disabledStyle}" onclick="return false;"` : `href="/table-tip?liga=${encodeURIComponent(selectedLiga)}"`}>Základní část</a>
-<a class="history-btn changed" href="/prestupy?liga=${encodeURIComponent(selectedLiga)}">Přestupy</a>
-<a class="history-btn changed" href="/statistics">Statistiky</a>
-<input type="hidden" id="globalCsrfToken" value="${req.session.csrfToken || ''}">
-</form>
-</div>
-</header>
-<header class="time-header">${await generateTimeWidget()}<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a></header>
-<main class="main_page">`;
+${await renderUserHeader({
+    username: username,
+    selectedLiga: selectedLiga,
+    uniqueLeagues: uniqueLeagues,
+    activeTab: 'exporter',
+    csrfToken: req.session.csrfToken || '',
+    timeWidgetHtml: await generateTimeWidget()
+})}
+<main class="main_page image-exporter-layout">`;
 
 html += await generateLeftPanel(data);
 
-html += `<section class="matches-container" style="flex: 1; padding: 20px;">
-    <div class="info-box">
-        <h3>🎨 Image Exporter</h3>
-        <p>Vygeneruj si vlastní obrázky se zápasy, přestupy nebo vítězi ligy.</p>
+html += `<section class="matches-container image-exporter-page">
+    <div class="section-header exporter-heading">
+        <div class="section-title">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+            <span>Exportér obrázků a grafiky<small>Vytvoř si vlastní zápasovou grafiku během pár kliknutí.</small></span>
+        </div>
     </div>
     
-    <div style="background: rgba(0, 212, 255, 0.1); padding: 15px; margin-bottom: 20px; border: 1px solid #00d4ff;">
-        <h4 style="color: #00d4ff; margin: 0 0 10px 0;">🔧 Filtr týmů pro exportér</h4>
-        <form method="GET" style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end;">
+    <div class="exporter-filter-panel">
+        <h4>🔧 Filtr týmů pro exportér</h4>
+        <form method="GET" class="exporter-filter-form">
             <div style="flex: 1; min-width: 200px;">
-                <label style="color: #aaa; font-size: 0.9em; display: block; margin-bottom: 5px;">Liga:</label>
-                <select name="exporterLiga" onchange="this.form.submit()" style="width: 100%; padding: 8px; background: #222; color: white; border: 1px solid #444;">
+                <label>Liga:</label>
+                <select name="exporterLiga" onchange="this.form.submit()">
                     <option value="all" ${exporterLiga === "all" ? "selected" : ""}>Všechny ligy</option>
                     ${uniqueLeagues.map(l => `<option value="${l}" ${exporterLiga === l ? "selected" : ""}>${l}</option>`).join('')}
                 </select>
             </div>
             <div style="flex: 1; min-width: 200px;">
-                <label style="color: #aaa; font-size: 0.9em; display: block; margin-bottom: 5px;">Sezóna:</label>
-                <select name="exporterSeason" onchange="this.form.submit()" style="width: 100%; padding: 8px; background: #222; color: white; border: 1px solid #444;">
+                <label>Sezóna:</label>
+                <select name="exporterSeason" onchange="this.form.submit()">
                     <option value="all" ${exporterSeason === "all" ? "selected" : ""}>Všechny sezóny</option>
                     ${seasonsFromTeams.map(s => `<option value="${s}" ${exporterSeason === s ? "selected" : ""}>${s}</option>`).join('')}
                 </select>
             </div>
-            <div style="color: #888; font-size: 0.85em; padding-bottom: 8px;">
+            <div class="exporter-team-count">
                 ${teamsList.length} týmů k dispozici
             </div>
         </form>
     </div>
     
     <div class="image-exporter-container">
-        <div class="image-type-selector">
-            <button type="button" class="image-type-btn active" onclick="showImageType('match')">🏒 Zápas VS</button>
-            <button type="button" class="image-type-btn" onclick="showImageType('result')">📊 Výsledek zápasu</button>
-            <button type="button" class="image-type-btn" onclick="showImageType('transfer')">🔄 Přestup</button>
-            <button type="button" class="image-type-btn" onclick="showImageType('winner')">🏆 Vítěz ligy</button>
-            <button type="button" class="image-type-btn" onclick="showImageType('standings')">📋 Tabulka</button>
-            <button type="button" class="image-type-btn" onclick="showImageType('statistics')">📈 Statistiky</button>
-            <button type="button" class="image-type-btn" onclick="showImageType('custom-images')">🖼️ Custom obrázky</button>
-            <button type="button" class="image-type-btn" onclick="showImageType('custom')">🎨 Custom nastavení</button>
+        <div class="exporter-step-heading">
+            <span class="exporter-step-number">01</span>
+            <div><h3>Vyber typ grafiky</h3><p>Každý typ má vlastní formulář. Textová nastavení se průběžně ukládají v tomto prohlížeči; nahrané soubory je potřeba po návratu vybrat znovu.</p></div>
         </div>
-        
+        <div class="image-type-selector" role="tablist" aria-label="Typ exportu">
+            <button type="button" role="tab" data-type="match" aria-selected="true" aria-controls="match-section" class="image-type-btn active" onclick="showImageType('match', event)"><span class="exporter-tab-icon">🏒</span><span>Zápas</span><small>Grafika před utkáním</small></button>
+            <button type="button" role="tab" data-type="result" aria-selected="false" aria-controls="result-section" class="image-type-btn" onclick="showImageType('result', event)"><span class="exporter-tab-icon">📊</span><span>Výsledek</span><small>Skóre i stav série</small></button>
+            <button type="button" role="tab" data-type="transfer" aria-selected="false" aria-controls="transfer-section" class="image-type-btn" onclick="showImageType('transfer', event)"><span class="exporter-tab-icon">🔄</span><span>Přestup</span><small>Hráč mezi kluby</small></button>
+            <button type="button" role="tab" data-type="winner" aria-selected="false" aria-controls="winner-section" class="image-type-btn" onclick="showImageType('winner', event)"><span class="exporter-tab-icon">🏆</span><span>Vítěz ligy</span><small>Oslava titulu</small></button>
+            <button type="button" role="tab" data-type="standings" aria-selected="false" aria-controls="standings-section" class="image-type-btn" onclick="showImageType('standings', event)"><span class="exporter-tab-icon">📋</span><span>Tabulka</span><small>Základní část / playoff</small></button>
+            <button type="button" role="tab" data-type="statistics" aria-selected="false" aria-controls="statistics-section" class="image-type-btn" onclick="showImageType('statistics', event)"><span class="exporter-tab-icon">📈</span><span>Statistiky</span><small>Výkony tipujících</small></button>
+        </div>
+
+        <div class="exporter-workspace">
+          <div class="exporter-controls">
+        <div class="exporter-step-heading exporter-config-heading">
+            <span class="exporter-step-number" id="exporter-config-step">02</span>
+            <div><h3>Nastav obsah</h3><p>Vyplň jen potřebné údaje; nepovinná pole můžeš nechat prázdná.</p></div>
+            <button type="button" class="exporter-reset-btn" onclick="resetActiveExporterForm()">Vymazat formulář</button>
+        </div>
         <div id="match-section" class="form-section active">
             <h3 style="color: #ff4500; margin-top: 0;">Obrázek zápasu (VS)</h3>
             <form id="match-form" onsubmit="event.preventDefault(); generateImage('match');">
                 <div class="form-row">
                     <div class="form-group">
                         <label>Domácí tým</label>
-                        <select name="homeTeamId" id="homeTeamSelect" onchange="toggleCustomTeam('home')">
+                        <select name="homeTeamId" id="homeTeamSelect" required onchange="toggleCustomTeam('home')">
                             <option value="">Vyber tým</option>
                             <option value="custom">Vlastní tým</option>
                             ${teamsList.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name} (${t.liga} - ${t.season})</option>`).join('')}
@@ -4049,13 +4611,14 @@ html += `<section class="matches-container" style="flex: 1; padding: 20px;">
                     </div>
                     <div class="form-group">
                         <label>Hostující tým</label>
-                        <select name="awayTeamId" id="awayTeamSelect" onchange="toggleCustomTeam('away')">
+                        <select name="awayTeamId" id="awayTeamSelect" required onchange="toggleCustomTeam('away')">
                             <option value="">Vyber tým</option>
                             <option value="custom">Vlastní tým</option>
                             ${teamsList.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name} (${t.liga} - ${t.season})</option>`).join('')}
                         </select>
                     </div>
                 </div>
+                <div class="exporter-swap-row"><button type="button" class="exporter-swap-btn" onclick="swapTeams('match')">⇄ Prohodit domácí a hostující</button></div>
                 <div class="form-row" id="customHomeTeam" style="display: none;">
                     <div class="form-group">
                         <label>Vlastní název týmu (domácí)</label>
@@ -4065,12 +4628,6 @@ html += `<section class="matches-container" style="flex: 1; padding: 20px;">
                         <label>Liga (domácí)</label>
                         <input type="text" name="customHomeLeague" placeholder="např. NHL">
                     </div>
-                </div>
-                <div class="form-group" id="customHomeLogoUpload" style="display: none;">
-                    <label>Vlastní logo domácího (nepovinné)</label>
-                    <input type="file" id="customHomeLogoInput" accept="image/*,image/webp" onchange="handleCustomLogoUpload('home', this)">
-                    <input type="hidden" name="customHomeLogoBase64" id="customHomeLogoBase64">
-                    <small style="color: #888; display: block; margin-top: 5px;">Max 5MB, nebo vyber z nahraných custom obrázků níže</small>
                 </div>
                 <div class="form-row" id="customAwayTeam" style="display: none;">
                     <div class="form-group">
@@ -4082,26 +4639,50 @@ html += `<section class="matches-container" style="flex: 1; padding: 20px;">
                         <input type="text" name="customAwayLeague" placeholder="např. NHL">
                     </div>
                 </div>
-                <div class="form-group" id="customAwayLogoUpload" style="display: none;">
-                    <label>Vlastní logo hostujícího (nepovinné)</label>
-                    <input type="file" id="customAwayLogoInput" accept="image/*,image/webp" onchange="handleCustomLogoUpload('away', this)">
-                    <input type="hidden" name="customAwayLogoBase64" id="customAwayLogoBase64">
-                    <small style="color: #888; display: block; margin-top: 5px;">Max 5MB, nebo vyber z nahraných custom obrázků níže</small>
-                </div>
-                <div class="form-group">
-                    <label>Custom logo domácího (nepovinné)</label>
-                    <select name="customHomeLogo" id="custom-home-logo-select" onchange="updateCustomLogoPreview('home')">
-                        <option value="">Použít výchozí logo týmu</option>
-                    </select>
-                    <small style="color: #888; display: block; margin-top: 5px;">Vyber z nahraných custom obrázků</small>
-                </div>
-                <div class="form-group">
-                    <label>Custom logo hostujícího (nepovinné)</label>
-                    <select name="customAwayLogo" id="custom-away-logo-select" onchange="updateCustomLogoPreview('away')">
-                        <option value="">Použít výchozí logo týmu</option>
-                    </select>
-                    <small style="color: #888; display: block; margin-top: 5px;">Vyber z nahraných custom obrázků</small>
-                </div>
+                <details class="exporter-logo-settings" id="match-logo-overrides">
+                    <summary>
+                        <span>Vlastní loga</span>
+                        <small>Nepovinné · výchozí loga týmů se použijí automaticky</small>
+                    </summary>
+                    <div class="exporter-logo-overrides">
+                        <div class="exporter-logo-card">
+                            <div class="exporter-logo-card-heading">
+                                <strong>Logo domácího týmu</strong>
+                            </div>
+                            <div class="form-group">
+                                <label for="custom-home-logo-select">Logo z Knihovny obrázků</label>
+                                <select name="customHomeLogo" id="custom-home-logo-select" onchange="updateCustomLogoPreview('home')">
+                                    <option value="">Použít výchozí logo týmu</option>
+                                </select>
+                            </div>
+                            <div class="exporter-logo-upload">
+                                <label for="customHomeLogoInput">Nebo nahrát logo z počítače</label>
+                                <input type="file" id="customHomeLogoInput" accept="image/*" onchange="handleCustomLogoUpload('home', this)">
+                                <input type="hidden" name="customHomeLogoBase64" id="customHomeLogoBase64">
+                                <small>Obrázek do 5 MB. Nahrané logo má přednost před výběrem z knihovny.</small>
+                            </div>
+                            <div id="custom-home-logo-preview" class="exporter-logo-preview" aria-live="polite"></div>
+                        </div>
+                        <div class="exporter-logo-card">
+                            <div class="exporter-logo-card-heading">
+                                <strong>Logo hostujícího týmu</strong>
+                            </div>
+                            <div class="form-group">
+                                <label for="custom-away-logo-select">Logo z Knihovny obrázků</label>
+                                <select name="customAwayLogo" id="custom-away-logo-select" onchange="updateCustomLogoPreview('away')">
+                                    <option value="">Použít výchozí logo týmu</option>
+                                </select>
+                            </div>
+                            <div class="exporter-logo-upload">
+                                <label for="customAwayLogoInput">Nebo nahrát logo z počítače</label>
+                                <input type="file" id="customAwayLogoInput" accept="image/*" onchange="handleCustomLogoUpload('away', this)">
+                                <input type="hidden" name="customAwayLogoBase64" id="customAwayLogoBase64">
+                                <small>Obrázek do 5 MB. Nahrané logo má přednost před výběrem z knihovny.</small>
+                            </div>
+                            <div id="custom-away-logo-preview" class="exporter-logo-preview" aria-live="polite"></div>
+                        </div>
+                    </div>
+                </details>
                 <div class="form-group watermark-option">
                     <input type="checkbox" name="watermark" id="match-watermark" checked>
                     <label for="match-watermark" style="margin: 0;">Přidat watermark</label>
@@ -4144,7 +4725,7 @@ html += `<section class="matches-container" style="flex: 1; padding: 20px;">
                     <input type="text" name="title" placeholder="např. Finále série, 3. zápas...">
                 </div>
                 <div class="form-group watermark-option">
-                    <input type="checkbox" name="isPlayoff" id="is-playoff" onchange="document.getElementById('series-row').style.display = this.checked ? 'flex' : 'none'">
+                    <input type="checkbox" name="isPlayoff" id="is-playoff" onchange="document.getElementById('series-row').style.display = this.checked ? 'grid' : 'none'">
                     <label for="is-playoff" style="margin: 0;">Playoff zápas (zobrazit stav série)</label>
                 </div>
                 <div class="form-row" id="series-row" style="display: none;">
@@ -4171,7 +4752,7 @@ html += `<section class="matches-container" style="flex: 1; padding: 20px;">
                 <div class="form-row">
                     <div class="form-group">
                         <label>Z týmu</label>
-                        <select name="fromTeamId" id="fromTeamSelect" onchange="toggleCustomTeam('from')">
+                        <select name="fromTeamId" id="fromTeamSelect" required onchange="toggleCustomTeam('from')">
                             <option value="">Vyber tým</option>
                             <option value="custom">Vlastní tým</option>
                             ${teamsList.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name} (${t.liga} - ${t.season})</option>`).join('')}
@@ -4179,28 +4760,32 @@ html += `<section class="matches-container" style="flex: 1; padding: 20px;">
                     </div>
                     <div class="form-group">
                         <label>Do týmu</label>
-                        <select name="toTeamId" id="toTeamSelect" onchange="toggleCustomTeam('to')">
+                        <select name="toTeamId" id="toTeamSelect" required onchange="toggleCustomTeam('to')">
                             <option value="">Vyber tým</option>
                             <option value="custom">Vlastní tým</option>
                             ${teamsList.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name} (${t.liga} - ${t.season})</option>`).join('')}
                         </select>
                     </div>
                 </div>
+                <div class="exporter-swap-row"><button type="button" class="exporter-swap-btn" onclick="swapTeams('transfer')">⇄ Prohodit původní a nový tým</button></div>
                 <div class="form-row" id="customFromTeam" style="display: none;">
                     <div class="form-group">
                         <label>Vlastní název týmu (z)</label>
                         <input type="text" name="customFromTeamName" placeholder="např. Toronto Maple Leafs">
                     </div>
                     <div class="form-group">
-                        <label>Nadpis (z)</label>
+                        <label>Liga týmu (z)</label>
                         <input type="text" name="customFromLeague" placeholder="např. NHL">
                     </div>
                 </div>
                 <div class="form-group" id="customFromLogoUpload" style="display: none;">
                     <label>Vlastní logo týmu (z) (nepovinné)</label>
+                    <select name="transferFromLogoSelection" id="transfer-from-logo-select" onchange="applyCustomLogoSelection('from', true)">
+                        <option value="">Použít logo z nahraného souboru</option>
+                    </select>
                     <input type="file" id="customFromLogoInput" accept="image/*,image/webp" onchange="handleCustomLogoUpload('from', this)">
                     <input type="hidden" name="customFromLogoBase64" id="customFromLogoBase64">
-                    <small style="color: #888; display: block; margin-top: 5px;">Max 5MB</small>
+                    <small style="color: #888; display: block; margin-top: 5px;">Vyber uložené logo nebo nahraj soubor (max. 5MB).</small>
                 </div>
                 <div class="form-row" id="customToTeam" style="display: none;">
                     <div class="form-group">
@@ -4208,15 +4793,18 @@ html += `<section class="matches-container" style="flex: 1; padding: 20px;">
                         <input type="text" name="customToTeamName" placeholder="např. Edmonton Oilers">
                     </div>
                     <div class="form-group">
-                        <label>Nadpis (do)</label>
+                        <label>Liga týmu (do)</label>
                         <input type="text" name="customToLeague" placeholder="např. NHL">
                     </div>
                 </div>
                 <div class="form-group" id="customToLogoUpload" style="display: none;">
                     <label>Vlastní logo týmu (do) (nepovinné)</label>
+                    <select name="transferToLogoSelection" id="transfer-to-logo-select" onchange="applyCustomLogoSelection('to', true)">
+                        <option value="">Použít logo z nahraného souboru</option>
+                    </select>
                     <input type="file" id="customToLogoInput" accept="image/*,image/webp" onchange="handleCustomLogoUpload('to', this)">
                     <input type="hidden" name="customToLogoBase64" id="customToLogoBase64">
-                    <small style="color: #888; display: block; margin-top: 5px;">Max 5MB</small>
+                    <small style="color: #888; display: block; margin-top: 5px;">Vyber uložené logo nebo nahraj soubor (max. 5MB).</small>
                 </div>
                 <div class="form-group">
                     <label>Jméno hráče (nepovinné)</label>
@@ -4253,8 +4841,8 @@ html += `<section class="matches-container" style="flex: 1; padding: 20px;">
                 <div class="form-row">
                     <div class="form-group">
                         <label>Barva akcentu</label>
-                        <input type="color" name="winnerColor" value="#ffd700" style="width: 60px; height: 40px; padding: 0; border: none; cursor: pointer;">
-                        <small style="color: #888; display: block; margin-top: 5px;">Zlatá, stříbrná, bronzová nebo jiná...</small>
+                        <input type="color" name="winnerColor" value="#ff4500" style="width: 60px; height: 40px; padding: 0; border: none; cursor: pointer;">
+                        <small style="color: #888; display: block; margin-top: 5px;">Výchozí barva odpovídá společnému akcentu.</small>
                     </div>
                     <div class="form-group watermark-option" style="align-items: flex-start; margin-top: 20px;">
                         <input type="checkbox" name="showTrophy" id="show-trophy" checked value="true">
@@ -4315,16 +4903,22 @@ html += `<section class="matches-container" style="flex: 1; padding: 20px;">
                 <button type="submit" id="generate-btn-statistics" class="generate-btn">Vygenerovat obrázek</button>
             </form>
         </div>
+
+        <div class="exporter-tools">
+            <span>Další nástroje</span>
+            <button type="button" class="exporter-tool-btn" data-tool="custom" aria-expanded="false" onclick="showExporterTool('custom', true)">🎨 Vzhled a branding</button>
+            <button type="button" class="exporter-tool-btn" data-tool="custom-images" aria-expanded="false" onclick="showExporterTool('custom-images', true)">🖼️ Knihovna obrázků</button>
+        </div>
         
         <div id="custom-images-section" class="form-section">
-            <h3 style="color: #ff4500; margin-top: 0;">🖼️ Custom obrázky</h3>
-            <p style="color: #888; font-size: 0.9em; margin-bottom: 15px;">Nahraj vlastní obrázky (loga, fotky hráčů, pozadí) a používej je v exportéru.</p>
+            <h3 style="color: #ff4500; margin-top: 0;">Knihovna vlastních obrázků</h3>
+            <p style="color: #888; font-size: 0.9em; margin-bottom: 15px;">Obrázky se ukládají pouze v tomto prohlížeči a můžeš je použít jako týmová loga nebo pozadí.</p>
             
             <div class="form-group">
                 <label>Nahrát nový obrázek</label>
                 <input type="file" id="customImageInput" accept="image/*" onchange="handleCustomImageUpload(this)">
                 <input type="text" id="customImageName" placeholder="Název obrázku (např. logo-tymu)" style="margin-top: 10px; width: 100%; padding: 8px; background: #222; color: white; border: 1px solid #444;">
-                <button type="button" onclick="uploadCustomImage()" style="margin-top: 10px; padding: 8px 20px; background: #00d4ff; color: #000; border: none; cursor: pointer; font-weight: bold;">📤 Nahrát</button>
+                <button type="button" onclick="uploadCustomImage()" class="generate-btn">Nahrát do knihovny</button>
                 <small style="color: #888; display: block; margin-top: 5px;">Max 5MB, uloží se do prohlížeče (localStorage)</small>
             </div>
             
@@ -4337,8 +4931,14 @@ html += `<section class="matches-container" style="flex: 1; padding: 20px;">
         </div>
         
         <div id="custom-section" class="form-section">
-            <h3 style="color: #ff4500; margin-top: 0;">🎨 Custom nastavení vzhledu</h3>
-            <p style="color: #888; font-size: 0.9em; margin-bottom: 15px;">Tyto nastavení se aplikují na všechny vygenerované obrázky.</p>
+            <h3 style="color: #ff4500; margin-top: 0;">Vzhled a branding</h3>
+            <p style="color: #888; font-size: 0.9em; margin-bottom: 15px;">Jednotný vzhled všech šesti grafik. Administrátor může tento branding nastavit také pro automatické obrázky v notifikacích.</p>
+
+            <div class="exporter-presets" aria-label="Předvolby vzhledu">
+                <button type="button" class="exporter-preset-btn" onclick="applyExporterPreset('arena', event)"><span>🏟️</span><b>Aréna</b><small>Tmavá / oranžová</small></button>
+                <button type="button" class="exporter-preset-btn" onclick="applyExporterPreset('ice', event)"><span>❄️</span><b>Led</b><small>Temná / ledově modrá</small></button>
+                <button type="button" class="exporter-preset-btn" onclick="applyExporterPreset('night', event)"><span>🌙</span><b>Noční</b><small>Tmavá / fialová</small></button>
+            </div>
             
             <div class="form-row">
                 <div class="form-group">
@@ -4368,31 +4968,86 @@ html += `<section class="matches-container" style="flex: 1; padding: 20px;">
             
             <div class="form-group">
                 <label>Custom pozadí (nepovinné)</label>
-                <input type="file" id="customBgInput" accept="image/*" onchange="handleCustomBg(this)">
+                <select id="custom-bg-image-select" onchange="applyCustomBackgroundSelection(true)">
+                    <option value="">Použít barevné pozadí</option>
+                </select>
+                <div id="exporter-bg-preview" class="exporter-logo-preview" aria-live="polite"></div>
+                <input type="file" id="customBgInput" accept="image/png,image/jpeg,image/webp,image/gif" onchange="handleCustomBg(this)">
                 <input type="hidden" name="customBgImage" id="customBgBase64">
-                <small style="color: #888; display: block; margin-top: 5px;">Max 5MB, přepíše barvu pozadí</small>
+                <small style="color: #888; display: block; margin-top: 5px;">Max 5MB. Pozadí se použije u všech exportovaných grafik i obrázků v notifikacích.</small>
             </div>
             
             <div class="form-group">
-                <label>Custom watermark text (nepovinné)</label>
+                <label>Text brandingu / watermarku (nepovinný)</label>
                 <input type="text" name="customWatermarkText" placeholder="např. @muj_tipovacka">
-                <small style="color: #888; display: block; margin-top: 5px;">Přepíše výchozí watermark</small>
+                <small style="color: #888; display: block; margin-top: 5px;">Zobrazí se ve všech grafikách, pokud je watermark zapnutý.</small>
+            </div>
+
+            <div class="form-group">
+                <label>Logo watermarku (nepovinné)</label>
+                <input type="file" id="customWatermarkLogoInput" accept="image/png,image/jpeg,image/webp,image/gif" onchange="handleWatermarkLogoUpload(this)">
+                <input type="hidden" id="customWatermarkLogoBase64">
+                <div id="exporter-watermark-logo-preview" class="exporter-logo-preview" aria-live="polite"></div>
+                <small style="color: #888; display: block; margin-top: 5px;">Max 5MB. Nahradí výchozí logo značky ve watermarku.</small>
             </div>
             
             <div class="form-group watermark-option">
                 <input type="checkbox" name="useCustomSettings" id="use-custom-settings">
-                <label for="use-custom-settings" style="margin: 0;">Použít custom nastavení pro všechny obrázky</label>
+                <label for="use-custom-settings" style="margin: 0;">Používat vlastní barvy při generování</label>
             </div>
             
-            <button type="button" onclick="saveCustomSettings()" class="generate-btn" style="background-color: #00d4ff;">💾 Uložit nastavení</button>
-            <button type="button" onclick="resetCustomSettings()" class="generate-btn" style="background-color: #ff4444; margin-left: 10px;">🔄 Resetovat na výchozí</button>
+            <div class="exporter-settings-actions">
+                <button type="button" onclick="saveCustomSettings()" class="generate-btn">Uložit jako výchozí vzhled</button>
+                ${req.session.role === 'admin' ? '<button type="button" onclick="saveGlobalExporterBranding()" class="generate-btn">Uložit branding pro všechny a notifikace</button>' : ''}
+                <button type="button" onclick="resetCustomSettings()" class="exporter-reset-btn">Obnovit výchozí</button>
+                <span id="exporter-settings-status" aria-live="polite"></span>
+            </div>
         </div>
-        
-        <div id="preview-container" class="preview-container">
-            <h3 style="color: #00d4ff; margin-top: 0;">Náhled vygenerovaného obrázku</h3>
-            <img id="preview-img" src="" alt="Generated image preview">
-            <br>
-            <a id="download-btn" href="" download class="download-btn">📥 Stáhnout obrázek</a>
+          </div>
+
+          <aside class="exporter-preview-column" aria-label="Náhled exportu">
+            <div class="exporter-step-heading">
+                <span class="exporter-step-number">03</span>
+                <div><h3>Vygeneruj a stáhni</h3><p>Náhled se vytvoří až po potvrzení formuláře.</p></div>
+            </div>
+            <div class="exporter-output-settings">
+                <label for="export-output-format">Formát a poměr stran</label>
+                <select id="export-output-format">
+                    <option value="original">Původní poměr stran</option>
+                    <option value="square">Čtverec · 1:1</option>
+                    <option value="portrait">Portrét · 4:5</option>
+                    <option value="story">Stories · 9:16</option>
+                    <option value="landscape">Krajina · 16:9</option>
+                </select>
+                <small id="export-format-description"></small>
+                <label for="export-output-scale">Rozlišení</label>
+                <select id="export-output-scale">
+                    <option value="1">Standardní</option>
+                    <option value="2">Vysoké · 2× více pixelů</option>
+                </select>
+                <small>2× rozměry znamenají 4× tolik pixelů a delší generování.</small>
+            </div>
+            <div id="preview-container" class="preview-container active">
+                <div id="preview-empty-state" class="preview-empty-state">
+                    <span>🏒</span>
+                    <strong>Grafika se objeví tady</strong>
+                    <p>Vyber typ, doplň údaje a stiskni „Vygenerovat obrázek“.</p>
+                </div>
+                <div class="exporter-preview-result">
+                    <div class="exporter-preview-title">
+                        <h3>Náhled exportu</h3>
+                        <span id="preview-meta" aria-live="polite"></span>
+                    </div>
+                    <div id="preview-generated-type" class="preview-generated-type"></div>
+                    <img id="preview-img" src="" alt="Náhled vygenerovaného obrázku">
+                    <div class="exporter-preview-actions">
+                        <a id="download-btn" href="" download class="download-btn">Stáhnout PNG</a>
+                        <a id="open-preview-btn" href="" target="_blank" rel="noopener" class="exporter-open-btn">Otevřít samostatně</a>
+                    </div>
+                </div>
+            </div>
+            <div id="exporter-error" class="exporter-error" role="alert" hidden></div>
+          </aside>
         </div>
     </div>
 </section>
@@ -5336,11 +5991,11 @@ router.get("/statistics", requireLogin, async (req, res) => {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Statistiky - Tipovačka</title>
-<link rel="stylesheet" href="/css/styles.css" />
+<title>Statistiky – Tipovačka</title>
+<link rel="stylesheet" href="/css/modern-design.css" />
 <style>
     .highlight-row {
-        background-color: rgba(0, 212, 255, 0.2) !important;
+        background-color: var(--primary-subtle) !important;
         font-weight: bold;
     }
     .charts-grid {
@@ -5359,75 +6014,55 @@ router.get("/statistics", requireLogin, async (req, res) => {
 <script src="/js/version-notification.js"></script>
 <link rel="icon" href="/images/logo.png">
 </head>
-<body class="usersite" style="justify-content: center">
-<header class="header">
-<div class="header-main">
-<div class="logo_title">
-    <img alt="Logo" class="image_logo" src="/images/logo.png">
-    <h1 id="title">Statistiky</h1>
-</div>
-<div class="header-user">
-    <p id="logged_user">Přihlášený jako: <strong>${username}</strong> <a href="/auth/logout">Odhlásit se</a></p>
-</div>
-</div>
-<div class="header-controls">
-<form class="league-dropdown" method="GET">
-<a class="history-btn" href="/history">Historie</a>
-<a class="history-btn changed" href="/">Tipovačka</a>
-<a class="history-btn changed" href="/table-tip">Základní část</a>
-<a class="history-btn changed" href="/prestupy">Přestupy</a>
-<a class="history-btn changed" href="/image-exporter">Exportér</a>
-<div style="text-align: center; margin: 0;">
-    <button type="button" id="notify-toggle-btn" onclick="toggleNotifications()"
-        style="width: 220px; height: 38px; cursor: pointer; font-weight: bold; border: none; color: white; background-color: #444;">
-        Zjišťuji stav...
-    </button>
-</div>
-<input type="hidden" id="globalCsrfToken" value="${req.session.csrfToken || ''}">
-</form>
-</div>
-</header>
-<header class="time-header">${await generateTimeWidget()}<a href="#" onclick="showVersionNotificationManual(); return false;" id="version-badge" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 0.75em; color: #666; text-decoration: none; cursor: pointer; opacity: 0.7; transition: opacity 0.3s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">v<span id="current-version">...</span></a></header>
+${renderNotificationScript(req.session.csrfToken || '')}
+<body class="usersite">
+${await renderUserHeader({
+    username: username,
+    selectedLiga: '',
+    uniqueLeagues: [],
+    activeTab: 'statistics',
+    csrfToken: req.session.csrfToken || '',
+    timeWidgetHtml: await generateTimeWidget()
+})}
 
-<main class="stats-container" style="margin: 10px; width: 95%; ">
-    <div class="stats-header">
-        <h2>Statistiky tipovačka - ${selectedSeason}</h2>
-        <div style="margin-bottom: 10px;">
-            <label for="season-select" style="color: #aaa; margin-right: 10px;">Vyber sezónu:</label>
-            <select id="season-select" onchange="window.location.href='/statistics?season=' + this.value" style="padding: 5px; border: 1px solid #444; background: #222; color: #fff;">
-                ${availableSeasons.map(season => `
-                    <option value="${season}" ${season === selectedSeason ? 'selected' : ''}>${season}</option>
-                `).join('')}
-            </select>
+<main class="layout-single-column">
+    <div class="stats-card">
+        <div class="section-header">
+            <div class="section-title">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+                Statistiky tipovačky – Sezóna ${selectedSeason}
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+                <label for="season-select" style="color: var(--text-dim); font-size:12px; font-weight:700;">Sezóna:</label>
+                <select id="season-select" onchange="window.location.href='/statistics?season=' + this.value" class="modern-select" style="padding: 6px 12px; width:auto;">
+                    ${availableSeasons.map(season => `
+                        <option value="${season}" ${season === selectedSeason ? 'selected' : ''}>${season}</option>
+                    `).join('')}
+                </select>
+            </div>
         </div>
-        <p style="color: #aaa;">Komplexní přehled výkonů všech uživatelů</p>
-    </div>
+        <p style="color: var(--text-muted); font-size:13px; margin-bottom:20px;">Komplexní přehled výkonů všech uživatelů a žebříčky úspěšnosti.</p>
     
-    <div style="grid-template-columns: repeat(5, 1fr);" class="stats-overview">
-        <div class="stat-card">
-            <h3>Celkem uživatelů</h3>
-            <p class="value">${appStats.totalUsers}</p>
-            <p class="label">Celkem registrovaných</p>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 24px;" class="stats-overview">
+        <div class="rule-card" style="flex-direction: column; align-items: flex-start; gap: 6px; padding: 14px;">
+            <span style="color: var(--text-dim); font-size: 11px; text-transform: uppercase; font-weight: 700;">Celkem uživatelů</span>
+            <span style="font-size: 22px; font-weight: 800; color: #fff; font-family: 'JetBrains Mono', monospace;">${appStats.totalUsers}</span>
         </div>
-        <div class="stat-card">
-            <h3>Aktivních uživatelů</h3>
-            <p class="value">${appStats.activeUsers}</p>
-            <p class="label">Alespoň jeden tip v sezóně</p>
+        <div class="rule-card" style="flex-direction: column; align-items: flex-start; gap: 6px; padding: 14px;">
+            <span style="color: var(--text-dim); font-size: 11px; text-transform: uppercase; font-weight: 700;">Aktivních v sezóně</span>
+            <span style="font-size: 22px; font-weight: 800; color: var(--accent-green); font-family: 'JetBrains Mono', monospace;">${appStats.activeUsers}</span>
         </div>
-        <div class="stat-card">
-            <h3>Celkem lig</h3>
-            <p class="value">${appStats.totalLeagues}</p>
-            <p class="label">V sezóně ${selectedSeason}</p>
+        <div class="rule-card" style="flex-direction: column; align-items: flex-start; gap: 6px; padding: 14px;">
+            <span style="color: var(--text-dim); font-size: 11px; text-transform: uppercase; font-weight: 700;">Celkem lig</span>
+            <span style="font-size: 22px; font-weight: 800; color: var(--primary); font-family: 'JetBrains Mono', monospace;">${appStats.totalLeagues}</span>
         </div>
-        <div class="stat-card">
-            <h3>Celkem tipů</h3>
-            <p class="value">${appStats.totalTips}</p>
-            <p class="label">Základní část + playoff</p>
+        <div class="rule-card" style="flex-direction: column; align-items: flex-start; gap: 6px; padding: 14px;">
+            <span style="color: var(--text-dim); font-size: 11px; text-transform: uppercase; font-weight: 700;">Odeslaných tipů</span>
+            <span style="font-size: 22px; font-weight: 800; color: #fff; font-family: 'JetBrains Mono', monospace;">${appStats.totalTips}</span>
         </div>
-        <div class="stat-card">
-            <h3>Průměrná úspěšnost</h3>
-            <p class="value">${appStats.avgSuccessRate}%</p>
-            <p class="label">Napříč všemi uživateli</p>
+        <div class="rule-card" style="flex-direction: column; align-items: flex-start; gap: 6px; padding: 14px;">
+            <span style="color: var(--text-dim); font-size: 11px; text-transform: uppercase; font-weight: 700;">Průměrná úspěšnost</span>
+            <span style="font-size: 22px; font-weight: 800; color: var(--accent-amber); font-family: 'JetBrains Mono', monospace;">${appStats.avgSuccessRate}%</span>
         </div>
     </div>
     
@@ -5700,142 +6335,16 @@ router.get("/statistics", requireLogin, async (req, res) => {
 
         <div class="chart-container">
             <h3>Trendy v čase (úspěšnost podle měsíce)</h3>
-            <p style="color: #888; margin-bottom: 15px;">Vývoj úspěšnosti v průběhu sezóny podle měsíců</p>
+            <p style="color: var(--text-dim); margin-bottom: 15px;">Vývoj úspěšnosti v průběhu sezóny podle měsíců</p>
             <canvas id="monthlyTrendChart"></canvas>
         </div>
+    </div>
     </div>
 </main>
 
 <script>
 // Registrace chartjs-plugin-datalabels
 Chart.register(ChartDataLabels);
-
-// Převod klíče
-function urlBase64ToUint8Array(base64String) {
-    const padding = '='.repeat((4 - base64String.length % 4) % 4);
-    const base64 = (base64String + padding).replace(/\\-/g, '+').replace(/_/g, '/');
-    const rawData = window.atob(base64);
-    const outputArray = new Uint8Array(rawData.length);
-    for (let i = 0; i < rawData.length; ++i) {
-        outputArray[i] = rawData.charCodeAt(i);
-    }
-    return outputArray;
-}
-
-async function toggleNotifications() {
-    const btn = document.getElementById('notify-toggle-btn');
-    if (!btn) return;
-    
-    btn.disabled = true;
-    btn.textContent = "Pracuji...";
-
-    try {
-        let registration = await navigator.serviceWorker.getRegistration();
-        
-        if (!registration) {
-            registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
-        }
-
-        let retry = 0;
-        while (!registration.active && retry < 10) {
-            await new Promise(res => setTimeout(res, 500));
-            registration = await navigator.serviceWorker.getRegistration();
-            retry++;
-        }
-
-        if (!registration.active) {
-            alert("Service Worker se nepodařilo aktivovat.");
-            btn.disabled = false;
-            await checkSubscriptionStatus();
-            return;
-        }
-
-        const subscription = await registration.pushManager.getSubscription();
-
-        if (subscription) {
-            // ODHLÁŠENÍ
-            const res = await fetch('/api/unsubscribe', {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'X-CSRF-Token': '${req.session.csrfToken || ''}'
-                },
-                body: JSON.stringify({ endpoint: subscription.endpoint })
-            });
-            if (res.ok) {
-                await subscription.unsubscribe();
-                alert('Notifikace vypnuty.');
-                await checkSubscriptionStatus();
-            }
-        } else {
-            // PŘIHLÁŠENÍ
-            const vapidRes = await fetch('/api/vapid-public-key');
-            if (!vapidRes.ok) {
-                alert('Server neodpovídá (chyba při získávání klíče).');
-                btn.disabled = false;
-                await checkSubscriptionStatus();
-                return;
-            }
-            const vapidPublicKey = await vapidRes.text();
-
-            const newSub = await registration.pushManager.subscribe({
-                userVisibleOnly: true,
-                applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
-            });
-
-            const saveRes = await fetch('/api/subscribe', {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'X-CSRF-Token': '${req.session.csrfToken || ''}'
-                },
-                body: JSON.stringify(newSub)
-            });
-            
-            if (saveRes.ok) {
-                alert('Notifikace zapnuty!');
-                await checkSubscriptionStatus();
-            } else {
-                alert('Nepodařilo se uložit odběr na server.');
-            }
-        }
-    } catch (e) {
-        console.error("Kritická chyba notifikací:", e);
-        alert('Došlo k nečekané chybě: ' + e.message);
-    }
-    
-    await checkSubscriptionStatus();
-    btn.disabled = false;
-}
-
-async function checkSubscriptionStatus() {
-    const btn = document.getElementById('notify-toggle-btn');
-    if (!btn) return;
-
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-        btn.textContent = "Nepodporováno";
-        btn.disabled = true;
-        return;
-    }
-
-    try {
-        // Kontrola stavu bez zbytečného čekání
-        const registration = await navigator.serviceWorker.getRegistration();
-        const subscription = registration ? await registration.pushManager.getSubscription() : null;
-
-        if (subscription) {
-            btn.textContent = "Vypnout notifikace 🔕";
-            btn.style.backgroundColor = "#555";
-        } else {
-            btn.textContent = "Zapnout notifikace 🔔";
-            btn.style.backgroundColor = "#ff4500";
-        }
-    } catch (e) {
-        btn.textContent = "Klikni pro stav";
-    }
-}
-
-document.addEventListener('DOMContentLoaded', checkSubscriptionStatus);
 
     // Data pro grafy
     const userStats = ${JSON.stringify(userStats)};

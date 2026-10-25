@@ -4,6 +4,61 @@
 
     const STORAGE_KEY = 'tipovacka_last_seen_version';
     const API_URL = '/api/version';
+    let activeTeamFormTarget = null;
+    let teamFormTooltip = null;
+
+    function hideTeamFormTooltip() {
+        teamFormTooltip?.remove();
+        teamFormTooltip = null;
+        activeTeamFormTarget = null;
+    }
+
+    function showTeamFormTooltip(target) {
+        const text = target.dataset.tooltip;
+        if (!text) return;
+        if (activeTeamFormTarget === target && teamFormTooltip) return;
+
+        hideTeamFormTooltip();
+        activeTeamFormTarget = target;
+        teamFormTooltip = document.createElement('div');
+        teamFormTooltip.className = 'team-form-tooltip';
+        teamFormTooltip.textContent = text;
+        document.body.appendChild(teamFormTooltip);
+
+        const targetRect = target.getBoundingClientRect();
+        const tooltipRect = teamFormTooltip.getBoundingClientRect();
+        const left = Math.max(12, Math.min(
+            targetRect.left + targetRect.width / 2 - tooltipRect.width / 2,
+            window.innerWidth - tooltipRect.width - 12
+        ));
+        const top = targetRect.top - tooltipRect.height - 8 >= 8
+            ? targetRect.top - tooltipRect.height - 8
+            : targetRect.bottom + 8;
+
+        teamFormTooltip.style.left = `${left}px`;
+        teamFormTooltip.style.top = `${top}px`;
+    }
+
+    document.addEventListener('pointerover', event => {
+        const target = event.target.closest('.team-form-result[data-tooltip]');
+        if (target) showTeamFormTooltip(target);
+    });
+    document.addEventListener('pointerout', event => {
+        if (activeTeamFormTarget && !activeTeamFormTarget.contains(event.relatedTarget)) {
+            hideTeamFormTooltip();
+        }
+    });
+    document.addEventListener('focusin', event => {
+        const target = event.target.closest('.team-form-result[data-tooltip]');
+        if (target) showTeamFormTooltip(target);
+    });
+    document.addEventListener('focusout', event => {
+        if (activeTeamFormTarget && !activeTeamFormTarget.contains(event.relatedTarget)) {
+            hideTeamFormTooltip();
+        }
+    });
+    window.addEventListener('scroll', hideTeamFormTooltip, true);
+    window.addEventListener('resize', hideTeamFormTooltip);
 
     // Vytvořit a zobrazit notifikaci
     function showVersionNotification(versionData, forceShow = false) {
@@ -76,6 +131,19 @@
         return div.innerHTML;
     }
 
+    // Aktualizovat text verze na stránce
+    function updateVersionBadges(version) {
+        if (!version) return;
+        const currentVersionEl = document.getElementById('current-version');
+        if (currentVersionEl) {
+            currentVersionEl.textContent = version;
+        }
+        const versionBadgeEls = document.querySelectorAll('.version-number, [data-version-badge]');
+        versionBadgeEls.forEach(el => {
+            el.textContent = 'v' + version;
+        });
+    }
+
     // Načíst informace o verzi
     async function checkVersion() {
         try {
@@ -86,6 +154,9 @@
             }
 
             const data = await response.json();
+            if (data && data.version) {
+                updateVersionBadges(data.version);
+            }
 
             // Pokud je to počáteční verze, nezobrazovat oznámení
             if (data.isInitial) {

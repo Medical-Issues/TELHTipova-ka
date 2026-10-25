@@ -5,3 +5,4 @@ node_modules/
 /public/images/notifications
 /public/images/exports
 .devin
+.aider*

@@ -1,26 +1,33 @@
 <!DOCTYPE html>
 <html lang="cs">
 <head>
-    <meta charset="UTF-8"><title>Login</title>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Tipovačka</title>
-    <link rel="stylesheet" href="/css/styles.css" />
+    <title>Přihlášení – Tipovačka</title>
+    <link rel="stylesheet" href="/css/modern-design.css" />
     <link rel="icon" href="/images/logo.png">
 </head>
 <body class="login_body">
-<header class="header">
-    <div class="logo_title"><img class="image_logo" src="/images/logo.png" alt="Logo"><h1 id="title">Tipovačka</h1></div>
-</header>
 <div class="login-container">
+    <img class="login-logo" src="/images/logo.png" alt="Logo">
     <h1>Přihlášení</h1>
-<form class="login_form" method="POST" action="/auth/login">
-    <input type="hidden" name="_csrf" id="csrfToken" value="">
-    <label><input class="login_input" name="username" placeholder="Uživatelské jméno" required /></label>
-    <label><input class="login_input" name="password" type="password" placeholder="Heslo" required /></label>
-    <button class="login_button" type="submit">Přihlásit se</button>
-</form>
-<p id="error-msg">Špatné přihlašovací údaje.</p>
-<a href="/auth/register">Ještě nemám účet</a>
+    <p class="login-subtitle">Vítejte zpět v tipovačce! Zadejte své údaje.</p>
+    <form class="login_form" method="POST" action="/auth/login">
+        <input type="hidden" name="_csrf" id="csrfToken" value="">
+        <div class="input-group">
+            <label class="input-label" for="username">Uživatelské jméno</label>
+            <input class="login_input" id="username" name="username" placeholder="Vaše přezdívka" required autocomplete="username" />
+        </div>
+        <div class="input-group">
+            <label class="input-label" for="password">Heslo</label>
+            <input class="login_input" id="password" name="password" type="password" placeholder="••••••••" required autocomplete="current-password" />
+        </div>
+        <button class="login_button" type="submit">Přihlásit se ➔</button>
+    </form>
+    <p id="error-msg">Špatné přihlašovací údaje.</p>
+    <div class="auth-switch">
+        Ještě nemáte účet? <a href="/auth/register">Zaregistrujte se</a>
+    </div>
 </div>
 
 <script src="/js/version-notification.js"></script>

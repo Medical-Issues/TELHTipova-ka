@@ -2,6 +2,7 @@ require('fs');
 require("path");
 require("fs");
 const { Teams, Users, Matches, Leagues, AllowedLeagues, ChosenSeason, Settings, TeamBonuses, LeagueStatus, TableTips, Playoff, PlayoffTemplates, Transfers, TransferLeagues} = require('./mongoDataAccess');
+const { drawBrandedBackground } = require('./imageBranding');
 
 async function requireLogin(req, res, next) {
     if (!req.session.user) {
@@ -14,20 +15,18 @@ async function requireLogin(req, res, next) {
             <html lang="cs">
             <head>
                 <meta charset="UTF-8">
-                <title>Přihlášení vyžadováno</title>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Přihlášení vyžadováno – Tipovačka</title>
+                <link rel="stylesheet" href="/css/modern-design.css" />
                 <link rel="icon" href="/images/logo.png">
-                <style>
-                    body { background-color: #121212; color: white; font-family: Arial, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-                    h1 { color: orangered; }
-                    .btn { background: orangered; color: black; padding: 10px 20px; text-decoration: none; font-weight: bold; margin-top: 20px; }
-                    .btn:hover { background: white; }
-                </style>
             </head>
-            <body>
-                <img style="width: 400px" src="/images/logo.png" alt="Logo" class="logo-large-margin">
-                <h1>Musíš se přihlásit</h1>
-                <p>Pro zobrazení této stránky je nutné přihlášení.</p>
-                <a href="/auth/login" class="btn">Přejít na přihlášení</a>
+            <body class="login_body">
+                <div class="login-container">
+                    <img src="/images/logo.png" alt="Logo" class="login-logo">
+                    <h1>Musíte se přihlásit</h1>
+                    <p class="login-subtitle">Pro zobrazení této stránky je nutné mít aktivní přihlášení.</p>
+                    <a href="/auth/login" class="login_button" style="text-align:center; text-decoration:none;">Přejít na přihlášení ➔</a>
+                </div>
             </body>
             </html>
         `);
@@ -1226,22 +1225,17 @@ async function renderErrorHtml(res, message, code = 500) {
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Chyba ${code}</title>
+            <title>Chyba ${code} – Tipovačka</title>
+            <link rel="stylesheet" href="/css/modern-design.css" />
             <link rel="icon" href="/images/logo.png">
-            <style>
-                body { background-color: #121212; color: white; font-family: Arial, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; }
-                h1 { color: orangered; margin-bottom: 20px; }
-                p { font-size: 1.2em; color: #ccc; margin-bottom: 30px; }
-                a { color: white; text-decoration: none; border: 1px solid orangered; padding: 10px 20px; transition: 0.3s; }
-                a:hover { background-color: orangered; color: black; }
-                .logo { width: 80px; margin-bottom: 20px; }
-            </style>
         </head>
-        <body>
-            <img src="/images/logo.png" alt="Logo" class="logo">
-            <h1>Jejda, chyba ${code}</h1>
-            <p>${message}</p>
-            <a href="javascript:history.back()">Zpět</a>
+        <body class="login_body">
+            <div class="login-container">
+                <img src="/images/logo.png" alt="Logo" class="login-logo">
+                <h1>Jejda, chyba ${code}</h1>
+                <p class="login-subtitle">${message}</p>
+                <a href="javascript:history.back()" class="login_button" style="text-align:center; text-decoration:none;">➔ Zpět</a>
+            </div>
         </body>
         </html>
     `);
@@ -1800,87 +1794,132 @@ async function prepareDashboardData(req, isHistory = false, isImageExporter = fa
 async function generateStatsHtml(username, currentUserStats, userStats, isRegularSeasonFinished) {
     if (!username) return ''; // Pokud není uživatel přihlášený, statistiky se neukazují
 
-    const statusStyle = isRegularSeasonFinished ? "color: lightgrey; font-weight: bold;" : "color: white; opacity: 0.7; background-color: black";
+    const statusStyle = isRegularSeasonFinished ? "color: var(--text-main); font-weight: 700;" : "color: var(--text-muted);";
 
     let html = `
-    <section class="user_stats">
-        <h2>Tvoje statistiky</h2>
-         ${currentUserStats ? `
-            <p>Správně tipnuto z maximálního počtu všech vyhodnocených zápasů: 
-                <strong>${currentUserStats.correct}</strong> z <strong>${currentUserStats.total}</strong> 
-                (${(currentUserStats.total > 0 ? (currentUserStats.correct / currentUserStats.total * 100).toFixed(2) : '0.00')} %)
-            </p>
-            ${currentUserStats.total !== currentUserStats.maxFromTips ? `
-            <p>Správně tipnuto z tipovaných zápasů: 
-                <strong>${currentUserStats.correct}</strong> z <strong>${currentUserStats.maxFromTips}</strong> 
-                (${(currentUserStats.maxFromTips > 0 ? (currentUserStats.correct / currentUserStats.maxFromTips * 100).toFixed(2) : '0.00')} %)
-            </p>` : ''}
-        ` : `<p>Nemáš pro tuto sezónu/ligu žádná data.</p>`}
+    <section class="user_stats modern-stats-card">
+        <div class="stats-card-header">
+            <div class="stats-card-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                Tvoje statistiky
+            </div>
+        </div>
         
-        ${currentUserStats?.tableCorrect > 0 || currentUserStats?.tableDeviation > 0 ? `
-            <hr>
-            <h3>Výsledek tipovačky tabulky</h3>
-            <p>Správně trefených pozic: <strong>${currentUserStats?.tableCorrect}</strong> (bodů)</p>
-            <p>Celková odchylka v umístění: <strong>${currentUserStats?.tableDeviation}</strong> (menší je lepší)</p>
-       ` : `<p><em>Tipovačka tabulky zatím nebyla vyhodnocena (nebo nemáš žádné body).</em></p>`}
+        ${currentUserStats ? `
+            <div class="user-stats-grid">
+                <div class="user-stat-box">
+                    <div class="user-stat-label">Vyhodnocené zápasy</div>
+                    <div class="user-stat-val">${currentUserStats.correct} <span class="user-stat-sub">/ ${currentUserStats.total}</span></div>
+                    <div class="user-stat-pct">${(currentUserStats.total > 0 ? (currentUserStats.correct / currentUserStats.total * 100).toFixed(1) : '0.0')}% úspěšnost</div>
+                </div>
+                ${currentUserStats.total !== currentUserStats.maxFromTips ? `
+                <div class="user-stat-box">
+                    <div class="user-stat-label">Z tipovaných zápasů</div>
+                    <div class="user-stat-val">${currentUserStats.correct} <span class="user-stat-sub">/ ${currentUserStats.maxFromTips}</span></div>
+                    <div class="user-stat-pct">${(currentUserStats.maxFromTips > 0 ? (currentUserStats.correct / currentUserStats.maxFromTips * 100).toFixed(1) : '0.0')}% úspěšnost</div>
+                </div>` : ''}
+                ${currentUserStats?.tableCorrect > 0 || currentUserStats?.tableDeviation > 0 ? `
+                <div class="user-stat-box highlight">
+                    <div class="user-stat-label">Tipovačka tabulky</div>
+                    <div class="user-stat-val">${currentUserStats?.tableCorrect} <span class="user-stat-sub">bodů</span></div>
+                    <div class="user-stat-pct">Odchylka: ${currentUserStats?.tableDeviation}</div>
+                </div>` : ''}
+            </div>
+        ` : `<p style="color: var(--text-dim); padding: 10px 0;">Nemáš pro tuto sezónu/ligu žádná data.</p>`}
+        
+        ${!(currentUserStats?.tableCorrect > 0 || currentUserStats?.tableDeviation > 0) ? `
+            <div style="font-size: 11px; color: var(--text-dim); margin-top: 8px;"><em>Tipovačka tabulky zatím nebyla vyhodnocena.</em></div>
+        ` : ''}
     </section>
     
-    <section class="global_stats">
-        <table class="points-table">
-            <thead>
-                <tr><th scope="col" id="points-table-header" colspan="8"><h2>Statistiky všech</h2></th></tr>
-                <tr>
-                    <th class="position">Místo</th>
-                    <th>Uživatel</th>
-                    <th>Úspěšnost</th>
-                    <th>Počet bodů</th>
-                    <th>Celkem tipů v ZČ</th>
-                    <th>Celkem tipů v Playoff</th>
-                    <th>Trefené pozice (Tabulka)</th>
-                    <th>Odchylka (Tabulka)</th>
-                </tr>
-            </thead>
-            <tbody>`;
+    <section class="global_stats modern-stats-card" style="margin-top: 20px;">
+        <div class="stats-card-header">
+            <div class="stats-card-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+                Statistiky všech tipérů
+            </div>
+        </div>
+        <div class="table-responsive-wrapper">
+            <table class="points-table stats-overview-table">
+                <thead>
+                    <tr>
+                        <th class="position">Místo</th>
+                        <th>Uživatel</th>
+                        <th style="text-align: center;">Úspěšnost</th>
+                        <th style="text-align: center;">Body</th>
+                        <th style="text-align: center;">ZČ</th>
+                        <th style="text-align: center;">PO</th>
+                        <th style="text-align: center;">Pozice</th>
+                        <th style="text-align: center;">Odchylka</th>
+                    </tr>
+                </thead>
+                <tbody>`;
 
     userStats.sort((a, b) => {
         if (b.correct !== a.correct) return b.correct - a.correct;
         if (b.tableCorrect !== a.tableCorrect) return b.tableCorrect - a.tableCorrect;
         return a.tableDeviation - b.tableDeviation;
     }).forEach((user, index) => {
-        const successRate = user.total > 0 ? ((user.correct / user.total) * 100).toFixed(2) : '0.00';
-        const successRateOverall = user.maxFromTips > 0 ? ((user.correct / user.maxFromTips) * 100).toFixed(2) : '0.00';
-
-        // Zjistíme, jestli byl vůbec uživatel z tabulky hodnocen
+        const successRate = user.total > 0 ? ((user.correct / user.total) * 100).toFixed(1) : '0.0';
+        const successRateOverall = user.maxFromTips > 0 ? ((user.correct / user.maxFromTips) * 100).toFixed(1) : '0.0';
         const isTableEvaluated = user.tableCorrect > 0 || user.tableDeviation > 0;
+        const isCurrent = user.username === username;
 
         html += `
-            <tr>
-                <td>${index + 1}.</td>
-                <td>${user.username}</td>
-                <td>${successRateOverall}%${user.total !== user.maxFromTips ? ` (${successRate}%)` : ''}</td>
-                <td>${user.correct}</td>
-                <td>${user.totalRegular}</td>
-                <td>${user.totalPlayoff}</td>
-                <td style="${statusStyle}">${isTableEvaluated ? user.tableCorrect : '-'}</td>
-                <td style="${statusStyle}">${isTableEvaluated ? user.tableDeviation : '-'}</td>
+            <tr class="${isCurrent ? 'current-user-row' : ''}">
+                <td class="rank-cell"><span class="rank-badge rank-${index + 1}">${index + 1}.</span></td>
+                <td><strong style="color: ${isCurrent ? 'var(--primary)' : '#fff'};">${user.username}${isCurrent ? ' (ty)' : ''}</strong></td>
+                <td class="numbers" style="color: var(--accent-green); font-weight: 700;">${successRateOverall}%${user.total !== user.maxFromTips ? `<span style="font-size:10px; color:var(--text-dim); margin-left:2px;">(${successRate}%)</span>` : ''}</td>
+                <td class="points numbers" style="text-align: center;"><span class="points-pill">${user.correct}</span></td>
+                <td class="numbers" style="text-align: center;">${user.totalRegular}</td>
+                <td class="numbers" style="text-align: center;">${user.totalPlayoff}</td>
+                <td class="numbers" style="text-align: center; ${statusStyle}">${isTableEvaluated ? user.tableCorrect : '-'}</td>
+                <td class="numbers" style="text-align: center; ${statusStyle}">${isTableEvaluated ? user.tableDeviation : '-'}</td>
             </tr>`;
     });
 
     html += `
-            </tbody>
-        </table>
-        <br>
-        <table style="color: black; font-size: 12px" class="points-table">
-            <tr style="background-color: #00FF00"><td colspan="3">Za správný tip zápasu v základní části</td><td colspan="3">1 bod</td></tr>
-            <tr style="background-color: #FF0000"><td colspan="3">Za správný tip vítěze dané série v playoff ale špatný tip počtu vyhraných zápasů</td><td colspan="3">1 bod</td></tr>
-            <tr style="background-color: #00FF00"><td colspan="3">Za správný tip vítěze dané série v playoff + počet vyhraných zápasů</td><td colspan="3">3 body</td></tr>
-            <tr style="background-color: #00FF00"><td colspan="3">Za správný tip vítěze zápasu v playoff + správné skóre</td><td colspan="3">5 bodů</td></tr>
-            <tr style="background-color: #FFFF00"><td colspan="3">Za správný tip vítěze zápasu v playoff + chyba o 1 gól</td><td colspan="3">4 body</td></tr>
-            <tr style="background-color: #FF6600"><td colspan="3">Za správný tip vítěze zápasu v playoff + chyba o 2 góly</td><td colspan="3">3 body</td></tr>
-            <tr style="background-color: #FF0000"><td colspan="3">Za správný tip vítěze zápasu v playoff + chyba o 3+ gólů</td><td colspan="3">1 bod</td></tr>
-            <tr style="background-color: #00FF00"><td colspan="3">Za přesné trefení pozice v konečné tabulce</td><td colspan="3">1 bod</td></tr>
-            <tr style="background-color: #ff4500"><td colspan="3">Odchylka tipu tabulky</td><td colspan="3">Sčítá se (čím méně, tím lépe)</td></tr>
-        </table>
+                </tbody>
+            </table>
+        </div>
+        <div class="rules-grid" style="margin-top: 18px;">
+            <div class="rule-card">
+                <span>Za správný tip zápasu v ZČ</span>
+                <span class="pts-tag pts-green">+1 bod</span>
+            </div>
+            <div class="rule-card">
+                <span>Vítěz série PO (špatný počet zápasů)</span>
+                <span class="pts-tag pts-amber">+1 bod</span>
+            </div>
+            <div class="rule-card">
+                <span>Vítěz série PO + přesný počet zápasů</span>
+                <span class="pts-tag pts-green">+3 body</span>
+            </div>
+            <div class="rule-card">
+                <span>Vítěz zápasu v PO + přesné skóre</span>
+                <span class="pts-tag pts-green">+5 bodů</span>
+            </div>
+            <div class="rule-card">
+                <span>Vítěz zápasu v PO (chyba o 1 gól)</span>
+                <span class="pts-tag pts-amber">+4 body</span>
+            </div>
+            <div class="rule-card">
+                <span>Vítěz zápasu v PO (chyba o 2 góly)</span>
+                <span class="pts-tag pts-amber">+3 body</span>
+            </div>
+            <div class="rule-card">
+                <span>Vítěz zápasu v PO (chyba o 3+ gólů)</span>
+                <span class="pts-tag pts-red">+1 bod</span>
+            </div>
+            <div class="rule-card">
+                <span>Přesná pozice v konečné tabulce</span>
+                <span class="pts-tag pts-blue">+1 bod</span>
+            </div>
+            <div class="rule-card">
+                <span>Odchylka tipu tabulky</span>
+                <span class="pts-tag pts-amber">Sčítá se (menší je lepší)</span>
+            </div>
+        </div>
     </section>`;
 
     return html;
@@ -1898,28 +1937,26 @@ async function generateLeftPanel(data, isHistory = false) {
     <section class="stats-container">
     <div class="left-panel">
     
-    <div style="display: flex; flex-direction: row; justify-content: space-around; margin:20px 0; text-align:center;">
+    <div style="display: flex; flex-direction: row; justify-content: center; margin: 12px 0 18px; text-align: center; gap: 8px;">
         <a href="?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}&mode=${clinchMode}&tableMode=regular" 
-           style="cursor: pointer; width: 120px; text-decoration: none; border: none; padding: 10px; ${tableMode === 'regular' ? 'color: black; background-color: orangered;' : 'color: orangered; background-color: black;'}" 
-           class="history-btn">
+           class="segmented-btn ${tableMode === 'regular' ? 'active' : ''}">
            Základní část
         </a>
         <a href="?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}&mode=${clinchMode}&tableMode=playoff" 
-           style="cursor: pointer; width: 120px; text-decoration: none; border: none; padding: 10px; ${tableMode === 'playoff' ? 'color: black; background-color: orangered;' : 'color: orangered; background-color: black;'}" 
-           class="history-btn">
+           class="segmented-btn ${tableMode === 'playoff' ? 'active' : ''}">
            Playoff
         </a>
     </div>
 
     <div id="regularTable" style="display:${tableMode === 'regular' ? 'block' : 'none'};">
-        <div style="display: flex; justify-content: flex-start; align-items: center; margin-bottom: 10px; gap: 10px;">
-            <span style="color: gray; font-size: 0.85em;">Logika obarvování:</span>
+        <div class="clinch-switch">
+            <span>Logika obarvování:</span>
             <a href="?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}&mode=strict&tableMode=${tableMode}" 
-               style="${clinchMode === 'strict' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; text-decoration: none; font-size: 0.85em;">
+               class="mini-pill ${clinchMode === 'strict' ? 'active' : ''}">
                Striktní (Jistá meta)
             </a>
             <a href="?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}&mode=cascade&tableMode=${tableMode}" 
-               style="${clinchMode === 'cascade' ? 'background-color: orangered; color: black;' : 'background-color: black; color: orangered; border: 1px solid orangered;'} padding: 4px 10px; text-decoration: none; font-size: 0.85em;">
+               class="mini-pill ${clinchMode === 'cascade' ? 'active' : ''}">
                Kaskádová (Minimální meta)
             </a>
         </div>
@@ -1927,6 +1964,56 @@ async function generateLeftPanel(data, isHistory = false) {
 
     const crossGroupTeams = [];
     const zoneConfig = getLeagueZones(leagueObj);
+    const escapeHtmlAttribute = value => String(value).replace(/[&<>"']/g, character => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    })[character]);
+    const getRecentTeamForm = (team) => (matches || [])
+        .filter(match => {
+            const result = match.result;
+            if (result?.scoreHome === undefined || result.scoreHome === null || result.scoreHome === '' ||
+                result.scoreAway === undefined || result.scoreAway === null || result.scoreAway === '') {
+                return false;
+            }
+            const scoreHome = Number(result?.scoreHome);
+            const scoreAway = Number(result?.scoreAway);
+            return match.season === selectedSeason &&
+                match.liga === selectedLiga &&
+                !match.isPlayoff &&
+                result &&
+                Number.isFinite(scoreHome) &&
+                Number.isFinite(scoreAway) &&
+                Number.isFinite(new Date(match.datetime || match.date).getTime()) &&
+                (Number(match.homeTeamId) === Number(team.id) || Number(match.awayTeamId) === Number(team.id));
+        })
+        .sort((a, b) => new Date(b.datetime || b.date) - new Date(a.datetime || a.date))
+        .slice(0, 10)
+        .map(match => {
+            const isScheduledHome = Number(match.homeTeamId) === Number(team.id);
+            const sideSwapped = match.result.sideSwap === true;
+            const teamIsScoredAsHome = isScheduledHome !== sideSwapped;
+            const scoreHome = Number(match.result.scoreHome);
+            const scoreAway = Number(match.result.scoreAway);
+            const teamScore = teamIsScoredAsHome ? scoreHome : scoreAway;
+            const opponentScore = teamIsScoredAsHome ? scoreAway : scoreHome;
+            const opponentId = Number(match.homeTeamId) === Number(team.id) ? match.awayTeamId : match.homeTeamId;
+            const opponentName = teams.find(opponent => Number(opponent.id) === Number(opponentId))?.name || 'Soupeř';
+            const won = teamScore > opponentScore;
+            const overtime = Boolean(match.result.ot);
+            const outcome = won ? overtime ? 'overtime-win' : 'win' : overtime ? 'overtime-loss' : 'loss';
+            const resultTitle = won ? overtime ? 'Výhra po prodloužení' : 'Výhra' : overtime ? 'Prohra po prodloužení' : 'Prohra';
+
+            return {
+                outcome,
+                label: overtime ? won ? 'Vp' : 'Pp' : won ? 'V' : 'P',
+                overtime,
+                score: `${teamScore}:${opponentScore}`,
+                title: `vs ${opponentName} · ${teamScore}:${opponentScore} · ${resultTitle}`
+            };
+        });
 
     // ==========================================
     // 1. ZÁKLADNÍ TABULKY (Skupiny)
@@ -1949,10 +2036,22 @@ async function generateLeftPanel(data, isHistory = false) {
         }
 
         html += `
-        <table class="points-table">
+        <table class="points-table standings-table">
+        <colgroup>
+            <col style="width: 7%">
+            <col style="width: 41%">
+            <col style="width: 11%">
+            <col style="width: 9%">
+            <col style="width: 7%">
+            <col style="width: 5%">
+            <col style="width: 5%">
+            <col style="width: 5%">
+            <col style="width: 5%">
+            <col style="width: 5%">
+        </colgroup>
         <thead>
         <tr><th scope="col" id="points-table-header" colspan="10"><h2>Týmy - ${selectedLiga} ${selectedSeason} - Základní část ${leagueObj?.isMultigroup ? `(Skupina ${group})` : ''}</h2></th></tr>
-        <tr><th class="position">Místo</th><th>Tým</th><th class="points">Body</th><th>Skóre</th><th>Rozdíl</th><th>Z</th><th>V</th><th>Vpp</th><th>Ppp</th><th>P</th></tr>
+        <tr id="points-table-second-header"><th class="position">Místo</th><th style="text-align: left; padding-left: 25px">Tým</th><th class="points">Body</th><th>Skóre</th><th>Rozdíl</th><th>Z</th><th>V</th><th>Vpp</th><th>Ppp</th><th>P</th></tr>
         </thead>
         <tbody>`;
 
@@ -2179,11 +2278,28 @@ async function generateLeftPanel(data, isHistory = false) {
 
             const teamStats = scores[team.id] || { gf: 0, ga: 0 };
             const goalDiff = teamStats.gf - teamStats.ga;
+            const teamLogoUrl = team.logo ? `/logoteamu/${team.logo}` : '';
+            const recentForm = getRecentTeamForm(team);
 
             html += `<tr class="${rowClass}">
-                <td class="rank-cell ${rankClass}">${index + 1}.</td>
-                <td>${team.name}</td>
-                <td class="points numbers">${myPoints}</td>
+                <td class="rank-cell ${rankClass}"><span class="rank-badge">${index + 1}.</span></td>
+                <td>
+                    <div class="team-cell">
+                        ${teamLogoUrl ? `<img src="${teamLogoUrl}" alt="" class="team-logo-small">` : ''}
+                        <div class="team-cell-content">
+                            <div class="team-cell-main"><span>${team.name}</span></div>
+                            ${recentForm.length ? `
+                                <div class="team-recent-form" aria-label="Forma: posledních ${recentForm.length} zápasů">
+                                    <div class="team-recent-form-results">
+                                        <span class="team-recent-form-label">FORMA</span>
+                                        ${recentForm.map(result => `<span class="team-form-result ${result.outcome}" data-tooltip="${escapeHtmlAttribute(result.title)}" tabindex="0">${result.label}</span>`).join('')}
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                </td>
+                <td class="points numbers"><span class="points-pill">${myPoints}</span></td>
                 <td class="numbers">${teamStats.gf}:${teamStats.ga}</td>
                 <td class="numbers">${goalDiff > 0 ? '+' + goalDiff : goalDiff}</td>
                 <td class="numbers">${played}</td>
@@ -2391,10 +2507,17 @@ async function generateLeftPanel(data, isHistory = false) {
 
             if (cLocked) rowClass += " locked";
 
+            const teamLogoUrl = team.logo ? `/logoteamu/${team.logo}` : '';
+
             html += `<tr class="${rowClass}">
-                <td class="rank-cell ${currentZone}">${index + 1}.</td>
-                <td>${team.name}</td>
-                <td class="points numbers">${myPoints}</td>
+                <td class="rank-cell ${currentZone}"><span class="rank-badge">${index + 1}</span></td>
+                <td>
+                    <div class="team-cell">
+                        ${teamLogoUrl ? `<img src="${teamLogoUrl}" alt="" class="team-logo-small">` : ''}
+                        <span>${team.name}</span>
+                    </div>
+                </td>
+                <td class="points numbers"><span class="points-pill">${myPoints}</span></td>
                 <td class="numbers">${teamStats.gf}:${teamStats.ga}</td>
                 <td class="numbers">${goalDiff > 0 ? '+' + goalDiff : goalDiff}</td>
                 <td class="numbers">${played}</td>
@@ -2794,11 +2917,17 @@ async function generateLeftPanel(data, isHistory = false) {
 
         html += `
         <section class="progress-section">
-            <h3>Odehráno zápasů v základní části</h3>
-            <div class="progress-container">
-                <div class="progress-bar" style="width:${percentage}%;">${percentage}%</div>
+            <div class="progress-header">
+                <div class="progress-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                    Odehráno zápasů v základní části
+                </div>
+                <div class="progress-stats-text">${filledMatches} / ${leagueObj.maxMatches || '?'} <span style="color: var(--accent-green); margin-left: 4px;">(${percentage}%)</span></div>
             </div>
-            <p id="progress-text"></p>
+            <div class="progress-container">
+                <div class="progress-bar" style="width:${percentage}%;"></div>
+            </div>
+            <p id="progress-text" style="display:none;"></p>
         </section>
         `;
     }
@@ -2831,50 +2960,51 @@ async function logUserAction(username, action, details, entity = 'user', entityI
 
 async function generateTimeWidget() {
     return `
-    <p id="current-time"></p>
+    <span id="live-date" style="text-transform: uppercase; font-weight: 600; font-size: 11px; color: var(--text-dim); letter-spacing: 0.5px;"></span>
+    <span style="opacity: 0.3; margin: 0 4px;">•</span>
+    <span id="live-clock" style="font-weight: 700; color: #fff; font-family: 'JetBrains Mono', monospace; font-size: 12px;"></span>
     <script>
-        function updateTime() {
+        function updateLiveTime() {
             const now = new Date();
-            const dateString = now.toLocaleString('cs-CZ', {
+            const dateStr = now.toLocaleDateString('cs-CZ', {
                 timeZone: 'Europe/Prague',
+                weekday: 'long',
                 day: 'numeric',
-                month: 'numeric',
+                month: 'long',
                 year: 'numeric'
             });
-            const timeString = now.toLocaleString('cs-CZ', {
+            const timeStr = now.toLocaleTimeString('cs-CZ', {
                 timeZone: 'Europe/Prague',
                 hour: '2-digit',
                 minute: '2-digit',
                 second: '2-digit'
             });
-            const timeElement = document.getElementById('current-time');
-            if (timeElement) {
-                const [hours, minutes, seconds] = timeString.split(':');
-                timeElement.innerHTML =
-                    '<span class="date">' + dateString + '</span>' +
-                    '<span class="separator">&nbsp;&nbsp;|&nbsp;&nbsp;</span>' +
-                    '<span class="digit">' + hours + '</span>' +
-                    '<span class="colon">:</span>' +
-                    '<span class="digit">' + minutes + '</span>' +
-                    '<span class="colon">:</span>' +
-                    '<span class="digit">' + seconds + '</span>';
-            }
+            const dateEl = document.getElementById('live-date');
+            const clockEl = document.getElementById('live-clock');
+            if (dateEl) dateEl.textContent = dateStr.toUpperCase();
+            if (clockEl) clockEl.textContent = timeStr;
         }
-        document.addEventListener('DOMContentLoaded', () => {
-            updateTime();
-            setInterval(updateTime, 1000);
-        });
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                updateLiveTime();
+                setInterval(updateLiveTime, 1000);
+            });
+        } else {
+            updateLiveTime();
+            setInterval(updateLiveTime, 1000);
+        }
     </script>
     `;
 }
 
-async function drawWatermark(ctx, width, height, watermarkColor = '#888888', customText = null) {
+async function drawWatermark(ctx, width, height, watermarkColor = '#888888', customText = null, watermarkLogo = null) {
     const { loadImage } = require('canvas');
     const path = require('path');
 
     try {
-        const logoPath = path.join(process.cwd(), 'public/images/logo.png');
-        const logoImg = await loadImage(logoPath);
+        const logoImg = watermarkLogo && watermarkLogo.startsWith('data:image/')
+            ? await loadImage(Buffer.from(watermarkLogo.split(',')[1], 'base64'))
+            : await loadImage(path.join(process.cwd(), 'public/images/logo.png'));
 
         // Draw logo directly in bottom right corner - clean, no background
         const logoSize = 45;
@@ -2891,7 +3021,7 @@ async function drawWatermark(ctx, width, height, watermarkColor = '#888888', cus
 
         ctx.drawImage(logoImg, drawX, drawY, drawWidth, drawHeight);
     } catch (e) {
-        // Silently fail if logo can't be loaded
+        console.error('[drawWatermark] Logo watermark se nepodařilo načíst:', e);
     }
 
     // Custom watermark text
@@ -2911,38 +3041,18 @@ async function drawWatermark(ctx, width, height, watermarkColor = '#888888', cus
 async function createMatchImage(homeTeam, awayTeam, scoreHome = null, scoreAway = null, title = null, withWatermark = true, seriesData = null, customSettings = {}) {
     const { createCanvas, loadImage } = require('canvas');
     const path = require('path');
-    const width = 800;
-    const height = 500;
+    const isResult = scoreHome !== null && scoreAway !== null;
+    const width = isResult ? 1000 : 800;
+    const height = isResult ? 600 : 500;
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext('2d');
 
     // Custom nastavení barev
-    const bgColor = customSettings.bgColor || '#1a1a1a';
     const textColor = customSettings.textColor || '#ffffff';
     const accentColor = customSettings.accentColor || '#ff4500';
     const watermarkColor = customSettings.watermarkColor || '#888888';
-    const bgImage = customSettings.bgImage || null;
 
-    // Custom pozadí nebo gradient
-    if (bgImage) {
-        try {
-            const img = await loadImage(Buffer.from(bgImage.split(',')[1], 'base64'));
-            ctx.drawImage(img, 0, 0, width, height);
-        } catch (e) {
-            // Fallback na gradient pokud obrázek nelze načíst
-            const grad = ctx.createLinearGradient(0, 0, 0, height);
-            grad.addColorStop(0, bgColor);
-            grad.addColorStop(1, '#000000');
-            ctx.fillStyle = grad;
-            ctx.fillRect(0, 0, width, height);
-        }
-    } else {
-        const grad = ctx.createLinearGradient(0, 0, 0, height);
-        grad.addColorStop(0, bgColor);
-        grad.addColorStop(1, '#000000');
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, width, height);
-    }
+    await drawBrandedBackground(ctx, width, height, customSettings);
 
     ctx.strokeStyle = accentColor + '26'; // 15% opacity
     ctx.lineWidth = 3;
@@ -2957,16 +3067,24 @@ async function createMatchImage(homeTeam, awayTeam, scoreHome = null, scoreAway 
         const logoName = team?.logo;
         const teamName = team?.name || '???';
         const size = 200;
+        const logoY = isResult ? 125 : 70;
         
+        if (isResult) {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.045)';
+            ctx.beginPath();
+            ctx.roundRect(x - 24, 94, 248, 330, 20);
+            ctx.fill();
+        }
+
         ctx.fillStyle = teamColor + '40';
         ctx.beginPath();
-        ctx.roundRect(x - 10, 60, size + 20, size + 20, 20);
+        ctx.roundRect(x - 10, logoY - 10, size + 20, size + 20, 20);
         ctx.fill();
         
         ctx.strokeStyle = teamColor;
         ctx.lineWidth = 4;
         ctx.beginPath();
-        ctx.roundRect(x - 10, 60, size + 20, size + 20, 20);
+        ctx.roundRect(x - 10, logoY - 10, size + 20, size + 20, 20);
         ctx.stroke();
         
         ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
@@ -2981,81 +3099,124 @@ async function createMatchImage(homeTeam, awayTeam, scoreHome = null, scoreAway 
                 const ratio = Math.min(size / img.width, size / img.height);
                 const nw = img.width * ratio;
                 const nh = img.height * ratio;
-                ctx.drawImage(img, x + (size - nw) / 2, 70 + (size - nh) / 2, nw, nh);
+                ctx.drawImage(img, x + (size - nw) / 2, logoY + (size - nh) / 2, nw, nh);
             } catch (e) {
                 const initials = teamName.split(' ').map(w => w[0]).join('').slice(0, 3).toUpperCase();
                 ctx.fillStyle = teamColor;
                 ctx.beginPath();
-                ctx.arc(x + size / 2, 70 + size / 2, 100, 0, Math.PI * 2);
+                ctx.arc(x + size / 2, logoY + size / 2, 100, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.fillStyle = textColor;
                 ctx.font = 'bold 80px Arial';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillText(initials, x + size / 2, 70 + size / 2);
+                ctx.fillText(initials, x + size / 2, logoY + size / 2);
             }
         } else {
             const initials = teamName.split(' ').map(w => w[0]).join('').slice(0, 3).toUpperCase();
             ctx.fillStyle = teamColor;
             ctx.beginPath();
-            ctx.arc(x + size / 2, 70 + size / 2, 100, 0, Math.PI * 2);
+            ctx.arc(x + size / 2, logoY + size / 2, 100, 0, Math.PI * 2);
             ctx.fill();
             ctx.fillStyle = textColor;
             ctx.font = 'bold 80px Arial';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(initials, x + size / 2, 70 + size / 2);
+            ctx.fillText(initials, x + size / 2, logoY + size / 2);
         }
         ctx.shadowBlur = 0;
+        if (isResult) {
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+        }
+        ctx.shadowColor = 'transparent';
     };
 
     const homeColor = accentColor;
     const awayColor = '#0064ff';
 
-    await drawLogo(homeTeam, 40, homeColor);
-    await drawLogo(awayTeam, 560, awayColor);
+    await drawLogo(homeTeam, isResult ? 54 : 40, homeColor);
+    await drawLogo(awayTeam, isResult ? 746 : 560, awayColor);
 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    ctx.fillStyle = textColor + '0D'; // 5% opacity
-    ctx.beginPath();
-    ctx.roundRect(width/2 - 100, height/2 - 60, 200, 120, 20);
-    ctx.fill();
-    ctx.strokeStyle = accentColor + '80'; // 50% opacity
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    ctx.shadowColor = accentColor + '80';
-    ctx.shadowBlur = 10;
-
-    const isResult = scoreHome !== null && scoreAway !== null;
-
     if (isResult) {
-        ctx.fillStyle = textColor;
-        ctx.font = 'bold 90px Arial';
-        ctx.fillText(`${scoreHome}:${scoreAway}`, width / 2, height / 2 + 5);
-        ctx.fillStyle = accentColor;
-        ctx.font = 'bold 20px Arial';
-        const displayText = title || 'KONEČNÝ VÝSLEDEK';
-        ctx.fillText(displayText, width / 2, height / 2 + 85);
+        const homeName = homeTeam?.name || 'Domácí';
+        const awayName = awayTeam?.name || 'Hosté';
+        const homeWon = Number(scoreHome) > Number(scoreAway);
+        const awayWon = Number(scoreAway) > Number(scoreHome);
 
-        // Zobrazeni stavu serie pro playoff
+        ctx.fillStyle = textColor;
+        ctx.font = 'bold 17px Arial';
+        ctx.fillText((title || 'KONEČNÝ VÝSLEDEK').toLocaleUpperCase('cs-CZ'), width / 2, 48, 900);
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+        ctx.beginPath();
+        ctx.roundRect(350, 170, 300, 170, 22);
+        ctx.fill();
+        ctx.strokeStyle = accentColor + '99';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.fillStyle = '#aeb7c6';
+        ctx.font = 'bold 12px Arial';
+        ctx.fillText('SKÓRE ZÁPASU', width / 2, 202);
+        ctx.fillStyle = textColor;
+        ctx.font = 'bold 68px Arial';
+        ctx.fillText(`${scoreHome} : ${scoreAway}`, width / 2, 275);
+
+        const drawTeamName = (name, x, color) => {
+            ctx.fillStyle = color;
+            ctx.font = 'bold 21px Arial';
+            let displayName = name;
+            while (ctx.measureText(displayName).width > 230 && ctx.font.match(/\d+/)) {
+                const fontSize = Number(ctx.font.match(/\d+/)[0]) - 1;
+                if (fontSize < 14) {
+                    displayName = name;
+                    while (displayName.length > 3 && ctx.measureText(`${displayName}…`).width > 230) {
+                        displayName = displayName.slice(0, -1);
+                    }
+                    displayName += '…';
+                    break;
+                }
+                ctx.font = `bold ${fontSize}px Arial`;
+            }
+            ctx.fillText(displayName, x, 370);
+        };
+        drawTeamName(homeName, 154, homeColor);
+        drawTeamName(awayName, 846, awayColor);
+
+        const outcomeText = homeWon ? `VÍTĚZ  ·  ${homeName}` : awayWon ? `VÍTĚZ  ·  ${awayName}` : 'REMÍZA';
+        ctx.fillStyle = homeWon ? homeColor : awayWon ? awayColor : textColor;
+        ctx.font = 'bold 16px Arial';
+        ctx.fillText(outcomeText, width / 2, 395);
+
         if (seriesData) {
             ctx.fillStyle = '#ffd700';
-            ctx.font = 'bold 28px Arial';
-            ctx.fillText('Serie: ' + seriesData.homeWins + ' - ' + seriesData.awayWins, width / 2, height / 2 + 125);
+            ctx.font = 'bold 15px Arial';
+            ctx.fillText(`STAV SÉRIE  ${seriesData.homeWins} : ${seriesData.awayWins}`, width / 2, 440);
         }
     } else {
+        ctx.fillStyle = textColor + '0D'; // 5% opacity
+        ctx.beginPath();
+        ctx.roundRect(width/2 - 100, height/2 - 60, 200, 120, 20);
+        ctx.fill();
+        ctx.strokeStyle = accentColor + '80'; // 50% opacity
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.shadowColor = accentColor + '80';
+        ctx.shadowBlur = 10;
         ctx.fillStyle = accentColor;
         ctx.font = 'bold 100px Arial';
         ctx.fillText('VS', width / 2, height / 2 + 5);
+        ctx.shadowBlur = 0;
     }
 
-    ctx.shadowBlur = 0;
 
     if (withWatermark) {
-        await drawWatermark(ctx, width, height, watermarkColor, customSettings.watermarkText);
+        await drawWatermark(ctx, width, height, watermarkColor, customSettings.watermarkText, customSettings.watermarkLogo);
     }
 
     return canvas.toBuffer('image/png');
@@ -3069,21 +3230,42 @@ async function createTransferImage(team1, team2, playerName = null, withWatermar
     const ctx = canvas.getContext('2d');
 
     // Custom nastavení barev
-    const bgColor = customSettings.bgColor || '#001a33';
-    const accentColor = customSettings.accentColor || '#00d4ff';
+    const accentColor = customSettings.accentColor || '#ff4500';
     const textColor = customSettings.textColor || '#ffffff';
 
-    const grad = ctx.createLinearGradient(0, 0, 0, height);
-    grad.addColorStop(0, bgColor);
-    grad.addColorStop(1, '#000000');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, width, height);
+    await drawBrandedBackground(ctx, width, height, customSettings);
 
-    ctx.strokeStyle = accentColor + '26';
+    ctx.strokeStyle = accentColor + '18';
     ctx.lineWidth = 2;
-    for (let i = 0; i < width; i += 30) {
-        ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, height); ctx.stroke();
+    for (let i = -100; i < width; i += 55) {
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i + 180, height);
+        ctx.stroke();
     }
+
+    [38, 462].forEach(x => {
+        ctx.fillStyle = 'rgba(10, 16, 24, 0.72)';
+        ctx.beginPath();
+        ctx.roundRect(x, 54, 300, 300, 24);
+        ctx.fill();
+        ctx.strokeStyle = accentColor + '55';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.fillStyle = accentColor;
+        ctx.beginPath();
+        ctx.roundRect(x + 18, 72, 4, 264, 2);
+        ctx.fill();
+    });
+    ctx.fillStyle = accentColor;
+    ctx.font = 'bold 14px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('PŘESTUP', width / 2, 35);
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = 'bold 11px Arial';
+    ctx.fillText('ODCHOD', 188, 78);
+    ctx.fillText('PŘÍCHOD', 612, 78);
 
     const drawLogo = async (team, x, customLogoBase64 = null) => {
         const logoName = team?.logo;
@@ -3095,20 +3277,20 @@ async function createTransferImage(team1, team2, playerName = null, withWatermar
         if (customLogoBase64 && customLogoBase64.startsWith('data:image')) {
             try {
                 const img = await loadImage(Buffer.from(customLogoBase64.split(',')[1], 'base64'));
-                ctx.shadowColor = 'rgba(0, 212, 255, 0.3)';
+                ctx.shadowColor = accentColor + '55';
                 ctx.shadowBlur = 15;
-                const size = 240;
+                const size = 190;
                 const ratio = Math.min(size / img.width, size / img.height);
-                ctx.drawImage(img, x + (size - img.width*ratio)/2, 80 + (size - img.height*ratio)/2, img.width*ratio, img.height*ratio);
+                ctx.drawImage(img, x + (size - img.width*ratio)/2, 100 + (size - img.height*ratio)/2, img.width*ratio, img.height*ratio);
                 ctx.shadowBlur = 0;
 
                 // Zobrazit název ligy pro custom týmy i s custom logem
                 if (leagueName) {
-                    ctx.fillStyle = '#00d4ff';
+                    ctx.fillStyle = accentColor;
                     ctx.font = 'bold 24px Arial';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'top';
-                    ctx.fillText(leagueName, x + size / 2, 80 + size + 10);
+                    ctx.fillText(leagueName, x + size / 2, 100 + size + 10);
                 }
                 return;
             } catch (e) {
@@ -3119,15 +3301,15 @@ async function createTransferImage(team1, team2, playerName = null, withWatermar
         // Pro custom týmy bez custom loga zobrazit iniciály a ligu
         if (isCustom || !logoName) {
             const initials = teamName.split(' ').map(w => w[0]).join('').slice(0, 3).toUpperCase();
-            const size = 240;
+            const size = 190;
             const centerX = x + size / 2;
-            const centerY = 80 + size / 2;
+            const centerY = 100 + size / 2;
             ctx.fillStyle = accentColor;
             ctx.beginPath();
-            ctx.arc(centerX, centerY, 90, 0, Math.PI * 2);
+            ctx.arc(centerX, centerY, 78, 0, Math.PI * 2);
             ctx.fill();
             ctx.fillStyle = textColor;
-            ctx.font = 'bold 70px Arial';
+            ctx.font = 'bold 60px Arial';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(initials, centerX, centerY);
@@ -3138,16 +3320,16 @@ async function createTransferImage(team1, team2, playerName = null, withWatermar
                 ctx.font = 'bold 24px Arial';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'top';
-                ctx.fillText(leagueName, centerX, centerY + 100);
+                ctx.fillText(leagueName, centerX, centerY + 105);
             }
         } else {
             try {
                 const img = await loadImage(path.join(process.cwd(), 'data/images', logoName));
                 ctx.shadowColor = accentColor + '4D';
                 ctx.shadowBlur = 15;
-                const size = 240;
+                const size = 190;
                 const ratio = Math.min(size / img.width, size / img.height);
-                ctx.drawImage(img, x + (size - img.width*ratio)/2, 80 + (size - img.height*ratio)/2, img.width*ratio, img.height*ratio);
+                ctx.drawImage(img, x + (size - img.width*ratio)/2, 100 + (size - img.height*ratio)/2, img.width*ratio, img.height*ratio);
                 ctx.shadowBlur = 0;
 
                 // Zobrazit název ligy i pro normální týmy pokud je k dispozici
@@ -3156,19 +3338,19 @@ async function createTransferImage(team1, team2, playerName = null, withWatermar
                     ctx.font = 'bold 24px Arial';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'top';
-                    ctx.fillText(leagueName, x + size / 2, 80 + size + 10);
+                    ctx.fillText(leagueName, x + size / 2, 100 + size + 10);
                 }
             } catch (e) {
                 const initials = teamName.split(' ').map(w => w[0]).join('').slice(0, 3).toUpperCase();
-                const size = 240;
+                const size = 190;
                 const centerX = x + size / 2;
-                const centerY = 80 + size / 2;
+                const centerY = 100 + size / 2;
                 ctx.fillStyle = accentColor;
                 ctx.beginPath();
-                ctx.arc(centerX, centerY, 90, 0, Math.PI * 2);
+                ctx.arc(centerX, centerY, 78, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.fillStyle = textColor;
-                ctx.font = 'bold 70px Arial';
+                ctx.font = 'bold 60px Arial';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 ctx.fillText(initials, centerX, centerY);
@@ -3178,31 +3360,32 @@ async function createTransferImage(team1, team2, playerName = null, withWatermar
                     ctx.font = 'bold 24px Arial';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'top';
-                    ctx.fillText(leagueName, centerX, centerY + 100);
+                    ctx.fillText(leagueName, centerX, centerY + 105);
                 }
             }
         }
     };
 
-    await drawLogo(team1, 60, customFromLogoBase64);
-    await drawLogo(team2, 500, customToLogoBase64);
+    await drawLogo(team1, 93, customFromLogoBase64);
+    await drawLogo(team2, 517, customToLogoBase64);
 
-    ctx.fillStyle = accentColor;
-    ctx.font = 'bold 80px Arial';
+    ctx.fillStyle = textColor;
+    ctx.font = 'bold 56px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('>>>', width / 2, height / 2 + 10);
-
-    ctx.font = 'bold 40px Arial';
-    ctx.fillText('PŘESTUP', width / 2, height / 2 - 55);
+    ctx.fillText('→', width / 2, 205);
+    ctx.fillStyle = textColor;
+    ctx.font = 'bold 17px Arial';
+    ctx.fillText((team1?.name || '???').toUpperCase(), 188, 330, 250);
+    ctx.fillText((team2?.name || '???').toUpperCase(), 612, 330, 250);
 
     // Draw player photo if provided
     if (playerPhotoPath) {
         try {
             const playerImg = await loadImage(playerPhotoPath);
-            const photoSize = 120;
+            const photoSize = 72;
             const photoX = (width - photoSize) / 2;
-            const photoY = height - 160;
+            const photoY = 286;
 
             // Circular mask for player photo
             ctx.save();
@@ -3219,8 +3402,8 @@ async function createTransferImage(team1, team2, playerName = null, withWatermar
             ctx.restore();
 
             // Border around photo
-            ctx.strokeStyle = '#00d4ff';
-            ctx.lineWidth = 4;
+            ctx.strokeStyle = accentColor;
+            ctx.lineWidth = 3;
             ctx.beginPath();
             ctx.arc(photoX + photoSize/2, photoY + photoSize/2, photoSize/2, 0, Math.PI * 2);
             ctx.stroke();
@@ -3231,12 +3414,13 @@ async function createTransferImage(team1, team2, playerName = null, withWatermar
 
     if (playerName) {
         ctx.fillStyle = textColor;
-        ctx.font = 'bold 24px Arial';
-        ctx.fillText(playerName, width / 2, height - 20);
+        ctx.font = 'bold 17px Arial';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(playerName, width / 2, 375, 360);
     }
 
     if (withWatermark) {
-        await drawWatermark(ctx, width, height);
+        await drawWatermark(ctx, width, height, customSettings.watermarkColor, customSettings.watermarkText, customSettings.watermarkLogo);
     }
 
     return canvas.toBuffer('image/png');
@@ -3252,24 +3436,23 @@ async function createWinnerImage(winnerTeam, title, withWatermark = true, option
     const ctx = canvas.getContext('2d');
     
     // Custom nastavení barev
-    const bgColor = customSettings.bgColor || '#1a1a1a';
     const textColor = customSettings.textColor || '#ffffff';
     
     // Options
     const {
-        accentColor = customSettings.accentColor || '#ffd700',
+        accentColor = customSettings.accentColor || '#ff4500',
         showTrophy = true
     } = options;
 
-    const grad = ctx.createLinearGradient(0, 0, 0, height);
-    // Adjust gradient based on accent color (darken it)
-    const baseColor = accentColor === '#ffd700' ? '#1a0f00' : bgColor;
-    const midColor = accentColor === '#ffd700' ? '#2d1f00' : '#1a1a1a';
-    grad.addColorStop(0, baseColor);
-    grad.addColorStop(0.5, midColor);
-    grad.addColorStop(1, '#0d0d0d');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, width, height);
+    await drawBrandedBackground(ctx, width, height, customSettings);
+
+    ctx.fillStyle = 'rgba(10, 16, 24, 0.68)';
+    ctx.beginPath();
+    ctx.roundRect(218, 28, 364, 342, 28);
+    ctx.fill();
+    ctx.strokeStyle = hexToRgba(accentColor, 0.42);
+    ctx.lineWidth = 2;
+    ctx.stroke();
 
     ctx.strokeStyle = hexToRgba(accentColor, 0.2);
     ctx.lineWidth = 3;
@@ -3287,20 +3470,31 @@ async function createWinnerImage(winnerTeam, title, withWatermark = true, option
     ctx.fillRect(0, 0, width, height);
 
     ctx.fillStyle = textColor;
-    ctx.font = 'bold 30px Arial';
+    ctx.font = 'bold 22px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.shadowColor = hexToRgba(accentColor, 0.8);
     ctx.shadowBlur = 20;
     
     // Pro pohár použijeme spolehlivý textový symbol místo emoji
+    ctx.font = 'bold 22px Arial';
+    ctx.fillText(title, width / 2, 58, 330);
     if (showTrophy) {
-        // Použijeme textový symbol který funguje všude
-        ctx.font = 'bold 30px Arial';
-        ctx.fillText(`⭐ ${title}`, width / 2, 50);
-    } else {
-        ctx.font = 'bold 30px Arial';
-        ctx.fillText(title, width / 2, 50);
+        const medalX = width / 2 - Math.min(ctx.measureText(title).width, 330) / 2 - 19;
+        ctx.fillStyle = accentColor;
+        ctx.beginPath();
+        ctx.arc(medalX, 58, 10, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(medalX - 5, 67);
+        ctx.lineTo(medalX, 77);
+        ctx.lineTo(medalX + 5, 67);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = textColor;
+        ctx.beginPath();
+        ctx.arc(medalX, 58, 3, 0, Math.PI * 2);
+        ctx.fill();
     }
     ctx.shadowBlur = 0;
 
@@ -3357,10 +3551,10 @@ async function createWinnerImage(winnerTeam, title, withWatermark = true, option
     ctx.font = 'bold 36px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(teamName.toUpperCase(), width / 2, 340);
+    ctx.fillText(teamName.toUpperCase(), width / 2, 328, 330);
 
     if (withWatermark) {
-        await drawWatermark(ctx, width, height);
+        await drawWatermark(ctx, width, height, customSettings.watermarkColor, customSettings.watermarkText, customSettings.watermarkLogo);
     }
 
     return canvas.toBuffer('image/png');
@@ -3380,7 +3574,6 @@ async function createStandingsImage(teamsData, title, withWatermark = true, opti
     const width = 950;
     
     // Custom nastavení barev
-    const bgColor = customSettings.bgColor || '#1a1a1a';
     const accentColor = customSettings.accentColor || '#ff4500';
     const textColor = customSettings.textColor || '#ffffff';
     
@@ -3390,7 +3583,6 @@ async function createStandingsImage(teamsData, title, withWatermark = true, opti
         quarterfinal = 0,
         playin = 0,
         relegation = 0,
-        clinchMode = 'cascade',
     } = options;
     
     // Group teams by their group property
@@ -3426,26 +3618,26 @@ async function createStandingsImage(teamsData, title, withWatermark = true, opti
     const ctx = canvas.getContext('2d');
 
     // Background
-    const grad = ctx.createLinearGradient(0, 0, 0, height);
-    grad.addColorStop(0, bgColor);
-    grad.addColorStop(1, '#000000');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, width, height);
+    await drawBrandedBackground(ctx, width, height, customSettings);
 
-    // Title
+    ctx.fillStyle = 'rgba(10, 16, 24, 0.54)';
+    ctx.beginPath();
+    ctx.roundRect(18, 18, width - 36, height - 36, 22);
+    ctx.fill();
+    ctx.strokeStyle = accentColor + '40';
+    ctx.lineWidth = 2;
+    ctx.stroke();
     ctx.fillStyle = accentColor;
-    ctx.font = 'bold 32px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(title || 'TABULKA', width / 2, 40);
-    
-    // Mode indicator
-    if (!isPlayoff && (quarterfinal > 0 || playin > 0 || relegation > 0)) {
-        ctx.fillStyle = '#888';
-        ctx.font = '12px Arial';
-        ctx.fillText(`Mód: ${clinchMode === 'strict' ? 'Přísný' : 'Kaskádový'}`, width / 2, 65);
-    }
+    ctx.beginPath();
+    ctx.roundRect(34, 35, 5, 40, 2);
+    ctx.fill();
 
+    ctx.fillStyle = accentColor;
+    ctx.font = 'bold 28px Arial';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(title || 'TABULKA', 54, 52, width - 90);
+    
     // Legend for zones
     let legendY = 85;
     if (!isPlayoff && (quarterfinal > 0 || playin > 0 || relegation > 0)) {
@@ -3454,19 +3646,22 @@ async function createStandingsImage(teamsData, title, withWatermark = true, opti
         let x = 30;
         if (quarterfinal > 0) {
             ctx.fillStyle = '#ffd700';
-            ctx.fillText('■ ČF', x, legendY);
-            x += 45;
+            ctx.fillText('■ Aktuálně čtvrtfinále', x, legendY);
+            x += 145;
         }
         if (playin > 0 && playin > quarterfinal) {
             ctx.fillStyle = '#00d4ff';
-            ctx.fillText('■ Předkolo', x, legendY);
-            x += 75;
+            ctx.fillText('■ Aktuálně předkolo', x, legendY);
+            x += 135;
         }
         if (relegation > 0) {
             ctx.fillStyle = '#ff4444';
-            ctx.fillText('■ Baráž', x, legendY);
+            ctx.fillText('■ Aktuálně baráž', x, legendY);
         }
         legendY += 20;
+        ctx.fillStyle = '#aeb7c6';
+        ctx.fillText('„Jisté“ ve sloupci Stav = matematicky zajištěná pozice.', 30, legendY);
+        legendY += 17;
     }
 
     // Calculate clinch statuses - use pre-calculated _clinchStatus if available
@@ -3490,10 +3685,10 @@ async function createStandingsImage(teamsData, title, withWatermark = true, opti
         return { 
             currentZone, 
             locked: false, 
-            clinchedQF: currentZone === 'quarterfinal',
-            clinchedPlayin: currentZone === 'playin', 
-            clinchedRelegation: currentZone === 'relegation',
-            clinchedNeutral: currentZone === 'neutral'
+            clinchedQF: false,
+            clinchedPlayin: false,
+            clinchedRelegation: false,
+            clinchedNeutral: false
         };
     };
 
@@ -3505,8 +3700,12 @@ async function createStandingsImage(teamsData, title, withWatermark = true, opti
         
         // Group header for multi-group leagues
         if (isMultiGroup) {
-            ctx.fillStyle = '#444';
-            ctx.fillRect(30, currentY - 5, width - 60, 30);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.075)';
+            ctx.beginPath();
+            ctx.roundRect(30, currentY - 5, width - 60, 30, 8);
+            ctx.fill();
+            ctx.fillStyle = accentColor;
+            ctx.fillRect(30, currentY - 5, 3, 30);
             ctx.fillStyle = accentColor;
             ctx.font = 'bold 16px Arial';
             ctx.textAlign = 'center';
@@ -3516,8 +3715,10 @@ async function createStandingsImage(teamsData, title, withWatermark = true, opti
         
         // Header row
         const headerY = currentY;
-        ctx.fillStyle = '#333';
-        ctx.fillRect(30, headerY, width - 60, 35);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.11)';
+        ctx.beginPath();
+        ctx.roundRect(30, headerY, width - 60, 35, 8);
+        ctx.fill();
         ctx.fillStyle = textColor;
         ctx.font = 'bold 14px Arial';
         ctx.textAlign = 'left';
@@ -3532,7 +3733,7 @@ async function createStandingsImage(teamsData, title, withWatermark = true, opti
         ctx.fillText('Skóre', 590, headerY + 22);
         ctx.fillText('Body', 660, headerY + 22);
         if (!isPlayoff && (quarterfinal > 0 || playin > 0 || relegation > 0)) {
-            ctx.fillText('Stav', 740, headerY + 22);
+            ctx.fillText('Postup / baráž', 740, headerY + 22);
         }
 
         // Team rows
@@ -3549,22 +3750,15 @@ async function createStandingsImage(teamsData, title, withWatermark = true, opti
                 ? calculateClinchStatus(team, index, groupTeams.length) 
                 : null;
             
-            // Row color based on zone
+            // Row tint reflects current position; the status text distinguishes it from a clinched outcome.
             if (status) {
                 let rowColor = null;
-                if (status.clinchedQF) rowColor = 'rgba(255, 215, 0, 0.15)';
-                else if (status.clinchedPlayin) rowColor = 'rgba(0, 212, 255, 0.15)';
-                else if (status.clinchedRelegation) rowColor = 'rgba(255, 68, 68, 0.15)';
-                else if (status.clinchedNeutral) rowColor = 'rgba(100, 255, 100, 0.1)';
+                if (status.currentZone === 'quarterfinal') rowColor = 'rgba(255, 215, 0, 0.12)';
+                else if (status.currentZone === 'playin') rowColor = 'rgba(0, 212, 255, 0.12)';
+                else if (status.currentZone === 'relegation') rowColor = 'rgba(255, 68, 68, 0.12)';
                 
                 if (rowColor) {
                     ctx.fillStyle = rowColor;
-                    ctx.fillRect(30, y - 12, width - 60, 30);
-                }
-                
-                // Locked indicator
-                if (status.locked) {
-                    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
                     ctx.fillRect(30, y - 12, width - 60, 30);
                 }
             }
@@ -3576,7 +3770,7 @@ async function createStandingsImage(teamsData, title, withWatermark = true, opti
                 if (status.currentZone === 'quarterfinal') posColor = '#ffd700';
                 else if (status.currentZone === 'playin') posColor = '#00d4ff';
                 else if (status.currentZone === 'relegation') posColor = '#ff4444';
-                else posColor = '#64ff64';
+                else posColor = textColor;
             }
 
             ctx.fillStyle = posColor;
@@ -3616,27 +3810,43 @@ async function createStandingsImage(teamsData, title, withWatermark = true, opti
             // Status column
             if (status) {
                 ctx.font = '12px Arial';
-                let statusText = '';
+                let statusText;
                 let statusColor = '#888';
                 
-                if (status.locked) {
-                    if (status.clinchedQF) { statusText = '! Čtvrtfinále'; statusColor = '#ffd700'; }
-                    else if (status.clinchedPlayin) { statusText = '! Předkolo'; statusColor = '#00d4ff'; }
-                    else if (status.clinchedRelegation) { statusText = '! Baráž'; statusColor = '#ff4444'; }
-                    else { statusText = '! Jistota'; statusColor = '#64ff64'; }
+                if (status.clinchedQF) {
+                    statusText = 'Jisté: čtvrtfinále';
+                    statusColor = '#ffd700';
+                } else if (status.clinchedPlayin) {
+                    statusText = 'Jisté: předkolo';
+                    statusColor = '#00d4ff';
+                } else if (status.clinchedRelegation) {
+                    statusText = 'Jistá baráž';
+                    statusColor = '#ff7777';
+                } else if (status.clinchedNeutral) {
+                    statusText = 'Jisté: bez baráže';
+                    statusColor = '#64ff64';
+                } else if (status.currentZone === 'quarterfinal') {
+                    statusText = 'Na pozici ČF';
+                    statusColor = '#ffd700';
+                } else if (status.currentZone === 'playin') {
+                    statusText = 'Na pozici předkola';
+                    statusColor = '#00d4ff';
+                } else if (status.currentZone === 'relegation') {
+                    statusText = 'Ohrožen baráží';
+                    statusColor = '#ff7777';
+                } else if (status.locked) {
+                    statusText = 'Pozice uzamčena';
+                    statusColor = '#aeb7c6';
                 } else {
-                    if (status.clinchedQF) { statusText = '? Čtvrtfinále'; statusColor = '#ffd700'; }
-                    else if (status.clinchedPlayin) { statusText = '? Předkolo'; statusColor = '#00d4ff'; }
-                    else if (status.clinchedNeutral) { statusText = '? Jistota'; statusColor = '#64ff64'; }
-                    else if (status.currentZone === 'quarterfinal') { statusText = 'Čtvrtfinále'; statusColor = '#ffd700'; }
-                    else if (status.currentZone === 'playin') { statusText = 'Předkolo'; statusColor = '#00d4ff'; }
-                    else if (status.currentZone === 'neutral') { statusText = ''; statusColor = '#888'; }
-                    else if (status.currentZone === 'relegation') { statusText = 'Baráž'; statusColor = '#ff4444'; }
+                    statusText = quarterfinal > 0 || playin > 0
+                        ? 'Mimo postupové zóny'
+                        : relegation > 0 ? 'Mimo barážovou zónu' : 'Mimo zóny';
                 }
                 
                 if (statusText) {
                     ctx.fillStyle = statusColor;
-                    ctx.fillText(statusText, 740, y + 3);
+                    ctx.textAlign = 'right';
+                    ctx.fillText(statusText, 910, y + 3, 190);
                 }
             }
 
@@ -3647,7 +3857,7 @@ async function createStandingsImage(teamsData, title, withWatermark = true, opti
     });
 
     if (withWatermark) {
-        await drawWatermark(ctx, width, height);
+        await drawWatermark(ctx, width, height, customSettings.watermarkColor, customSettings.watermarkText, customSettings.watermarkLogo);
     }
 
     return canvas.toBuffer('image/png');
@@ -3655,101 +3865,100 @@ async function createStandingsImage(teamsData, title, withWatermark = true, opti
 
 async function createStatisticsImage(usersStats, title, withWatermark = true, customSettings = {}) {
     const { createCanvas } = require('canvas');
-    const width = 800;
-    const height = Math.max(500, 150 + usersStats.length * 40);
+    const width = 980;
+    const headerY = 104;
+    const headerHeight = 42;
+    const rowHeight = 52;
+    const tableBottom = headerY + headerHeight + usersStats.length * rowHeight;
+    const height = Math.max(280, tableBottom + (withWatermark ? 54 : 30));
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext('2d');
 
-    // Custom nastavení barev
-    const bgColor = customSettings.bgColor || '#1a1a1a';
     const accentColor = customSettings.accentColor || '#ff4500';
     const textColor = customSettings.textColor || '#ffffff';
 
-    // Background
-    const grad = ctx.createLinearGradient(0, 0, 0, height);
-    grad.addColorStop(0, bgColor);
-    grad.addColorStop(1, '#000000');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, width, height);
+    await drawBrandedBackground(ctx, width, height, customSettings);
 
-    // Title
     ctx.fillStyle = accentColor;
-    ctx.font = 'bold 32px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(title || 'STATISTIKY TIPUJÍCÍCH', width / 2, 40);
-
-    // Header
-    ctx.fillStyle = '#333';
-    ctx.fillRect(30, 70, width - 60, 35);
+    ctx.fillRect(36, 30, 4, 42);
     ctx.fillStyle = textColor;
-    ctx.font = 'bold 14px Arial';
+    ctx.font = 'bold 29px Arial';
     ctx.textAlign = 'left';
-    ctx.fillText('#', 40, 87);
-    ctx.fillText('Uživatel', 75, 87);
+    ctx.textBaseline = 'middle';
+    ctx.fillText(title || 'STATISTIKY TIPUJÍCÍCH', 54, 52, width - 100);
+
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '13px Arial';
     ctx.textAlign = 'center';
-    ctx.fillText('Úspěšnost', 360, 87);
-    ctx.fillText('Body', 430, 87);
-    ctx.fillText('ZČ', 480, 87);
-    ctx.fillText('PO', 525, 87);
-    ctx.fillText('Trefené pozice', 615, 87);
-    ctx.fillText('Odchylka', 715, 87);
+    ctx.fillText(`${usersStats.length} ${usersStats.length === 1 ? 'tipující' : 'tipujících'}`, width - 66, 52);
 
-    // User rows
-    let y = 110;
-    usersStats.forEach((user, index) => {
-        if (index % 2 === 0) {
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
-            ctx.fillRect(30, y - 12, width - 60, 30);
-        }
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.075)';
+    ctx.beginPath();
+    ctx.roundRect(30, headerY, width - 60, headerHeight, 9);
+    ctx.fill();
 
-        // Position
-        const pos = index + 1;
-        let posColor = textColor;
-        if (pos === 1) posColor = '#ffd700';
-        else if (pos === 2) posColor = '#c0c0c0';
-        else if (pos === 3) posColor = '#cd7f32';
-
-        ctx.fillStyle = posColor;
-        ctx.font = 'bold 16px Arial';
-        ctx.textAlign = 'left';
-        ctx.fillText(pos + '.', 40, y + 3);
-
-        // Username
-        ctx.fillStyle = textColor;
-        ctx.font = '14px Arial';
-        ctx.fillText(user.username.substring(0, 20), 75, y + 3);
-
-        // Stats
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#aaa';
-        const successRate = user.total > 0 ? ((user.correct / user.total) * 100).toFixed(1) : '0.0';
-        ctx.fillText(successRate + '%', 360, y + 3);
-
-        ctx.fillStyle = accentColor;
-        ctx.font = 'bold 14px Arial';
-        ctx.fillText(String(user.correct || 0), 430, y + 3);
-
-        ctx.fillStyle = textColor;
-        ctx.font = '14px Arial';
-        ctx.fillText(String(user.totalRegular || 0), 480, y + 3);
-        ctx.fillText(String(user.totalPlayoff || 0), 525, y + 3);
-
-        // Table stats - always show values or 0
-        ctx.fillText(String(user.tableCorrect || 0), 615, y + 3);
-        ctx.fillText(String(user.tableDeviation || 0), 715, y + 3);
-
-        y += 30;
+    const columns = [
+        { label: '#', x: 62, align: 'center' },
+        { label: 'TIPUJÍCÍ', x: 96, align: 'left' },
+        { label: 'ÚSPĚŠNOST', x: 438, align: 'center' },
+        { label: 'BODY', x: 544, align: 'center' },
+        { label: 'ZČ', x: 630, align: 'center' },
+        { label: 'PO', x: 700, align: 'center' },
+        { label: 'TREFENÉ POZICE', x: 804, align: 'center' },
+        { label: 'ODCHYLKA', x: 916, align: 'center' }
+    ];
+    ctx.fillStyle = '#cbd5e1';
+    ctx.font = 'bold 11px Arial';
+    ctx.textBaseline = 'middle';
+    columns.forEach(column => {
+        ctx.textAlign = column.align;
+        ctx.fillText(column.label, column.x, headerY + headerHeight / 2);
     });
 
-    // Legend
-    ctx.fillStyle = '#888';
+    usersStats.forEach((user, index) => {
+        const rowY = headerY + headerHeight + index * rowHeight;
+        const centerY = rowY + rowHeight / 2;
+        ctx.fillStyle = index % 2 === 0 ? 'rgba(255, 255, 255, 0.035)' : 'rgba(255, 255, 255, 0.015)';
+        ctx.fillRect(30, rowY, width - 60, rowHeight);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.07)';
+        ctx.fillRect(30, rowY + rowHeight - 1, width - 60, 1);
+
+        const positionColor = ['#f5c451', '#c3ccd8', '#cd8c60'][index] || '#aab4c3';
+        ctx.fillStyle = positionColor;
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(index + 1), 62, centerY);
+
+        ctx.fillStyle = textColor;
+        ctx.font = 'bold 15px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillText(user.username || 'Neznámý uživatel', 96, centerY, 300);
+
+        const successRate = user.total > 0 ? ((user.correct / user.total) * 100).toFixed(1) : '0.0';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#cbd5e1';
+        ctx.font = '14px Arial';
+        ctx.fillText(successRate + '%', 438, centerY);
+        ctx.fillStyle = accentColor;
+        ctx.font = 'bold 15px Arial';
+        ctx.fillText(String(user.correct || 0), 544, centerY);
+        ctx.fillStyle = textColor;
+        ctx.font = '14px Arial';
+        ctx.fillText(String(user.totalRegular || 0), 630, centerY);
+        ctx.fillText(String(user.totalPlayoff || 0), 700, centerY);
+        ctx.fillText(String(user.tableCorrect || 0), 804, centerY);
+        ctx.fillText(String(user.tableDeviation || 0), 916, centerY);
+    });
+
+    ctx.fillStyle = '#8490a0';
     ctx.font = '11px Arial';
     ctx.textAlign = 'left';
-    ctx.fillText('ZČ = tipy v základní části, PO = tipy v playoff, Trefené pozice = správně trefené pozice v tabulce, Odchylka = odchylka tipů tabulky', 30, height - 30);
+    ctx.textBaseline = 'middle';
+    ctx.fillText('ZČ = základní část · PO = playoff · Odchylka = součet rozdílů v pořadí týmů', 36, height - 24, width - 72);
 
     if (withWatermark) {
-        await drawWatermark(ctx, width, height);
+        await drawWatermark(ctx, width, height, customSettings.watermarkColor, customSettings.watermarkText, customSettings.watermarkLogo);
     }
 
     return canvas.toBuffer('image/png');
@@ -3760,7 +3969,6 @@ async function createPlayoffBracketImage(data, withWatermark = true, customSetti
     const { playoffData, matches, teams, selectedLiga, title, standings } = data;
     
     // Custom nastavení barev
-    const bgColor = customSettings.bgColor || '#1a1a1a';
     const accentColor = customSettings.accentColor || '#ff4500';
     const textColor = customSettings.textColor || '#ffffff';
     
@@ -3774,18 +3982,25 @@ async function createPlayoffBracketImage(data, withWatermark = true, customSetti
     const ctx = canvas.getContext('2d');
     
     // Background
-    const grad = ctx.createLinearGradient(0, 0, 0, height);
-    grad.addColorStop(0, bgColor);
-    grad.addColorStop(1, '#000000');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, width, height);
+    await drawBrandedBackground(ctx, width, height, customSettings);
     
-    // Title
+    ctx.fillStyle = 'rgba(10, 16, 24, 0.45)';
+    ctx.beginPath();
+    ctx.roundRect(24, 22, width - 48, height - 44, 26);
+    ctx.fill();
+    ctx.strokeStyle = accentColor + '40';
+    ctx.lineWidth = 2;
+    ctx.stroke();
     ctx.fillStyle = accentColor;
-    ctx.font = 'bold 32px Arial';
-    ctx.textAlign = 'center';
+    ctx.beginPath();
+    ctx.roundRect(44, 40, 5, 42, 2);
+    ctx.fill();
+
+    ctx.fillStyle = accentColor;
+    ctx.font = 'bold 28px Arial';
+    ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText(title || `Playoff - ${selectedLiga}`, width / 2, 40);
+    ctx.fillText(title || `PLAYOFF · ${selectedLiga}`, 62, 61, width - 124);
     
     // Helper function to get series info
     function getSeriesInfo(slotKey) {
@@ -3911,42 +4126,26 @@ async function createPlayoffBracketImage(data, withWatermark = true, customSetti
         
         // Background with subtle gradient
         const boxGrad = ctx.createLinearGradient(x, y, x, y + h);
-        if (seriesInfo && seriesInfo.isFinished) {
-            boxGrad.addColorStop(0, 'rgba(40, 60, 40, 0.9)');
-            boxGrad.addColorStop(1, 'rgba(30, 50, 30, 0.9)');
-        } else if (seriesInfo && !seriesInfo.isWaiting) {
-            boxGrad.addColorStop(0, 'rgba(50, 50, 50, 0.9)');
-            boxGrad.addColorStop(1, 'rgba(35, 35, 35, 0.9)');
-        } else {
-            boxGrad.addColorStop(0, 'rgba(45, 45, 45, 0.7)');
-            boxGrad.addColorStop(1, 'rgba(30, 30, 30, 0.7)');
-        }
+        boxGrad.addColorStop(0, 'rgba(20, 28, 38, 0.96)');
+        boxGrad.addColorStop(1, 'rgba(10, 16, 24, 0.96)');
         ctx.fillStyle = boxGrad;
-        
-        // Draw rounded rectangle
         ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(x + w, y);
-        ctx.quadraticCurveTo(x + w, y, x + w, y);
-        ctx.lineTo(x + w, y + h);
-        ctx.quadraticCurveTo(x + w, y + h, x + w, y + h);
-        ctx.lineTo(x, y + h);
-        ctx.quadraticCurveTo(x, y + h, x, y + h);
-        ctx.lineTo(x, y);
-        ctx.quadraticCurveTo(x, y, x, y);
-        ctx.closePath();
+        ctx.roundRect(x, y, w, h, 12);
         ctx.fill();
         
-        // Border color based on status
+        let statusColor = '#64748b';
         if (seriesInfo && seriesInfo.isFinished) {
-            ctx.strokeStyle = '#00aa00'; // Green for finished
+            statusColor = accentColor;
         } else if (seriesInfo && !seriesInfo.isWaiting) {
-            ctx.strokeStyle = '#ff6600'; // Orange for ongoing
-        } else {
-            ctx.strokeStyle = '#666666'; // Gray for waiting
+            statusColor = accentColor;
         }
+        ctx.strokeStyle = statusColor + '99';
         ctx.lineWidth = 2;
         ctx.stroke();
+        ctx.fillStyle = statusColor;
+        ctx.beginPath();
+        ctx.roundRect(x + 8, y + 10, 3, h - 20, 2);
+        ctx.fill();
         
         if (seriesInfo) {
             const teamRowHeight = 22;
@@ -3956,14 +4155,14 @@ async function createPlayoffBracketImage(data, withWatermark = true, customSetti
             function drawTeamRow(teamName, seed, isWinner, rowY) {
                 ctx.font = 'bold 14px Arial';
                 ctx.textAlign = 'left';
-                ctx.fillStyle = isWinner ? '#00ff00' : textColor;
+                ctx.fillStyle = isWinner ? accentColor : textColor;
                 
                 // Seed indicator on the left
                 if (seed) {
                     ctx.fillStyle = '#888888';
                     ctx.font = 'bold 12px Arial';
                     ctx.fillText(`(${seed})`, x + 6, rowY);
-                    ctx.fillStyle = isWinner ? '#00ff00' : textColor;
+                    ctx.fillStyle = isWinner ? accentColor : textColor;
                     ctx.font = 'bold 14px Arial';
                     const displayName = teamName.length > 18 ? teamName.substring(0, 16) + '..' : teamName;
                     ctx.fillText(displayName, x + 30, rowY);
@@ -3981,18 +4180,18 @@ async function createPlayoffBracketImage(data, withWatermark = true, customSetti
             
             // Draw main score in center-right area
             ctx.textAlign = 'right';
-            ctx.fillStyle = '#ffd700';
+            ctx.fillStyle = accentColor;
             ctx.font = 'bold 18px Arial';
             ctx.fillText(`${seriesInfo.scoreH} : ${seriesInfo.scoreA}`, x + w - 8, y + h/2 + 15);
             
             // Status text below score (small, clean)
-            let statusColor = '#888888';
+            let statusColor = '#94a3b8';
             let statusText = '';
             if (seriesInfo.isFinished) {
-                statusColor = '#00aa00';
+                statusColor = accentColor;
                 statusText = 'Konec';
             } else if (seriesInfo.isOngoing) {
-                statusColor = '#ff6600';
+                statusColor = accentColor;
                 statusText = 'Probíhá';
             }
             
@@ -4006,13 +4205,13 @@ async function createPlayoffBracketImage(data, withWatermark = true, customSetti
             // Advance arrows on the right edge
             if (seriesInfo.homeWins) {
                 ctx.textAlign = 'right';
-                ctx.fillStyle = '#00ff00';
+                ctx.fillStyle = accentColor;
                 ctx.font = 'bold 14px Arial';
                 ctx.fillText('>>', x + w - 8, y + topPadding + 10);
             }
             if (seriesInfo.awayWins) {
                 ctx.textAlign = 'right';
-                ctx.fillStyle = '#00ff00';
+                ctx.fillStyle = accentColor;
                 ctx.font = 'bold 14px Arial';
                 ctx.fillText('>>', x + w - 8, y + topPadding + teamRowHeight + 10);
             }
@@ -4020,7 +4219,7 @@ async function createPlayoffBracketImage(data, withWatermark = true, customSetti
             // Individual match scores (if available and enough space)
             if (seriesInfo.playedMatches && seriesInfo.playedMatches.length > 0 && w > 200) {
                 ctx.font = '12px Arial';
-                ctx.fillStyle = '#ffd700';
+                ctx.fillStyle = accentColor;
                 ctx.textAlign = 'center';
                 const matchScores = seriesInfo.playedMatches.map(pm => `${pm.scoreHome}:${pm.scoreAway}`).join(' | ');
                 ctx.fillText(matchScores.substring(0, 30), x + w/2, y + h - 6);
@@ -4035,7 +4234,7 @@ async function createPlayoffBracketImage(data, withWatermark = true, customSetti
         
         // Round label above box
         if (label) {
-            ctx.fillStyle = '#ff6600';
+            ctx.fillStyle = accentColor;
             ctx.font = 'bold 11px Arial';
             ctx.textAlign = 'center';
             ctx.fillText(label, x + w/2, y - 8);
@@ -4046,7 +4245,7 @@ async function createPlayoffBracketImage(data, withWatermark = true, customSetti
     function drawConnection(x1, y1, x2, y2) {
         const midX = x1 + (x2 - x1) / 2;
         
-        ctx.strokeStyle = '#ff6600';
+        ctx.strokeStyle = accentColor + '99';
         ctx.lineWidth = 2;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
@@ -4059,7 +4258,7 @@ async function createPlayoffBracketImage(data, withWatermark = true, customSetti
         ctx.stroke();
         
         // Draw small dot at connection point
-        ctx.fillStyle = '#ff6600';
+        ctx.fillStyle = accentColor;
         ctx.beginPath();
         ctx.arc(x2, y2, 3, 0, Math.PI * 2);
         ctx.fill();
@@ -4232,7 +4431,7 @@ async function createPlayoffBracketImage(data, withWatermark = true, customSetti
     }
     
     if (withWatermark) {
-        await drawWatermark(ctx, width, height);
+        await drawWatermark(ctx, width, height, customSettings.watermarkColor, customSettings.watermarkText, customSettings.watermarkLogo);
     }
     
     return canvas.toBuffer('image/png');
