@@ -1791,7 +1791,7 @@ async function prepareDashboardData(req, isHistory = false, isImageExporter = fa
     };
 }
 
-async function generateStatsHtml(username, currentUserStats, userStats, isRegularSeasonFinished) {
+async function generateStatsHtml(username, currentUserStats, userStats) {
     if (!username) return ''; // Pokud není uživatel přihlášený, statistiky se neukazují
 
     const isTableEvaluated = currentUserStats?.tableCorrect > 0 || currentUserStats?.tableDeviation > 0;
@@ -2993,7 +2993,7 @@ async function generateLeftPanel(data, isHistory = false) {
     // ==========================================
     // 5. STATISTIKY UŽIVATELŮ
     // ==========================================
-    html += await generateStatsHtml(username, currentUserStats, userStats, isRegularSeasonFinished);
+    html += await generateStatsHtml(username, currentUserStats, userStats);
 
     html += `
     </div> </section> `;
