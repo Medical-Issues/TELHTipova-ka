@@ -2,7 +2,7 @@ require('dotenv').config();
 
 // Debug mód pro vypnutí obrázků
 const DEBUG_NO_IMAGES = process.env.DEBUG_NO_IMAGES === 'true';
-
+console.log("=== BEZÍCÍ VERZE NODE.JS ===", process.version);
 const express = require('express');
 const path = require('path');
 const bodyParser = require("body-parser");
