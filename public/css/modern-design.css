@@ -4669,3 +4669,405 @@ td.vs {
     color: var(--accent-purple);
     border: 1px solid rgba(139, 92, 246, 0.4);
 }
+
+/* =========================================================
+   MATCH TIPS SUMMARY (HYBRID BREAKDOWN & POPOVER)
+   ========================================================= */
+.match-tips-panel {
+    position: relative;
+    width: 100%;
+    margin-top: 6px;
+    font-family: inherit;
+    user-select: none;
+}
+
+.match-tips-track {
+    height: 3px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-full, 99px);
+    overflow: hidden;
+    margin-bottom: 5px;
+}
+
+.match-tips-fill {
+    height: 100%;
+    border-radius: var(--radius-full, 99px);
+    transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.match-tips-fill.home-fill {
+    background: linear-gradient(90deg, var(--primary, #ff5500), #ff7733);
+}
+
+.match-tips-fill.away-fill {
+    margin-left: auto;
+    background: linear-gradient(90deg, #38bdf8, #818cf8);
+}
+
+.match-tips-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.tips-align-left .match-tips-row {
+    justify-content: flex-start;
+}
+
+.tips-align-right .match-tips-row {
+    justify-content: flex-end;
+}
+
+.match-tips-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm, 4px);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    color: var(--text-muted, #94a3b8);
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: all 0.15s ease;
+}
+
+.match-tips-count:hover {
+    background: rgba(255, 255, 255, 0.09);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: #fff;
+}
+
+.match-tips-count strong {
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.tips-pct {
+    color: var(--text-dim, #64748b);
+    font-size: 10px;
+    font-weight: 500;
+}
+
+.match-tips-chips {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+
+.tip-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: var(--radius-full, 99px);
+    font-size: 11px;
+    font-weight: 600;
+    color: #cbd5e1;
+    white-space: nowrap;
+    max-width: 130px;
+    transition: all 0.15s ease;
+}
+
+.tip-chip:hover {
+    background: rgba(255, 255, 255, 0.09);
+    color: #fff;
+}
+
+.tip-chip.is-me {
+    background: rgba(255, 85, 0, 0.16);
+    border-color: rgba(255, 85, 0, 0.45);
+    color: #fff;
+    font-weight: 700;
+}
+
+.tip-chip.chip-correct {
+    background: rgba(34, 197, 94, 0.16);
+    border-color: rgba(34, 197, 94, 0.38);
+    color: #4ade80;
+}
+
+.tip-chip.chip-wrong {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.25);
+    color: #f87171;
+}
+
+.chip-avatar {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.14);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8.5px;
+    font-weight: 800;
+    line-height: 1;
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.tip-chip.is-me .chip-avatar {
+    background: var(--primary, #ff5500);
+}
+
+.chip-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.chip-detail {
+    font-size: 9.5px;
+    color: var(--text-muted, #94a3b8);
+    font-weight: 500;
+}
+
+.chip-pts {
+    font-size: 9px;
+    font-weight: 800;
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: rgba(34, 197, 94, 0.25);
+    color: #22c55e;
+    margin-left: 2px;
+}
+
+.tip-more-btn {
+    cursor: pointer;
+    background: rgba(255, 85, 0, 0.08);
+    border: 1px dashed rgba(255, 85, 0, 0.35);
+    color: var(--primary, #ff5500);
+    font-family: inherit;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+}
+
+.tip-more-btn:hover {
+    background: rgba(255, 85, 0, 0.2);
+    border-color: var(--primary, #ff5500);
+    color: #fff;
+    transform: translateY(-1px);
+}
+
+.match-tips-empty {
+    color: var(--text-dim, #64748b);
+    font-size: 10px;
+    font-style: italic;
+    padding: 2px 0;
+}
+
+/* Popover floating window */
+.tips-popover {
+    position: absolute;
+    top: calc(100% + 6px);
+    z-index: 120;
+    min-width: 200px;
+    max-width: 280px;
+    background: #141a22;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: var(--radius-md, 8px);
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.04);
+    padding: 8px 10px;
+    animation: tipsPopoverFadeIn 0.15s ease-out;
+}
+
+@keyframes tipsPopoverFadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.tips-popover.tips-align-left {
+    left: 0;
+}
+
+.tips-popover.tips-align-right {
+    right: 0;
+}
+
+.tips-popover-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding-bottom: 6px;
+    margin-bottom: 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.tips-popover-title {
+    font-size: 11px;
+    color: var(--text-muted, #94a3b8);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tips-popover-title strong {
+    color: #fff;
+}
+
+.tips-popover-close {
+    background: transparent;
+    border: none;
+    color: var(--text-muted, #94a3b8);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 2px;
+    border-radius: 3px;
+    transition: color 0.15s ease;
+}
+
+.tips-popover-close:hover {
+    color: #fff;
+}
+
+.tips-popover-list {
+    max-height: 220px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding-right: 2px;
+}
+
+.tips-popover-list::-webkit-scrollbar {
+    width: 4px;
+}
+
+.tips-popover-list::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 4px;
+}
+
+.tips-popover-list::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.18);
+    border-radius: 4px;
+}
+
+.popover-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 4px 6px;
+    border-radius: var(--radius-sm, 4px);
+    font-size: 12px;
+    color: var(--text-main, #e2e8f0);
+    transition: background 0.12s ease;
+}
+
+.popover-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.popover-item.is-me {
+    background: rgba(255, 85, 0, 0.12);
+    border: 1px solid rgba(255, 85, 0, 0.3);
+    color: #fff;
+    font-weight: 700;
+}
+
+.popover-avatar {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.12);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9.5px;
+    font-weight: 800;
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.popover-item.is-me .popover-avatar {
+    background: var(--primary, #ff5500);
+}
+
+.popover-user {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
+}
+
+.popover-username {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.popover-me-badge {
+    font-size: 9px;
+    font-weight: 800;
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: var(--primary, #ff5500);
+    color: #fff;
+    line-height: 1.1;
+    flex-shrink: 0;
+}
+
+.popover-detail {
+    font-size: 11px;
+    color: var(--text-muted, #94a3b8);
+    font-weight: normal;
+    flex-shrink: 0;
+}
+
+.popover-pts {
+    font-size: 10px;
+    font-weight: 800;
+    padding: 2px 6px;
+    border-radius: 4px;
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+.popover-pts.pts-win {
+    background: rgba(34, 197, 94, 0.2);
+    color: #22c55e;
+    border: 1px solid rgba(34, 197, 94, 0.35);
+}
+
+.popover-pts.pts-zero {
+    background: rgba(239, 68, 68, 0.12);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.22);
+}
+
+@media (max-width: 640px) {
+    .match-tips-panel {
+        margin-top: 4px;
+    }
+    .match-tips-row {
+        gap: 4px;
+    }
+    .tip-chip {
+        max-width: 95px;
+        padding: 1px 5px;
+        font-size: 10px;
+    }
+    .chip-avatar {
+        width: 12px;
+        height: 12px;
+        font-size: 8px;
+    }
+    .match-tips-count {
+        font-size: 10px;
+        padding: 1px 4px;
+    }
+}

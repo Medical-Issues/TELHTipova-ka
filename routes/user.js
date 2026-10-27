@@ -703,15 +703,47 @@ html += await generateLeftPanel(data);
                 });
 
                 // Načíst verzi a zobrazit v badge
-                fetch('/api/version')
-                    .then(res => res.json())
-                    .then(data => {
-                        const versionBadge = document.getElementById('current-version');
-                        if (versionBadge) {
-                            versionBadge.textContent = data.version;
-                        }
-                    })
-                    .catch(err => console.error('Nepodařilo se načíst verzi', err));
+                
+function toggleTipsPopover(event, matchId, side) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    const popoverId = 'tips-popover-' + matchId + '-' + side;
+    const popover = document.getElementById(popoverId);
+    if (!popover) return;
+    const wasHidden = popover.hidden;
+    document.querySelectorAll('.tips-popover:not([hidden])').forEach(p => p.hidden = true);
+    popover.hidden = !wasHidden;
+}
+
+function closeTipsPopover(matchId, side) {
+    const popoverId = 'tips-popover-' + matchId + '-' + side;
+    const popover = document.getElementById(popoverId);
+    if (popover) popover.hidden = true;
+}
+
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.match-tips-panel')) {
+        document.querySelectorAll('.tips-popover:not([hidden])').forEach(p => p.hidden = true);
+    }
+});
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        document.querySelectorAll('.tips-popover:not([hidden])').forEach(p => p.hidden = true);
+    }
+});
+
+fetch('/api/version')
+        .then(res => res.json())
+        .then(data => {
+            const versionBadge = document.getElementById('current-version');
+            if (versionBadge) {
+                versionBadge.textContent = data.version;
+            }
+        })
+        .catch(err => console.error('Nepodařilo se načíst verzi', err));
             });
         </script>
         <script src="/js/version-notification.js"></script>
@@ -933,6 +965,205 @@ router.post("/tip", requireLogin, async (req, res) => {
     });
 });
 
+
+function escapeHtmlGlobal(value = '') {
+    return String(value).replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+    })[char]);
+}
+
+function getMatchTipsBreakdown(match, allUsers, season, liga, currentUsername, isHistory = false) {
+    const homeTippers = [];
+    const awayTippers = [];
+
+    if (Array.isArray(allUsers)) {
+        allUsers.forEach(u => {
+            if (!u || !u.username) return;
+            const tipsList = u.tips?.[season]?.[liga];
+            if (!Array.isArray(tipsList)) return;
+            const tip = tipsList.find(t => String(t.matchId) === String(match.id));
+            if (!tip || (tip.winner !== 'home' && tip.winner !== 'away')) return;
+
+            let extraDetail = '';
+            if (match.isPlayoff) {
+                const bo = match.bo || 1;
+                if (bo > 1) {
+                    const winsNeeded = Math.ceil(bo / 2);
+                    const lWins = tip.loserWins != null ? parseInt(tip.loserWins, 10) : 0;
+                    extraDetail = tip.winner === 'home' ? `${winsNeeded}:${lWins}` : `${lWins}:${winsNeeded}`;
+                } else if (bo === 1 && tip.scoreHome != null && tip.scoreAway != null) {
+                    extraDetail = `${tip.scoreHome}:${tip.scoreAway}`;
+                }
+            }
+
+            let earnedPoints = 0;
+            const isCorrect = match.result?.winner ? tip.winner === match.result.winner : null;
+            if (isHistory && match.result?.winner && isCorrect) {
+                const bo = match.bo || 1;
+                if (!match.isPlayoff) {
+                    earnedPoints = 1;
+                } else if (match.isPlayoff && bo === 1) {
+                    const tH = tip.scoreHome ?? 0;
+                    const tA = tip.scoreAway ?? 0;
+                    const totalDiff = Math.abs(tH - (match.result.scoreHome || 0)) + Math.abs(tA - (match.result.scoreAway || 0));
+                    if (totalDiff === 0) earnedPoints = 5;
+                    else if (totalDiff === 1) earnedPoints = 4;
+                    else if (totalDiff === 2) earnedPoints = 3;
+                    else earnedPoints = 1;
+                } else if (match.isPlayoff && bo > 1) {
+                    const realLoserWins = match.result.winner === 'home' ? (match.result.scoreAway || 0) : (match.result.scoreHome || 0);
+                    if (parseInt(tip.loserWins, 10) === realLoserWins) {
+                        earnedPoints = 3;
+                    } else {
+                        earnedPoints = 1;
+                    }
+                }
+            }
+
+            const tipper = {
+                username: u.username,
+                isCurrentUser: u.username === currentUsername,
+                extraDetail,
+                isCorrect,
+                points: earnedPoints
+            };
+
+            if (tip.winner === 'home') homeTippers.push(tipper);
+            else awayTippers.push(tipper);
+        });
+    }
+
+    const sortFn = (a, b) => {
+        if (a.isCurrentUser) return -1;
+        if (b.isCurrentUser) return 1;
+        return a.username.localeCompare(b.username, 'cs', { sensitivity: 'base' });
+    };
+    homeTippers.sort(sortFn);
+    awayTippers.sort(sortFn);
+
+    const totalTips = homeTippers.length + awayTippers.length;
+    let homePct = 0;
+    let awayPct = 0;
+    if (totalTips > 0) {
+        homePct = Math.round((homeTippers.length / totalTips) * 100);
+        awayPct = 100 - homePct;
+    }
+
+    return {
+        totalTips,
+        home: { tippers: homeTippers, pct: homePct },
+        away: { tippers: awayTippers, pct: awayPct }
+    };
+}
+
+function renderMatchTipsSide(sideData, matchId, side, teamName, isHistory = false) {
+    const { tippers, pct } = sideData;
+    const isHome = side === 'home';
+    const alignClass = isHome ? 'tips-align-left' : 'tips-align-right';
+
+    if (!tippers || tippers.length === 0) {
+        return `
+        <div class="match-tips-panel ${isHome ? 'home-tips' : 'away-tips'} ${alignClass}">
+            <div class="match-tips-track">
+                <div class="match-tips-fill ${isHome ? 'home-fill' : 'away-fill'}" style="width: 0%;"></div>
+            </div>
+            <div class="match-tips-row">
+                <span class="match-tips-empty">0 tipů (0%)</span>
+            </div>
+        </div>`;
+    }
+
+    const directCount = tippers.length <= 3 ? tippers.length : 2;
+    const visibleTippers = tippers.slice(0, directCount);
+    const hasMore = tippers.length > directCount;
+    const moreCount = tippers.length - directCount;
+
+    const renderChip = (t) => {
+        const initial = (t.username || '?')[0].toUpperCase();
+        let statusClass = '';
+        let pointsTag = '';
+        if (isHistory && t.isCorrect !== null) {
+            statusClass = t.isCorrect ? 'chip-correct' : 'chip-wrong';
+            if (t.points > 0) {
+                pointsTag = `<span class="chip-pts">+${t.points}b</span>`;
+            }
+        }
+        return `
+        <span class="tip-chip ${t.isCurrentUser ? 'is-me' : ''} ${statusClass}" title="${escapeHtmlGlobal(t.username)}${t.extraDetail ? ` (${t.extraDetail})` : ''}">
+            <span class="chip-avatar">${initial}</span>
+            <span class="chip-name">${escapeHtmlGlobal(t.username)}</span>
+            ${t.extraDetail ? `<span class="chip-detail">${t.extraDetail}</span>` : ''}
+            ${pointsTag}
+        </span>`;
+    };
+
+    const chipsHtml = visibleTippers.map(renderChip).join('');
+
+    const moreBtnHtml = hasMore ? `
+        <button type="button" class="tip-chip tip-more-btn" onclick="toggleTipsPopover(event, '${matchId}', '${side}')" aria-label="Zobrazit všechny tipy (${tippers.length})">
+            +${moreCount} ${moreCount === 1 ? 'další' : (moreCount < 5 ? 'další' : 'dalších')} ▾
+        </button>
+    ` : '';
+
+    const popoverItemsHtml = tippers.map(t => {
+        const initial = (t.username || '?')[0].toUpperCase();
+        let statusClass = '';
+        let ptsHtml = '';
+        if (isHistory && t.isCorrect !== null) {
+            statusClass = t.isCorrect ? 'popover-correct' : 'popover-wrong';
+            ptsHtml = `<span class="popover-pts ${t.points > 0 ? 'pts-win' : 'pts-zero'}">${t.points > 0 ? `+${t.points} b.` : '0 b.'}</span>`;
+        }
+        return `
+        <div class="popover-item ${t.isCurrentUser ? 'is-me' : ''} ${statusClass}">
+            <span class="popover-avatar">${initial}</span>
+            <span class="popover-user">
+                <span class="popover-username">${escapeHtmlGlobal(t.username)}</span>
+                ${t.isCurrentUser ? '<span class="popover-me-badge">Ty</span>' : ''}
+                ${t.extraDetail ? `<span class="popover-detail">(${t.extraDetail})</span>` : ''}
+            </span>
+            ${ptsHtml}
+        </div>`;
+    }).join('');
+
+    const popoverHtml = `
+    <div id="tips-popover-${matchId}-${side}" class="tips-popover ${alignClass}" hidden onclick="event.stopPropagation()">
+        <div class="tips-popover-header">
+            <span class="tips-popover-title">Tipy pro <strong>${escapeHtmlGlobal(teamName)}</strong> (${tippers.length})</span>
+            <button type="button" class="tips-popover-close" onclick="closeTipsPopover('${matchId}', '${side}')" aria-label="Zavřít">&times;</button>
+        </div>
+        <div class="tips-popover-list">
+            ${popoverItemsHtml}
+        </div>
+    </div>`;
+
+    const countBadge = `
+        <span class="match-tips-count" title="${tippers.length} tipů (${pct}%)" onclick="toggleTipsPopover(event, '${matchId}', '${side}')" style="cursor: pointer;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+            <strong>${tippers.length}</strong>
+            <span class="tips-pct">(${pct}%)</span>
+        </span>
+    `;
+
+    return `
+    <div class="match-tips-panel ${isHome ? 'home-tips' : 'away-tips'} ${alignClass}" data-match-id="${matchId}" data-side="${side}">
+        <div class="match-tips-track">
+            <div class="match-tips-fill ${isHome ? 'home-fill' : 'away-fill'}" style="width: ${pct}%;"></div>
+        </div>
+        <div class="match-tips-row">
+            ${isHome ? countBadge : ''}
+            <div class="match-tips-chips">
+                ${isHome ? chipsHtml + moreBtnHtml : moreBtnHtml + chipsHtml}
+            </div>
+            ${!isHome ? countBadge : ''}
+        </div>
+        ${popoverHtml}
+    </div>`;
+}
+
 router.get('/', requireLogin, async (req, res) => {
     // Kontrola jest je liga veřejná
     const chosenSeason = await ChosenSeason.findAll();
@@ -950,7 +1181,7 @@ router.get('/', requireLogin, async (req, res) => {
 
     // 2. VYBALÍME SI PROMĚNNÉ, KTERÉ POTŘEBUJE HTML (Destructuring)
     const {
-        username, selectedSeason, selectedLiga, uniqueLeagues, teams, currentUserMatchTips
+        username, selectedSeason, selectedLiga, uniqueLeagues, teams, currentUserMatchTips, allUsers
     } = data;
     // DEBUG PRO MAXA LIGU
 
@@ -1085,8 +1316,11 @@ ${await renderUserHeader({
                 const matchStartPrague = toPragueDateTime(match.datetime || match.date);
                 const matchStarted = isLockedManually || match.postponed || Boolean(matchStartPrague && matchStartPrague <= currentPragueTimeISO);
                 const vsText = isLockedManually ? '🔒' : 'vs';
-                const matchTime = matchStartPrague?.slice(11, 16) || '';
-                const isPlayoff = match.isPlayoff;
+const matchTime = matchStartPrague?.slice(11, 16) || '';
+const isPlayoff = match.isPlayoff;
+const tipsBreakdown = matchStarted ? getMatchTipsBreakdown(match, allUsers, selectedSeason, selectedLiga, username, false) : null;
+const homeTipsHtml = tipsBreakdown ? renderMatchTipsSide(tipsBreakdown.home, match.id, 'home', homeTeamName, false) : '';
+const awayTipsHtml = tipsBreakdown ? renderMatchTipsSide(tipsBreakdown.away, match.id, 'away', awayTeamName, false) : '';
 
                 if (match.postponed) {
                     html += `<tr class="match-row postponed"><td colspan="3" style="text-align:center; padding:12px; color:var(--accent-amber);"><strong>${homeTeamName} vs ${awayTeamName} (Odloženo)</strong></td></tr>`;
@@ -1101,6 +1335,7 @@ ${await renderUserHeader({
                 <span>${homeTeamName}</span>
             </div>
         </button>
+        ${homeTipsHtml}
     </td>
     <td class="vs" style="width: 5%;"><span class="match-vs">${vsText}</span>${matchTime ? `<span class="match-time">${matchTime}</span>` : ''}</td> 
     <td style="width: calc(45%);">
@@ -1110,6 +1345,7 @@ ${await renderUserHeader({
                 <div class="team-logo-small-wrap"><img src="${awayLogoUrl}" alt=""></div>
             </div>
         </button>
+        ${awayTipsHtml}
     </td>
 </tr>`;
                 } else {
@@ -1172,6 +1408,7 @@ ${await renderUserHeader({
                 <span>${homeTeamName}</span>
             </div>
         </button>
+        ${homeTipsHtml}
     </td>
     <td class="vs" style="width: 5%;"><span class="match-vs">${vsText}</span>${matchTime ? `<span class="match-time">${matchTime}</span>` : ''}</td>
     <td style="width: calc(45%);">
@@ -1181,6 +1418,7 @@ ${await renderUserHeader({
                 <div class="team-logo-small-wrap"><img src="${awayLogoUrl}" alt=""></div>
             </div>
         </button>
+        ${awayTipsHtml}
     </td>
 </tr>
         ${playedMatchesHtml}
@@ -1804,7 +2042,39 @@ ${await renderUserHeader({
     });
 }
 
-        function toggleSeriesDetails(btn) {
+        
+function toggleTipsPopover(event, matchId, side) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    const popoverId = 'tips-popover-' + matchId + '-' + side;
+    const popover = document.getElementById(popoverId);
+    if (!popover) return;
+    const wasHidden = popover.hidden;
+    document.querySelectorAll('.tips-popover:not([hidden])').forEach(p => p.hidden = true);
+    popover.hidden = !wasHidden;
+}
+
+function closeTipsPopover(matchId, side) {
+    const popoverId = 'tips-popover-' + matchId + '-' + side;
+    const popover = document.getElementById(popoverId);
+    if (popover) popover.hidden = true;
+}
+
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.match-tips-panel')) {
+        document.querySelectorAll('.tips-popover:not([hidden])').forEach(p => p.hidden = true);
+    }
+});
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        document.querySelectorAll('.tips-popover:not([hidden])').forEach(p => p.hidden = true);
+    }
+});
+
+function toggleSeriesDetails(btn) {
             const details = btn.nextElementSibling;
             const expanded = btn.getAttribute('aria-expanded') === 'true';
             details.hidden = expanded;
@@ -1965,6 +2235,10 @@ ${await renderUserHeader({
                 let homeCellItems = "", awayCellItems = "", scoreCellHTML = "";
                 let initHomeClass = "", initAwayClass = "";
 
+                const tipsBreakdown = getMatchTipsBreakdown(match, allUsers, selectedSeason, selectedLiga, username, true);
+                const homeTipsHtml = renderMatchTipsSide(tipsBreakdown.home, match.id, 'home', homeTeamName, true);
+                const awayTipsHtml = renderMatchTipsSide(tipsBreakdown.away, match.id, 'away', awayTeamName, true);
+
                 usersWithTips.forEach(u => {
                     const homeRes = renderUserTip(u, match, 'home');
                     const awayRes = renderUserTip(u, match, 'away');
@@ -2005,6 +2279,7 @@ ${await renderUserHeader({
                     </div>
                 </div>
             </div>
+            ${homeTipsHtml}
         </div>
     </td>
     <td class="vs" style="width: 5%; text-align: center; vertical-align: middle;">
@@ -2031,6 +2306,7 @@ ${await renderUserHeader({
                     </div>
                 </div>
             </div>
+            ${awayTipsHtml}
         </div>
     </td>
 </tr>`;
