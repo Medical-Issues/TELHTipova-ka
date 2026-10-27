@@ -121,7 +121,11 @@ router.get('/', requireAdmin, async (req, res) => {
     const futureSeasons = await generateSeasonRange(currentYear, 10);
 
     const allSeasons = [...new Set([...futureSeasons, ...knownSeasons])];
-    allSeasons.sort();
+    allSeasons.sort((a, b) => {
+        const [a1, a2] = a.split('/').map(Number);
+        const [b1, b2] = b.split('/').map(Number);
+        return b1 - a1 || b2 - a2; // Reverse chronological order (newest first)
+    });
 
     const uniqueLeagues = allLeagues.filter(l => leaguesFromLeagues.includes(l));
 
@@ -1282,7 +1286,11 @@ router.get('/new/match', requireAdmin, async (req, res) => {
     const futureSeasons = await generateSeasonRange(currentYear, 10);
 
     const allSeasons = [...new Set([...futureSeasons, ...knownSeasons])];
-    allSeasons.sort();
+    allSeasons.sort((a, b) => {
+        const [a1, a2] = a.split('/').map(Number);
+        const [b1, b2] = b.split('/').map(Number);
+        return b1 - a1 || b2 - a2; // Reverse chronological order (newest first)
+    });
 
     // 1. Získáme unikátní ligy pro filtr
     const uniqueLeagues = [...new Set(teams.map(t => t.liga))].sort();
@@ -1392,7 +1400,7 @@ router.get('/new/match', requireAdmin, async (req, res) => {
                 </div>
                 <label style="display: flex; flex-direction: column">Sezóna
                     <select class="league-select" name="season" id="seasonSelect" required>
-                        ${allSeasons.map(s => `<option value="${s}">${s}</option>`).join('')}
+                        ${allSeasons.map(s => `<option value="${s}" ${s === chosenSeason ? 'selected' : ''}>${s}</option>`).join('')}
                     </select>
                 </label>
                 <div style="display: flex; align-items: center; gap: 10px;">
@@ -1678,7 +1686,11 @@ router.get('/edit/:id', requireAdmin, async (req, res) => {
     const seasonsFromMatches = matches.map(m => m.season).filter(Boolean);
     const allSeasons = [...new Set([...seasonsFromTeams, ...seasonsFromMatches])];
     const uniqueLeagues = [...new Set(allTeams.map(t => t.liga))].sort();
-    allSeasons.sort();
+    allSeasons.sort((a, b) => {
+        const [a1, a2] = a.split('/').map(Number);
+        const [b1, b2] = b.split('/').map(Number);
+        return b1 - a1 || b2 - a2; // Reverse chronological order (newest first)
+    });
 
     const resultHome = match.result?.scoreHome ?? '';
     const resultAway = match.result?.scoreAway ?? '';
