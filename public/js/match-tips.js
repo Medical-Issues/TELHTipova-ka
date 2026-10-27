@@ -104,7 +104,7 @@ window.openUserProfileModal = function(targetUsername) {
             return res.json();
         })
         .then(data => {
-            const { currentUsername, targetUser, isSelf, h2h, topTeams } = data;
+            const {targetUser, isSelf, h2h, topTeams } = data;
             const initial = (targetUser.username || '?')[0].toUpperCase();
 
             let h2hHtml = '';
