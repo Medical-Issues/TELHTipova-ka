@@ -703,38 +703,6 @@ html += await generateLeftPanel(data);
                 });
 
                 // Načíst verzi a zobrazit v badge
-                
-function toggleTipsPopover(event, matchId, side) {
-    if (event) {
-        event.preventDefault();
-        event.stopPropagation();
-    }
-    const popoverId = 'tips-popover-' + matchId + '-' + side;
-    const popover = document.getElementById(popoverId);
-    if (!popover) return;
-    const wasHidden = popover.hidden;
-    document.querySelectorAll('.tips-popover:not([hidden])').forEach(p => p.hidden = true);
-    popover.hidden = !wasHidden;
-}
-
-function closeTipsPopover(matchId, side) {
-    const popoverId = 'tips-popover-' + matchId + '-' + side;
-    const popover = document.getElementById(popoverId);
-    if (popover) popover.hidden = true;
-}
-
-document.addEventListener('click', (e) => {
-    if (!e.target.closest('.match-tips-panel')) {
-        document.querySelectorAll('.tips-popover:not([hidden])').forEach(p => p.hidden = true);
-    }
-});
-
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-        document.querySelectorAll('.tips-popover:not([hidden])').forEach(p => p.hidden = true);
-    }
-});
-
 fetch('/api/version')
         .then(res => res.json())
         .then(data => {
@@ -1199,6 +1167,7 @@ router.get('/', requireLogin, async (req, res) => {
 <title>Tipovačka</title>
 <link rel="stylesheet" href="/css/modern-design.css" />
 <script src="/js/version-notification.js"></script>
+<script src="/js/match-tips.js"></script>
 <link rel="icon" href="/images/logo.png">
 </head>
 ${renderNotificationScript(req.session.csrfToken || '')}
@@ -1961,6 +1930,7 @@ router.get('/history/a', requireLogin, async (req, res) => {
 <title>Tipovačka – Historie ${selectedLiga} ${selectedSeason}</title>
 <link rel="stylesheet" href="/css/modern-design.css" />
 <script src="/js/version-notification.js"></script>
+<script src="/js/match-tips.js"></script>
 <link rel="icon" href="/images/logo.png">
 </head>
 ${typeof renderNotificationScript === 'function' ? renderNotificationScript(req.session?.csrfToken || '') : ''}
@@ -2043,37 +2013,6 @@ ${await renderUserHeader({
 }
 
         
-function toggleTipsPopover(event, matchId, side) {
-    if (event) {
-        event.preventDefault();
-        event.stopPropagation();
-    }
-    const popoverId = 'tips-popover-' + matchId + '-' + side;
-    const popover = document.getElementById(popoverId);
-    if (!popover) return;
-    const wasHidden = popover.hidden;
-    document.querySelectorAll('.tips-popover:not([hidden])').forEach(p => p.hidden = true);
-    popover.hidden = !wasHidden;
-}
-
-function closeTipsPopover(matchId, side) {
-    const popoverId = 'tips-popover-' + matchId + '-' + side;
-    const popover = document.getElementById(popoverId);
-    if (popover) popover.hidden = true;
-}
-
-document.addEventListener('click', (e) => {
-    if (!e.target.closest('.match-tips-panel')) {
-        document.querySelectorAll('.tips-popover:not([hidden])').forEach(p => p.hidden = true);
-    }
-});
-
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-        document.querySelectorAll('.tips-popover:not([hidden])').forEach(p => p.hidden = true);
-    }
-});
-
 function toggleSeriesDetails(btn) {
             const details = btn.nextElementSibling;
             const expanded = btn.getAttribute('aria-expanded') === 'true';
