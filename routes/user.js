@@ -1061,7 +1061,7 @@ function renderMatchTipsSide(sideData, matchId, side, teamName, isHistory = fals
             }
         }
         return `
-        <span class="tip-chip ${t.isCurrentUser ? 'is-me' : ''} ${statusClass}" title="${escapeHtmlGlobal(t.username)}${t.extraDetail ? ` (${t.extraDetail})` : ''}">
+        <span class="tip-chip ${t.isCurrentUser ? 'is-me' : ''} ${statusClass}" onclick="openUserProfileModal('${escapeHtmlGlobal(t.username)}'); event.stopPropagation();" style="cursor: pointer;" title="${escapeHtmlGlobal(t.username)}${t.extraDetail ? ` (${t.extraDetail})` : ''}">
             <span class="chip-avatar">${initial}</span>
             <span class="chip-name">${escapeHtmlGlobal(t.username)}</span>
             ${t.extraDetail ? `<span class="chip-detail">${t.extraDetail}</span>` : ''}
@@ -1086,7 +1086,7 @@ function renderMatchTipsSide(sideData, matchId, side, teamName, isHistory = fals
             ptsHtml = `<span class="popover-pts ${t.points > 0 ? 'pts-win' : 'pts-zero'}">${t.points > 0 ? `+${t.points} b.` : '0 b.'}</span>`;
         }
         return `
-        <div class="popover-item ${t.isCurrentUser ? 'is-me' : ''} ${statusClass}">
+        <div class="popover-item ${t.isCurrentUser ? 'is-me' : ''} ${statusClass}" onclick="openUserProfileModal('${escapeHtmlGlobal(t.username)}'); event.stopPropagation();" style="cursor: pointer;">
             <span class="popover-avatar">${initial}</span>
             <span class="popover-user">
                 <span class="popover-username">${escapeHtmlGlobal(t.username)}</span>
@@ -1306,7 +1306,7 @@ const awayTipsHtml = tipsBreakdown ? renderMatchTipsSide(tipsBreakdown.away, mat
         </button>
         ${homeTipsHtml}
     </td>
-    <td class="vs" style="width: 5%;"><span class="match-vs">${vsText}</span>${matchTime ? `<span class="match-time">${matchTime}</span>` : ''}</td> 
+    <td class="vs"><div class="vs-inner"><span class="match-vs">${vsText}</span>${matchTime ? `<span class="match-time">${matchTime}</span>` : ''}</div></td>
     <td style="width: calc(45%);">
         <button type="button" class="team-link away-btn ${selectedWinner === "away" ? "selected" : ""}" data-winner="away" ${matchStarted ? 'disabled' : ''}>
             <div class="team-info-row" style="justify-content: flex-end; width:100%;">
@@ -1379,7 +1379,7 @@ const awayTipsHtml = tipsBreakdown ? renderMatchTipsSide(tipsBreakdown.away, mat
         </button>
         ${homeTipsHtml}
     </td>
-    <td class="vs" style="width: 5%;"><span class="match-vs">${vsText}</span>${matchTime ? `<span class="match-time">${matchTime}</span>` : ''}</td>
+    <td class="vs"><div class="vs-inner"><span class="match-vs">${vsText}</span>${matchTime ? `<span class="match-time">${matchTime}</span>` : ''}</div></td>
     <td style="width: calc(45%);">
         <button type="button" class="team-link away-btn ${selectedWinner === "away" ? "selected" : ""}" data-winner="away" ${matchStarted ? 'disabled' : ''}>
             <div class="team-info-row" style="justify-content: flex-end; width:100%;">
@@ -2221,13 +2221,11 @@ function toggleSeriesDetails(btn) {
             ${homeTipsHtml}
         </div>
     </td>
-    <td class="vs" style="width: 5%; text-align: center; vertical-align: middle;">
-        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
-            <span class="match-vs" style="font-size: 16px; font-weight: 800; color: #fff; line-height: 1.2;">
-                ${match.result?.scoreHome ?? 0}:${match.result?.scoreAway ?? 0}
-            </span>
-            ${isOvertimeOrShooting ? `<span style="font-size: 11px; color: var(--accent-amber); font-weight: 700; margin-top: 2px;">pp/sn</span>` : ''}
-            ${matchTime ? `<span class="match-time" style="font-size: 11px; margin-top: 2px;">${matchTime}</span>` : ''}
+        <td class="vs">
+        <div class="vs-inner vs-history">
+            <span class="match-vs">${match.result?.scoreHome ?? 0}:${match.result?.scoreAway ?? 0}</span>
+            ${isOvertimeOrShooting ? `<span class="vs-ot">pp/sn</span>` : ''}
+            ${matchTime ? `<span class="match-time">${matchTime}</span>` : ''}
         </div>
     </td>
     <td style="width: calc(45%);">
@@ -6976,5 +6974,316 @@ router.get('/api/players/:teamId', requireLogin, async (req, res) => {
         res.status(500).json({ error: 'Chyba serveru' });
     }
 });
+
+
+// =========================================================
+// API: UŽIVATELSKÝ PROFIL & H2H DUEL (POPUP MODAL)
+// =========================================================
+router.get('/api/user-profile-h2h', requireLogin, async (req, res) => {
+    try {
+        const currentUsername = req.session.user;
+        const targetUsername = req.query.targetUser || currentUsername;
+        const chosenSeason = await ChosenSeason.findAll();
+        const selectedSeason = req.query.season || chosenSeason;
+        const allowedLeagues = await getAllowedLeagues(selectedSeason);
+        const selectedLiga = req.query.liga || allowedLeagues[0] || '';
+
+        const [allUsers, allMatches, allTeams] = await Promise.all([
+            Users.findAll(),
+            Matches.findAll(),
+            Teams.findAll()
+        ]);
+
+        const currentUser = allUsers.find(u => u.username === currentUsername);
+        const targetUser = allUsers.find(u => u.username === targetUsername);
+
+        if (!targetUser) {
+            return res.status(404).json({ error: 'Uživatel nebyl nalezen.' });
+        }
+
+        const isSelf = currentUsername === targetUsername;
+
+        // Odehrané zápasy v této sezóně a lize s výsledkem
+        const seasonMatches = allMatches.filter(m =>
+            String(m.season) === String(selectedSeason) &&
+            String(m.liga) === String(selectedLiga) &&
+            m.result
+        ).sort((a, b) => new Date(b.datetime || b.date) - new Date(a.datetime || a.date));
+
+        // Výpočet bodů
+        const calculatePoints = (tip, match) => {
+            if (!tip || !match.result || tip.winner !== match.result.winner) return 0;
+            if (!match.isPlayoff) return 1;
+            const bo = match.bo || 1;
+            if (bo === 1) {
+                const tH = tip.scoreHome ?? 0;
+                const tA = tip.scoreAway ?? 0;
+                const diff = Math.abs(tH - (match.result.scoreHome || 0)) + Math.abs(tA - (match.result.scoreAway || 0));
+                if (diff === 0) return 5;
+                if (diff === 1) return 4;
+                if (diff === 2) return 3;
+                return 1;
+            } else {
+                const realLoserWins = match.result.winner === 'home' ? (match.result.scoreAway || 0) : (match.result.scoreHome || 0);
+                return parseInt(tip.loserWins, 10) === realLoserWins ? 3 : 1;
+            }
+        };
+
+        const targetTips = targetUser.tips?.[selectedSeason]?.[selectedLiga] || [];
+        const currentTips = currentUser ? (currentUser.tips?.[selectedSeason]?.[selectedLiga] || []) : [];
+
+        let targetPoints = 0;
+        let targetCorrect = 0;
+
+        // Spočítáme unikátní vyhodnocené zápasy, na které si cílový uživatel vsadil
+        const tippedMatchIds = new Set(targetTips.map(t => String(t.matchId)));
+        const targetTotalTipped = seasonMatches.filter(m => tippedMatchIds.has(String(m.id))).length;
+
+        // Úspěšnost podle týmů
+        const teamPerfMap = {};
+
+        seasonMatches.forEach(m => {
+            // BEZPEČNÉ POROVNÁNÍ ID (String - String)
+            const tTip = targetTips.find(t => String(t.matchId) === String(m.id));
+            if (tTip && tTip.winner) {
+                const pts = calculatePoints(tTip, m);
+                targetPoints += pts;
+                if (pts > 0) targetCorrect++;
+
+                const pickedTeamId = tTip.winner === 'home' ? m.homeTeamId : m.awayTeamId;
+                if (pickedTeamId) {
+                    const key = String(pickedTeamId);
+                    if (!teamPerfMap[key]) teamPerfMap[key] = { teamId: pickedTeamId, correct: 0, total: 0, points: 0 };
+                    teamPerfMap[key].total++;
+                    teamPerfMap[key].points += pts;
+                    if (pts > 0) teamPerfMap[key].correct++;
+                }
+            }
+        });
+
+        // Top týmy pro cílového uživatele
+        const topTeams = Object.values(teamPerfMap)
+            .map(perf => {
+                const team = allTeams.find(t => String(t.id) === String(perf.teamId));
+                const pct = perf.total > 0 ? Math.round((perf.correct / perf.total) * 100) : 0;
+                return {
+                    name: team?.name || 'Tým',
+                    logo: team?.logo ? `/logoteamu/${team.logo}` : '/images/logo.png',
+                    ...perf,
+                    pct
+                };
+            })
+            .filter(t => t.total >= 2)
+            .sort((a, b) => (b.pct - a.pct) || (b.points - a.points))
+            .slice(0, 3);
+
+        // H2H duel s přihlášeným uživatelem
+        let h2h = null;
+        if (!isSelf && currentUser) {
+            let myWins = 0;
+            let targetWins = 0;
+            let draws = 0;
+            let agreedCount = 0;
+            let disagreedCount = 0;
+            const recentDuels = [];
+
+            seasonMatches.forEach(m => {
+                // BEZPEČNÉ POROVNÁNÍ ID
+                const myTip = currentTips.find(t => String(t.matchId) === String(m.id));
+                const targetTip = targetTips.find(t => String(t.matchId) === String(m.id));
+
+                if (myTip && targetTip && myTip.winner && targetTip.winner) {
+                    const myPts = calculatePoints(myTip, m);
+                    const targetPts = calculatePoints(targetTip, m);
+
+                    // 1. Shoda / odlišnost v typu tipu (vítěze)
+                    if (myTip.winner === targetTip.winner) {
+                        agreedCount++;
+                    } else {
+                        disagreedCount++;
+                    }
+
+                    // 2. Porovnání bodů na zápase (H2H výhra / prohra / remíza)
+                    if (myPts > targetPts) {
+                        myWins++;
+                    } else if (targetPts > myPts) {
+                        targetWins++;
+                    } else {
+                        draws++;
+                    }
+
+                    // 3. Posledních 5 odlišných soubojů pro detail
+                    if (myTip.winner !== targetTip.winner && recentDuels.length < 5) {
+                        const homeTeam = allTeams.find(t => String(t.id) === String(m.homeTeamId));
+                        const awayTeam = allTeams.find(t => String(t.id) === String(m.awayTeamId));
+                        recentDuels.push({
+                            matchId: m.id,
+                            homeName: homeTeam?.name || 'Domácí',
+                            awayName: awayTeam?.name || 'Hosté',
+                            score: `${m.result.scoreHome}:${m.result.scoreAway}${m.result.ot ? 'p' : ''}`,
+                            myPick: myTip.winner === 'home' ? (homeTeam?.name || 'Domácí') : (awayTeam?.name || 'Hosté'),
+                            targetPick: targetTip.winner === 'home' ? (homeTeam?.name || 'Domácí') : (awayTeam?.name || 'Hosté'),
+                            myPts,
+                            targetPts
+                        });
+                    }
+                }
+            });
+
+            const totalCompared = agreedCount + disagreedCount;
+            const agreementPct = totalCompared > 0 ? Math.round((agreedCount / totalCompared) * 100) : 0;
+
+            h2h = {
+                myWins,
+                targetWins,
+                draws,
+                agreedCount,
+                disagreedCount,
+                agreementPct,
+                recentDuels
+            };
+        }
+
+        // Rank v lize
+        const validUsers = allUsers.filter(u => u.username && u.username.toLowerCase() !== 'admin');
+        const userScores = validUsers.map(u => {
+            const uTips = u.tips?.[selectedSeason]?.[selectedLiga] || [];
+            let pts = 0;
+            let corr = 0;
+            seasonMatches.forEach(m => {
+                const tip = uTips.find(t => String(t.matchId) === String(m.id));
+                const p = calculatePoints(tip, m);
+                pts += p;
+                if (p > 0) corr++;
+            });
+            return { username: u.username, points: pts, correct: corr };
+        }).sort((a, b) => (b.correct - a.correct) || (b.points - a.points));
+
+        const targetRank = userScores.findIndex(u => u.username === targetUsername) + 1;
+
+        res.json({
+            currentUsername,
+            targetUser: {
+                username: targetUser.username,
+                rank: targetRank || 1,
+                points: targetPoints,
+                correct: targetCorrect,
+                totalTipped: targetTotalTipped,
+                pct: targetTotalTipped > 0 ? ((targetCorrect / targetTotalTipped) * 100).toFixed(1) : '0.0'
+            },
+            isSelf,
+            h2h,
+            topTeams
+        });
+    } catch (err) {
+        console.error('Chyba v /api/user-profile-h2h:', err);
+        res.status(500).json({ error: 'Chyba serveru při načítání profilu.' });
+    }
+});
+
+// =========================================================
+// API: NEDÁVNÁ AKTIVITA & BODY (POPUP MODAL)
+// =========================================================
+router.get('/api/recent-activity', requireLogin, async (req, res) => {
+    try {
+        const username = req.session.user;
+        const chosenSeason = await ChosenSeason.findAll();
+        const selectedSeason = req.query.season || chosenSeason;
+        const allowedLeagues = await getAllowedLeagues(selectedSeason);
+        const selectedLiga = req.query.liga || allowedLeagues[0] || '';
+
+        const [allUsers, allMatches, allTeams] = await Promise.all([
+            Users.findAll(),
+            Matches.findAll(),
+            Teams.findAll()
+        ]);
+
+        const currentUser = allUsers.find(u => u.username === username);
+        const userTips = currentUser?.tips?.[selectedSeason]?.[selectedLiga] || [];
+
+        // Posledních až 8 dohraných zápasů
+        const finishedMatches = allMatches.filter(m =>
+            String(m.season) === String(selectedSeason) &&
+            String(m.liga) === String(selectedLiga) &&
+            m.result
+        ).sort((a, b) => new Date(b.datetime || b.date) - new Date(a.datetime || a.date))
+        .slice(0, 8);
+
+        const calculatePoints = (tip, match) => {
+            if (!tip || !match.result || tip.winner !== match.result.winner) return 0;
+            if (!match.isPlayoff) return 1;
+            const bo = match.bo || 1;
+            if (bo === 1) {
+                const tH = tip.scoreHome ?? 0;
+                const tA = tip.scoreAway ?? 0;
+                const diff = Math.abs(tH - (match.result.scoreHome || 0)) + Math.abs(tA - (match.result.scoreAway || 0));
+                if (diff === 0) return 5;
+                if (diff === 1) return 4;
+                if (diff === 2) return 3;
+                return 1;
+            } else {
+                const realLoserWins = match.result.winner === 'home' ? (match.result.scoreAway || 0) : (match.result.scoreHome || 0);
+                return parseInt(tip.loserWins, 10) === realLoserWins ? 3 : 1;
+            }
+        };
+
+        let totalEarned = 0;
+        let totalPossible = finishedMatches.length;
+
+        const results = finishedMatches.map(m => {
+            const homeTeam = allTeams.find(t => String(t.id) === String(m.homeTeamId));
+            const awayTeam = allTeams.find(t => String(t.id) === String(m.awayTeamId));
+            const userTip = userTips.find(t => String(t.matchId) === String(m.id));
+            const pts = calculatePoints(userTip, m);
+            totalEarned += pts;
+
+            let homeTipsCount = 0;
+            let awayTipsCount = 0;
+            allUsers.forEach(u => {
+                const tip = u.tips?.[selectedSeason]?.[selectedLiga]?.find(t => String(t.matchId) === String(m.id));
+                if (tip?.winner === 'home') homeTipsCount++;
+                else if (tip?.winner === 'away') awayTipsCount++;
+            });
+
+            const pickedTeamName = userTip?.winner === 'home'
+                ? homeTeam?.name
+                : (userTip?.winner === 'away' ? awayTeam?.name : null);
+
+            let dateFormatted = m.datetime ? m.datetime.slice(0, 10) : '';
+
+            return {
+                matchId: m.id,
+                date: dateFormatted,
+                homeName: homeTeam?.name || 'Domácí',
+                awayName: awayTeam?.name || 'Hosté',
+                homeLogo: homeTeam?.logo ? `/logoteamu/${teamLogoSanitize(homeTeam.logo)}` : '/images/logo.png',
+                awayLogo: awayTeam?.logo ? `/logoteamu/${teamLogoSanitize(awayTeam.logo)}` : '/images/logo.png',
+                score: `${m.result.scoreHome}:${m.result.scoreAway}`,
+                ot: !!m.result.ot,
+                winner: m.result.winner,
+                userPicked: pickedTeamName,
+                isCorrect: pts > 0,
+                points: pts,
+                community: { home: homeTipsCount, away: awayTipsCount }
+            };
+        });
+
+        function teamLogoSanitize(logo) {
+            return logo ? encodeURIComponent(logo) : '';
+        }
+
+        res.json({
+            selectedLiga,
+            selectedSeason,
+            totalEarned,
+            totalPossible,
+            results
+        });
+    } catch (err) {
+        console.error('Chyba v /api/recent-activity:', err);
+        res.status(500).json({ error: 'Chyba serveru při načítání nedávných výsledků.' });
+    }
+});
+
 
 module.exports = router;

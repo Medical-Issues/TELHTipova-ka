@@ -2032,15 +2032,6 @@ button.playoff-series-header[aria-expanded="true"] .series-toggle-icon {
     text-transform: none;
 }
 
-.matches-table td.vs {
-    width: 32px !important;
-    min-width: 32px !important;
-    max-width: 32px !important;
-    padding: 10px 0;
-    text-align: center;
-    vertical-align: middle;
-}
-
 .matches-table td.vs .match-vs,
 .matches-table td.vs .match-time {
     width: 100%;
@@ -2052,6 +2043,7 @@ button.playoff-series-header[aria-expanded="true"] .series-toggle-icon {
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-md);
     transition: all 0.2s ease;
+    vertical-align: top;
 }
 
 .match-row td {
@@ -2110,7 +2102,7 @@ button.playoff-series-header[aria-expanded="true"] .series-toggle-icon {
 
 .team-link.selected::after, .team-pick-btn.selected::after {
     content: '✓ TIP';
-    font-size: 9px;
+    font-size: 8px;
     font-weight: 800;
     color: var(--primary);
     letter-spacing: 0.5px;
@@ -5070,4 +5062,665 @@ td.vs {
         font-size: 10px;
         padding: 1px 4px;
     }
+}
+
+
+/* =========================================================
+   USER PROFILE, H2H DUEL & RECENT ACTIVITY MODALS
+   ========================================================= */
+.btn-recent-activity {
+    background: rgba(255, 85, 0, 0.12);
+    border: 1px solid rgba(255, 85, 0, 0.35);
+    color: var(--primary, #ff5500);
+    padding: 4px 10px;
+    border-radius: var(--radius-sm, 6px);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.2s ease;
+}
+
+.btn-recent-activity:hover {
+    background: rgba(255, 85, 0, 0.25);
+    border-color: var(--primary, #ff5500);
+    color: #fff;
+    transform: translateY(-1px);
+}
+
+.user-profile-link {
+    color: inherit;
+    text-decoration: none;
+    cursor: pointer;
+    transition: color 0.15s ease;
+}
+
+.user-profile-link:hover {
+    color: var(--primary, #ff5500) !important;
+    text-decoration: underline;
+}
+
+/* Modal Overlay & Card */
+.app-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: rgba(0, 0, 0, 0.78);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    animation: modalFadeIn 0.2s ease-out;
+}
+
+.app-modal-overlay[hidden] {
+    display: none !important;
+}
+
+@keyframes modalFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes modalSlideUp {
+    from { opacity: 0; transform: translateY(16px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.app-modal-card {
+    background: #141a22;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--radius-lg, 12px);
+    box-shadow: 0 24px 50px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.05);
+    width: 100%;
+    max-width: 520px;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 24px;
+    position: relative;
+    animation: modalSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    color: var(--text-main, #e2e8f0);
+}
+
+.app-modal-card::-webkit-scrollbar {
+    width: 6px;
+}
+.app-modal-card::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.02);
+}
+.app-modal-card::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+}
+
+.app-modal-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: rgba(255, 255, 255, 0.08);
+    border: none;
+    color: var(--text-muted, #94a3b8);
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+}
+
+.app-modal-close:hover {
+    background: rgba(239, 68, 68, 0.2);
+    color: #f87171;
+}
+
+/* Modal User Header */
+.modal-user-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.modal-user-avatar {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary, #ff5500), #ff8844);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    font-weight: 800;
+    color: #fff;
+    box-shadow: 0 4px 14px rgba(255, 85, 0, 0.35);
+    flex-shrink: 0;
+}
+
+.modal-user-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.modal-user-name {
+    font-size: 20px;
+    font-weight: 800;
+    color: #fff;
+    margin: 0 0 4px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.modal-user-stats-strip {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--text-muted, #94a3b8);
+    flex-wrap: wrap;
+}
+
+.modal-user-stats-strip strong {
+    color: #fff;
+}
+
+.modal-rank-badge {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fbbf24;
+    border: 1px solid rgba(251, 191, 36, 0.3);
+    padding: 2px 8px;
+    border-radius: var(--radius-full, 99px);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+/* H2H Duel Score Box */
+.h2h-duel-card {
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-md, 8px);
+    padding: 16px;
+    margin-bottom: 20px;
+}
+
+.h2h-duel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-muted, #94a3b8);
+    margin-bottom: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.h2h-scoreboard {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 12px;
+    text-align: center;
+    margin-bottom: 14px;
+}
+
+.h2h-player {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.h2h-player-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-muted, #94a3b8);
+}
+
+.h2h-player-score {
+    font-size: 32px;
+    font-weight: 800;
+    line-height: 1;
+    color: #fff;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.h2h-player.winner .h2h-player-score {
+    color: var(--accent-green, #22c55e);
+    text-shadow: 0 0 12px rgba(34, 197, 94, 0.4);
+}
+
+.h2h-vs-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.h2h-vs-badge {
+    background: rgba(255, 85, 0, 0.15);
+    border: 1px solid rgba(255, 85, 0, 0.4);
+    color: var(--primary, #ff5500);
+    padding: 3px 9px;
+    border-radius: var(--radius-full, 99px);
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.h2h-draws-label {
+    font-size: 10px;
+    color: var(--text-dim, #64748b);
+}
+
+.h2h-agreement-bar {
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: var(--radius-full, 99px);
+    height: 6px;
+    overflow: hidden;
+    margin-bottom: 6px;
+}
+
+.h2h-agreement-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #38bdf8, var(--primary, #ff5500));
+    border-radius: var(--radius-full, 99px);
+}
+
+.h2h-agreement-text {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-dim, #64748b);
+}
+
+/* Recent Duels list */
+.modal-section-title {
+    font-size: 13px;
+    font-weight: 800;
+    color: #fff;
+    margin: 0 0 10px 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.recent-duels-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.recent-duel-item {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: var(--radius-sm, 6px);
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 12px;
+}
+
+.recent-duel-match {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+}
+
+.recent-duel-teams {
+    font-weight: 700;
+    color: #fff;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.recent-duel-score {
+    font-size: 11px;
+    color: var(--accent-amber, #f59e0b);
+    font-weight: 700;
+}
+
+.recent-duel-picks {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+}
+
+.pick-badge {
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.pick-badge.win {
+    background: rgba(34, 197, 94, 0.18);
+    color: #4ade80;
+    border: 1px solid rgba(34, 197, 94, 0.35);
+}
+
+.pick-badge.loss {
+    background: rgba(239, 68, 68, 0.12);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+/* Recent Activity Modal items */
+.activity-banner {
+    background: linear-gradient(135deg, rgba(255, 85, 0, 0.15) 0%, rgba(255, 85, 0, 0.04) 100%);
+    border: 1px solid rgba(255, 85, 0, 0.3);
+    border-radius: var(--radius-md, 8px);
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 18px;
+}
+
+.activity-banner-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.activity-banner-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--primary, #ff5500);
+    text-transform: uppercase;
+}
+
+.activity-banner-score {
+    font-size: 18px;
+    font-weight: 800;
+    color: #fff;
+}
+
+.activity-matches-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.activity-match-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: var(--radius-md, 8px);
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: background 0.15s ease;
+}
+
+.activity-match-card:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.activity-match-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.activity-teams {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+    font-size: 13px;
+    color: #fff;
+    flex: 1;
+    min-width: 0;
+}
+
+.activity-teams img {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+}
+
+.activity-score-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    font-weight: 800;
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.activity-match-bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.activity-tip-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 4px;
+}
+
+.activity-tip-badge.correct {
+    background: rgba(34, 197, 94, 0.2);
+    color: #4ade80;
+    border: 1px solid rgba(34, 197, 94, 0.35);
+}
+
+.activity-tip-badge.wrong {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.activity-tip-badge.untipped {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-dim, #64748b);
+}
+
+.activity-community-stats {
+    color: var(--text-dim, #64748b);
+}
+/* Container pro celou kartu zápasu v duelu */
+.recent-duel-item {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    min-width: 0; /* Klíčové pro správné zkracování flex položek */
+}
+
+/* Řádek se zápasem a skóre */
+.recent-duel-match {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+}
+
+.recent-duel-teams {
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.recent-duel-score {
+    font-weight: 700;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+/* Řádek s odznaky tipů */
+.recent-duel-picks {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+    flex-wrap: wrap; /* Pokud se nevejdou vedle sebe na malém displeji, hodí se pod sebe */
+    justify-content: center;
+}
+
+/* Samotné odznaky (badges) */
+.pick-badge {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%; /* Zamezí přetečení z karty */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 1; /* Dovolí jemné zmenšení textu uvnitř badge */
+    min-width: 0;
+}
+
+/* Sjednocení výšky pro boxy týmů */
+.match-row .team-link {
+    min-height: 46px; /* Sjednotí výšku i když chybí/jsou skryté badges */
+    display: flex !important;
+    align-items: center !important;
+    box-sizing: border-box;
+}
+/* ===== FIX: vs sloupec zarovnaný se středem bublin ===== */
+
+/* sloupce: krajní pružné, prostřední pevný */
+.matches-table col:nth-child(1),
+.matches-table col:nth-child(3) { width: auto !important; }
+.matches-table col:nth-child(2) { width: 64px !important; }
+
+.matches-table td:not(.vs) { width: auto !important; }
+
+.matches-table td.vs {
+    width: 64px !important;
+    min-width: 64px !important;
+    max-width: 64px !important;
+    padding: 10px 0 !important;
+    vertical-align: top !important;   /* přebije i inline vertical-align v historii */
+    text-align: center;
+}
+
+/* pevná výška bubliny = pevná výška vs-bloku */
+.matches-table .match-row .team-link {
+    height: 58px;
+    min-height: 58px;
+}
+
+.matches-table td.vs > .vs-inner,
+.matches-table td.vs > div {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 58px;          /* stejné jako .team-link */
+}
+
+.matches-table td.vs .match-vs,
+.matches-table td.vs .match-time {
+    display: block;
+    width: 100%;
+    text-align: center;
+    white-space: nowrap;
+}
+/* ===== FIX: logo se nemačká, text se krátí ===== */
+.team-logo-small-wrap {
+    flex: 0 0 35px;
+    width: 35px;
+    height: 35px;
+}
+
+.team-link .team-info-row {
+    flex: 1 1 auto;
+    min-width: 0;          /* bez tohohle flex položka nejde zúžit pod obsah */
+}
+
+.team-link .team-info-row > span {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* hosté: text zarovnaný doprava, logo zůstane vpravo */
+.team-link.away-btn .team-info-row > span {
+    text-align: right;
+}
+
+/* o trochu užší střed = víc místa pro bubliny */
+.matches-table col:nth-child(2) { width: 52px !important; }
+.matches-table td.vs {
+    width: 52px !important;
+    min-width: 52px !important;
+    max-width: 52px !important;
+}
+/* ===== FIX: skóre v historii vždy uprostřed bubliny ===== */
+.matches-table td.vs {
+    letter-spacing: 0 !important;   /* 1px spacing posouvalo text opticky doleva */
+}
+
+.vs-history {
+    position: relative;
+}
+
+.vs-history .match-vs {
+    font-size: 16px;
+    font-weight: 800;
+    color: #fff;
+    line-height: 1;
+    letter-spacing: 0;
+    font-variant-numeric: tabular-nums;
+}
+
+/* pp/sn nad skórem */
+.vs-history .vs-ot {
+    position: absolute;
+    top: 2px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--accent-amber);
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+/* čas pod skórem */
+.vs-history .match-time {
+    position: absolute;
+    bottom: 2px;
+    left: 0;
+    right: 0;
+    margin: 0 !important;
+    font-size: 10px !important;
+    line-height: 1;
 }

@@ -1799,11 +1799,14 @@ async function generateStatsHtml(username, currentUserStats, userStats) {
     let html = `
     <!-- 1. MOJE STATISTIKY -->
     <section class="user_stats modern-stats-card">
-        <div class="stats-card-header">
+        <div class="stats-card-header" style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
             <div class="stats-card-title">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                 Tvoje statistiky
             </div>
+            <button type="button" class="btn-recent-activity" onclick="openRecentActivityModal()" title="Zobrazit přehled tvých nedávných bodů">
+                ⚡ Nedávné body
+            </button>
         </div>
         
         ${currentUserStats ? `
@@ -1873,7 +1876,7 @@ async function generateStatsHtml(username, currentUserStats, userStats) {
         html += `
             <tr class="${isCurrent ? 'current-user-row' : ''}">
                 <td class="rank-cell"><span class="rank-badge rank-${index + 1}">${index + 1}.</span></td>
-                <td><strong style="color: ${isCurrent ? 'var(--primary)' : '#fff'};">${user.username}${isCurrent ? ' (ty)' : ''}</strong></td>
+                <td><a href="javascript:void(0)" class="user-profile-link" onclick="openUserProfileModal('${user.username}')" title="Zobrazit profil a vzájemný duel"><strong style="color: ${isCurrent ? 'var(--primary)' : '#fff'};">${user.username}${isCurrent ? ' (ty)' : ''}</strong></a></td>
                 <td class="numbers" style="text-align: center; color: var(--accent-green); font-weight: 700;">${successRateOverall}%${user.total !== user.maxFromTips ? `<span style="font-size:10px; color:var(--text-dim); margin-left:2px;">(${successRate}%)</span>` : ''}</td>
                 <td class="points numbers" style="text-align: center;"><span class="points-pill">${user.correct} b</span></td>
                 <td class="numbers" style="text-align: center;">${user.totalRegular ?? 0}</td>
@@ -1922,7 +1925,7 @@ async function generateStatsHtml(username, currentUserStats, userStats) {
         html += `
             <tr class="${isCurrent ? 'current-user-row' : ''}">
                 <td class="rank-cell"><span class="rank-badge rank-${index + 1}">${index + 1}.</span></td>
-                <td><strong style="color: ${isCurrent ? 'var(--primary)' : '#fff'};">${user.username}${isCurrent ? ' (ty)' : ''}</strong></td>
+                <td><a href="javascript:void(0)" class="user-profile-link" onclick="openUserProfileModal('${user.username}')" title="Zobrazit profil a vzájemný duel"><strong style="color: ${isCurrent ? 'var(--primary)' : '#fff'};">${user.username}${isCurrent ? ' (ty)' : ''}</strong></a></td>
                 <td class="points numbers" style="text-align: center;">
                     ${hasEvaluated ? `<span class="pts-pill pts-purple">+${user.tableCorrect || 0} b</span>` : '<span style="color:var(--text-dim);">-</span>'}
                 </td>
