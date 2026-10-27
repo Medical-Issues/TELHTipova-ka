@@ -1069,7 +1069,7 @@ function renderMatchTipsSide(sideData, matchId, side, teamName, isHistory = fals
         return `
         <div class="match-tips-panel ${isHome ? 'home-tips' : 'away-tips'} ${alignClass}">
             <div class="match-tips-track">
-                <div class="match-tips-fill ${isHome ? 'home-fill' : 'away-fill'}" style="width: 0%;"></div>
+                <div class="match-tips-fill ${isHome ? 'home-fill' : 'away-fill'}" style="width: 0;"></div>
             </div>
             <div class="match-tips-row">
                 <span class="match-tips-empty">0 tipů (0%)</span>
