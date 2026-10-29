@@ -1713,19 +1713,27 @@ router.get('/history', requireLogin, async (req, res) => {
 // =========================================================
 router.get('/history/prestupy', requireLogin, async (req, res) => {
     try {
-        const { Transfers, Teams } = require('../utils/mongoDataAccess');
+        const { Transfers, Teams, Leagues } = require('../utils/mongoDataAccess');
         const transfersData = await Transfers.findAll();
         const allTeams = await Teams.findAll();
+        const leaguesData = await Leagues.findAll();
 
         const selectedLiga = req.query.liga;
         const selectedSeason = req.query.season;
+        const selectedGroup = req.query.group ? parseInt(req.query.group) : null;
 
         if (!selectedLiga || !selectedSeason) {
             return res.redirect('/history');
         }
 
+        // Check if league is multigroup
+        const leaguesForSeasonData = leaguesData[selectedSeason]?.leagues || [];
+        const leagueObj = leaguesForSeasonData.find(l => l.name === selectedLiga);
+        const isMultigroup = leagueObj?.isMultigroup || false;
+        const groupCount = leagueObj?.groupCount || 1;
+
         const teamsInSelectedLiga = allTeams.filter(t =>
-            t.liga === selectedLiga && t.season === selectedSeason && t.active
+            t.liga === selectedLiga && t.season === selectedSeason && t.active && (!selectedGroup || t.group === selectedGroup)
         );
 
         const currentTransfers = transfersData?.[selectedSeason]?.[selectedLiga] || {};
@@ -1772,6 +1780,14 @@ ${await renderUserHeader({
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M16 3h5v5"/><path d="M4 20L21 3"/><path d="M21 16v5h-5"/><path d="M15 15l6 6"/><path d="M4 4l5 5"/></svg>
             Přestupy a Spekulace – ${selectedLiga} (${selectedSeason})
         </div>
+        ${isMultigroup ? `
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <label style="color: #888; font-size: 14px;">Skupina:</label>
+            <select onchange="window.location.href = '/history/prestupy?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}&group=' + this.value" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #444; background-color: #1e293b !important; color: #fff !important; font-size: 14px;">
+                <option value="">Všechny skupiny</option>
+                ${[...Array(groupCount).keys()].map(i => `<option value="${i+1}" ${selectedGroup === i+1 ? 'selected' : ''}>Skupina ${String.fromCharCode(65+i)}</option>`).join('')}
+            </select>
+        </div>` : ''}
     </div>
     <div style="display: grid; gap: 15px; width: 100%;">
 `;
@@ -1829,7 +1845,7 @@ ${await renderUserHeader({
         if (teamsInSelectedLiga.length === 0) {
             html += `<div class="dashboard-section" style="text-align: center; padding: 40px; color: var(--text-dim);">Žádné týmy v lize ${selectedLiga} pro sezónu ${selectedSeason}</div>`;
         } else {
-            teamsInSelectedLiga.sort((a, b) => (a.id || 0) - (b.id || 0)).forEach(team => {
+            filteredTeams.sort((a, b) => a.name.localeCompare(b.name, 'cs', { sensitivity: 'base' })).forEach(team => {
                 const tId = String(team.id);
                 const tData = currentTransfers[tId] || { specIn: [], specOut: [], confIn: [], confOut: [] };
                 const logoUrl = team.logo ? `/logoteamu/${team.logo}` : '/images/logo.png';
@@ -2500,9 +2516,22 @@ router.get('/history/roster', requireLogin, async (req, res) => {
     try {
         if (!req.query.liga || !req.query.season) return res.redirect('/history');
 
+        const selectedGroup = req.query.group ? parseInt(req.query.group) : null;
+
         const data = await prepareDashboardData(req, true);
         const { username, selectedSeason, selectedLiga, teamsInSelectedLiga } = data;
-        teamsInSelectedLiga.sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
+
+        // Check if league is multigroup
+        const { Leagues } = require('../utils/mongoDataAccess');
+        const leaguesData = await Leagues.findAll();
+        const leaguesForSeasonData = leaguesData[selectedSeason]?.leagues || [];
+        const leagueObj = leaguesForSeasonData.find(l => l.name === selectedLiga);
+        const isMultigroup = leagueObj?.isMultigroup || false;
+        const groupCount = leagueObj?.groupCount || 1;
+
+        // Filter teams by group if selected
+        const filteredTeams = selectedGroup ? teamsInSelectedLiga.filter(t => t.group === selectedGroup) : teamsInSelectedLiga;
+        filteredTeams.sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
 
         let html = `
 <!DOCTYPE html>
@@ -2546,9 +2575,17 @@ ${await renderUserHeader({
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             Soupisky – ${selectedLiga} (${selectedSeason})
         </div>
+        ${isMultigroup ? `
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <label style="color: #888; font-size: 14px;">Skupina:</label>
+            <select onchange="window.location.href = '/history/roster?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}&group=' + this.value" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #444; background-color: #1e293b !important; color: #fff !important; font-size: 14px;">
+                <option value="">Všechny skupiny</option>
+                ${[...Array(groupCount).keys()].map(i => `<option value="${i+1}" ${selectedGroup === i+1 ? 'selected' : ''}>Skupina ${String.fromCharCode(65+i)}</option>`).join('')}
+            </select>
+        </div>` : ''}
     </div>
 
-    <div id="allRostersView" class="all-rosters-grid" data-team-ids='${JSON.stringify(teamsInSelectedLiga.map(t => t.id))}' data-teams='${JSON.stringify(teamsInSelectedLiga)}' data-season='${selectedSeason}'></div>
+    <div id="allRostersView" class="all-rosters-grid" data-team-ids='${JSON.stringify(filteredTeams.sort((a, b) => a.name.localeCompare(b.name, 'cs', { sensitivity: 'base' })).map(t => t.id))}' data-teams='${JSON.stringify(filteredTeams.sort((a, b) => a.name.localeCompare(b.name, 'cs', { sensitivity: 'base' })))}' data-season='${selectedSeason}'></div>
 
 <script>
 function escapeRosterHtml(value) {
@@ -2736,7 +2773,7 @@ module.exports = router;
 router.get("/prestupy", requireLogin, async (req, res) => {
     try {
         // Odstraněna podmínka kontroly veřejné ligy - přestupy jsou viditelné vždy
-        
+
         // 1. ZAVOLÁME MOZEK, KTERÝ VŠE VYPOČÍTÁ BĚHEM MILISEKUNDY
         const data = await prepareDashboardData(req);
 
@@ -2745,6 +2782,20 @@ router.get("/prestupy", requireLogin, async (req, res) => {
             username, selectedLiga, selectedSeason, uniqueLeagues, teamsInSelectedLiga,
             activeTransferLeagues, currentTransfers,
         } = data;
+
+        // Check if league is multigroup
+        const { Leagues } = require('../utils/mongoDataAccess');
+        const leaguesData = await Leagues.findAll();
+        const leaguesForSeasonData = leaguesData[selectedSeason]?.leagues || [];
+        const leagueObj = leaguesForSeasonData.find(l => l.name === selectedLiga);
+        const isMultigroup = leagueObj?.isMultigroup || false;
+        const groupCount = leagueObj?.groupCount || 1;
+
+        // Get selected group from query
+        const selectedGroup = req.query.group ? parseInt(req.query.group) : null;
+
+        // Filter teams by group if selected
+        const filteredTeams = selectedGroup ? teamsInSelectedLiga.filter(t => t.group === selectedGroup) : teamsInSelectedLiga;
         
         // Načtení nastavení
         const settingsData = await Settings.findAll();
@@ -2788,17 +2839,33 @@ html += await generateLeftPanel(data);
             // Pokud nejsou přestupy, zobrazit všechny soupisky
             html += `<div class="transfer-page-actions transfer-page-actions-rosters">
                 <a href="/history/prestupy" class="transfer-history-link">📜 Historie přestupů</a>
+                ${isMultigroup ? `
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <label style="color: #888; font-size: 14px;">Skupina:</label>
+                    <select onchange="window.location.href = '/prestupy?liga=${encodeURIComponent(selectedLiga)}&group=' + this.value" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #444; background-color: #1e293b !important; color: #fff !important; font-size: 14px;">
+                        <option value="">Všechny skupiny</option>
+                        ${[...Array(groupCount).keys()].map(i => `<option value="${i+1}" ${selectedGroup === i+1 ? 'selected' : ''}>Skupina ${String.fromCharCode(65+i)}</option>`).join('')}
+                    </select>
+                </div>` : ''}
             </div>
             <h2 style="margin-top: 0; text-align: center; border-bottom: 2px solid orangered; padding-bottom: 10px;">Soupisky - ${selectedLiga}</h2>
-            <div id="allRostersView" style="margin-top: 15px;" data-team-ids='${JSON.stringify(teamsInSelectedLiga.map(t => t.id))}' data-teams='${JSON.stringify(teamsInSelectedLiga)}'></div>`;
+            <div id="allRostersView" style="margin-top: 15px;" data-team-ids='${JSON.stringify(filteredTeams.map(t => t.id))}' data-teams='${JSON.stringify(filteredTeams)}'></div>`;
         } else {
             // --- SEKCE PŘESTUPŮ ---
             html += `<div class="transfer-page-actions">
                 <a href="/history/prestupy" class="transfer-history-link">📜 Historie přestupů</a>
+                ${isMultigroup ? `
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <label style="color: #888; font-size: 14px;">Skupina:</label>
+                    <select onchange="window.location.href = '/prestupy?liga=${encodeURIComponent(selectedLiga)}&group=' + this.value" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #444; background-color: #1e293b !important; color: #fff !important; font-size: 14px;">
+                        <option value="">Všechny skupiny</option>
+                        ${[...Array(groupCount).keys()].map(i => `<option value="${i+1}" ${selectedGroup === i+1 ? 'selected' : ''}>Skupina ${String.fromCharCode(65+i)}</option>`).join('')}
+                    </select>
+                </div>` : ''}
                 <button onclick="toggleView()" id="toggleViewBtn" class="transfer-view-toggle" type="button">👥 Zobrazit soupisky</button>
             </div>
             <h2 id="viewTitle" style="margin-top: 0; text-align: center; border-bottom: 2px solid orangered; padding-bottom: 10px;">Přestupy a Spekulace - ${selectedLiga}</h2>
-            
+
             <div id="transfersContainer">
             <div id="individualTeamsView" style="display: grid; gap: 15px; margin-top: 15px;">`;
 
@@ -2863,7 +2930,7 @@ html += await generateLeftPanel(data);
     `).join('');
             };
 // 3. VYKRESLENÍ KARET (Zůstává podobné, jen volá vylepšený renderList)
-            teamsInSelectedLiga.sort((a, b) => a.id - b.id).forEach(team => {
+            filteredTeams.sort((a, b) => a.name.localeCompare(b.name, 'cs', { sensitivity: 'base' })).forEach(team => {
                 const tId = String(team.id);
                 const tData = currentTransfers[tId] || { specIn: [], specOut: [], confIn: [], confOut: [] };
                 const logoUrl = team.logo ? `/logoteamu/${team.logo}` : '/images/logo.png';
@@ -4882,7 +4949,7 @@ html += `<section class="matches-container image-exporter-page">
                         <select name="homeTeamId" id="homeTeamSelect" required onchange="toggleCustomTeam('home')">
                             <option value="">Vyber tým</option>
                             <option value="custom">Vlastní tým</option>
-                            ${teamsList.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name} (${t.liga} - ${t.season})</option>`).join('')}
+                            ${teamsList.sort((a, b) => a.name.localeCompare(b.name, 'cs', { sensitivity: 'base' })).map(t => `<option value="${t.id}">${t.name} (${t.liga} - ${t.season})</option>`).join('')}
                         </select>
                     </div>
                     <div class="form-group">
@@ -4890,7 +4957,7 @@ html += `<section class="matches-container image-exporter-page">
                         <select name="awayTeamId" id="awayTeamSelect" required onchange="toggleCustomTeam('away')">
                             <option value="">Vyber tým</option>
                             <option value="custom">Vlastní tým</option>
-                            ${teamsList.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name} (${t.liga} - ${t.season})</option>`).join('')}
+                            ${teamsList.sort((a, b) => a.name.localeCompare(b.name, 'cs', { sensitivity: 'base' })).map(t => `<option value="${t.id}">${t.name} (${t.liga} - ${t.season})</option>`).join('')}
                         </select>
                     </div>
                 </div>
@@ -4975,14 +5042,14 @@ html += `<section class="matches-container image-exporter-page">
                         <label>Domácí tým</label>
                         <select name="homeTeamId" required>
                             <option value="">Vyber tým</option>
-                            ${teamsList.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name} (${t.liga} - ${t.season})</option>`).join('')}
+                            ${teamsList.sort((a, b) => a.name.localeCompare(b.name, 'cs', { sensitivity: 'base' })).map(t => `<option value="${t.id}">${t.name} (${t.liga} - ${t.season})</option>`).join('')}
                         </select>
                     </div>
                     <div class="form-group">
                         <label>Hostující tým</label>
                         <select name="awayTeamId" required>
                             <option value="">Vyber tým</option>
-                            ${teamsList.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name} (${t.liga} - ${t.season})</option>`).join('')}
+                            ${teamsList.sort((a, b) => a.name.localeCompare(b.name, 'cs', { sensitivity: 'base' })).map(t => `<option value="${t.id}">${t.name} (${t.liga} - ${t.season})</option>`).join('')}
                         </select>
                     </div>
                 </div>
@@ -5031,7 +5098,7 @@ html += `<section class="matches-container image-exporter-page">
                         <select name="fromTeamId" id="fromTeamSelect" required onchange="toggleCustomTeam('from')">
                             <option value="">Vyber tým</option>
                             <option value="custom">Vlastní tým</option>
-                            ${teamsList.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name} (${t.liga} - ${t.season})</option>`).join('')}
+                            ${teamsList.sort((a, b) => a.name.localeCompare(b.name, 'cs', { sensitivity: 'base' })).map(t => `<option value="${t.id}">${t.name} (${t.liga} - ${t.season})</option>`).join('')}
                         </select>
                     </div>
                     <div class="form-group">
@@ -5039,7 +5106,7 @@ html += `<section class="matches-container image-exporter-page">
                         <select name="toTeamId" id="toTeamSelect" required onchange="toggleCustomTeam('to')">
                             <option value="">Vyber tým</option>
                             <option value="custom">Vlastní tým</option>
-                            ${teamsList.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name} (${t.liga} - ${t.season})</option>`).join('')}
+                            ${teamsList.sort((a, b) => a.name.localeCompare(b.name, 'cs', { sensitivity: 'base' })).map(t => `<option value="${t.id}">${t.name} (${t.liga} - ${t.season})</option>`).join('')}
                         </select>
                     </div>
                 </div>
@@ -5107,7 +5174,7 @@ html += `<section class="matches-container image-exporter-page">
                     <label>Vítězný tým</label>
                     <select name="winnerTeamId" required>
                         <option value="">Vyber tým</option>
-                        ${teamsList.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name} (${t.liga} - ${t.season})</option>`).join('')}
+                        ${teamsList.sort((a, b) => a.name.localeCompare(b.name, 'cs', { sensitivity: 'base' })).map(t => `<option value="${t.id}">${t.name} (${t.liga} - ${t.season})</option>`).join('')}
                     </select>
                 </div>
                 <div class="form-group">

@@ -1277,6 +1277,7 @@ router.get('/new/match', requireAdmin, async (req, res) => {
     const chosenSeason = await ChosenSeason.findAll();
     const teams = (await Teams.findAll()).filter(t => t.active === true && t.season === chosenSeason);
     const matches = await Matches.findAll();
+    const leagues = await Leagues.findAll();
 
     const seasonsFromTeams = teams.map(t => t.season).filter(Boolean);
     const seasonsFromMatches = matches.map(m => m.season).filter(Boolean);
@@ -1295,6 +1296,17 @@ router.get('/new/match', requireAdmin, async (req, res) => {
     // 1. Získáme unikátní ligy pro filtr
     const uniqueLeagues = [...new Set(teams.map(t => t.liga))].sort();
 
+    // Get league multigroup info
+    const leaguesForSeasonData = leagues[chosenSeason]?.leagues || [];
+    const leaguesInfo = uniqueLeagues.map(liga => {
+        const leagueObj = leaguesForSeasonData.find(l => l.name === liga);
+        return {
+            name: liga,
+            isMultigroup: leagueObj?.isMultigroup || false,
+            groupCount: leagueObj?.groupCount || 1
+        };
+    });
+
     const html = `
         <!DOCTYPE html>
     <html lang="cs">
@@ -1307,6 +1319,7 @@ router.get('/new/match', requireAdmin, async (req, res) => {
         <script>
             // 2. Předáme data týmů z backendu do JS proměnné
             const allTeams = ${JSON.stringify(teams)};
+            const leaguesInfo = ${JSON.stringify(leaguesInfo)};
 
             function toggleBOOptions() {
                 const checkbox = document.getElementById('isPlayoff');
@@ -1317,13 +1330,50 @@ router.get('/new/match', requireAdmin, async (req, res) => {
             // 3. Funkce pro filtrování
             function filterByLeague() {
                 const selectedLeague = document.getElementById('leagueFilter').value;
+                document.getElementById('homeTeamId');
+                document.getElementById('awayTeamId');
+                const groupSelect = document.getElementById('groupFilter');
+                const groupContainer = document.getElementById('groupFilterContainer');
+
+                // Show/hide group filter based on league
+                const leagueInfo = leaguesInfo.find(l => l.name === selectedLeague);
+                if (leagueInfo && leagueInfo.isMultigroup) {
+                    groupContainer.style.display = 'flex';
+                    // Update group options
+                    groupSelect.innerHTML = '<option value="">Všechny skupiny</option>';
+                    for (let i = 0; i < leagueInfo.groupCount; i++) {
+                        const option = document.createElement('option');
+                        option.value = i + 1;
+                        option.text = 'Skupina ' + String.fromCharCode(65 + i);
+                        groupSelect.appendChild(option);
+                    }
+                } else {
+                    groupContainer.style.display = 'none';
+                    groupSelect.value = '';
+                }
+
+                // Trigger group filter update
+                filterByGroup();
+            }
+
+            function filterByGroup() {
+                const selectedLeague = document.getElementById('leagueFilter').value;
+                const selectedGroup = document.getElementById('groupFilter').value;
                 const homeSelect = document.getElementById('homeTeamId');
                 const awaySelect = document.getElementById('awayTeamId');
 
-                // Vyfiltrujeme týmy (nebo vezmeme všechny, pokud je vybráno "Všechny ligy")
-                const filteredTeams = selectedLeague === 'all' 
-                    ? allTeams 
+                // Vyfiltrujeme týmy
+                let filteredTeams = selectedLeague === 'all'
+                    ? allTeams
                     : allTeams.filter(t => t.liga === selectedLeague);
+
+                // Filter by group if selected
+                if (selectedGroup) {
+                    filteredTeams = filteredTeams.filter(t => t.group === parseInt(selectedGroup));
+                }
+
+                // Sort teams alphabetically
+                filteredTeams.sort((a, b) => a.name.localeCompare(b.name, 'cs', { sensitivity: 'base' }));
 
                 // Funkce pro přegenerování <option> v selectu
                 const updateSelect = (selectElement) => {
@@ -1339,7 +1389,7 @@ router.get('/new/match', requireAdmin, async (req, res) => {
                 updateSelect(homeSelect);
                 updateSelect(awaySelect);
             }
-            
+
             function toggleBarazLiga() {
                 const cb = document.getElementById('isBarazCb');
                 const field = document.getElementById('barazLigaField');
@@ -1367,18 +1417,23 @@ router.get('/new/match', requireAdmin, async (req, res) => {
                     <option value="all">-- Všechny ligy --</option>
                     ${uniqueLeagues.map(l => `<option value="${l}">${l}</option>`).join('')}
                 </select>
+                <div id="groupFilterContainer" style="display: none; margin-left: 10px;">
+                    <label for="groupFilter" style="color: white; font-weight: bold;">Skupina:</label>
+                    <select class="league-select" id="groupFilter" onchange="filterByGroup()">
+                    </select>
+                </div>
             </div>
 
             <form style="display: flex; flex-direction: row; gap: 10px; flex-wrap: wrap;" action="/admin/new/match" method="POST">
                 <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
                 <label style="display: flex; flex-direction: column" for="homeTeamId">Domácí tým
                     <select class="league-select" style="width: 220px" id="homeTeamId" name="homeTeamId" required>
-                        ${teams.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.liga} - ${t.name}</option>`).join('')}
+                        ${teams.sort((a, b) => a.name.localeCompare(b.name, 'cs', { sensitivity: 'base' })).map(t => `<option value="${t.id}">${t.liga} - ${t.name}</option>`).join('')}
                     </select>
                 </label>
                 <label style="display: flex; flex-direction: column" for="awayTeamId">Hostující tým
                     <select class="league-select" style="width: 220px" id="awayTeamId" name="awayTeamId" required>
-                        ${teams.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.liga} - ${t.name}</option>`).join('')}
+                        ${teams.sort((a, b) => a.name.localeCompare(b.name, 'cs', { sensitivity: 'base' })).map(t => `<option value="${t.id}">${t.liga} - ${t.name}</option>`).join('')}
                     </select>
                 </label>
                 <label style="display: flex; flex-direction: column" for="datetime">Datum a čas
@@ -1841,13 +1896,13 @@ router.get('/edit/:id', requireAdmin, async (req, res) => {
     <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
     <label for="homeTeamId">Domácí tým
       <select class="league-select" style="width: 220px" id="homeTeamId" name="homeTeamId" required>
-        ${teams.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}" ${t.id === match.homeTeamId ? 'selected' : ''}>${t.name}</option>`).join('')}
+        ${teams.sort((a, b) => a.name.localeCompare(b.name, 'cs', { sensitivity: 'base' })).map(t => `<option value="${t.id}" ${t.id === match.homeTeamId ? 'selected' : ''}>${t.name}</option>`).join('')}
       </select>
     </label>
 
     <label for="awayTeamId">Hostující tým
       <select class="league-select" style="width: 220px" id="awayTeamId" name="awayTeamId" required>
-        ${teams.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}" ${t.id === match.awayTeamId ? 'selected' : ''}>${t.name}</option>`).join('')}
+        ${teams.sort((a, b) => a.name.localeCompare(b.name, 'cs', { sensitivity: 'base' })).map(t => `<option value="${t.id}" ${t.id === match.awayTeamId ? 'selected' : ''}>${t.name}</option>`).join('')}
       </select>
     </label>
     
@@ -5196,6 +5251,17 @@ router.get('/matches/import', requireAdmin, async (req, res) => {
     // Pokud je seznam prázdný, dáme tam aspoň default
     if (leaguesList.length === 0) leaguesList.push("TELH");
 
+    // Get league multigroup info for current season
+    const leaguesForSeasonData = leaguesData[currentSeason]?.leagues || [];
+    const leaguesInfo = leaguesList.map(liga => {
+        const leagueObj = leaguesForSeasonData.find(l => l.name === liga);
+        return {
+            name: liga,
+            isMultigroup: leagueObj?.isMultigroup || false,
+            groupCount: leagueObj?.groupCount || 1
+        };
+    });
+
     // 2. Datumy (Dnes -> +14 dní)
     const today = new Date().toISOString().split('T')[0];
     const nextWeekDate = new Date();
@@ -5224,6 +5290,40 @@ router.get('/matches/import', requireAdmin, async (req, res) => {
         <title>Import z Livesport.cz</title>
         <link rel="stylesheet" href="/css/styles.css">
         <link rel="icon" href="/images/logo.png">
+        <script>
+            const leaguesInfo = ${JSON.stringify(leaguesInfo)};
+
+            function updateGroupOptions() {
+                const ligaSelect = document.querySelector('select[name="liga"]');
+                const groupContainer = document.getElementById('groupContainer');
+                const groupSelect = document.querySelector('select[name="group"]');
+
+                const selectedLiga = ligaSelect.value;
+                const leagueInfo = leaguesInfo.find(l => l.name === selectedLiga);
+
+                if (leagueInfo && leagueInfo.isMultigroup) {
+                    groupContainer.style.display = 'flex';
+                    groupSelect.innerHTML = '<option value="">Všechny skupiny</option>';
+                    for (let i = 0; i < leagueInfo.groupCount; i++) {
+                        const option = document.createElement('option');
+                        option.value = i + 1;
+                        option.text = 'Skupina ' + String.fromCharCode(65 + i);
+                        groupSelect.appendChild(option);
+                    }
+                } else {
+                    groupContainer.style.display = 'none';
+                    groupSelect.value = '';
+                }
+            }
+
+            document.addEventListener('DOMContentLoaded', function() {
+                const ligaSelect = document.querySelector('select[name="liga"]');
+                if (ligaSelect) {
+                    ligaSelect.addEventListener('change', updateGroupOptions);
+                    updateGroupOptions();
+                }
+            });
+        </script>
     </head>
     <body class="admin_site">
         
@@ -5298,6 +5398,14 @@ router.get('/matches/import', requireAdmin, async (req, res) => {
                             </select>
                         </label>
                     </div>
+
+                    <div id="groupContainer" style="display: none; gap: 20px; flex-wrap: wrap;">
+                        <label style="flex: 1; display: flex; flex-direction: column; color: orangered;">
+                            Skupina (pro multigroup ligy):
+                            <select name="group" style="padding: 10px; background-color: #222; border: 1px solid orangered; color: white;">
+                            </select>
+                        </label>
+                    </div>
                     
                     <div style="display:flex; margin-top: 10px; padding: 10px; background: rgba(255, 69, 0, 0.1); border: 1px dashed orangered;">
                         <label style="display: flex; align-items: center; gap: 10px; color: white; cursor: pointer;">
@@ -5322,12 +5430,18 @@ router.post('/matches/import-run', express.urlencoded({ extended: true }), requi
         return res.status(403).send('Neplatný CSRF token');
     }
     
-    const { url, liga, season, dateFrom, dateTo, lockImported } = req.body;
+    const { url, liga, season, dateFrom, dateTo, lockImported, group } = req.body;
     const shouldLock = lockImported === 'on';
+    const selectedGroup = group ? parseInt(group) : null;
 
     try {
         // 1. Načtení týmů z DB
         const allTeams = await Teams.findAll();
+
+        // Filter teams by group if selected
+        const filteredTeams = selectedGroup
+            ? allTeams.filter(t => t.liga === liga && t.group === selectedGroup)
+            : allTeams.filter(t => t.liga === liga);
 
         // 2. Načtení existujících zápasů pro kontrolu duplicit
         const matchesDB = await Matches.findAll();
@@ -5343,7 +5457,7 @@ router.post('/matches/import-run', express.urlencoded({ extended: true }), requi
             season,
             dateFrom,
             dateTo,
-            dbTeams: allTeams
+            dbTeams: filteredTeams
         });
 
         if (!importResult.success) {
@@ -6894,14 +7008,23 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
         // Načtení nastavení výchozího zobrazení
     const settingsData = await Settings.findAll();
     const defaultView = settingsData.defaultView || 'transfers'; // 'transfers' nebo 'roster'
-
-    let transfersData = await Transfers.findAll();
+        let [transfersData] = await Promise.all([Transfers.findAll()]);
     if (!transfersData || Object.keys(transfersData).length === 0) transfersData = {};
 
     const currentTransfers = transfersData[selectedSeason]?.[selectedLiga] || {};
     // Filter teams by selectedSeason - admin should only see teams from current season
     const teamsFromCurrentSeason = teams.filter(t => t.season === selectedSeason);
     const teamsInLiga = teamsFromCurrentSeason.filter(t => t.liga === selectedLiga && t.active);
+
+    // Check if league is multigroup
+        const [leagues] = await Promise.all([Leagues.findAll()]);
+        const leaguesForSeasonData = leagues[selectedSeason]?.leagues || [];
+    const leagueObj = leaguesForSeasonData.find(l => l.name === selectedLiga);
+    const isMultigroup = leagueObj?.isMultigroup || false;
+    const groupCount = leagueObj?.groupCount || 1;
+
+    // Get selected group from query
+    const selectedGroup = req.query.group ? parseInt(req.query.group) : null;
 
     let html = `
     <!DOCTYPE html>
@@ -6947,10 +7070,16 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
             </div>
 
             <form method="GET" style="margin-bottom: 20px;">
-                Změnit ligu: 
+                Změnit ligu:
                 <select id="league-select" name="liga" onchange="this.form.submit()" style="padding: 5px;">
                     ${leaguesForSeason.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected' : ''}>${l}</option>`).join('')}
                 </select>
+                ${isMultigroup ? `
+                Skupina:
+                <select id="group-select" name="group" onchange="this.form.submit()" style="padding: 5px;">
+                    <option value="">Všechny skupiny</option>
+                    ${[...Array(groupCount).keys()].map(i => `<option value="${i+1}" ${selectedGroup === i+1 ? 'selected' : ''}>Skupina ${String.fromCharCode(65+i)}</option>`).join('')}
+                </select>` : ''}
             </form>
 
             <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 2px solid #00d4ff; padding: 20px; margin-bottom: 20px;">
@@ -6970,7 +7099,7 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
                 <input type="hidden" name="liga" value="${selectedLiga}">
                 <input type="hidden" name="season" value="${selectedSeason}">
                 
-                ${teamsInLiga.sort((a, b) => a.id - b.id).map(team => {
+                ${teamsInLiga.filter(t => !selectedGroup || t.group === selectedGroup).sort((a, b) => a.name.localeCompare(b.name, 'cs', { sensitivity: 'base' })).map(team => {
         const tId = String(team.id);
         const data = currentTransfers[tId] || { specIn: [], specOut: [], confIn: [], confOut: [] };
         const logoUrl = team.logo ? `/logoteamu/${team.logo}` : '/images/logo.png';
@@ -7036,14 +7165,14 @@ router.get('/transfers/manage', requireAdmin, async (req, res) => {
                                 <label style="color: #aaa; display: block; margin-bottom: 5px;">Z týmu:</label>
                                 <select name="genFromTeam" style="width: 100%; padding: 8px; background: #111; border: 1px solid #444; color: white;">
                                     <option value="">Vyber tým</option>
-                                    ${teamsInLiga.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+                                    ${teamsInLiga.sort((a, b) => a.name.localeCompare(b.name, 'cs', { sensitivity: 'base' })).map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
                                 </select>
                             </div>
                             <div>
                                 <label style="color: #aaa; display: block; margin-bottom: 5px;">Do týmu:</label>
                                 <select name="genToTeam" style="width: 100%; padding: 8px; background: #111; border: 1px solid #444; color: white;">
                                     <option value="">Vyber tým</option>
-                                    ${teamsInLiga.sort((a, b) => a.id - b.id).map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+                                    ${teamsInLiga.sort((a, b) => a.name.localeCompare(b.name, 'cs', { sensitivity: 'base' })).map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
                                 </select>
                             </div>
                         </div>
@@ -9445,6 +9574,7 @@ router.get('/players/:teamId', requireAdmin, async (req, res) => {
             <div>
                 <a href="/admin/transfers/manage?liga=${encodeURIComponent(team.liga)}" class="btn btn-secondary">← Zpět na přestupy</a>
                 <button class="btn" onclick="openAddModal()">+ Přidat hráče</button>
+                <button class="btn btn-secondary" onclick="openBulkAddModal()">📋 Hromadně přidat</button>
             </div>
         </div>
 
@@ -9576,6 +9706,39 @@ router.get('/players/:teamId', requireAdmin, async (req, res) => {
         </div>
     </div>
 
+    <!-- Modal pro hromadné přidání hráčů -->
+    <div id="bulkAddModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <h2 style="color: orangered; margin-bottom: 15px;">📋 Hromadně přidat hráče</h2>
+            <form id="bulkAddForm">
+                <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
+                <div class="form-group">
+                    <label>Seznam hráčů (každý na nový řádek, formát: Jméno nebo Jméno,Post nebo Jméno,Post,Číslo)</label>
+                    <textarea name="players" rows="15" placeholder="Jan Novák,Útočník,68
+Petr Svoboda,Obránce,12
+Tomáš Dvořák,Útočník
+Martin Černý,Brankář,30"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Výchozí post (pokud není uveden)</label>
+                    <select name="defaultPosition">
+                        <option value="">-- Vyberte --</option>
+                        <option value="Útočník">Útočník</option>
+                        <option value="Obránce">Obránce</option>
+                        <option value="Brankář">Brankář</option>
+                        <option value="Centr">Centr</option>
+                        <option value="Křídlo">Křídlo</option>
+                        <option value="Jiné">Jiné</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button type="submit" class="btn">Přidat hráče</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeBulkAddModal()">Zrušit</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
         function toggleTransferOptions() {
             const transferType = document.getElementById('transferType').value;
@@ -9642,6 +9805,14 @@ router.get('/players/:teamId', requireAdmin, async (req, res) => {
 
         function closeTransferModal() {
             document.getElementById('transferModal').style.display = 'none';
+        }
+
+        function openBulkAddModal() {
+            document.getElementById('bulkAddModal').style.display = 'block';
+        }
+
+        function closeBulkAddModal() {
+            document.getElementById('bulkAddModal').style.display = 'none';
         }
 
         function deletePlayer(playerId) {
@@ -9728,6 +9899,36 @@ router.get('/players/:teamId', requireAdmin, async (req, res) => {
             }
         });
 
+        document.getElementById('bulkAddForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            data.teamId = ${teamId};
+            data.season = '${selectedSeason}';
+            data.liga = '${team.liga}';
+
+            try {
+                const res = await fetch('/admin/players/bulk', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await res.json();
+
+                if (res.ok) {
+                    alert('Přidáno ' + result.added + ' hráčů');
+                    closeBulkAddModal();
+                    location.reload();
+                } else {
+                    alert('Chyba při hromadném přidávání: ' + (result.error || 'Neznámá chyba'));
+                }
+            } catch (error) {
+                console.error('Chyba při hromadném přidávání:', error);
+                alert('Chyba při hromadném přidávání: ' + error.message);
+            }
+        });
+
         document.getElementById('transferForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const formData = new FormData(e.target);
@@ -9801,6 +10002,85 @@ router.post('/players', express.json(), requireAdmin, async (req, res) => {
         res.json({ success: true, player: newPlayer });
     } catch (error) {
         console.error('Chyba při přidávání hráče:', error);
+        res.status(500).json({ error: 'Chyba serveru: ' + error.message });
+    }
+});
+
+// POST - Hromadně přidat hráče
+router.post('/players/bulk', express.json(), requireAdmin, async (req, res) => {
+    try {
+        const { players, defaultPosition, teamId, season, liga, _csrf } = req.body;
+
+        if (!_csrf || _csrf !== req.session.csrfToken) {
+            return res.status(403).json({ error: 'Neplatný CSRF token' });
+        }
+
+        if (!players || !teamId || !season || !liga) {
+            return res.status(400).json({ error: 'Chybí povinná pole' });
+        }
+
+        // Valid positions
+        const validPositions = ['Útočník', 'Obránce', 'Brankář', 'Centr', 'Křídlo', 'Jiné'];
+
+        // Parse players text - each line: "Name" or "Name,Position" or "Name,Position,Number"
+        const lines = players.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+        const playersToAdd = [];
+        const errors = [];
+
+        for (const line of lines) {
+            const parts = line.split(',').map(p => p.trim());
+            const name = parts[0];
+            let position = parts[1] || defaultPosition || null;
+            let number = parts[2] ? parseInt(parts[2]) : null;
+
+            if (!name) {
+                continue;
+            }
+
+            // Validate position
+            if (position && !validPositions.includes(position)) {
+                errors.push(`Neplatný post "${position}" pro hráče "${name}". Platné posty: ${validPositions.join(', ')}`);
+                continue;
+            }
+
+            // Validate number
+            if (number !== null && (isNaN(number) || number < 0 || number > 99)) {
+                errors.push(`Neplatné číslo "${parts[2]}" pro hráče "${name}". Číslo musí být 0-99.`);
+                continue;
+            }
+
+            playersToAdd.push({
+                name,
+                number: number || null,
+                position: position || null,
+                status: 'active',
+                statusDetails: null,
+                teamId: parseInt(teamId),
+                season,
+                liga,
+                createdAt: new Date(),
+                updatedAt: new Date()
+            });
+        }
+
+        if (errors.length > 0) {
+            return res.status(400).json({ error: 'Chyby při parsování: ' + errors.join('; ') });
+        }
+
+        if (playersToAdd.length === 0) {
+            return res.status(400).json({ error: 'Žádní hráči k přidání' });
+        }
+
+        // Insert all players
+        for (const player of playersToAdd) {
+            await Players.insertOne(player);
+        }
+
+        await logAdminAction(req.session.user, "HRÁČI_HROMADNĚ_PŘIDAT", `Hromadně přidáno ${playersToAdd.length} hráčů do týmu ${teamId}`);
+
+        res.json({ success: true, added: playersToAdd.length, players: playersToAdd });
+    } catch (error) {
+        console.error('Chyba při hromadném přidávání hráčů:', error);
         res.status(500).json({ error: 'Chyba serveru: ' + error.message });
     }
 });
