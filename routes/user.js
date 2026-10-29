@@ -1845,7 +1845,7 @@ ${await renderUserHeader({
         if (teamsInSelectedLiga.length === 0) {
             html += `<div class="dashboard-section" style="text-align: center; padding: 40px; color: var(--text-dim);">Žádné týmy v lize ${selectedLiga} pro sezónu ${selectedSeason}</div>`;
         } else {
-            filteredTeams.sort((a, b) => a.name.localeCompare(b.name, 'cs', { sensitivity: 'base' })).forEach(team => {
+            filteredTeams.sort((a, b) => (a.group - b.group) || a.name.localeCompare(b.name, 'cs', { sensitivity: 'base' })).forEach(team => {
                 const tId = String(team.id);
                 const tData = currentTransfers[tId] || { specIn: [], specOut: [], confIn: [], confOut: [] };
                 const logoUrl = team.logo ? `/logoteamu/${team.logo}` : '/images/logo.png';
@@ -2531,7 +2531,7 @@ router.get('/history/roster', requireLogin, async (req, res) => {
 
         // Filter teams by group if selected
         const filteredTeams = selectedGroup ? teamsInSelectedLiga.filter(t => t.group === selectedGroup) : teamsInSelectedLiga;
-        filteredTeams.sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
+        filteredTeams.sort((a, b) => (a.group - b.group) || a.name.localeCompare(b.name, 'cs', { sensitivity: 'base' }));
 
         let html = `
 <!DOCTYPE html>
@@ -2585,7 +2585,7 @@ ${await renderUserHeader({
         </div>` : ''}
     </div>
 
-    <div id="allRostersView" class="all-rosters-grid" data-team-ids='${JSON.stringify(filteredTeams.sort((a, b) => a.name.localeCompare(b.name, 'cs', { sensitivity: 'base' })).map(t => t.id))}' data-teams='${JSON.stringify(filteredTeams.sort((a, b) => a.name.localeCompare(b.name, 'cs', { sensitivity: 'base' })))}' data-season='${selectedSeason}'></div>
+    <div id="allRostersView" class="all-rosters-grid" data-team-ids='${JSON.stringify(filteredTeams.sort((a, b) => (a.group - b.group) || a.name.localeCompare(b.name, 'cs', { sensitivity: 'base' })).map(t => t.id))}' data-teams='${JSON.stringify(filteredTeams.sort((a, b) => (a.group - b.group) || a.name.localeCompare(b.name, 'cs', { sensitivity: 'base' })))}' data-season='${selectedSeason}'></div>
 
 <script>
 function escapeRosterHtml(value) {
@@ -2849,7 +2849,7 @@ html += await generateLeftPanel(data);
                 </div>` : ''}
             </div>
             <h2 style="margin-top: 0; text-align: center; border-bottom: 2px solid orangered; padding-bottom: 10px;">Soupisky - ${selectedLiga}</h2>
-            <div id="allRostersView" style="margin-top: 15px;" data-team-ids='${JSON.stringify(filteredTeams.map(t => t.id))}' data-teams='${JSON.stringify(filteredTeams)}'></div>`;
+            <div id="allRostersView" style="margin-top: 15px;" data-team-ids='${JSON.stringify(filteredTeams.sort((a, b) => (a.group - b.group) || a.name.localeCompare(b.name, 'cs', { sensitivity: 'base' })).map(t => t.id))}' data-teams='${JSON.stringify(filteredTeams.sort((a, b) => (a.group - b.group) || a.name.localeCompare(b.name, 'cs', { sensitivity: 'base' })))}'></div>`;
         } else {
             // --- SEKCE PŘESTUPŮ ---
             html += `<div class="transfer-page-actions">
@@ -2930,7 +2930,7 @@ html += await generateLeftPanel(data);
     `).join('');
             };
 // 3. VYKRESLENÍ KARET (Zůstává podobné, jen volá vylepšený renderList)
-            filteredTeams.sort((a, b) => a.name.localeCompare(b.name, 'cs', { sensitivity: 'base' })).forEach(team => {
+            filteredTeams.sort((a, b) => (a.group - b.group) || a.name.localeCompare(b.name, 'cs', { sensitivity: 'base' })).forEach(team => {
                 const tId = String(team.id);
                 const tData = currentTransfers[tId] || { specIn: [], specOut: [], confIn: [], confOut: [] };
                 const logoUrl = team.logo ? `/logoteamu/${team.logo}` : '/images/logo.png';
