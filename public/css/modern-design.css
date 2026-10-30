@@ -4475,6 +4475,124 @@ td.vs {
     width: 100%;
 }
 
+/* Keep dashboard, statistics and history content inside the viewport on phones. */
+@media (max-width: 640px) {
+    .nav-pills,
+    .header-nav-pills {
+        width: 100%;
+        min-width: 0;
+        justify-content: flex-start;
+        border-radius: var(--radius-lg);
+        gap: 4px;
+    }
+
+    .nav-pills .nav-pill,
+    .header-nav-pills .nav-pill {
+        flex: 1 1 calc(50% - 4px);
+        min-width: 0;
+        padding: 6px 7px;
+        text-align: center;
+        white-space: normal;
+        line-height: 1.25;
+        font-size: 12px;
+    }
+
+    .main_page > *,
+    .layout-container > *,
+    .left-panel,
+    .stats-container,
+    .modern-stats-card,
+    .stats-card,
+    .chart-container,
+    .charts-grid > * {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .user-stats-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .user-stat-box,
+    .user-stat-val,
+    .stats-card-title {
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+
+    .table-responsive-wrapper,
+    .chart-container:has(> table.modern-table),
+    .chart-container > div[style*="overflow-x:auto"] {
+        max-width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .table-responsive-wrapper > .points-table,
+    .chart-container > .modern-table,
+    .chart-container > div > .modern-table {
+        width: max-content;
+        min-width: 100%;
+        table-layout: auto;
+    }
+
+    .stats-overview-table th,
+    .stats-overview-table td,
+    .modern-table th,
+    .modern-table td,
+    .points-table th,
+    .points-table td {
+        white-space: nowrap;
+    }
+
+    .charts-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .chart-container {
+        padding: 14px;
+        overflow: hidden;
+    }
+
+    .chart-container canvas {
+        display: block;
+        width: 100% !important;
+        max-width: 100%;
+        max-height: 300px;
+    }
+
+    .segmented-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        width: 100%;
+        min-width: 0;
+        gap: 6px;
+    }
+
+    .segmented-tabs .segmented-btn {
+        flex: 1 1 calc(50% - 6px);
+        min-width: 0;
+        text-align: center;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
+    .history-container,
+    .history-container * {
+        min-width: 0;
+        box-sizing: border-box;
+    }
+
+    .history-container table {
+        max-width: 100%;
+    }
+
+    .history-container .history-team-wrapper,
+    .history-container .history-score-wrapper {
+        overflow-wrap: anywhere;
+    }
+}
+
 /* =========================================================
    SCORING RULES (IMPROVED DASHBOARD WIDGET)
    ========================================================= */
@@ -5723,4 +5841,184 @@ td.vs {
     margin: 0 !important;
     font-size: 10px !important;
     line-height: 1;
+}
+
+/* Final phone layout fixes for the shared header and match/standings panels. */
+@media (max-width: 640px) {
+    .header-top,
+    .header-top > *,
+    .user-menu,
+    .user-menu > *,
+    .league-dropdown,
+    .league-select-wrap {
+        min-width: 0;
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+
+    .user-menu {
+        width: 100%;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+    }
+
+    .user-menu > form.league-dropdown {
+        flex: 1 1 160px;
+        width: auto;
+    }
+
+    .user-menu .league-select-wrap {
+        width: 100% !important;
+        max-width: 100%;
+    }
+
+    .user-menu .league-select-trigger {
+        max-width: 100%;
+    }
+
+    .user-menu .league-select-value,
+    .user-menu .user-name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .user-menu .bell-btn {
+        flex: 0 0 42px;
+    }
+
+    .user-menu .user-avatar {
+        flex: 1 1 100%;
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    /* The standings table keeps all columns; constrain its embedded recent form. */
+    .left-panel,
+    .stats-container,
+    .left-panel .standings-table {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .left-panel {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+    }
+
+    .left-panel::-webkit-scrollbar {
+        display: block;
+        height: 5px;
+    }
+
+    .left-panel .standings-table {
+        width: 100%;
+        min-width: 470px;
+        table-layout: fixed;
+    }
+
+    .left-panel .standings-table .team-cell {
+        min-width: 0;
+        max-width: 100%;
+        overflow: hidden;
+        gap: 4px;
+    }
+
+    .left-panel .standings-table .team-cell-content,
+    .left-panel .standings-table .team-recent-form-results {
+        min-width: 0;
+        max-width: 100%;
+        overflow: hidden;
+    }
+
+    /* Recent form is newest first. Keep those five results on narrow screens. */
+    .left-panel .standings-table .team-form-result:nth-of-type(n + 7) {
+        display: none;
+    }
+
+    .left-panel .standings-table .team-form-result {
+        flex-basis: 15px;
+        width: 15px;
+        height: 16px;
+        font-size: 8px;
+    }
+
+    /* Keep both sides consistent: chips first, tip count directly underneath. */
+    .tips-align-left .match-tips-row,
+    .tips-align-right .match-tips-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 4px;
+    }
+
+    .tips-align-left .match-tips-row {
+        justify-items: start;
+    }
+
+    .tips-align-right .match-tips-row {
+        justify-items: end;
+    }
+
+    .tips-align-left .match-tips-chips,
+    .tips-align-right .match-tips-chips {
+        order: 1;
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .tips-align-left .match-tips-count,
+    .tips-align-right .match-tips-count {
+        order: 2;
+    }
+
+    .tips-align-left .match-tips-count {
+        justify-self: start;
+    }
+
+    .tips-align-right .match-tips-count {
+        justify-self: end;
+    }
+
+    /* Only show the tappable tip count on phones; names remain in its popover. */
+    .match-tips-chips {
+        display: none;
+    }
+
+    /* Keep the team control in normal flow so it cannot cover logos or tip counts. */
+    .matches-table .simple-match-row td {
+        height: auto;
+        max-height: none;
+        vertical-align: top;
+        padding: 8px 4px;
+    }
+
+    .matches-table .simple-match-row .team-link {
+        position: relative;
+        inset: auto;
+        height: 58px;
+        min-height: 58px;
+        padding: 6px;
+        overflow: hidden;
+    }
+
+    .matches-table .simple-match-row .team-info-row {
+        min-width: 0;
+        width: 100%;
+        gap: 4px;
+    }
+
+    .matches-table .simple-match-row .team-logo-small-wrap {
+        flex: 0 0 30px;
+        width: 30px;
+        height: 30px;
+    }
+
+    /* The selected state stays clear from its color/border; reclaim logo space. */
+    .team-link.selected::after,
+    .team-pick-btn.selected::after {
+        display: none;
+        content: none;
+    }
 }

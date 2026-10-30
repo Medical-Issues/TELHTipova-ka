@@ -412,7 +412,7 @@ router.get("/table-tip", requireLogin, async (req, res) => {
             <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
             <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
 <title>Tipování tabulky – Tipovačka</title>
-<link rel="stylesheet" href="/css/modern-design.css?v=standings-layout-20261024" />
+<link rel="stylesheet" href="/css/modern-design.css?v=mobile-tip-names-20261030" />
 <script src="/js/version-notification.js"></script>
 <link rel="icon" href="/images/logo.png">
 </head>
@@ -1165,7 +1165,7 @@ router.get('/', requireLogin, async (req, res) => {
             <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
             <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
 <title>Tipovačka</title>
-<link rel="stylesheet" href="/css/modern-design.css" />
+<link rel="stylesheet" href="/css/modern-design.css?v=mobile-tip-names-20261030" />
 <script src="/js/version-notification.js"></script>
 <script src="/js/match-tips.js"></script>
 <link rel="icon" href="/images/logo.png">
