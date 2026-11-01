@@ -7053,7 +7053,9 @@ router.get('/api/user-profile-h2h', requireLogin, async (req, res) => {
         const chosenSeason = await ChosenSeason.findAll();
         const selectedSeason = req.query.season || chosenSeason;
         const allowedLeagues = await getAllowedLeagues(selectedSeason);
-        const selectedLiga = req.query.liga || allowedLeagues[0] || '';
+        const settingsData = await Settings.findAll();
+        const defaultLeagueForSeason = settingsData?.defaultLeague?.[selectedSeason];
+        const selectedLiga = req.query.liga || defaultLeagueForSeason || allowedLeagues[0] || '';
 
         const [allUsers, allMatches, allTeams] = await Promise.all([
             Users.findAll(),
@@ -7257,7 +7259,9 @@ router.get('/api/recent-activity', requireLogin, async (req, res) => {
         const chosenSeason = await ChosenSeason.findAll();
         const selectedSeason = req.query.season || chosenSeason;
         const allowedLeagues = await getAllowedLeagues(selectedSeason);
-        const selectedLiga = req.query.liga || allowedLeagues[0] || '';
+        const settingsData = await Settings.findAll();
+        const defaultLeagueForSeason = settingsData?.defaultLeague?.[selectedSeason];
+        const selectedLiga = req.query.liga || defaultLeagueForSeason || allowedLeagues[0] || '';
 
         const [allUsers, allMatches, allTeams] = await Promise.all([
             Users.findAll(),

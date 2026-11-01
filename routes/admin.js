@@ -290,6 +290,27 @@ router.get('/', requireAdmin, async (req, res) => {
               <button type="submit" class="btn btn-primary">💸 Uložit přestupy</button>
             </form>
           </div>
+
+          <!-- Defaultní liga -->
+          <div class="setting-item" style="background: rgba(255, 193, 7, 0.1);">
+            <div class="setting-info">
+              <label class="setting-label">🎯 Defaultní liga</label>
+              <span class="setting-description">Liga, která se automaticky zobrazí uživatelům (nastavení pro každou sezónu zvlášť)<br>
+                <strong>Aktuálně zobrazeno pro sezónu:</strong> ${selectedSeason}<br>
+                <strong>Aktuální default:</strong> ${settingsData?.defaultLeague?.[selectedSeason] || allowedLeaguesForSeason[0] || 'Není nastaveno'}</span>
+            </div>
+            <form method="POST" action="/admin/settings/default-league" style="display: flex; align-items: center; gap: 10px;">
+              <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
+              <input type="hidden" name="season" value="${selectedSeason}">
+              <select class="modern-select" name="defaultLeague" style="width: 200px;'">
+                <option value="">Automaticky (první veřejná)</option>
+                ${allowedLeaguesForSeason.map(l => `
+                  <option value="${l}" ${settingsData?.defaultLeague?.[selectedSeason] === l ? 'selected' : ''}>${l}</option>
+                `).join('')}
+              </select>
+              <button type="submit" class="btn btn-primary">🎯 Uložit</button>
+            </form>
+          </div>
           
           <!-- Logika zamykání tabulky -->
           <div class="setting-item">
@@ -5687,6 +5708,41 @@ router.post('/settings/default-view', requireAdmin, async (req, res) => {
     } catch (error) {
         console.error('Chyba při ukládání nastavení:', error);
         res.status(500).json({ success: false, message: 'Chyba při ukládání nastavení' });
+    }
+});
+
+router.post('/settings/default-league', requireAdmin, async (req, res) => {
+    try {
+        const { defaultLeague, season } = req.body;
+        
+        if (!season) {
+            return res.status(400).json({ success: false, message: 'Sezóna je povinná' });
+        }
+        
+        // Načtení existujících nastavení
+        const settingsData = await Settings.findAll();
+        
+        // Pokud defaultLeague není objekt, inicializuj ho
+        if (!settingsData.defaultLeague || typeof settingsData.defaultLeague !== 'object') {
+            settingsData.defaultLeague = {};
+        }
+        
+        // Uložení nastavení pro konkrétní sezónu
+        if (defaultLeague && defaultLeague.trim() !== '') {
+            settingsData.defaultLeague[season] = defaultLeague;
+        } else {
+            delete settingsData.defaultLeague[season]; // Pokud je prázdné, smažeme nastavení (bude se používat automaticky)
+        }
+        
+        // Uložení nastavení
+        await Settings.replaceAll(settingsData);
+        
+        await logAdminAction(req.session.user, "DEFAULT_LEAGUE", `Defaultní liga pro sezónu ${season} nastavena na: ${defaultLeague || 'automaticky'}`, 'admin', null, req);
+        
+        res.redirect('/admin');
+    } catch (error) {
+        console.error('Chyba při ukládání default league:', error);
+        res.status(500).json({ success: false, message: 'Chyba při ukládání' });
     }
 });
 

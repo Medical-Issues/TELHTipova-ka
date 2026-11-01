@@ -1367,9 +1367,16 @@ async function prepareDashboardData(req, isHistory = false, isImageExporter = fa
         ? allLeagues
         : allLeagues.filter(l => allowedLeagues.includes(l));
 
+    // Načtení defaultní ligy z Settings
+    let defaultLeagueForSeason = null;
+    try {
+        const settingsData = await getSettingsData();
+        defaultLeagueForSeason = settingsData?.defaultLeague?.[selectedSeason];
+    } catch (e) {}
+
     const selectedLiga = req.query.liga && uniqueLeagues.includes(req.query.liga)
         ? req.query.liga
-        : (uniqueLeagues[0] || "Neurčeno");
+        : (defaultLeagueForSeason && uniqueLeagues.includes(defaultLeagueForSeason) ? defaultLeagueForSeason : (uniqueLeagues[0] || "Neurčeno"));
 
     const teamsInSelectedLiga = teams.filter(t => 
     t.liga === selectedLiga || 
