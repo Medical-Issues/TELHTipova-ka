@@ -19,7 +19,6 @@ const { Users } = require('./utils/mongoDataAccess');
 
 // MongoDB připojení a zálohování
 const { connectToDatabase } = require('./config/database');
-const { backupJsonFilesToGitHub } = require("./utils/githubBackup");
 const { restoreFromGitHub, fullRestoreFromGitHub } = require("./utils/githubRestore");
 const { createLocalSnapshot, backupToGitHub } = require("./utils/backupService");
 const app = express();
