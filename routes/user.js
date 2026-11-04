@@ -733,6 +733,10 @@ router.post("/table-tip", requireLogin, express.json(), async (req, res) => {
     const {liga, season, teamOrder} = req.body; // teamOrder je objekt, např. {"1": [1,2,3]}
     if (!liga || !season || !teamOrder) return res.status(400).send("Chybí data.");
 
+    // 0. Nejprve zkontrolujeme časovače (stejně jako u zápasů se kontroluje datetime při každém requestu)
+    const { checkAndApplyTableTipsLockers } = require('../utils/fileUtils');
+    await checkAndApplyTableTipsLockers(season, liga);
+
     // 1. KONTROLA ZÁMKŮ PŘED ULOŽENÍM
     let lockedStatus = false;
     try {

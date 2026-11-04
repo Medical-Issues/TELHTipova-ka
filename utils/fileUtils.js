@@ -882,7 +882,103 @@ async function renameLeagueGlobal(oldName, newName) {
     } catch (e) { }
 }
 
+// Funkce pro kontrolu a aplikaci časovačů uzamčení tabulek (stejný princip jako u zápasů)
+async function checkAndApplyTableTipsLockers(season, liga) {
+    try {
+        const allSeasonData = await Leagues.findAll();
+        const statusData = await getLeagueStatusData();
+        const now = new Date();
+        let lockTriggered = false;
+
+        const league = allSeasonData[season]?.leagues.find(l => l.name === liga);
+        if (!league) return;
+
+        const globalLockTime = league.tableTipsLockDateTime;
+        const groupTimers = league.tableTipsLockTimer || {};
+
+        // Kontrola globálního časovače
+        if (globalLockTime) {
+            const lockTime = new Date(globalLockTime);
+            if (!isNaN(lockTime.getTime()) && now >= lockTime) {
+                const currentLockStatus = statusData[season]?.[liga]?.tableTipsLocked;
+                if (currentLockStatus !== true) {
+                    if (!statusData[season]) statusData[season] = {};
+                    if (!statusData[season][liga]) statusData[season][liga] = {};
+                    statusData[season][liga].tableTipsLocked = true;
+
+                    // Smazání časovače po spuštění
+                    league.tableTipsLockDateTime = '';
+                    await Leagues.replaceAll(allSeasonData);
+                    await LeagueStatus.replaceAll(statusData);
+
+                    console.log(`🔒 Automaticky zamčeno (globální): ${liga} v ${now.toISOString()}`);
+                    lockTriggered = true;
+                }
+            }
+        }
+
+        // Kontrola skupinových časovačů
+        for (const group in groupTimers) {
+            const lockTimeStr = groupTimers[group];
+            if (!lockTimeStr) continue;
+
+            const lockTime = new Date(lockTimeStr);
+            if (isNaN(lockTime.getTime())) continue;
+
+            if (now >= lockTime) {
+                const currentLockStatus = statusData[season]?.[liga]?.tableTipsLocked;
+                let shouldLock = false;
+
+                let lockedGroups = [];
+                if (Array.isArray(currentLockStatus)) {
+                    lockedGroups = [...currentLockStatus];
+                } else if (currentLockStatus === true) {
+                    const totalGroups = league.groupCount || 1;
+                    for (let i = 1; i <= totalGroups; i++) {
+                        lockedGroups.push(String(i));
+                    }
+                }
+
+                if (!lockedGroups.includes(group)) {
+                    lockedGroups.push(group);
+                    const totalGroups = league.groupCount || lockedGroups.length;
+                    if (lockedGroups.length === totalGroups && totalGroups > 0) {
+                        if (!statusData[season]) statusData[season] = {};
+                        if (!statusData[season][liga]) statusData[season][liga] = {};
+                        statusData[season][liga].tableTipsLocked = true;
+                    } else {
+                        if (!statusData[season]) statusData[season] = {};
+                        if (!statusData[season][liga]) statusData[season][liga] = {};
+                        statusData[season][liga].tableTipsLocked = lockedGroups;
+                    }
+                    shouldLock = true;
+                }
+
+                if (shouldLock) {
+                    // Smazání časovače po spuštění
+                    delete league.tableTipsLockTimer[group];
+                    await Leagues.replaceAll(allSeasonData);
+                    await LeagueStatus.replaceAll(statusData);
+
+                    console.log(`🔒 Automaticky zamčeno (skupina): ${liga} - Skupina ${group} v ${now.toISOString()}`);
+                    lockTriggered = true;
+                }
+            }
+        }
+
+        if (lockTriggered) {
+            // Vyhodnocení tabulky po uzamčení
+            await evaluateRegularSeasonTable(season, liga);
+        }
+    } catch (error) {
+        console.error('❌ Chyba při kontrole časovačů uzamčení tabulek:', error);
+    }
+}
+
 async function evaluateRegularSeasonTable(season, liga, groupKey = null, isForLeftPanel = false) {
+    // Nejprve zkontrolujeme časovače (stejně jako u zápasů se kontroluje datetime při každém requestu)
+    await checkAndApplyTableTipsLockers(season, liga);
+
     // Pokud je specifická skupina a NENÍ pro levý panel, kontrolujeme její zamčení
     if (groupKey && !isForLeftPanel) {
         const statusData = await getLeagueStatusData();

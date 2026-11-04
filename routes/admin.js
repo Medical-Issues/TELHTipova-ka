@@ -4554,6 +4554,9 @@ router.get('/leagues/manage', requireAdmin, async (req, res) => {
                      <option value="goalDiff">Celkové skóre</option>
                  </select>
              </label>
+             <label title="Datum a čas automatického uzamčení tipování na tabulky (nevyplněno = bez automatického uzamčení)">
+                 Uzamknout tipy: <input type="datetime-local" class="league-select" name="newLeague[tableTipsLockDateTime]" style="width: 200px;">
+             </label>
              <button class="action-btn edit-btn" type="submit">Přidat</button>
         </form>
 
@@ -4563,6 +4566,7 @@ router.get('/leagues/manage', requireAdmin, async (req, res) => {
         // Načtení dat ligy
         let isFinished = false;
         let lockedStatus = false;
+        const globalLockTimer = l.tableTipsLockDateTime || '';
         if (statusData[selectedSeason] && statusData[selectedSeason][l.name]) {
             isFinished = statusData[selectedSeason][l.name].regularSeasonFinished;
             lockedStatus = statusData[selectedSeason][l.name].tableTipsLocked;
@@ -4572,14 +4576,15 @@ router.get('/leagues/manage', requireAdmin, async (req, res) => {
         const statusStyle = isFinished ? "color: green; font-weight: bold;" : "color: orange;";
         const globalLockStyle = isGloballyLocked ? "color: red; font-weight: bold;" : "color: green;";
 
-        // GENERUJEME HTML PRO SKUPINOVÉ ZÁMKY
+        // GENERUJEME HTML PRO SKUPINOVÉ ZÁMKY A ČASOVAČE
         let groupLocksHTML = '';
         if (l.isMultigroup && l.groupCount > 0) {
-            groupLocksHTML += '<div style="flex-basis: 100%; display: flex; gap: 15px; margin-left: 20px; margin-top: 5px; padding-top:5px; border-top:1px dotted #444;">';
+            groupLocksHTML += '<div style="flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 15px; margin-left: 20px; margin-top: 5px; padding-top:5px; border-top:1px dotted #444;">';
             for (let i = 1; i <= l.groupCount; i++) {
                 const gKey = String(i);
                 const gLabel = `Skupina ${String.fromCharCode(64 + i)}`;
                 let gLocked = false;
+                const gLockTimer = l.tableTipsLockTimer?.[gKey] || '';
                 if (statusData[selectedSeason] && statusData[selectedSeason][l.name]) {
                     gLocked = statusData[selectedSeason][l.name].tableTipsLocked;
                 }
@@ -4587,17 +4592,26 @@ router.get('/leagues/manage', requireAdmin, async (req, res) => {
                 const gStyle = isThisGroupLocked ? "color: red; font-weight: bold;" : "color: green;";
 
                 groupLocksHTML += `
-                    <form method="POST" action="/admin/toggle-table-tips-lock" style="display:inline-flex; align-items:center;">
-                        <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
-                        <input type="hidden" name="season" value="${selectedSeason}">
-                        <input type="hidden" name="liga" value="${l.name}">
-                        <input type="hidden" name="group" value="${gKey}">
-                        <input type="hidden" name="totalGroups" value="${l.groupCount}">
-                        <label style="cursor: pointer; display: flex; align-items: center; gap: 3px; font-size: 0.9em; ${gStyle}">
-                            <input type="checkbox" name="locked" value="true" ${isThisGroupLocked ? 'checked' : ''} onchange="this.form.submit()">
-                            ${gLabel}
-                        </label>
-                    </form>
+                    <div style="display: flex; flex-direction: column; gap: 5px;">
+                        <form method="POST" action="/admin/toggle-table-tips-lock" style="display:inline-flex; align-items:center;">
+                            <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
+                            <input type="hidden" name="season" value="${selectedSeason}">
+                            <input type="hidden" name="liga" value="${l.name}">
+                            <input type="hidden" name="group" value="${gKey}">
+                            <input type="hidden" name="totalGroups" value="${l.groupCount}">
+                            <label style="cursor: pointer; display: flex; align-items: center; gap: 3px; font-size: 0.9em; ${gStyle}">
+                                <input type="checkbox" name="locked" value="true" ${isThisGroupLocked ? 'checked' : ''} onchange="this.form.submit()">
+                                ${gLabel}
+                            </label>
+                        </form>
+                        <form method="POST" action="/admin/leagues/update" style="display: flex; align-items: center; gap: 5px;">
+                            <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
+                            <input type="hidden" name="originalLeagueName" value="${l.name}">
+                            <input type="hidden" name="updateGroupTimer" value="${gKey}">
+                            <input type="datetime-local" name="groupLockTime" value="${gLockTimer}" style="font-size: 0.8em; padding: 2px;" title="Datum a čas automatického uzamčení skupiny">
+                            <button type="submit" style="font-size: 0.7em; padding: 2px 5px;">Nastavit čas</button>
+                        </form>
+                    </div>
                 `;
             }
             groupLocksHTML += '</div>';
@@ -4672,6 +4686,13 @@ router.get('/leagues/manage', requireAdmin, async (req, res) => {
                                 ${isGloballyLocked ? 'Tabulky ZAMČENY (Vše)' : 'Zamknout Vše'}
                             </label>
                         </form>
+                        <form method="POST" action="/admin/leagues/update" style="display:inline-flex; align-items: center; gap: 5px;">
+                            <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
+                            <input type="hidden" name="originalLeagueName" value="${l.name}">
+                            <input type="hidden" name="updateGlobalTimer" value="true">
+                            <input type="datetime-local" name="globalLockTime" value="${globalLockTimer}" style="font-size: 0.8em; padding: 2px;" title="Datum a čas automatického uzamčení pro všechny skupiny">
+                            <button type="submit" style="font-size: 0.7em; padding: 2px 5px;">Čas Vše</button>
+                        </form>
 
                         <form method="POST" action="/admin/toggle-regular-season" style="display:inline-flex;">
                             <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
@@ -4717,7 +4738,7 @@ router.post('/leagues/manage', express.urlencoded({ extended: true }), requireAd
         return res.status(403).send('Neplatný CSRF token');
     }
     
-    const { ligaName, multigroup, groupCount, maxMatches, quarterfinal, playin, relegation, tiebreakerPriority } = req.body.newLeague;
+    const { ligaName, multigroup, groupCount, maxMatches, quarterfinal, playin, relegation, tiebreakerPriority, tableTipsLockDateTime } = req.body.newLeague;
     const allSeasonData = await Leagues.findAll();
     const selectedSeason = await ChosenSeason.findAll();
 
@@ -4739,7 +4760,9 @@ router.post('/leagues/manage', express.urlencoded({ extended: true }), requireAd
             quarterfinal: Number(quarterfinal) || 0,
             playin: Number(playin) || 0,
             relegation: Number(relegation) || 0,
-            tiebreakerPriority: tiebreakerPriority || 'h2h'
+            tiebreakerPriority: tiebreakerPriority || 'h2h',
+            tableTipsLockDateTime: tableTipsLockDateTime || '',
+            tableTipsLockTimer: {}
         });
         await Leagues.replaceAll(allSeasonData);
 
@@ -4757,7 +4780,9 @@ router.post('/leagues/update', express.urlencoded({ extended: true }), requireAd
     const {
         originalLeagueName, leagueName, maxMatches, quarterfinal, playin, relegation, tiebreakerPriority,
         // Nová pole z formuláře
-        crossGroupEnabled, crossGroupPosition, crossQuarterfinal, crossPlayin, crossRelegation, playoffFormat
+        crossGroupEnabled, crossGroupPosition, crossQuarterfinal, crossPlayin, crossRelegation, playoffFormat,
+        // Časovače
+        updateGlobalTimer, globalLockTime, updateGroupTimer, groupLockTime
     } = req.body;
 
     const allSeasonData = await Leagues.findAll();
@@ -4791,6 +4816,19 @@ router.post('/leagues/update', express.urlencoded({ extended: true }), requireAd
                 playin: Number(crossPlayin) || 0,
                 relegation: Number(crossRelegation) || 0
             };
+
+            // Aktualizace časovačů
+            if (!allSeasonData[selectedSeason].leagues[index].tableTipsLockTimer) {
+                allSeasonData[selectedSeason].leagues[index].tableTipsLockTimer = {};
+            }
+
+            if (updateGlobalTimer) {
+                allSeasonData[selectedSeason].leagues[index].tableTipsLockDateTime = globalLockTime || '';
+            }
+
+            if (updateGroupTimer) {
+                allSeasonData[selectedSeason].leagues[index].tableTipsLockTimer[updateGroupTimer] = groupLockTime || '';
+            }
 
             await Leagues.replaceAll(allSeasonData);
         }
