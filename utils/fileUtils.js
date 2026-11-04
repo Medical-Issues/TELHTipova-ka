@@ -1474,10 +1474,12 @@ async function prepareDashboardData(req, isHistory = false, isImageExporter = fa
         ? req.query.liga
         : (defaultLeagueForSeason && uniqueLeagues.includes(defaultLeagueForSeason) ? defaultLeagueForSeason : (uniqueLeagues[0] || "Neurčeno"));
 
-    const teamsInSelectedLiga = teams.filter(t => 
-    t.liga === selectedLiga || 
-    t.liga === selectedLiga.trim() ||
-    t.liga.toLowerCase() === selectedLiga.toLowerCase()
+    const teamsInSelectedLiga = teams.filter(t =>
+    t.liga && (
+        t.liga === selectedLiga ||
+        t.liga === selectedLiga.trim() ||
+        t.liga.toLowerCase() === selectedLiga.toLowerCase()
+    )
 );
 
     const leagueObj = leagues.find(l => l.name === selectedLiga) || {

@@ -21,6 +21,7 @@ const {
     getAvailableImages,
 } = require("../utils/fileUtils");
 const { fetchMatchesFromLivesport } = require('../utils/livesportService');
+const { createLocalSnapshot, listAvailableSnapshots, restoreFromLocalSnapshot, backupToGitHub } = require('../utils/backupService');
 const { 
     scanImageHashes, 
     findDuplicates, 
@@ -385,6 +386,7 @@ router.get('/', requireAdmin, async (req, res) => {
           <a href="/admin/transfer-data" class="btn btn-warning">🔄 Převod dat z minulého roku</a>
           <a href="/admin/fix-teams-season" class="btn btn-info">🔧 Opravit sezóny týmů</a>
           <a id="backupBtn" class="btn btn-warning">💾 Záloha dat do JSONů</a>
+          <a href="/admin/backups" class="btn btn-secondary">🛡️ Správa záloh a snapshotů</a>
           <a id="verifyStatsBtn" class="btn btn-danger">🔍 Kontrola statistik</a>
         </div>
       </div>
@@ -1569,6 +1571,11 @@ router.post('/new/match', express.urlencoded({ extended: true }), requireAdmin, 
 
 router.get('/new/team', requireAdmin, async (req, res) => {
     const selectedSeason = await ChosenSeason.findAll();
+    // pre-action-league-update: Záchranný snapshot před úpravou ligy
+    try {
+        await createLocalSnapshot('pre-action', 'league_update_' + (originalLeagueName || leagueName || 'league'), req.session.user);
+    } catch (e) { console.error('Chyba při tvorbě pre-action snapshotu:', e.message); }
+
     const allSeasonData = await Leagues.findAll();
     const leagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues)
         ? allSeasonData[selectedSeason].leagues
@@ -4562,7 +4569,7 @@ router.get('/leagues/manage', requireAdmin, async (req, res) => {
 
         <h2>Seznam lig v sezóně ${selectedSeason}</h2>
         <ul>
-            ${seasonLeagues.map(l => {
+            ${seasonLeagues.map((l, lIndex) => {
         // Načtení dat ligy
         let isFinished = false;
         let lockedStatus = false;
@@ -4604,11 +4611,12 @@ router.get('/leagues/manage', requireAdmin, async (req, res) => {
                                 ${gLabel}
                             </label>
                         </form>
-                        <form method="POST" action="/admin/leagues/update" style="display: flex; align-items: center; gap: 5px;">
+                        <form method="POST" action="/admin/set-table-tips-lock-timer" style="display: flex; align-items: center; gap: 5px;">
                             <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
-                            <input type="hidden" name="originalLeagueName" value="${l.name}">
-                            <input type="hidden" name="updateGroupTimer" value="${gKey}">
-                            <input type="datetime-local" name="groupLockTime" value="${gLockTimer}" style="font-size: 0.8em; padding: 2px;" title="Datum a čas automatického uzamčení skupiny">
+                            <input type="hidden" name="season" value="${selectedSeason}">
+                            <input type="hidden" name="liga" value="${l.name}">
+                            <input type="hidden" name="group" value="${gKey}">
+                            <input type="datetime-local" name="lockTime" value="${gLockTimer}" style="font-size: 0.8em; padding: 2px;" title="Datum a čas automatického uzamčení skupiny">
                             <button type="submit" style="font-size: 0.7em; padding: 2px 5px;">Nastavit čas</button>
                         </form>
                     </div>
@@ -4622,7 +4630,8 @@ router.get('/leagues/manage', requireAdmin, async (req, res) => {
                     
                     <form method="POST" action="/admin/leagues/update" style="display:flex; flex-wrap: wrap; align-items:center; gap:10px; width: 100%;">
                         <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
-                        <input type="hidden" name="originalLeagueName" value="${l.name}">
+                        <input type="hidden" name="leagueIndex" value="${lIndex}">
+                        <input type="hidden" name="originalLeagueName" value="${l.name || ''}">
                         
                         <div style="display:inline-flex; align-items:center; gap:10px;">
                             <input type="text" name="leagueName" class="league-select" style="width: 150px" value="${l.name}">
@@ -4686,11 +4695,12 @@ router.get('/leagues/manage', requireAdmin, async (req, res) => {
                                 ${isGloballyLocked ? 'Tabulky ZAMČENY (Vše)' : 'Zamknout Vše'}
                             </label>
                         </form>
-                        <form method="POST" action="/admin/leagues/update" style="display:inline-flex; align-items: center; gap: 5px;">
+                        <form method="POST" action="/admin/set-table-tips-lock-timer" style="display:inline-flex; align-items: center; gap: 5px;">
                             <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
-                            <input type="hidden" name="originalLeagueName" value="${l.name}">
-                            <input type="hidden" name="updateGlobalTimer" value="true">
-                            <input type="datetime-local" name="globalLockTime" value="${globalLockTimer}" style="font-size: 0.8em; padding: 2px;" title="Datum a čas automatického uzamčení pro všechny skupiny">
+                            <input type="hidden" name="season" value="${selectedSeason}">
+                            <input type="hidden" name="liga" value="${l.name}">
+                            <input type="hidden" name="group" value="global">
+                            <input type="datetime-local" name="lockTime" value="${globalLockTimer}" style="font-size: 0.8em; padding: 2px;" title="Datum a čas automatického uzamčení pro všechny skupiny">
                             <button type="submit" style="font-size: 0.7em; padding: 2px 5px;">Čas Vše</button>
                         </form>
 
@@ -4778,23 +4788,25 @@ router.post('/leagues/update', express.urlencoded({ extended: true }), requireAd
     }
     
     const {
-        originalLeagueName, leagueName, maxMatches, quarterfinal, playin, relegation, tiebreakerPriority,
+        leagueIndex, originalLeagueName, leagueName, maxMatches, quarterfinal, playin, relegation, tiebreakerPriority,
         // Nová pole z formuláře
-        crossGroupEnabled, crossGroupPosition, crossQuarterfinal, crossPlayin, crossRelegation, playoffFormat,
-        // Časovače
-        updateGlobalTimer, globalLockTime, updateGroupTimer, groupLockTime
+        crossGroupEnabled, crossGroupPosition, crossQuarterfinal, crossPlayin, crossRelegation, playoffFormat
     } = req.body;
 
     const allSeasonData = await Leagues.findAll();
     const selectedSeason = await ChosenSeason.findAll();
 
     if (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues) {
-        const index = allSeasonData[selectedSeason].leagues.findIndex(l => l.name === originalLeagueName);
+        // Použijeme index, pokud je k dispozici, jinak hledáme podle názvu
+        const index = leagueIndex !== undefined ? Number(leagueIndex) : allSeasonData[selectedSeason].leagues.findIndex(l => l.name === originalLeagueName);
 
         if (index !== -1) {
-            // 1. Změna názvu
-            if (originalLeagueName !== leagueName) {
+            // 1. Změna názvu (pouze pokud je původní název definovaný a je jiný)
+            if (originalLeagueName && originalLeagueName !== leagueName) {
                 await renameLeagueGlobal(originalLeagueName, leagueName);
+                allSeasonData[selectedSeason].leagues[index].name = leagueName;
+            } else if (leagueName) {
+                // Pokud původní název není definový, ale nový je, jen nastavíme nový název bez globálního přejmenování
                 allSeasonData[selectedSeason].leagues[index].name = leagueName;
             }
 
@@ -4817,19 +4829,6 @@ router.post('/leagues/update', express.urlencoded({ extended: true }), requireAd
                 relegation: Number(crossRelegation) || 0
             };
 
-            // Aktualizace časovačů
-            if (!allSeasonData[selectedSeason].leagues[index].tableTipsLockTimer) {
-                allSeasonData[selectedSeason].leagues[index].tableTipsLockTimer = {};
-            }
-
-            if (updateGlobalTimer) {
-                allSeasonData[selectedSeason].leagues[index].tableTipsLockDateTime = globalLockTime || '';
-            }
-
-            if (updateGroupTimer) {
-                allSeasonData[selectedSeason].leagues[index].tableTipsLockTimer[updateGroupTimer] = groupLockTime || '';
-            }
-
             await Leagues.replaceAll(allSeasonData);
         }
     }
@@ -4837,7 +4836,133 @@ router.post('/leagues/update', express.urlencoded({ extended: true }), requireAd
     res.redirect('/admin/leagues/manage');
 });
 
+router.post("/set-table-tips-lock-timer", express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+
+    const { season, liga, group, lockTime } = req.body;
+
+    const allSeasonData = await Leagues.findAll();
+    if (!allSeasonData[season]) {
+        return res.status(400).send('Sezóna neexistuje');
+    }
+
+    const league = allSeasonData[season].leagues.find(l => l.name === liga);
+    if (!league) {
+        return res.status(400).send('Liga neexistuje');
+    }
+
+    // Inicializace časovačů
+    if (!league.tableTipsLockTimer) {
+        league.tableTipsLockTimer = {};
+    }
+
+    // Uložení časovače do definice ligy
+    if (group === 'global') {
+        league.tableTipsLockDateTime = lockTime || '';
+    } else {
+        league.tableTipsLockTimer[group] = lockTime || '';
+    }
+
+    await Leagues.replaceAll(allSeasonData);
+
+    await logAdminAction(req.session.user, "ČASOVAČ_ZÁMKU_TABULKY", `Nastaven časovač uzamčení pro ${liga} (Skupina: ${group === 'global' ? 'GLOBÁLNÍ' : group}) na: ${lockTime || 'VYPNUTO'}`, 'admin', null, req);
+
+    res.redirect('/admin/leagues/manage');
+});
+
+router.get('/check-data-damage', requireAdmin, async (req, res) => {
+    // Kontrola poškození dat po renameLeagueGlobal(null, "Euro Hockey Tour")
+    const teams = await Teams.findAll();
+    const matches = await Matches.findAll();
+    const leagues = await Leagues.findAll();
+
+    const teamsWithNullLiga = teams.filter(t => t.liga === null || t.liga === undefined);
+    const teamsWithEHT = teams.filter(t => t.liga === 'Euro Hockey Tour');
+    const matchesWithNullLiga = matches.filter(m => m.liga === null || m.liga === undefined);
+    const matchesWithEHT = matches.filter(m => m.liga === 'Euro Hockey Tour');
+
+    let html = '<h2>Kontrola poškození dat</h2>';
+    html += `<h3>TÝMY (${teams.length} celkem)</h3>`;
+    html += `<p>S liga = null/undefined: ${teamsWithNullLiga.length}</p>`;
+    html += `<p>S liga = "Euro Hockey Tour": ${teamsWithEHT.length}</p>`;
+    if (teamsWithNullLiga.length > 0) {
+        html += `<h4>Týmy s null/undefined:</h4>`;
+        html += `<ul>${teamsWithNullLiga.map(t => `<li>${t.name} (id: ${t.id}, liga: ${t.liga})</li>`).join('')}</ul>`;
+    }
+
+    html += `<h3>ZÁPASY (${matches.length} celkem)</h3>`;
+    html += `<p>S liga = null/undefined: ${matchesWithNullLiga.length}</p>`;
+    html += `<p>S liga = "Euro Hockey Tour": ${matchesWithEHT.length}</p>`;
+    if (matchesWithNullLiga.length > 0) {
+        html += `<h4>Zápasy s null/undefined (prvních 10):</h4>`;
+        html += `<ul>${matchesWithNullLiga.slice(0, 10).map(m => `<li>${m.id} (home: ${m.home}, away: ${m.away}, liga: ${m.liga})</li>`).join('')}</ul>`;
+    }
+
+    html += `<h3>LIGY</h3>`;
+    for (const season in leagues) {
+        const seasonLeagues = leagues[season]?.leagues || [];
+        html += `<h4>Sezóna ${season}</h4>`;
+        html += `<ul>${seasonLeagues.map(l => `<li>${l.name || '(null)'}: skupiny=${l.groupCount || 0}, maxMatches=${l.maxMatches || 0}</li>`).join('')}</ul>`;
+    }
+
+    html += `<form method="POST" action="/admin/fix-data-damage" style="margin-top: 20px;">`;
+    html += `<input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">`;
+    html += `<label>Nastavit ligu pro null/undefined týmy a zápasy na: <input type="text" name="targetLiga" value="Euro Hockey Tour"></label>`;
+    html += `<button type="submit">Opravit data</button>`;
+    html += `</form>`;
+
+    res.send(html);
+});
+
+router.post('/fix-data-damage', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+
+    const { targetLiga } = req.body;
+    if (!targetLiga) {
+        return res.status(400).send('Chybí cílová liga');
+    }
+
+    const teams = await Teams.findAll();
+    const matches = await Matches.findAll();
+
+    let teamsFixed = 0;
+    let matchesFixed = 0;
+
+    // Oprava týmů
+    teams.forEach(t => {
+        if (t.liga === null || t.liga === undefined) {
+            t.liga = targetLiga;
+            teamsFixed++;
+        }
+    });
+
+    // Oprava zápasů
+    matches.forEach(m => {
+        if (m.liga === null || m.liga === undefined) {
+            m.liga = targetLiga;
+            matchesFixed++;
+        }
+    });
+
+    await Teams.replaceAll(teams);
+    await Matches.replaceAll(matches);
+
+    await logAdminAction(req.session.user, "OPRAVA_DAT", `Opraveno ${teamsFixed} týmů a ${matchesFixed} zápasů s liga = null/undefined na ${targetLiga}`, 'admin', null, req);
+
+    res.send(`<h2>Oprava dokončena</h2><p>Opraveno ${teamsFixed} týmů a ${matchesFixed} zápasů na ligu "${targetLiga}"</p><a href="/admin/check-data-damage">Zkontrolovat znovu</a>`);
+});
+
 router.post('/leagues/delete', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // pre-action-league-delete: Záchranný snapshot před smazáním ligy
+    try {
+        await createLocalSnapshot('pre-action', 'league_delete_' + (req.body.league || 'league'), req.session.user);
+    } catch (e) { console.error('Chyba při tvorbě pre-action snapshotu:', e.message); }
     // CSRF kontrola
     if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
         return res.status(403).send('Neplatný CSRF token');
@@ -10971,6 +11096,194 @@ router.use(async (err, req, res, _next) => {
         console.error('Chyba při logování admin chyby:', logErr);
     }
     renderErrorHtml(res, 'Došlo k chybě při zpracování požadavku. Chyba byla logována.', 500);
+});
+
+
+// ==========================================
+// SPRÁVA ZÁLOH A SNAPSHOTŮ
+// ==========================================
+router.get('/backups', requireAdmin, async (req, res) => {
+    try {
+        const snapshots = listAvailableSnapshots();
+        const csrfToken = req.session.csrfToken || '';
+
+        let tableRows;
+        if (snapshots.length === 0) {
+            tableRows = '<tr><td colspan="6" style="text-align: center; color: #888; padding: 20px;">Žádné snapshoty zatím nebyly vytvořeny.</td></tr>';
+        } else {
+            tableRows = snapshots.map(s => {
+                const dateFormatted = new Date(s.createdAt).toLocaleString('cs-CZ');
+                const badgeStyle = s.type === 'pre-action'
+                    ? 'background: #b02a37; color: white; padding: 3px 8px; border-radius: 4px; font-size: 0.8em; font-weight: bold;'
+                    : 'background: #0d6efd; color: white; padding: 3px 8px; border-radius: 4px; font-size: 0.8em; font-weight: bold;';
+                const labelText = s.type === 'pre-action' ? '🛡️ Pre-action' : '⏰ Periodic';
+
+                const summaryCounts = [
+                    'Uživatelé: ' + (s.counts.users || 0),
+                    'Zápasy: ' + (s.counts.matches || 0),
+                    'Týmy: ' + (s.counts.teams || 0)
+                ].join(', ');
+
+                return `
+                <tr style="border-bottom: 1px solid #333;">
+                    <td style="padding: 10px;"><span style="${badgeStyle}">${labelText}</span></td>
+                    <td style="padding: 10px; font-family: monospace; font-size: 0.9em; color: #eee;">${s.actionLabel || '-'}</td>
+                    <td style="padding: 10px; color: #ccc;">${dateFormatted}</td>
+                    <td style="padding: 10px; color: #aaa;">${s.sizeFormatted}</td>
+                    <td style="padding: 10px; font-size: 0.85em; color: #888;">${summaryCounts}</td>
+                    <td style="padding: 10px; text-align: right;">
+                        <form method="POST" action="/admin/backups/restore" class="restore-form" data-label="${s.actionLabel || s.filename}" style="display:inline;">
+                            <input type="hidden" name="_csrf" value="${csrfToken}">
+                            <input type="hidden" name="snapshotPath" value="${encodeURIComponent(s.path)}">
+                            <button type="submit" class="btn btn-warning" style="padding: 4px 10px; font-size: 0.85em;">🔄 Obnovit</button>
+                        </form>
+                    </td>
+                </tr>
+                `;
+            }).join('');
+        }
+
+        const html = `
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Správa záloh a snapshotů – Admin</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="icon" href="/images/logo.png">
+    <style>
+        .backup-card { background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 20px; margin-bottom: 25px; }
+        .backup-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        .backup-table th { background: #252525; padding: 10px; text-align: left; color: orangered; font-size: 0.9em; }
+        .action-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 15px; }
+    </style>
+</head>
+<body class="admin_site">
+    <header class="header">
+        <div class="header-main">
+            <div class="logo_title">
+                <img class="image_logo" src="/images/logo.png" alt="Logo">
+                <h1 id="title">Správa záloh a snapshotů</h1>
+            </div>
+            <div class="header-user">
+                <a href="/admin" class="history-btn">← Zpět na admin</a>
+            </div>
+        </div>
+    </header>
+
+    <main style="padding: 20px; max-width: 1100px; margin: 0 auto;">
+        <div class="backup-card">
+            <h2 style="color: orangered; margin-top: 0;">🛡️ Trojstupňový systém zálohování</h2>
+            <p style="color: #ccc; line-height: 1.5;">
+                <strong>1. Lokální snapshoty:</strong> Ukládají se automaticky každé 4 hodiny a drží se 30 dní.<br>
+                <strong>2. Záchranné Pre-Action snapshoty:</strong> Ukládají se automaticky těsně před každou úpravou či smazáním ligy a drží se 30 dní.<br>
+                <strong>3. Externí záloha na GitHub:</strong> Běží automaticky každých 12 hodin do privátního repozitáře <code>Medical-Issues/TELHTipovackaZaloha</code>.
+            </p>
+
+            <div class="action-row">
+                <form method="POST" action="/admin/backups/create-snapshot" style="display:inline;">
+                    <input type="hidden" name="_csrf" value="${csrfToken}">
+                    <button type="submit" class="btn btn-primary">💾 Vytvořit okamžitý snapshot</button>
+                </form>
+
+                <form method="POST" action="/admin/backups/backup-github" style="display:inline;" onsubmit="return confirm('Spustit okamžitou zálohu do GitHub repozitáře?');">
+                    <input type="hidden" name="_csrf" value="${csrfToken}">
+                    <button type="submit" class="btn btn-warning">☁️ Odeslat zálohu na GitHub</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="backup-card">
+            <h3 style="color: #eee; margin-top: 0;">Dostupné lokální snapshoty (${snapshots.length})</h3>
+            <div style="overflow-x: auto;">
+                <table class="backup-table">
+                    <thead>
+                        <tr>
+                            <th>Typ</th>
+                            <th>Popis / Akce</th>
+                            <th>Datum vytvoření</th>
+                            <th>Velikost</th>
+                            <th>Obsah kolekcí</th>
+                            <th style="text-align: right;">Akce</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${tableRows}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+<script id="restore-form-script">
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.restore-form').forEach(function(form) {
+            form.addEventListener('submit', function(e) {
+                const label = this.getAttribute('data-label') || 'tento snapshot';
+                if (!confirm('Opravdu chcete obnovit databázi ze snapshotu (' + label + ')? Současná data budou nahrazena!')) {
+                    e.preventDefault();
+                }
+            });
+        });
+    });
+    </script>
+</body>
+</html>
+        `;
+
+        res.send(html);
+    } catch (err) {
+        console.error('Chyba při zobrazení snapshotů:', err);
+        res.status(500).send('Chyba: ' + err.message);
+    }
+});
+
+router.post('/backups/create-snapshot', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+
+    try {
+        await createLocalSnapshot('periodic', 'manual_admin', req.session.user || 'admin');
+        await logAdminAction(req.session.user, "MANUÁLNÍ_SNAPSHOT", 'Vytvořen manuální snapshot databáze', 'admin', null, req);
+        res.redirect('/admin/backups');
+    } catch (err) {
+        res.status(500).send('Chyba při tvorbě snapshotu: ' + err.message);
+    }
+});
+
+router.post('/backups/backup-github', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+
+    try {
+        const result = await backupToGitHub(req.session.user || 'admin');
+        await logAdminAction(req.session.user, "GITHUB_ZÁLOHA", 'Spuštěna manuální záloha do GitHub repozitáře (' + result.uploadedCount + ' souborů)', 'admin', null, req);
+        res.redirect('/admin/backups');
+    } catch (err) {
+        res.status(500).send('Chyba při záloze na GitHub: ' + err.message);
+    }
+});
+
+router.post('/backups/restore', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+
+    const { snapshotPath } = req.body;
+    if (!snapshotPath) {
+        return res.status(400).send('Chybí cesta k souboru snapshotu');
+    }
+
+    try {
+        const decodedPath = decodeURIComponent(snapshotPath);
+        const result = await restoreFromLocalSnapshot(decodedPath);
+        await logAdminAction(req.session.user, "OBNOVA_ZE_SNAPSHOTU", 'Obnovena databáze ze snapshotu: ' + path.basename(decodedPath), 'admin', null, req, 'warning');
+        res.send('<h2>✅ Databáze byla úspěšně obnovena!</h2><p>Počty obnovených záznamů: ' + JSON.stringify(result.restoredCounts) + '</p><br><a href="/admin/backups">Zpět na správu záloh</a> | <a href="/admin">Zpět do administrace</a>');
+    } catch (err) {
+        res.status(500).send('Chyba při obnově databáze: ' + err.message);
+    }
 });
 
 module.exports = router;

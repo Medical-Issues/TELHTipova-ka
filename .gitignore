@@ -2,6 +2,7 @@
 .env
 node_modules/
 /data/
+/backups/
 /public/images/notifications
 /public/images/exports
 .devin

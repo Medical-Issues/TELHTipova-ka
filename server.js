@@ -17,10 +17,11 @@ const { router: securityRoutes } = require('./routes/security');
 const versionRoutes = require('./routes/version');
 const { Users } = require('./utils/mongoDataAccess');
 
-// MongoDB připojení
+// MongoDB připojení a zálohování
 const { connectToDatabase } = require('./config/database');
 const { backupJsonFilesToGitHub } = require("./utils/githubBackup");
 const { restoreFromGitHub, fullRestoreFromGitHub } = require("./utils/githubRestore");
+const { createLocalSnapshot, backupToGitHub } = require("./utils/backupService");
 const app = express();
 
 // Nastavit debug mód pro všechny routy
@@ -625,10 +626,35 @@ async function startServer() {
         }, 10000);
     });
 
-    setInterval(() => {
-        console.log('⏰ Spouštím automatickou zálohu...');
-        backupJsonFilesToGitHub();
-    }, 60 * 60 * 1000 * 24);
+    // 1. Lokální periodic snapshot (každé 4 hodiny)
+    setInterval(async () => {
+        try {
+            console.log('⏰ [SNAPSHOT] Spouštím automatický lokální snapshot databáze...');
+            await createLocalSnapshot('periodic', 'scheduled_4h', 'scheduler');
+        } catch (e) {
+            console.error('❌ Chyba při plánovaném lokálním snapshotu:', e.message);
+        }
+    }, 4 * 60 * 60 * 1000);
+
+    // 2. Off-site záloha na GitHub (každých 12 hodin)
+    setInterval(async () => {
+        try {
+            console.log('⏰ [GITHUB BACKUP] Spouštím automatickou zálohu na GitHub...');
+            await backupToGitHub('scheduler_12h');
+        } catch (e) {
+            console.error('❌ Chyba při plánované záloze na GitHub:', e.message);
+        }
+    }, 12 * 60 * 60 * 1000);
+
+    // 3. Po startu serveru po 15 sekundách vytvořit počáteční snapshot
+    setTimeout(async () => {
+        try {
+            console.log('🚀 [STARTUP] Vytvářím startovní lokální snapshot...');
+            await createLocalSnapshot('periodic', 'server_startup', 'system');
+        } catch (e) {
+            console.warn('⚠️ Varování při startovním snapshotu:', e.message);
+        }
+    }, 15000);
 }
 
 startServer().catch(err => {
