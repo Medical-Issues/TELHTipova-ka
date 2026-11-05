@@ -438,8 +438,8 @@ router.get('/', requireAdmin, async (req, res) => {
 `;
 
     for (const m of pendingMatches) {
-        const homeTeam = teams.find(t => t.id === m.homeTeamId)?.name || '???';
-        const awayTeam = teams.find(t => t.id === m.awayTeamId)?.name || '???';
+        const homeTeam = teamsFromCurrentSeason.find(t => t.id === m.homeTeamId)?.name || '???';
+        const awayTeam = teamsFromCurrentSeason.find(t => t.id === m.awayTeamId)?.name || '???';
         
         let result = '-';
         if (m.isPlayoff && m.bo > 1 && m.playedMatches && m.playedMatches.length > 0) {
@@ -513,8 +513,8 @@ router.get('/', requireAdmin, async (req, res) => {
     `;
 
     for (const m of finishedMatches) {
-        const homeTeam = teams.find(t => t.id === m.homeTeamId)?.name || '???';
-        const awayTeam = teams.find(t => t.id === m.awayTeamId)?.name || '???';
+        const homeTeam = teamsFromCurrentSeason.find(t => t.id === m.homeTeamId)?.name || '???';
+        const awayTeam = teamsFromCurrentSeason.find(t => t.id === m.awayTeamId)?.name || '???';
         const result = `${m.result.scoreHome} : ${m.result.scoreAway} ${m.result.ot === true ? "pp/sn" : ""}`;
         const dateObj = new Date(m.datetime);
         const formattedDate = dateObj.toLocaleString('cs-CZ', {
@@ -2198,11 +2198,7 @@ router.post('/teams/edit/:id', express.urlencoded({ extended: true }), requireAd
     const teams = await Teams.findAll();
     
     // NOVÉ: Získej aktuální sezónu (admin nebo chosen)
-    const chosenSeason = await ChosenSeason.findAll();
-    const selectedSeason = req.session.adminSeason || chosenSeason;
-    
-    // OPRAVA: Najdi index týmu s daným ID v rámci aktuální sezóny
-    const teamIndex = teams.findIndex(t => t.id === teamId && t.season === selectedSeason);
+    await ChosenSeason.findAll();
     if (teamIndex === -1) return renderErrorHtml(res, "Tým s tímto ID nebyl nalezen v aktuální sezóně.", 404);
     
     const team = teams[teamIndex];
@@ -4917,6 +4913,149 @@ router.get('/check-data-damage', requireAdmin, async (req, res) => {
     res.send(html);
 });
 
+router.get('/remove-team-duplicates', requireAdmin, async (req, res) => {
+    const teams = await Teams.findAll();
+    await Matches.findAll();
+// Najdi duplicity týmů (stejné ID)
+    const teamIdMap = {};
+    teams.forEach(t => {
+        if (!teamIdMap[t.id]) {
+            teamIdMap[t.id] = [];
+        }
+        teamIdMap[t.id].push(t);
+    });
+
+    const duplicateIds = Object.keys(teamIdMap).filter(id => teamIdMap[id].length > 1);
+
+    // Filtrujeme jen duplicity se stejnou season (skutečné duplicity)
+    const trueDuplicates = duplicateIds.filter(id => {
+        const dupTeams = teamIdMap[id];
+        const seasons = [...new Set(dupTeams.map(t => t.season))];
+        return seasons.length === 1; // Jen jedna season = skutečná duplicita
+    });
+
+    let html = '<h2>Duplicitní týmy</h2>';
+    html += `<p>Počet duplicitních ID: ${duplicateIds.length}</p>`;
+    html += `<p>Skutečných duplicit (stejná season): ${trueDuplicates.length}</p>`;
+    html += `<p><strong>POZNÁMKA:</strong> Týmy s různými season (např. 25/26 a 26/27) jsou legitimní a nezobrazují se zde.</p>`;
+
+    trueDuplicates.forEach(id => {
+        const dupTeams = teamIdMap[id];
+        const seasons = [...new Set(dupTeams.map(t => t.season))];
+        html += `<h3>ID ${id} (sezóna: ${seasons.join(', ')})</h3>`;
+        html += `<ul>${dupTeams.map((t, idx) => `<li><input type="radio" name="keep_${id}" value="${t._id}" ${idx === dupTeams.length - 1 ? 'checked' : ''}> <strong>${t.name}</strong> (liga: ${t.liga}, season: ${t.season || '(null)'}, group: ${t.group}, _id: ${t._id})</li>`).join('')}</ul>`;
+    });
+
+    html += `<form method="POST" action="/admin/remove-team-duplicates" style="margin-top: 20px;">`;
+    html += `<input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">`;
+    html += `<button type="submit">Odstranit duplicity (ponechat vybrané záznamy)</button>`;
+    html += `</form>`;
+
+    res.send(html);
+});
+
+router.get('/fix-teams-season', requireAdmin, async (req, res) => {
+    const teams = await Teams.findAll();
+    await Leagues.findAll();
+// Zjistíme, které týmy nemají pole season
+    const teamsWithoutSeason = teams.filter(t => !t.season);
+
+    let html = '<h2>Oprava sezón týmů</h2>';
+    html += `<p>Celkem týmů: ${teams.length}</p>`;
+    html += `<p>Týmů bez pole season: ${teamsWithoutSeason.length}</p>`;
+
+    if (teamsWithoutSeason.length > 0) {
+        html += `<h3>Seznam týmů bez season</h3>`;
+        html += `<ul>${teamsWithoutSeason.slice(0, 20).map(t => `<li>${t.name} (liga: ${t.liga}, id: ${t.id})</li>`).join('')}</ul>`;
+        if (teamsWithoutSeason.length > 20) {
+            html += `<p>...a dalších ${teamsWithoutSeason.length - 20} týmů</p>`;
+        }
+    }
+
+    html += `<form method="POST" action="/admin/fix-teams-season" style="margin-top: 20px;">`;
+    html += `<input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">`;
+    html += `<label>Sezóna pro týmy bez season: <input type="text" name="targetSeason" value="25/26"></label>`;
+    html += `<button type="submit">Přidat season</button>`;
+    html += `</form>`;
+
+    res.send(html);
+});
+
+router.post('/fix-teams-season', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+
+    const { targetSeason } = req.body;
+    if (!targetSeason) {
+        return res.status(400).send('Chybí cílová sezóna');
+    }
+
+    const teams = await Teams.findAll();
+    let fixedCount = 0;
+
+    teams.forEach(t => {
+        if (!t.season) {
+            t.season = targetSeason;
+            fixedCount++;
+        }
+    });
+
+    await Teams.replaceAll(teams);
+
+    await logAdminAction(req.session.user, "OPRAVA_SEZON_TYMU", `Přidáno pole season do ${fixedCount} týmů na ${targetSeason}`, 'admin', null, req);
+
+    res.send(`<h2>Sezony opraveny</h2><p>Přidáno pole season do ${fixedCount} týmů na ${targetSeason}</p><a href="/admin/fix-teams-season">Zkontrolovat znovu</a>`);
+});
+
+router.post('/remove-team-duplicates', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    // CSRF kontrola
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+
+    const teams = await Teams.findAll();
+
+    // Najdi duplicity
+    const teamIdMap = {};
+    teams.forEach((t, index) => {
+        if (!teamIdMap[t.id]) {
+            teamIdMap[t.id] = [];
+        }
+        teamIdMap[t.id].push({ index, team: t });
+    });
+
+    const duplicateIds = Object.keys(teamIdMap).filter(id => teamIdMap[id].length > 1);
+    let removedCount = 0;
+
+    // Odstraníme nevybrané záznamy
+    const indicesToRemove = [];
+    duplicateIds.forEach(id => {
+        const dupTeams = teamIdMap[id];
+        const keepId = req.body[`keep_${id}`]; // _id záznamu, který chceme ponechat
+
+        dupTeams.forEach(item => {
+            if (item.team._id !== keepId) {
+                indicesToRemove.push(item.index);
+                removedCount++;
+            }
+        });
+    });
+
+    // Seřadíme indexy sestupně a odstraníme
+    indicesToRemove.sort((a, b) => b - a);
+    indicesToRemove.forEach(index => {
+        teams.splice(index, 1);
+    });
+
+    await Teams.replaceAll(teams);
+
+    await logAdminAction(req.session.user, "ODSTRANĚNÍ_DUPLICIT", `Odstraněno ${removedCount} duplicitních týmů`, 'admin', null, req);
+
+    res.send(`<h2>Duplicity odstraněny</h2><p>Odstraněno ${removedCount} duplicitních týmů</p><a href="/admin/remove-team-duplicates">Zkontrolovat znovu</a>`);
+});
+
 router.post('/fix-data-damage', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
     // CSRF kontrola
     if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
@@ -5028,7 +5167,7 @@ router.post("/toggle-regular-season", express.urlencoded({ extended: true }), re
                 const winnerTip = sortedTips[0];
                 if (winnerTip) {
                     const teams = await Teams.findAll();
-                    winnerTeam = teams.find(t => t.id === winnerTip.teamId);
+                    winnerTeam = teams.find(t => t.id === winnerTip.teamId && t.season === season);
                 }
             }
         } catch (err) {
@@ -7640,10 +7779,13 @@ router.post('/transfers/generate-preview', handleFormDataBeforeCSRF, requireAdmi
         const toTeamId = req.body.toTeamId;
         const playerName = req.body.playerName;
         const watermark = req.body.watermark;
-        
+
+        const chosenSeason = await ChosenSeason.findAll();
+        const selectedSeason = req.session.adminSeason || chosenSeason;
+
         const teams = await Teams.findAll();
-        const fromTeam = teams.find(t => t.id === parseInt(fromTeamId));
-        const toTeam = teams.find(t => t.id === parseInt(toTeamId));
+        const fromTeam = teams.find(t => t.id === parseInt(fromTeamId) && t.season === selectedSeason);
+        const toTeam = teams.find(t => t.id === parseInt(toTeamId) && t.season === selectedSeason);
         
         if (!fromTeam || !toTeam) {
             return res.status(400).json({ error: 'Týmy nenalezeny' });
@@ -9720,15 +9862,15 @@ router.get('/fix-teams-season', requireAdmin, async (req, res) => {
 router.get('/players/:teamId', requireAdmin, async (req, res) => {
     try {
         const teamId = parseInt(req.params.teamId);
+        const chosenSeason = await ChosenSeason.findAll();
+        const selectedSeason = req.session.adminSeason || chosenSeason;
+
         const teams = await Teams.findAll();
-        const team = teams.find(t => t.id === teamId);
+        const team = teams.find(t => t.id === teamId && t.season === selectedSeason);
 
         if (!team) {
             return res.status(404).send('Tým nenalezen');
         }
-
-        const chosenSeason = await ChosenSeason.findAll();
-        const selectedSeason = req.session.adminSeason || chosenSeason;
 
         // Načtení hráčů týmu pro vybranou sezónu
         const allPlayers = await Players.findAll();
