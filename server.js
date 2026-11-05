@@ -16,6 +16,7 @@ const healthRoutes = require('./routes/health');
 const { router: securityRoutes } = require('./routes/security');
 const versionRoutes = require('./routes/version');
 const { Users } = require('./utils/mongoDataAccess');
+const { checkAllTableTipsLockers } = require('./utils/fileUtils');
 
 // MongoDB připojení a zálohování
 const { connectToDatabase } = require('./config/database');
@@ -615,6 +616,21 @@ async function startServer() {
 
     app.listen(3000, () => {
         console.log('Server běží na portu 3000.');
+
+        let checkingTableTipsLocks = false;
+        const checkTableTipsLocks = async () => {
+            if (checkingTableTipsLocks) return;
+            checkingTableTipsLocks = true;
+            try {
+                await checkAllTableTipsLockers();
+            } catch (error) {
+                console.error('❌ Chyba při plánované kontrole zámků tabulek:', error);
+            } finally {
+                checkingTableTipsLocks = false;
+            }
+        };
+        void checkTableTipsLocks();
+        setInterval(checkTableTipsLocks, 30 * 1000);
 
         setTimeout(() => {
             console.log('🔄 Monitoring service skipped (unified keep-alive handles this)');

@@ -4,7 +4,8 @@ const router = express.Router();
 const path = require('path');
 const {
     requireLogin, prepareDashboardData, getGroupDisplayLabel, generateLeftPanel,
-    getLeagueStatusData, getTableTipsData, generateTimeWidget, getAllowedLeagues, createMatchImage, logUserAction
+    getLeagueStatusData, getTableTipsData, checkAndApplyTableTipsLockers,
+    generateTimeWidget, getAllowedLeagues, createMatchImage, logUserAction
 } = require("../utils/fileUtils");
 const { Users, Matches, Leagues, TableTips, ChosenSeason, Players, Settings, Teams} = require('../utils/mongoDataAccess');
 
@@ -395,6 +396,10 @@ router.get("/table-tip", requireLogin, async (req, res) => {
     
     // 1. ZAVOLÁME MOZEK, KTERÝ VŠE VYPOČÍTÁ BĚHEM MILISEKUNDY
     const data = await prepareDashboardData(req);
+    await checkAndApplyTableTipsLockers(data.selectedSeason, data.selectedLiga);
+    const latestLeagueStatus = await getLeagueStatusData();
+    data.isTipsLocked = latestLeagueStatus?.[data.selectedSeason]?.[data.selectedLiga]?.tableTipsLocked;
+
     const {
         username, selectedSeason, selectedLiga, uniqueLeagues, isTipsLocked, userTipData,
         sortedGroups, teamsByGroup, globalRealRankMap, sortedGroupKeys, groupedTeams,

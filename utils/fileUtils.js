@@ -882,6 +882,59 @@ async function renameLeagueGlobal(oldName, newName) {
     } catch (e) { }
 }
 
+function parseTableTipsLockTime(value) {
+    if (!value) return null;
+
+    const rawValue = String(value).trim();
+    if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(rawValue)) {
+        const date = new Date(rawValue);
+        return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    const match = rawValue.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/);
+    if (!match) return null;
+
+    const [, year, month, day, hour, minute, second = '0', millisecond = '0'] = match;
+    const localTimeAsUtc = Date.UTC(
+        Number(year),
+        Number(month) - 1,
+        Number(day),
+        Number(hour),
+        Number(minute),
+        Number(second),
+        Number(millisecond.padEnd(3, '0'))
+    );
+    const formatter = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Europe/Prague',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hourCycle: 'h23'
+    });
+
+    let timestamp = localTimeAsUtc;
+    for (let i = 0; i < 2; i++) {
+        const parts = Object.fromEntries(formatter.formatToParts(new Date(timestamp))
+            .filter(part => part.type !== 'literal')
+            .map(part => [part.type, Number(part.value)]));
+        const formattedAsUtc = Date.UTC(
+            parts.year,
+            parts.month - 1,
+            parts.day,
+            parts.hour,
+            parts.minute,
+            parts.second
+        );
+        timestamp = localTimeAsUtc - (formattedAsUtc - Math.floor(timestamp / 1000) * 1000);
+    }
+
+    const date = new Date(timestamp);
+    return Number.isNaN(date.getTime()) ? null : date;
+}
+
 // Funkce pro kontrolu a aplikaci časovačů uzamčení tabulek (stejný princip jako u zápasů)
 async function checkAndApplyTableTipsLockers(season, liga) {
     try {
@@ -898,8 +951,8 @@ async function checkAndApplyTableTipsLockers(season, liga) {
 
         // Kontrola globálního časovače
         if (globalLockTime) {
-            const lockTime = new Date(globalLockTime);
-            if (!isNaN(lockTime.getTime()) && now >= lockTime) {
+            const lockTime = parseTableTipsLockTime(globalLockTime);
+            if (lockTime && now >= lockTime) {
                 const currentLockStatus = statusData[season]?.[liga]?.tableTipsLocked;
                 if (currentLockStatus !== true) {
                     if (!statusData[season]) statusData[season] = {};
@@ -922,8 +975,8 @@ async function checkAndApplyTableTipsLockers(season, liga) {
             const lockTimeStr = groupTimers[group];
             if (!lockTimeStr) continue;
 
-            const lockTime = new Date(lockTimeStr);
-            if (isNaN(lockTime.getTime())) continue;
+            const lockTime = parseTableTipsLockTime(lockTimeStr);
+            if (!lockTime) continue;
 
             if (now >= lockTime) {
                 const currentLockStatus = statusData[season]?.[liga]?.tableTipsLocked;
@@ -972,6 +1025,19 @@ async function checkAndApplyTableTipsLockers(season, liga) {
         }
     } catch (error) {
         console.error('❌ Chyba při kontrole časovačů uzamčení tabulek:', error);
+    }
+}
+
+async function checkAllTableTipsLockers() {
+    const allSeasonData = await Leagues.findAll();
+    for (const [season, seasonData] of Object.entries(allSeasonData || {})) {
+        for (const league of seasonData?.leagues || []) {
+            const hasGlobalTimer = Boolean(league.tableTipsLockDateTime);
+            const hasGroupTimer = Object.values(league.tableTipsLockTimer || {}).some(Boolean);
+            if (hasGlobalTimer || hasGroupTimer) {
+                await checkAndApplyTableTipsLockers(season, league.name);
+            }
+        }
     }
 }
 
@@ -4705,6 +4771,8 @@ module.exports = {
     logUserAction,
     getLeagueStatusData,
     getTableTipsData,
+    checkAndApplyTableTipsLockers,
+    checkAllTableTipsLockers,
     generateTimeWidget,
     createMatchImage,
     createTransferImage,
