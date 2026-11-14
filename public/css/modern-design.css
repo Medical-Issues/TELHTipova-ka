@@ -6141,6 +6141,7 @@ td.vs {
 }
 
 .stb-page .ring {
+    --p: 0;
     width: 108px;
     height: 108px;
     border-radius: 50%;

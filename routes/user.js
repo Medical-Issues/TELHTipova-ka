@@ -7,7 +7,7 @@ const {
     getLeagueStatusData, getTableTipsData, checkAndApplyTableTipsLockers,
     generateTimeWidget, getAllowedLeagues, createMatchImage, logUserAction
 } = require("../utils/fileUtils");
-const { Users, Matches, Leagues, TableTips, ChosenSeason, Players, Settings, Teams} = require('../utils/mongoDataAccess');
+const { Users, Matches, TableTips, ChosenSeason, Players, Settings, Teams} = require('../utils/mongoDataAccess');
 const { buildStatisticsBoard } = require('../utils/statisticsBoard');
 
 function toPragueDateTime(value) {

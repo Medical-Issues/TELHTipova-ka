@@ -152,8 +152,7 @@ function scopeTips(opts) {
         if (tip.season !== season) return false;
         if (league !== 'all' && tip.league !== league) return false;
         if (kind !== 'all' && tip.kind !== kind) return false;
-        if (user && tip.user !== user) return false;
-        return true;
+        return !user || tip.user === user;
     });
 }
 function tableExtra(user, season, league) {
@@ -379,8 +378,8 @@ function pagePrehled(rows, boards) {
     const percentile = others.length ? Math.round(100 * fewer / others.length) : 100;
     const otherTips = scopeTips().filter((tip) => tip.user !== state.user);
     const field = summarize(otherTips);
-    const insights = buildInsights(mine, rows, boards, field, prev.last);
-    const last = lastRound(boards, mine);
+    const insights = buildInsights(mine, boards, field);
+    const last = lastRound(boards);
     const rate = mine.max ? Math.round(1000 * mine.points / mine.max) / 10 : 0;
     return `
         ${banner()}
@@ -468,7 +467,7 @@ function teamTable(list) {
     }
     return [...map.values()].sort((a, b) => (b.max ? b.points / b.max : 0) - (a.max ? a.points / a.max : 0) || b.tips - a.tips);
 }
-function lastRound(boards, mine) {
+function lastRound(boards) {
     const dated = boards.filter((board) => board.date);
     if (!dated.length) return { date: '', html: '<p class="muted">Zápasy nemají datum.</p>' };
     const date = dated.map((board) => board.date).sort().pop();
@@ -498,7 +497,7 @@ function lastRound(boards, mine) {
     return { date, html, minePoints };
 }
 
-function buildInsights(mine, rows, boards, field, lastDate) {
+function buildInsights(mine, boards, field) {
     const lines = [];
     const fieldRate = field.max ? field.points / field.max : 0;
     const myRate = mine.max ? mine.points / mine.max : 0;
@@ -802,7 +801,7 @@ function tipList(list, empty, mode) {
     }).join('') + '</div>';
 }
 
-function pageSouboje(rows) {
+function pageSouboje() {
     const rivals = DATA.users.filter((user) => user !== state.user);
     if (!rivals.length) return '<div class="card empty">Na souboj jsou potřeba dva hráči.</div>';
     if (!rivals.includes(state.rival)) state.rival = rivals[0];
@@ -1256,7 +1255,7 @@ function render() {
             zebricek: () => pageZebricek(rows),
             ligy: () => pageLigy(),
             hra: () => pageHra(rows, boards),
-            souboje: () => pageSouboje(rows),
+            souboje: () => pageSouboje(),
             cas: () => pageCas(rows),
             zapasy: () => pageZapasy(boards),
             tabulky: () => pageTabulky(),
