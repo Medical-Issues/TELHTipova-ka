@@ -485,11 +485,14 @@ function parentLabel(parent) {
     return `${parent.kind === 'loser' ? 'Poražený' : 'Vítěz'} ${title}`;
 }
 
-function findListedTeam(teams, id, league, preferredLeague) {
+function findListedTeam(teams, id, league, preferredLeague, preferredName) {
     const numeric = Number(id);
     const list = (teams || []).filter(team => Number(team.id) === numeric);
     if (!list.length) return null;
-    if (league) return list.find(team => team.liga === league) || null;
+    if (league) return list.find(team => team.liga === league) ||
+        list.find(team => preferredName && team.name === preferredName) || null;
+    if (preferredName) return list.find(team => team.name === preferredName) ||
+        list.find(team => team.liga === preferredLeague) || list[0];
     return list.find(team => team.liga === preferredLeague) || list[0];
 }
 
@@ -525,6 +528,7 @@ function hydratePlayoffModel(model, context) {
     };
 
     const linkedSeriesMatchesRankedPositions = (slotId, match) => {
+        if (context.historical) return true;
         const rankedSides = ['home', 'away'].filter(side => usesRankedPositions(slotId, side));
         if (!rankedSides.length) return true;
         const expected = rankedSides.map(side => Number(context.zoneFaces?.[slotId]?.[side]?.id) || 0);
@@ -543,12 +547,43 @@ function hydratePlayoffModel(model, context) {
                 const view = resolveSeries(match, teamsById, seeds);
                 const homeLeague = savedSlots[`${slotId}_t1league`];
                 const awayLeague = savedSlots[`${slotId}_t2league`];
+                const listedTeams = teams.concat(context.nameTeams || []);
                 if (homeLeague) {
-                    const team = findListedTeam(teams, match.homeTeamId, homeLeague, context.selectedLiga);
+                    const team = findListedTeam(
+                        listedTeams,
+                        match.homeTeamId,
+                        homeLeague,
+                        context.selectedLiga,
+                        savedSlots[`${slotId}_t1`]
+                    );
+                    if (team) view.home = teamFace(team, team.liga === context.selectedLiga ? seeds.get(Number(team.id)) : null);
+                } else if (savedSlots[`${slotId}_t1`]) {
+                    const team = findListedTeam(
+                        listedTeams,
+                        match.homeTeamId,
+                        '',
+                        context.selectedLiga,
+                        savedSlots[`${slotId}_t1`]
+                    );
                     if (team) view.home = teamFace(team, team.liga === context.selectedLiga ? seeds.get(Number(team.id)) : null);
                 }
                 if (awayLeague) {
-                    const team = findListedTeam(teams, match.awayTeamId, awayLeague, context.selectedLiga);
+                    const team = findListedTeam(
+                        listedTeams,
+                        match.awayTeamId,
+                        awayLeague,
+                        context.selectedLiga,
+                        savedSlots[`${slotId}_t2`]
+                    );
+                    if (team) view.away = teamFace(team, team.liga === context.selectedLiga ? seeds.get(Number(team.id)) : null);
+                } else if (savedSlots[`${slotId}_t2`]) {
+                    const team = findListedTeam(
+                        listedTeams,
+                        match.awayTeamId,
+                        '',
+                        context.selectedLiga,
+                        savedSlots[`${slotId}_t2`]
+                    );
                     if (team) view.away = teamFace(team, team.liga === context.selectedLiga ? seeds.get(Number(team.id)) : null);
                 }
                 return view;

@@ -452,7 +452,7 @@ function seriesBySlot(savedSlots, slotId, matches) {
     return (matches || []).find(match => Number(match.id) === matchId) || null;
 }
 
-function playoffRanking(template, savedSlots, matches, teams) {
+function playoffRanking(template, savedSlots, matches, teams, season, league) {
     const teamsById = new Map((teams || []).map(team => [Number(team.id), team]));
     const columns = template?.columns || [];
     let slotId = '';
@@ -478,6 +478,14 @@ function playoffRanking(template, savedSlots, matches, teams) {
     }
     if (!slotId) return [];
     const match = seriesBySlot(savedSlots, slotId, matches);
+    if (!match ||
+        !match.isPlayoff ||
+        (season && match.season !== season) ||
+        (league && match.liga !== league) ||
+        !teamsById.has(Number(match.homeTeamId)) ||
+        !teamsById.has(Number(match.awayTeamId))) {
+        return [];
+    }
     const winner = seriesWinner(match, teamsById, 'winner');
     const loser = seriesWinner(match, teamsById, 'loser');
     const ranking = [];
@@ -968,8 +976,33 @@ function buildLeagueTable(teams, leagueObj, season, matches, leagueName, calcula
     });
     const lockedIds = new Set();
     Object.keys(teamsByGroup).forEach(group => {
+        // Seřazení týmů stejným způsobem jako v user.js
+        teamsByGroup[group].sort((a, b) => {
+            const aStats = a.stats?.[season] || {};
+            const bStats = b.stats?.[season] || {};
+            const aPoints = aStats.points || 0;
+            const bPoints = bStats.points || 0;
+            if (bPoints !== aPoints) return bPoints - aPoints;
+            const aTiebreaker = aStats.tiebreaker || 0;
+            const bTiebreaker = bStats.tiebreaker || 0;
+            if (aTiebreaker !== bTiebreaker) {
+                if (aTiebreaker === 0) return 1;
+                if (bTiebreaker === 0) return -1;
+                return aTiebreaker - bTiebreaker;
+            }
+            const aScores = scores[a.id] || { gf: 0, ga: 0 };
+            const bScores = scores[b.id] || { gf: 0, ga: 0 };
+            const aTotalGF = aStats.gf || aScores.gf || 0;
+            const bTotalGF = bStats.gf || bScores.gf || 0;
+            const aTotalGA = aStats.ga || aScores.ga || 0;
+            const bTotalGA = bStats.ga || bScores.ga || 0;
+            const aDiff = aTotalGF - aTotalGA;
+            const bDiff = bTotalGF - bTotalGA;
+            if (bDiff !== aDiff) return bDiff - aDiff;
+            return bTotalGF - aTotalGF;
+        });
         teamsByGroup[group] = calculateClinchStatusesForGroup(
-            sortGroupForZone(teamsByGroup[group], leagueObj, season, matches, leagueName),
+            teamsByGroup[group],
             leagueObj,
             season,
             mode,
@@ -994,7 +1027,6 @@ function zoneFacesForBracket(input) {
         : new Set((input.lockedIds || []).map(id => Number(id)));
     const faces = {};
     listSlots(template).forEach(slot => {
-        if (String(savedSlots[slot.id] || '').startsWith('series-')) return;
         const context = {
             template,
             slot,
@@ -1008,27 +1040,24 @@ function zoneFacesForBracket(input) {
             lockedIds,
             ignoreLock: false
         };
-        const pack = (side, ruleSide, suffix) => {
-            const resolved = resolveRule(template.rules[slot.id]?.[ruleSide], {
-                ...context,
-                manualId: savedSlots[`${slot.id}_${suffix}id`]
-            });
-            if (savedSlots[`${slot.id}_${suffix}id`]) return null;
+        const pack = ruleSide => {
+            const resolved = resolveRule(template.rules[slot.id]?.[ruleSide], context);
             if (!resolved.team) return null;
             if (resolved.state === 'ready') {
                 const team = resolved.team;
+                const isLocked = lockedIds.has(Number(team.id));
                 return {
                     id: team.id,
                     name: team.name,
                     league: team.liga || '',
                     logo: team.logo ? `/logoteamu/${team.logo}` : '',
-                    locked: true
+                    locked: isLocked
                 };
             }
             return null;
         };
-        const home = pack('home', 'home', 't1');
-        const away = pack('away', 'away', 't2');
+        const home = pack('home');
+        const away = pack('away');
         if (home || away) faces[slot.id] = { home, away };
     });
     return faces;
@@ -1040,7 +1069,7 @@ function collectZonePreview(input) {
 
     const league = input.league;
     const season = input.season;
-    const matches = input.matches || [];
+    const matches = (input.matches || []).filter(match => match.season === season);
     const calculateClinchStatusesForGroup = input.calculateClinchStatusesForGroup;
     const clinchMode = input.clinchMode;
 
@@ -1078,7 +1107,14 @@ function collectZonePreview(input) {
     needed.forEach(name => {
         if (name === league) {
             tables[name] = standing;
-            playoffRanks[name] = playoffRanking(template, input.savedSlots, matches, input.teamsInLeague || input.teams || []);
+            playoffRanks[name] = playoffRanking(
+                template,
+                input.savedSlots,
+                matches,
+                input.teamsInLeague || input.teams || [],
+                season,
+                league
+            );
             return;
         }
         const foreignLeagueObj = (input.leagues || []).find(item => item.name === name) || null;
@@ -1098,7 +1134,9 @@ function collectZonePreview(input) {
             foreignTemplate,
             input.playoffData?.[season]?.[name] || {},
             matches,
-            foreignTeams
+            foreignTeams,
+            season,
+            name
         );
     });
 
@@ -1269,11 +1307,12 @@ function renderPlayoffAdminPage(data) {
         ? renderPlayoffBracket({
             template,
             savedSlots: data.savedSlots || {},
-            matches: data.matches || [],
+            matches: (data.matches || []).filter(match => match.season === data.season),
             teams: data.teams || [],
             scores: data.scores || {},
             zoneFaces: data.zoneFaces || null,
             ranks: data.ranks || null,
+            historical: Boolean(data.historical),
             selectedSeason: data.season,
             selectedLiga: data.league,
             visible: true,

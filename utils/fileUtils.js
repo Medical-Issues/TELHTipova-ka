@@ -441,6 +441,25 @@ function getTeamZone(index, totalTeams, cfg) {
     return "neutral";
 }
 
+function getMatchesPerTeam(leagueObj, teamsInGroup, matches, season, liga) {
+    const configured = Number(leagueObj?.maxMatches) || 0;
+    const estimate = leagueObj?.isMultigroup
+        ? Math.max(1, teamsInGroup.length - 1)
+        : (configured > 100
+            ? Math.ceil((configured * 2) / Math.max(1, teamsInGroup.length))
+            : configured);
+    const teamIds = new Set(teamsInGroup.map(team => Number(team.id)));
+    const scheduled = new Map([...teamIds].map(id => [id, 0]));
+    (matches || []).forEach(match => {
+        if (match.season !== season || match.liga !== liga || match.isPlayoff) return;
+        [match.homeTeamId, match.awayTeamId].forEach(rawId => {
+            const id = Number(rawId);
+            if (scheduled.has(id)) scheduled.set(id, scheduled.get(id) + 1);
+        });
+    });
+    return Math.max(estimate, ...scheduled.values());
+}
+
 /**
  * Calculate clinch statuses for teams in a group.
  * Returns teams with added clinch status properties.
@@ -464,9 +483,7 @@ function calculateClinchStatusesForGroup(
     };
 
     const sorted = [...teamsInGroup];
-    let matchesPerTeam = leagueObj?.isMultigroup 
-        ? Math.max(1, teamsInGroup.length - 1) 
-        : Math.ceil((leagueObj?.maxMatches * 2) / teamsInGroup.length);
+    const matchesPerTeam = getMatchesPerTeam(leagueObj, teamsInGroup, matches, selectedSeason, liga);
 
     const qfLimit = zoneConfig.quarterfinal;
     const playinLimit = zoneConfig.playin;
@@ -543,19 +560,8 @@ function calculateClinchStatusesForGroup(
             const chaserMax = (s.points || 0) + (rem * 3);
             const chaserTie = s.tiebreaker || 0;
 
-            if (chaserMax > myPoints) { 
-                // Check head-to-head if chaser can potentially catch up
-                const h2hResult = getHeadToHeadResult(team.id, sorted[i].id);
-                if (h2hResult === -1) {
-                    // Prohráli jsme head-to-head, takže nás mohou dohnat
-                    canDrop = true; break;
-                }
-                // Pokud jsme vyhráli nebo remízovali, nemohou nás dohnat (pokud mají výrazně více bodů)
-                if (chaserMax > myPoints + 3) {
-                    canDrop = true; break;
-                }
-                continue;
-            }
+            // Může nás přeskočit na body – vzájemný zápas rozhoduje jen při rovnosti
+            if (chaserMax > myPoints) { canDrop = true; break; }
             if (chaserMax === myPoints) {
                 if (myTie > 0 && chaserTie > 0 && myTie < chaserTie) continue;
                 if (rem > 0 || remaining > 0) {
@@ -575,14 +581,8 @@ function calculateClinchStatusesForGroup(
             const leaderPoints = leaderStats.points || 0;
             const leadTie = leaderStats.tiebreaker || 0;
 
-            if (myMaxPoints > leaderPoints) {
-                // Check head-to-head if we can potentially catch up
-                const h2hResult = getHeadToHeadResult(team.id, sorted[index - 1].id);
-                if (h2hResult === 1) {
-                    // Vyhráli jsme head-to-head, takže je můžeme dohnat
-                    canRise = true;
-                } else canRise = h2hResult !== -1;
-            }
+            // Můžeme je přeskočit na body – vzájemný zápas rozhoduje jen při rovnosti
+            if (myMaxPoints > leaderPoints) canRise = true;
             else if (myMaxPoints === leaderPoints) {
                 if (myTie > 0 && leadTie > 0 && myTie > leadTie) canRise = false;
                 else if (remaining > 0) {
@@ -1411,14 +1411,12 @@ async function getTableMode(req, isRegularSeasonFinished, leagueObj, playoffData
     }
 
     // 2. Default: Pokud v URL nic není, rozhodne stav ligy
-    // V historii vždy defaultujeme na regular (uživatel si může kliknout na playoff)
+    const hasPlayoffTable = playoffData && Object.keys(playoffData).length > 0;
     if (isHistory) {
-        return 'regular';
+        return hasPlayoffTable ? 'playoff' : 'regular';
     }
 
     // V aktuálním režimu: hotovo -> playoff, probíhá -> regular
-    // Ale POUZE pokud liga má přiřazenou playoff tabulku v databázi
-    const hasPlayoffTable = playoffData && Object.keys(playoffData).length > 0;
     if (isRegularSeasonFinished && hasPlayoffTable) {
         return 'playoff';
     }
@@ -1945,24 +1943,61 @@ async function prepareDashboardData(req, isHistory = false, isImageExporter = fa
     const tableMode = await getTableMode(req, isRegularSeasonFinished, leagueObj, playoffData, isHistory);
     const referencedSeriesIds = new Set(
         Object.entries(playoffData || {})
-            .filter(([key, value]) => !key.includes('_') && String(value).startsWith('series-'))
-            .map(([, value]) => Number(String(value).replace('series-', '')))
+            .map(([, value]) => String(value).match(/^series-(\d+)$/)?.[1])
+            .map(id => Number(id))
             .filter(id => Number.isFinite(id))
     );
     const bracketMatches = allMatches.filter(match =>
         (match.season === selectedSeason && match.liga === selectedLiga) || referencedSeriesIds.has(Number(match.id))
     );
-    const knownTeamIds = new Set(teams.map(team => Number(team.id)));
     const bracketNameTeams = [];
     const seenNameIds = new Set();
+    const mappedLeagueByTeamId = new Map();
+    Object.entries(playoffData || {}).forEach(([slotId, value]) => {
+        const matchId = String(value).match(/^series-(\d+)$/)?.[1];
+        if (!matchId) return;
+        const match = allMatches.find(item => Number(item.id) === Number(matchId));
+        if (!match) return;
+        ['t1', 't2'].forEach(suffix => {
+            const storedId = Number(playoffData[`${slotId}_${suffix}id`]);
+            const id = storedId || Number(suffix === 't1' ? match.homeTeamId : match.awayTeamId);
+            const savedName = playoffData[`${slotId}_${suffix}`];
+            let league = playoffData[`${slotId}_${suffix}league`];
+            if (!league && savedName) {
+                const namedTeam = allTeams.find(team =>
+                    Number(team.id) === id &&
+                    team.season === selectedSeason &&
+                    team.name === savedName
+                );
+                league = namedTeam?.liga;
+            }
+            if (id && league && [Number(match.homeTeamId), Number(match.awayTeamId)].includes(id)) {
+                mappedLeagueByTeamId.set(id, league);
+            }
+        });
+    });
     bracketMatches.forEach(match => {
         [match.homeTeamId, match.awayTeamId].forEach(rawId => {
             const id = Number(rawId);
-            if (!Number.isFinite(id) || knownTeamIds.has(id) || seenNameIds.has(id)) return;
-            seenNameIds.add(id);
-            const preferred = allTeams.find(team =>
-                Number(team.id) === id && team.liga === selectedLiga && team.name
+            if (!Number.isFinite(id) || seenNameIds.has(id)) return;
+            const mappedLeague = mappedLeagueByTeamId.get(id);
+            const alreadyListed = teams.some(team =>
+                Number(team.id) === id && (!mappedLeague || team.liga === mappedLeague)
             );
+            if (alreadyListed) return;
+            seenNameIds.add(id);
+            const candidates = allTeams.filter(team =>
+                Number(team.id) === id && team.name
+            );
+            const preferred = candidates.find(team =>
+                team.season === selectedSeason && team.liga === mappedLeague
+            ) || candidates.find(team =>
+                team.season === selectedSeason && team.liga === selectedLiga
+            ) || candidates.find(team =>
+                team.liga === mappedLeague
+            ) || candidates.find(team =>
+                team.liga === selectedLiga
+            ) || candidates[0];
             if (preferred) bracketNameTeams.push(preferred);
         });
     });
@@ -2371,7 +2406,7 @@ async function generateLeftPanel(data, isHistory = false) {
         <tbody>`;
 
         const sorted = teamsInGroup;
-        let matchesPerTeam = leagueObj.isMultigroup ? Math.max(1, teamsInGroup.length - 1) : Math.ceil((leagueObj.maxMatches * 2) / teamsInGroup.length);
+        const matchesPerTeam = getMatchesPerTeam(leagueObj, teamsInGroup, matches, selectedSeason, selectedLiga);
 
         const qfLimit = leagueObj.quarterfinal || 0;
         const playinLimit = leagueObj.playin || 0;
@@ -2864,6 +2899,7 @@ async function generateLeftPanel(data, isHistory = false) {
         scores,
         zoneFaces,
         ranks: globalRealRankMap || null,
+        historical: isHistory,
         selectedSeason,
         selectedLiga,
         visible: tableMode === 'playoff'

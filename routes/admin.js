@@ -35,7 +35,6 @@ const {
     planPlayoffFill,
     playoffRanking,
     buildLeagueTable,
-    zoneFacesForBracket,
     collectZonePreview,
     renderPlayoffAdminPage,
     listSlots,
@@ -2369,6 +2368,12 @@ router.post('/admin-season', express.urlencoded({ extended: true }), requireAdmi
 router.get('/playoff', requireAdmin, async (req, res) => {
     const chosenSeason = await ChosenSeason.findAll();
     const selectedSeason = req.session.adminSeason || chosenSeason;
+    
+    // Načtení clinchMode z nastavení
+    const settingsData = await Settings.findAll();
+    let clinchMode = 'strict';
+    if (settingsData && settingsData.clinchMode) clinchMode = settingsData.clinchMode;
+    
     const allSeasonData = await Leagues.findAll();
     const leagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues) ? allSeasonData[selectedSeason].leagues : [];
     const allLeagues = leagues.map(l => l.name);
@@ -2430,7 +2435,7 @@ router.get('/playoff', requireAdmin, async (req, res) => {
                     Boolean(storedPlayoffSlots[`${slotId}_${suffix}id`] || storedPlayoffSlots[`${slotId}_${suffix}`]);
             })
         );
-    if (hasRankedAssignments) {
+    if (hasRankedAssignments && selectedSeason === chosenSeason) {
         try {
             const preview = await applyPlayoffRules(selectedSeason, selectedLeague, { dryRun: true });
             const staleSlots = (preview.lines || []).filter(line =>
@@ -2475,7 +2480,8 @@ router.get('/playoff', requireAdmin, async (req, res) => {
         selectedSeason,
         matches,
         selectedLeague,
-        calculateClinchStatusesForGroup
+        calculateClinchStatusesForGroup,
+        clinchMode
     );
     const ranks = {};
     Object.values(standing.teamsByGroup).forEach(groupTeams => {
@@ -2542,6 +2548,7 @@ router.get('/playoff', requireAdmin, async (req, res) => {
         teams: teamsFromCurrentSeason,
         ranks,
         scores,
+        historical: selectedSeason !== chosenSeason,
         groups,
         plan,
         zoneFaces,
@@ -2757,8 +2764,7 @@ router.post('/playoff/fill', express.urlencoded({ extended: true }), requireAdmi
         if (!bundle.template || !bundle.formatKey) {
             return redirectPlayoff(res, league, { ok: 'Nejdřív vyber formát pavouka.' });
         }
-        const prepared = prepareTemplate(bundle.template, bundle.positionConfig);
-        bundle.templates[bundle.formatKey] = prepared;
+        bundle.templates[bundle.formatKey] = prepareTemplate(bundle.template, bundle.positionConfig);
         await PlayoffTemplates.replaceAll(bundle.templates);
         const outcome = await applyPlayoffRules(season, league, { dryRun: false });
         const created = outcome.created || 0;
@@ -4067,11 +4073,12 @@ async function applyPlayoffRules(season, league, options = {}) {
     if (!hasRules) return { handled: false, lines: [], created: 0, filled: 0 };
 
     const { calculateClinchStatusesForGroup } = require('../utils/fileUtils');
+    const seasonMatches = bundle.matches.filter(match => match.season === season);
     const standing = standingsForLeague(
         bundle.teams,
         bundle.leagueObj,
         season,
-        bundle.matches,
+        seasonMatches,
         league,
         calculateClinchStatusesForGroup
     );
@@ -4091,7 +4098,14 @@ async function applyPlayoffRules(season, league, options = {}) {
     needed.forEach(name => {
         if (name === league) {
             tables[name] = standing;
-            playoffRanks[name] = playoffRanking(bundle.template, bundle.savedSlots, bundle.matches, bundle.teams);
+            playoffRanks[name] = playoffRanking(
+                bundle.template,
+                bundle.savedSlots,
+                seasonMatches,
+                bundle.teams,
+                season,
+                league
+            );
             return;
         }
         const leagueObj = (bundle.leagues || []).find(item => item.name === name) || null;
@@ -4100,7 +4114,7 @@ async function applyPlayoffRules(season, league, options = {}) {
             foreignTeams,
             leagueObj,
             season,
-            bundle.matches,
+            seasonMatches,
             name,
             calculateClinchStatusesForGroup
         );
@@ -4109,8 +4123,10 @@ async function applyPlayoffRules(season, league, options = {}) {
         playoffRanks[name] = playoffRanking(
             foreignTemplate,
             bundle.playoffData?.[season]?.[name] || {},
-            bundle.matches,
-            foreignTeams
+            seasonMatches,
+            foreignTeams,
+            season,
+            name
         );
     });
 
@@ -4125,7 +4141,7 @@ async function applyPlayoffRules(season, league, options = {}) {
         playoffRanks,
         leagueName: league,
         lockedIds,
-        matches: bundle.matches,
+        matches: seasonMatches,
         onlySlot: options.onlySlot || ''
     });
     if (options.dryRun) return { handled: true, lines, created: 0, filled: 0 };
