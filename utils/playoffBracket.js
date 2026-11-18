@@ -604,8 +604,7 @@ function hydratePlayoffModel(model, context) {
         const hinted = emptyView(slotId);
         const home = waitingHome || zoneFace(slotId, 'home') || hinted.home;
         const away = waitingAway || zoneFace(slotId, 'away') || hinted.away;
-        const zoned = Boolean(home?.zone || away?.zone);
-        if (waitingHome || waitingAway || zoned || home?.seed || away?.seed || home?.locked || away?.locked || home?.logo || away?.logo) {
+        if (waitingHome || waitingAway || home?.seed || away?.seed || home?.locked || away?.locked || home?.logo || away?.logo) {
             return {
                 state: 'pending',
                 home,
@@ -613,8 +612,7 @@ function hydratePlayoffModel(model, context) {
                 scoreH: null,
                 scoreA: null,
                 bo: 0,
-                match: null,
-                zoned
+                match: null
             };
         }
 
@@ -630,7 +628,6 @@ function hydratePlayoffModel(model, context) {
             name: preview.name,
             logo: preview.logo || '',
             seed,
-            zone: preview.zone || '',
             locked: Boolean(preview.locked)
         };
     };
@@ -714,9 +711,7 @@ function renderFace(face, extraClass) {
     const logo = face.logo
         ? `<img class="pb-logo" src="${escapeHtml(face.logo)}" alt="">`
         : '';
-    const zone = face.zone ? `<span class="pb-zone">${escapeHtml(face.zone)}</span>` : '';
-    const classes = [extraClass, face.zone ? 'is-zone' : ''].filter(Boolean).join(' ');
-    return `<span class="pb-team ${classes}">${seed}${logo}<span class="pb-name">${escapeHtml(face.name)}</span>${zone}</span>`;
+    return `<span class="pb-team ${extraClass || ''}">${seed}${logo}<span class="pb-name">${escapeHtml(face.name)}</span></span>`;
 }
 
 function renderGames(view) {
@@ -759,7 +754,6 @@ function renderGames(view) {
 
 function renderCard(slot, extraClass) {
     const view = slot.view;
-    const inZone = Boolean(view.zoned || view.home?.zone || view.away?.zone);
     const stateClass = {
         empty: 'is-empty',
         pending: 'is-pending',
@@ -768,7 +762,7 @@ function renderCard(slot, extraClass) {
         done: 'is-done',
         missing: 'is-missing'
     }[view.state] || 'is-empty';
-    const statusLabel = inZone && view.state === 'pending' ? 'V oblasti' : ({
+    const statusLabel = ({
         empty: 'Bez týmů',
         pending: 'Čeká na soupeře',
         waiting: 'Čeká',
@@ -804,7 +798,7 @@ function renderCard(slot, extraClass) {
             : `<div class="pb-card-hit">${summary}</div>`);
 
     return `
-        <article class="pb-card ${stateClass} ${inZone ? 'is-zone' : ''} ${slot.selected ? 'is-selected' : ''} ${extraClass || ''}" data-slot="${escapeHtml(slot.id)}" style="--center:${cssNumber(slot.center || 0)}" id="${domId(slot.id)}">
+        <article class="pb-card ${stateClass} ${slot.selected ? 'is-selected' : ''} ${extraClass || ''}" data-slot="${escapeHtml(slot.id)}" style="--center:${cssNumber(slot.center || 0)}" id="${domId(slot.id)}">
             ${body}
         </article>`;
 }

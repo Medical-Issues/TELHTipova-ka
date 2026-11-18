@@ -3322,28 +3322,6 @@ button.pb-card-hit:focus-visible { outline: 2px solid orangered; outline-offset:
 .pb-team.is-winner { color: #fff; font-weight: 700; }
 .pb-team.is-winner .pb-name { color: #d9ffe6; }
 .pb-team.is-loser { color: #777; }
-.pb-card.is-zone { border-style: dashed; }
-.pb-team.is-zone {
-    flex-wrap: wrap;
-    row-gap: 1px;
-    color: #f0d48a;
-}
-.pb-team.is-zone .pb-name {
-    font-style: italic;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: calc(100% - 46px);
-}
-.pb-zone {
-    flex: 1 0 100%;
-    margin-left: 22px;
-    color: #d7b15a;
-    font-size: 0.68rem;
-    line-height: 1.1;
-    font-style: normal;
-    letter-spacing: 0.02em;
-}
 
 .pb-seed {
     flex: 0 0 auto;

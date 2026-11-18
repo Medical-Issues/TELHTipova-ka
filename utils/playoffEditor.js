@@ -791,93 +791,6 @@ function planPlayoffFill(input) {
 
     return lines;
 }
-
-function sortGroupForZone(teams, leagueObj, season, matches, leagueName) {
-    const list = (teams || []).slice();
-    const miniStats = new Map();
-    const pointsGroups = new Map();
-    list.forEach(team => {
-        const points = Number(team.stats?.[season]?.points) || 0;
-        if (!pointsGroups.has(points)) pointsGroups.set(points, []);
-        pointsGroups.get(points).push(Number(team.id));
-    });
-
-    pointsGroups.forEach(teamIds => {
-        const tiedIds = new Set(teamIds);
-        const groupStats = new Map(teamIds.map(id => [id, { points: 0, diff: 0, gf: 0 }]));
-        (matches || []).forEach(match => {
-            if (match.season !== season || match.liga !== leagueName || !match.result || match.isPlayoff) return;
-            const homeId = Number(match.homeTeamId);
-            const awayId = Number(match.awayTeamId);
-            if (!tiedIds.has(homeId) || !tiedIds.has(awayId)) return;
-            const homeGoals = Number(match.result?.scoreHome ?? match.scoreHome ?? 0);
-            const awayGoals = Number(match.result?.scoreAway ?? match.scoreAway ?? 0);
-            const overtime = Boolean(match.result?.ot || match.ot);
-            let homePoints = 1;
-            let awayPoints = 1;
-            if (homeGoals > awayGoals) {
-                homePoints = overtime ? 2 : 3;
-                awayPoints = overtime ? 1 : 0;
-            } else if (awayGoals > homeGoals) {
-                awayPoints = overtime ? 2 : 3;
-                homePoints = overtime ? 1 : 0;
-            }
-            const home = groupStats.get(homeId);
-            const away = groupStats.get(awayId);
-            home.points += homePoints;
-            home.diff += homeGoals - awayGoals;
-            home.gf += homeGoals;
-            away.points += awayPoints;
-            away.diff += awayGoals - homeGoals;
-            away.gf += awayGoals;
-        });
-        groupStats.forEach((value, id) => miniStats.set(id, value));
-    });
-
-    const directMatchResult = (teamA, teamB) => {
-        const match = (matches || []).find(item =>
-            item.season === season &&
-            item.liga === leagueName &&
-            item.result &&
-            !item.isPlayoff &&
-            ((Number(item.homeTeamId) === Number(teamA.id) && Number(item.awayTeamId) === Number(teamB.id)) ||
-                (Number(item.homeTeamId) === Number(teamB.id) && Number(item.awayTeamId) === Number(teamA.id)))
-        );
-        if (!match) return 0;
-        const homeScore = Number(match.result?.scoreHome ?? match.scoreHome ?? 0);
-        const awayScore = Number(match.result?.scoreAway ?? match.scoreAway ?? 0);
-        const teamAScore = Number(match.homeTeamId) === Number(teamA.id) ? homeScore : awayScore;
-        const teamBScore = Number(match.homeTeamId) === Number(teamA.id) ? awayScore : homeScore;
-        return teamAScore === teamBScore ? 0 : (teamAScore > teamBScore ? -1 : 1);
-    };
-
-    return list.sort((a, b) => {
-        const aStats = a.stats?.[season] || {};
-        const bStats = b.stats?.[season] || {};
-        const pointsA = aStats.points || 0;
-        const pointsB = bStats.points || 0;
-        if (pointsB !== pointsA) return pointsB - pointsA;
-        const tieA = aStats.tiebreaker || 0;
-        const tieB = bStats.tiebreaker || 0;
-        if (tieA !== tieB) return tieA - tieB;
-
-        const miniA = miniStats.get(Number(a.id)) || { points: 0, diff: 0, gf: 0 };
-        const miniB = miniStats.get(Number(b.id)) || { points: 0, diff: 0, gf: 0 };
-        if (miniB.points !== miniA.points) return miniB.points - miniA.points;
-
-        const overallDiffA = (Number(aStats.gf) || 0) - (Number(aStats.ga) || 0);
-        const overallDiffB = (Number(bStats.gf) || 0) - (Number(bStats.ga) || 0);
-        const goalDiffFirst = leagueObj?.tiebreakerPriority === 'goalDiff';
-        if (goalDiffFirst && overallDiffA !== overallDiffB) return overallDiffB - overallDiffA;
-        if (miniB.diff !== miniA.diff) return miniB.diff - miniA.diff;
-        if (miniB.gf !== miniA.gf) return miniB.gf - miniA.gf;
-
-        const headToHead = directMatchResult(a, b);
-        if (headToHead) return headToHead;
-        return goalDiffFirst ? 0 : overallDiffB - overallDiffA;
-    });
-}
-
 function refreshStandingsStats(teams, matches, season, bonusData) {
     const statsByTeam = new Map();
     const leagueByTeam = new Map();
@@ -1037,8 +950,7 @@ function zoneFacesForBracket(input) {
             teamsById,
             matches: input.matches || [],
             savedSlots,
-            lockedIds,
-            ignoreLock: false
+            lockedIds
         };
         const pack = ruleSide => {
             const resolved = resolveRule(template.rules[slot.id]?.[ruleSide], context);
@@ -1498,7 +1410,6 @@ module.exports = {
     playoffRanking,
     refreshStandingsStats,
     buildLeagueTable,
-    zoneFacesForBracket,
     collectZonePreview,
     renderPlayoffAdminPage,
     listSlots,
