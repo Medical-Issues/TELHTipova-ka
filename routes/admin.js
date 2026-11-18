@@ -2625,6 +2625,48 @@ router.post('/playoff/editor', express.urlencoded({ extended: true }), requireAd
             await logAdminAction(req.session.user, 'PLAYOFF_SLOT', `Odebrán slot ${slotId} z pavouka ${league}`, 'playoff', league, req);
             return redirectPlayoff(res, league, { ok: 'Zápas je z pavouka pryč. Série v zápasech zůstala.' });
         }
+        if (action === 'clear-slot') {
+            const slotId = String(req.body.slotId || '');
+            if (!listSlots(bundle.template).some(slot => slot.id === slotId)) return fail('Zápas v pavoukovi nebyl nalezen.');
+            const slots = { ...bundle.savedSlots };
+            const seriesId = String(slots[slotId] || '');
+            ['', '_t1', '_t2', '_t1id', '_t2id', '_t1league', '_t2league'].forEach(suffix => { delete slots[`${slotId}${suffix}`]; });
+
+            let removedMatch = false;
+            const matchId = Number(seriesId.replace(/^series-/, ''));
+            const match = Number.isFinite(matchId) && matchId > 0
+                ? bundle.matches.find(item => Number(item.id) === matchId)
+                : null;
+            const referencedByAnotherSlot = seriesId && Object.entries(slots).some(([key, value]) =>
+                !/_t[12](?:id|league)?$/.test(key) && String(value) === seriesId
+            );
+            const referencedByAnotherRule = Object.entries(bundle.template.rules || {}).some(([otherSlotId, sides]) =>
+                otherSlotId !== slotId && ['home', 'away'].some(side => sides?.[side]?.of === slotId)
+            );
+            if (match &&
+                match.season === season &&
+                match.liga === league &&
+                match.isPlayoff &&
+                !match.result &&
+                !(Array.isArray(match.playedMatches) && match.playedMatches.length) &&
+                !match.locked &&
+                !match.datetime &&
+                !referencedByAnotherSlot &&
+                !referencedByAnotherRule) {
+                bundle.matches = bundle.matches.filter(item => Number(item.id) !== matchId);
+                await Matches.replaceAll(bundle.matches);
+                removedMatch = true;
+            }
+
+            await writePlayoffSlots(bundle.playoffData, season, league, slots);
+            await logAdminAction(req.session.user, 'PLAYOFF_SLOT_CLEAR', `Vyčištěn slot ${slotId} v pavoukovi ${league}`, 'playoff', league, req);
+            return redirectPlayoff(res, league, {
+                ok: removedMatch
+                    ? 'Týmy byly vymazány a neodehraná série odstraněna.'
+                    : 'Týmy a přiřazení série byly vymazány. Zápas zůstal zachován v zápasech.',
+                slot: slotId
+            });
+        }
         if (action === 'save-slot' || action === 'create-series') {
             const slotId = String(req.body.slotId || '');
             const updated = updateSlot(bundle.template, {
@@ -2636,7 +2678,7 @@ router.post('/playoff/editor', express.urlencoded({ extended: true }), requireAd
             const slots = mergeSlotPatch(bundle.savedSlots, updated.patch);
             await writePlayoffSlots(bundle.playoffData, season, league, slots);
             if (action === 'create-series') {
-                const outcome = await applyPlayoffRules(season, league, { dryRun: false, ignoreLock: true, onlySlot: slotId });
+                const outcome = await applyPlayoffRules(season, league, { dryRun: false, onlySlot: slotId });
                 const line = (outcome.lines || []).find(item => item.slotId === slotId);
                 await logAdminAction(req.session.user, 'PLAYOFF_SERIE', line?.message || `Série pro ${slotId} v ${league}`, 'playoff', league, req);
                 return redirectPlayoff(res, league, { ok: line?.message || 'Série se nezaložila.', slot: slotId });
@@ -4024,8 +4066,7 @@ async function applyPlayoffRules(season, league, options = {}) {
         leagueName: league,
         lockedIds,
         matches: bundle.matches,
-        onlySlot: options.onlySlot || '',
-        ignoreLock: Boolean(options.ignoreLock)
+        onlySlot: options.onlySlot || ''
     });
     if (options.dryRun) return { handled: true, lines, created: 0, filled: 0 };
 

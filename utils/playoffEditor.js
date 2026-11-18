@@ -568,7 +568,7 @@ function resolveRule(rule, context) {
         const team = list[index];
         if (!team) return { state: 'wait', label };
         const locked = lockedIds && lockedIds.has(Number(team.id));
-        if (!locked && !context.ignoreLock) {
+        if (!locked) {
             const zone = zoneClaim(team);
             if (zone) return { state: 'zone', team, zone, label: team.name };
             return { state: 'wait', team, label: `${team.name} (${label}, ještě není jistý)` };
@@ -622,7 +622,7 @@ function planPlayoffFill(input) {
     listSlots(template).forEach(slot => {
         if (input.onlySlot && input.onlySlot !== slot.id) return;
         const seriesKey = savedSlots[slot.id];
-        if (seriesKey && String(seriesKey).startsWith('series-') && !input.ignoreLock) {
+        if (seriesKey && String(seriesKey).startsWith('series-')) {
             lines.push({ slotId: slot.id, action: 'keep', message: `${slot.id.toUpperCase()}: série už je připojená.` });
             return;
         }
@@ -636,8 +636,7 @@ function planPlayoffFill(input) {
             teamsById,
             matches: input.matches || [],
             savedSlots,
-            lockedIds,
-            ignoreLock: Boolean(input.ignoreLock)
+            lockedIds
         };
         const home = resolveRule(template.rules[slot.id]?.home, {
             ...context,
@@ -704,14 +703,49 @@ function planPlayoffFill(input) {
     return lines;
 }
 
-function sortGroupForZone(teams, season) {
+function sortGroupForZone(teams, season, matches, leagueName) {
+    const standingsScore = team => {
+        const stats = team.stats?.[season] || {};
+        return {
+            goalsFor: stats.gf || 0,
+            goalsAgainst: stats.ga || 0
+        };
+    };
+    const headToHead = (teamA, teamB) => {
+        const match = (matches || []).find(item =>
+            item.season === season &&
+            item.liga === leagueName &&
+            item.result &&
+            !item.isPlayoff &&
+            ((Number(item.homeTeamId) === Number(teamA.id) && Number(item.awayTeamId) === Number(teamB.id)) ||
+                (Number(item.homeTeamId) === Number(teamB.id) && Number(item.awayTeamId) === Number(teamA.id)))
+        );
+        if (!match) return 0;
+        const homeScore = Number(match.result?.scoreHome ?? match.scoreHome ?? 0);
+        const awayScore = Number(match.result?.scoreAway ?? match.scoreAway ?? 0);
+        const teamAIsHome = Number(match.homeTeamId) === Number(teamA.id);
+        const teamAScore = teamAIsHome ? homeScore : awayScore;
+        const teamBScore = teamAIsHome ? awayScore : homeScore;
+        return teamAScore === teamBScore ? 0 : (teamAScore > teamBScore ? -1 : 1);
+    };
+
     return (teams || []).slice().sort((a, b) => {
         const aStats = a.stats?.[season] || {};
         const bStats = b.stats?.[season] || {};
         const pointsA = aStats.points || 0;
         const pointsB = bStats.points || 0;
         if (pointsB !== pointsA) return pointsB - pointsA;
-        return (aStats.tiebreaker || 0) - (bStats.tiebreaker || 0);
+        const tieA = aStats.tiebreaker || 0;
+        const tieB = bStats.tiebreaker || 0;
+        if (tieA !== tieB) return tieA - tieB;
+
+        const scoreA = standingsScore(a);
+        const scoreB = standingsScore(b);
+        const goalDiffA = scoreA.goalsFor - scoreA.goalsAgainst;
+        const goalDiffB = scoreB.goalsFor - scoreB.goalsAgainst;
+        if (goalDiffA !== goalDiffB) return goalDiffB - goalDiffA;
+        if (scoreA.goalsFor !== scoreB.goalsFor) return scoreB.goalsFor - scoreA.goalsFor;
+        return headToHead(a, b);
     });
 }
 
@@ -738,7 +772,7 @@ function buildLeagueTable(teams, leagueObj, season, matches, leagueName, calcula
     const lockedIds = new Set();
     Object.keys(teamsByGroup).forEach(group => {
         teamsByGroup[group] = calculateClinchStatusesForGroup(
-            sortGroupForZone(teamsByGroup[group], season),
+            sortGroupForZone(teamsByGroup[group], season, matches, leagueName),
             leagueObj,
             season,
             mode,
@@ -1173,6 +1207,7 @@ function renderPlayoffAdminPage(data) {
             <div class="pb-editor-actions">
                 <button type="submit" name="action" value="save-slot">Uložit zápas</button>
                 <button type="submit" name="action" value="create-series">Vytvořit sérii z jistých týmů</button>
+                <button type="submit" name="action" value="clear-slot" onclick="return confirm('Odpojit sérii a vymazat týmy z tohoto slotu? Neodehraná série bez termínu se může odstranit.');">Vymazat týmy / odpojit sérii</button>
                 <button type="submit" name="action" value="delete-slot" onclick="return confirm('Odebrat tenhle zápas z pavouka?');">Odebrat zápas</button>
             </div>
         </form>`;
