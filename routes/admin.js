@@ -19,8 +19,28 @@ const {
     renderErrorHtml,
     logAdminAction,
     getAvailableImages,
+    calculateClinchStatusesForGroup,
 } = require("../utils/fileUtils");
 const { fetchMatchesFromLivesport } = require('../utils/livesportService');
+const {
+    prepareTemplate,
+    addRound,
+    addSlot,
+    deleteSlot,
+    setDensity,
+    updateSlot,
+    importTemplate,
+    presetTemplate,
+    presetCatalog,
+    planPlayoffFill,
+    playoffRanking,
+    buildLeagueTable,
+    zoneFacesForBracket,
+    collectZonePreview,
+    renderPlayoffAdminPage,
+    listSlots,
+    resolveNameIds
+} = require('../utils/playoffEditor');
 const { createLocalSnapshot, listAvailableSnapshots, restoreFromLocalSnapshot, backupToGitHub } = require('../utils/backupService');
 const { 
     scanImageHashes, 
@@ -2368,52 +2388,7 @@ router.get('/playoff', requireAdmin, async (req, res) => {
 
     const playoffMatches = matches.filter(m => m.season === selectedSeason && m.liga === selectedLeague && m.isPlayoff);
 
-    // AUTOMATICKÁ GENERACE Z LOCKED POZIC PŘI NAČTENÍ STRÁNKY
-    try {
-        const statusData = await LeagueStatus.findAll();
-        const positionConfig = statusData?.[selectedSeason]?.[selectedLeague]?.playoffPositionConfig;
-        
-        // Zjistíme, zda template má barážové sloty
-        const allTemplates = await PlayoffTemplates.findAll() || {};
-        const template = allTemplates[playoffFormat];
-        let hasBarazSlot = false;
-        if (template && template.columns) {
-            for (const column of template.columns) {
-                for (const slotId of column.slots) {
-                    if (slotId.toLowerCase().includes('bar') || slotId.toLowerCase().includes('relegation')) {
-                        hasBarazSlot = true;
-                        break;
-                    }
-                }
-                if (hasBarazSlot) break;
-            }
-        }
-        
-        // Pokud má barážové sloty, použijeme baraz režim
-        if (hasBarazSlot) {
-            await autoGenerateMatchesFromLockedPositions(selectedSeason, selectedLeague, 'baraz', null);
-        } else if (positionConfig) {
-            // Použijeme 'manual' režim s uloženou konfigurací
-            await autoGenerateMatchesFromLockedPositions(selectedSeason, selectedLeague, 'manual', positionConfig);
-        }
-    } catch (error) {
-        console.error('Chyba při automatické generaci playoff při načtení stránky:', error);
-    }
-
-    // Vytvoříme seznam sérií do roletky
-    // (Toto už tam máš)
-    const seriesOptionsHTML = playoffMatches.map(m => {
-        const teamA = teamsFromCurrentSeason.find(t => t.id === m.homeTeamId)?.name || 'Neznámý';
-        const teamB = teamsFromCurrentSeason.find(t => t.id === m.awayTeamId)?.name || 'Neznámý';
-        return `<option value="series-${m.id}">${teamA} vs ${teamB} (Série ${m.id})</option>`;
-    }).join('');
-
-    // --- 1. PŘIDEJ TOTO (Seznam týmů pro čekající sloty) ---
-    const teamsInLeague = teamsFromCurrentSeason.filter(t => t.liga === selectedLeague);
-    const teamsOptionsHTML = teamsInLeague.map(t => `<option value="${t.name}">${t.name}</option>`).join('');
-
-    // --- CHYBĚJÍCÍ BLOK: Načteme už uložené přiřazení slotů ---
-    const playoffData = await Playoff.findAll();
+    const playoffData = await Playoff.findAll() || {};
     let savedSlots = {};
     try {
         if (playoffData[selectedSeason] && playoffData[selectedSeason][selectedLeague]) {
@@ -2423,68 +2398,123 @@ router.get('/playoff', requireAdmin, async (req, res) => {
         console.error('Chyba při načítání playoff dat:', e);
     }
 
-    // --- 2. NAHRAĎ PŮVODNÍ FUNKCI renderSlot TÍMTO ---
-    const renderSlot = (slotId, label) => {
-        const selectedVal = savedSlots[slotId] || '';
-        const waitTeam1 = savedSlots[`${slotId}_t1`] || '';
-        const waitTeam2 = savedSlots[`${slotId}_t2`] || '';
+    const teamsInLeague = teamsFromCurrentSeason.filter(team => team.liga === selectedLeague);
+    const resolvedNames = resolveNameIds(savedSlots, teamsInLeague);
+    if (resolvedNames.changed) {
+        savedSlots = resolvedNames.slots;
+        try {
+            if (!playoffData[selectedSeason]) playoffData[selectedSeason] = {};
+            playoffData[selectedSeason][selectedLeague] = savedSlots;
+            await Playoff.replaceAll(playoffData);
+        } catch (error) {
+            console.error('Chyba při převodu jmen playoff týmů na id:', error);
+        }
+    }
 
-        return `
-            <div style="margin-bottom: 10px; background: #222; padding: 10px; border: 1px solid #444; border-left: 3px solid orangered;">
-                <label style="display:block; font-weight: bold; margin-bottom: 5px; color: lightgrey;">${label}</label>
-                
-                <select name="${slotId}" class="league-select" style="width: 100%; max-width: 400px; margin-bottom: 5px;">
-                    <option value="">-- Prázdný slot (Čeká se na vytvoření série) --</option>
-                    ${seriesOptionsHTML.replace(`value="${selectedVal}"`, `value="${selectedVal}" selected`)}
-                </select>
-                
-                <div style="display: flex; gap: 10px; font-size: 0.9em; margin-top: 5px; max-width: 400px;">
-                    <select name="${slotId}_t1" class="league-select" style="flex: 1; padding: 3px;">
-                        <option value="">-- Čekající tým 1 --</option>
-                        ${teamsOptionsHTML.replace(`value="${waitTeam1}"`, `value="${waitTeam1}" selected`)}
-                    </select>
-                    <span style="color: gray; align-self: center;">vs</span>
-                    <select name="${slotId}_t2" class="league-select" style="flex: 1; padding: 3px;">
-                        <option value="">-- Čekající tým 2 --</option>
-                        ${teamsOptionsHTML.replace(`value="${waitTeam2}"`, `value="${waitTeam2}" selected`)}
-                    </select>
-                </div>
-            </div>
-        `;
-    };
-
-    let slotsHTML = '';
-    // 1. Načtení šablon z MongoDB
     const allTemplates = await PlayoffTemplates.findAll() || {};
-    const currentTemplate = allTemplates[playoffFormat];
-    if (!currentTemplate) {
-        slotsHTML = '<p style="color: gray;">Tato liga nemá nastavený platný formát. <a href="/admin/playoff/templates" style="color:orangered">Vytvoř ho zde</a> a pak ho přiřaď lize v nastavení.</p>';
-    } else {
-        // Generujeme sekce podle šablony
-        currentTemplate.columns.forEach(col => {
-            slotsHTML += `<h3>${col.title}</h3>`;
-            col.slots.forEach(slotId => {
-                slotsHTML += renderSlot(slotId, slotId.toUpperCase());
+    const currentTemplate = playoffFormat !== 'none' ? (allTemplates[playoffFormat] || null) : null;
+    let positionConfig = '';
+    try {
+        const statusData = await LeagueStatus.findAll();
+        positionConfig = statusData?.[selectedSeason]?.[selectedLeague]?.playoffPositionConfig || '';
+    } catch (e) {
+        console.error('Chyba při načítání konfigurace pozic:', e);
+    }
+
+    let formatUsers = 0;
+    if (playoffFormat && playoffFormat !== 'none') {
+        Object.values(allSeasonData || {}).forEach(seasonObj => {
+            (seasonObj?.leagues || []).forEach(item => {
+                if (item.playoffFormat === playoffFormat) formatUsers += 1;
             });
         });
     }
 
-    const leagueOptions = allLeagues.map(liga => `<option value="${liga}" ${liga === selectedLeague ? 'selected' : ''}>${liga}</option>`).join('\n');
+    const groups = leagueObj?.isMultigroup
+        ? [...new Set(teamsInLeague.map(team => team.group ? String.fromCharCode(Number(team.group) + 64) : '').filter(letter => /^[A-Z]$/.test(letter)))].sort()
+        : [];
+    const scores = {};
+    teamsInLeague.forEach(team => {
+        const stats = team.stats?.[selectedSeason] || {};
+        scores[team.id] = { gf: stats.gf || 0, ga: stats.ga || 0, points: stats.points || 0 };
+    });
+    const playoffMatchOptions = playoffMatches.map(match => {
+        const home = teamsFromCurrentSeason.find(team => team.id === match.homeTeamId)?.name || 'Neznámý';
+        const away = teamsFromCurrentSeason.find(team => team.id === match.awayTeamId)?.name || 'Neznámý';
+        return { id: match.id, label: `${home} vs ${away} (Série ${match.id})` };
+    });
 
-    let html = `
+    let plan = null;
+    if (req.query.plan === '1' && currentTemplate) {
+        try {
+            const outcome = await applyPlayoffRules(selectedSeason, selectedLeague, { dryRun: true });
+            plan = outcome.lines || [];
+        } catch (error) {
+            console.error('Chyba při náhledu doplnění playoff:', error);
+            plan = [{ message: 'Náhled doplnění se nepodařilo spočítat.' }];
+        }
+    }
+
+    let zoneFaces = null;
+    if (currentTemplate && currentTemplate.rules && Object.keys(currentTemplate.rules).length > 0) {
+        try {
+            zoneFaces = collectZonePreview({
+                season: selectedSeason,
+                league: selectedLeague,
+                template: currentTemplate,
+                positionConfig,
+                savedSlots,
+                teamsInLeague,
+                seasonTeams: teamsFromCurrentSeason,
+                leagues,
+                templates: allTemplates,
+                playoffData,
+                matches,
+                calculateClinchStatusesForGroup
+            });
+        } catch (e) {
+            console.error('Chyba při výpočtu zónového náhledu playoff:', e);
+        }
+    }
+
+    const leagueOptions = allLeagues.map(liga => `<option value="${liga}" ${liga === selectedLeague ? 'selected' : ''}>${liga}</option>`).join('\n');
+    const pageBody = renderPlayoffAdminPage({
+        csrf: req.session.csrfToken || '',
+        season: selectedSeason,
+        league: selectedLeague,
+        leagueObj,
+        template: currentTemplate,
+        formatKey: playoffFormat !== 'none' ? playoffFormat : '',
+        savedSlots,
+        matches,
+        teams: teamsFromCurrentSeason,
+        scores,
+        groups,
+        plan,
+        zoneFaces,
+        selectedSlot: String(req.query.slot || ''),
+        notice: String(req.query.ok || '').slice(0, 300),
+        leagueNames: allLeagues.filter(name => name !== selectedLeague),
+        formatUsers,
+        playoffMatches: playoffMatchOptions,
+        positionConfig,
+        unresolved: resolvedNames.unresolved
+    });
+
+    const html = `
 <!DOCTYPE html>
 <html lang="cs">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Správa Playoff</title>
-  <link rel="stylesheet" href="/css/styles.css" />
+  <link rel="stylesheet" href="/css/styles.css?v=playoff-zone-fix-20261118" />
   <link rel="icon" href="/images/logo.png"/>
 </head>
 <body class="admin_site">
 <header class="header">
   <div class="header-main">
-    <div class="logo_title"><img class="image_logo" src="/images/logo.png" alt="Logo"><h1 id="title">Přiřazení sérií do pavouka (${selectedSeason})</h1></div>
+    <div class="logo_title"><img class="image_logo" src="/images/logo.png" alt="Logo"><h1 id="title">Pavouk (${selectedSeason})</h1></div>
     <div class="header-user">
       <a href="/admin" class="history-btn">← Zpět na admin</a>
     </div>
@@ -2494,343 +2524,156 @@ router.get('/playoff', requireAdmin, async (req, res) => {
     <select name="league" class="league-select" onchange="this.form.submit()">
       ${leagueOptions}
     </select>
-  </form>
+    </form>
+  </div>
 </header>
-<main style="padding: 20px; max-width: 800px; margin: 0 auto;">
-    
-    <div style="background: #1a1a1a; padding: 20px; border: 1px solid #333; margin-bottom: 20px;">
-        <h2 style="color: orangered; margin-top: 0;">Přiřazení slotů</h2>
-        <p style="color: gray; font-size: 0.9em;">
-            Zde pouze vybereš, která série (zápas vytvořený v "Nový zápas") patří do kterého místa v pavouku. 
-            O barvy, čáry a skóre se už postará systém na webu sám!
-        </p>
-
-        <form action="/admin/playoff/save" method="POST">
-            <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
-            <input type="hidden" name="season" value="${selectedSeason}">
-            <input type="hidden" name="league" value="${selectedLeague}">
-            
-            ${slotsHTML}
-
-            ${playoffFormat !== 'none' ? `<button type="submit" class="action-btn edit-btn" style="width: 100%; padding: 15px; font-size: 1.1em; margin-top: 20px;">Uložit pavouka</button>` : ''}
-        </form>
-        
-        ${playoffFormat !== 'none' ? `
-        <form action="/admin/playoff/delete" method="POST" onsubmit="return confirm('Opravdu vymazat celého pavouka pro tuto ligu? Všechny naklikané série ze slotů zmizí.');">
-            <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
-            <input type="hidden" name="season" value="${selectedSeason}">
-            <input type="hidden" name="league" value="${selectedLeague}">
-            <button type="submit" class="action-btn delete-btn" style="width: 100%; padding: 15px; font-size: 1.1em; margin-top: 10px;">Vyresetovat pavouka</button>
-        </form>` : ''}
-    </div>
-
-    ${playoffFormat !== 'none' ? `
-    <div style="background: #1a1a1a; padding: 20px; border: 1px solid #333; margin-bottom: 20px;">
-        <h2 style="color: #4CAF50; margin-top: 0;">🤖 Automatické generování playoff</h2>
-        <p style="color: gray; font-size: 0.9em; margin-bottom: 15px;">
-            Automaticky vygeneruje playoff zápasy podle aktuální tabulky ligy. Zápasy budou vytvořeny s prázdným datem, časem a typem série (BO), které doplníte později.
-        </p>
-
-        <form action="/admin/playoff/auto-generate" method="POST" onsubmit="return confirm('Opravdu automaticky vygenerovat playoff? Toto vytvoří nové zápasy a přiřadí je do slotů podle vybraného scénáře.');">
-            <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
-            <input type="hidden" name="season" value="${selectedSeason}">
-            <input type="hidden" name="league" value="${selectedLeague}">
-            
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; color: lightgrey; margin-bottom: 8px; font-weight: bold;">Vyberte scénář přiřazení týmů:</label>
-                <select name="scenario" class="league-select" style="width: 100%; background: #000; color: orangered; border: 1px solid #444;">
-                    ${(() => {
-                        const scenarios = currentTemplate?.scenarios || [
-                            { id: 'standard', label: '🏆 Standardní playoff (1vs8, 2vs7, 3vs6, 4vs5...)' },
-                            { id: 'playin', label: '🎯 Play-in (7vs10, 8vs9, vítězové vs 1vs4, 2vs3)' },
-                            { id: 'top4', label: '🥇 Top 4 playoff (1vs4, 2vs3)' },
-                            { id: 'top6', label: '🥈 Top 6 playoff (1vs6, 2vs5, 3vs4)' },
-                            { id: 'cross_group', label: '🔀 Křížové zápasy (1.A vs 2.B, 2.A vs 1.B...)' },
-                            { id: 'cross_group_top4', label: '🏆 Křížové Top 4 (1.A vs 2.B, 2.A vs 1.B)' },
-                            { id: 'cross_group_top8', label: '🥇 Křížové Top 8 (1.A vs 4.B, 2.A vs 3.B, 3.A vs 2.B, 4.A vs 1.B)' },
-                            { id: 'separate_groups', label: '📋 Playoff zvlášť pro každou skupinu' }
-                        ];
-                        return scenarios.map(s => `<option value="${s.id}">${s.label}</option>`).join('');
-                    })()}
-                </select>
-            </div>
-
-            <div style="background: #222; padding: 10px; border-left: 3px solid #4CAF50; margin-bottom: 15px; font-size: 0.85em; color: #aaa;">
-                <strong style="color: #4CAF50;">Vysvětlení scénářů:</strong><br>
-                • <strong>Standardní:</strong> Nejvyšší vs nejnižší (1vs8, 2vs7, atd.)<br>
-                • <strong>Play-in:</strong> Nižší pozice hrají předkolo (vyžaduje alespoň 10 týmů)<br>
-                • <strong>Top 4:</strong> Pouze 4 nejlepší týmy<br>
-                • <strong>Top 6:</strong> Pouze 6 nejlepších týmů<br>
-                • <strong>Křížové zápasy:</strong> 1.A vs 2.B, 2.A vs 1.B, 3.A vs 4.B...<br>
-                • <strong>Křížové Top 4:</strong> Pouze 4 nejlepší (2 z každé skupiny)<br>
-                • <strong>Křížové Top 8:</strong> 8 týmů (4 z každé skupiny): 1.A vs 4.B, 2.A vs 3.B, 3.A vs 2.B, 4.A vs 1.B<br>
-                • <strong>Zvlášť pro skupiny:</strong> Každá skupina má vlastní playoff
-            </div>
-
-            <button type="submit" class="action-btn edit-btn" style="width: 100%; padding: 15px; font-size: 1.1em; background: #4CAF50; border-color: #4CAF50;">🤖 Vygenerovat playoff automaticky</button>
-        </form>
-    </div>` : ''}
-
-    ${playoffFormat !== 'none' ? `
-    <div style="background: #1a1a1a; padding: 20px; border: 1px solid #333; margin-bottom: 20px;">
-        <h2 style="color: #2196F3; margin-top: 0;">🔒 Automatické generování podle locked pozic</h2>
-        <p style="color: gray; font-size: 0.9em; margin-bottom: 15px;">
-            Nastavte konfiguraci pozic - jakmile se tým lockne, automaticky se doplní do playoff tabulky. Zápas se vytvoří až když jsou oba týmy locked.
-        </p>
-
-        ${await (async () => {
-            // Načtení týmů pro zjištění skupin
-            const allTeams = await Teams.findAll();
-            const teamsInLeague = allTeams.filter(t => t.active === true && t.season === selectedSeason && t.liga === selectedLeague);
-
-            // Zjištění počtu skupin
-            const teamsByGroup = {};
-            teamsInLeague.forEach((team) => {
-                const groupLetter = leagueObj.isMultigroup && team.group ? String.fromCharCode(team.group + 64) : 'X';
-                if (!teamsByGroup[groupLetter]) teamsByGroup[groupLetter] = [];
-                teamsByGroup[groupLetter].push(team);
-            });
-
-            const groups = Object.keys(teamsByGroup).sort();
-            const hasMultipleGroups = groups.length > 1;
-
-            // Načtení existujícího typu baráže
-            let existingBarazType = 'manual';
-            try {
-                const statusData = await LeagueStatus.findAll();
-                existingBarazType = statusData?.[selectedSeason]?.[selectedLeague]?.barazType || 'manual';
-            } catch (e) {
-                console.error('Chyba při načítání LeagueStatus:', e);
-            }
-
-            return `
-        <form action="/admin/playoff/save-position-config" method="POST">
-            <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
-            <input type="hidden" name="season" value="${selectedSeason}">
-            <input type="hidden" name="league" value="${selectedLeague}">
-
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; color: lightgrey; margin-bottom: 8px; font-weight: bold;">Typ baráže:</label>
-                <select name="barazType" class="league-select" style="width: 100%; background: #000; color: orangered; border: 1px solid #444;">
-                    <option value="manual" ${existingBarazType === 'manual' ? 'selected' : ''}>📝 Ruční konfigurace (vyber si pozice ručně)</option>
-                    <option value="auto_last2" ${existingBarazType === 'auto_last2' ? 'selected' : ''}>🤖 Automaticky z posledních 2 míst</option>
-                    ${hasMultipleGroups ? `<option value="auto_last_per_group" ${existingBarazType === 'auto_last_per_group' ? 'selected' : ''}>🤖 Automaticky z posledního každé skupiny</option>` : ''}
-                </select>
-            </div>`;
-        })()}
-
-            ${await (async () => {
-        // Generování dynamických formulářů na základě šablony
-        if (!currentTemplate) return '<p>Žádná šablona</p>';
-
-        // Načtení existující konfigurace
-        let existingConfig = {};
-        try {
-            const statusData = await LeagueStatus.findAll();
-            const configStr = statusData?.[selectedSeason]?.[selectedLeague]?.playoffPositionConfig || '';
-            if (configStr) {
-                const assignments = configStr.split(',').map(a => a.trim());
-                for (const assignment of assignments) {
-                    const [key, positionStr] = assignment.split(':');
-                    if (key && positionStr) {
-                        existingConfig[key] = positionStr;
-                    }
-                }
-            }
-        } catch (e) {
-            console.error('Chyba při načítání playoff dat:', e);
-        }
-
-        // Načtení týmů pro zjištění skupin
-        const allTeams = await Teams.findAll();
-        const teamsInLeague = allTeams.filter(t => t.active === true && t.season === selectedSeason && t.liga === selectedLeague);
-        
-        // Zjištění počtu skupin
-        const teamsByGroup = {};
-        teamsInLeague.forEach((team) => {
-            const groupLetter = leagueObj.isMultigroup && team.group ? String.fromCharCode(team.group + 64) : 'X';
-            if (!teamsByGroup[groupLetter]) teamsByGroup[groupLetter] = [];
-            teamsByGroup[groupLetter].push(team);
-        });
-        
-        const groups = Object.keys(teamsByGroup).sort();
-        const hasMultipleGroups = groups.length > 1;
-
-        // Zjištění počtu dokončených playoff zápasů pro dynamický inteligentní výběr
-        const allMatches = await Matches.findAll();
-        allMatches.filter(m =>
-            m.season === selectedSeason &&
-            m.liga === selectedLeague &&
-            m.isPlayoff &&
-            m.result // jen dokončené zápasy
-        );
-// Výpočet počtu pozic na základě skutečného počtu týmů v lize
-        let positionCount;
-        if (hasMultipleGroups) {
-            // Pro skupiny použijeme maximální počet týmů ve skupině
-            positionCount = Math.max(...groups.map(g => teamsByGroup[g].length));
-        } else {
-            // Pro bezskupinové ligy použijeme skutečný počet týmů v lize
-            positionCount = teamsInLeague.length;
-            if (positionCount === 0) positionCount = 12; // fallback
-        }
-
-        let formHTML = '';
-        for (let colIndex = 0; colIndex < currentTemplate.columns.length; colIndex++) {
-            const column = currentTemplate.columns[colIndex];
-            formHTML += `<h3 style="color: orangered; margin-top: 20px; border-bottom: 1px solid #444; padding-bottom: 5px;">${column.title}</h3>`;
-
-            // Výpočet počtu týmů z předchozí fáze (podle šablony)
-            let prevRoundTeamCount = 0;
-            if (colIndex > 0) {
-                const prevColumn = currentTemplate.columns[colIndex - 1];
-                prevRoundTeamCount = prevColumn.slots.length;
-            }
-
-            for (const slotId of column.slots) {
-                const t1Key = `${slotId}_t1`;
-                const t2Key = `${slotId}_t2`;
-                const t1Value = existingConfig[t1Key] || '';
-                const t2Value = existingConfig[t2Key] || '';
-
-                formHTML += `
-                            <div style="background: #222; padding: 15px; margin-bottom: 10px; border-left: 3px solid #2196F3;">
-                                <label style="display: block; color: lightgrey; margin-bottom: 10px; font-weight: bold;">${slotId.toUpperCase()}</label>
-                                
-                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                                    <div>
-                                        <label style="display: block; color: #aaa; margin-bottom: 5px; font-size: 0.9em;">Tým 1 (domácí)</label>
-                                        <div style="display: flex; gap: 5px;">
-                                            <select name="${t1Key}_pos" class="league-select" style="flex: 1; background: #000; color: orangered; border: 1px solid #444; padding: 5px;">
-                                                <option value="">--</option>
-                                                ${Array.from({length: positionCount}, (_, i) => i + 1).map(n =>
-                    `<option value="${n}" ${t1Value.includes(`${n}_`) ? 'selected' : ''}>${n}. místo</option>`
-                ).join('')}
-                                                <option value="" disabled>── Inteligentní výběr ──</option>
-                                                ${(() => {
-                                                    let options = '';
-                                                    // Slot-based výběr (vítěz konkrétního slotu)
-                                                    for (const col of currentTemplate.columns) {
-                                                        for (const slot of col.slots) {
-                                                            if (slot !== slotId) { // Neukazovat aktuální slot
-                                                                options += `<option value="winner_${slot}" ${t1Value === `winner_${slot}` ? 'selected' : ''}>🏆 Vítěz ${slot.toUpperCase()}</option>`;
-                                                            }
-                                                        }
-                                                    }
-                                                    // Seed-based výběr (podle seedu z předchozí fáze playoff)
-                                                    options += `<option value="" disabled>── Seed-based (${prevRoundTeamCount} týmů z předchozí fáze) ──</option>`;
-                                                    if (prevRoundTeamCount > 0) {
-                                                        options += Array.from({length: Math.min(prevRoundTeamCount, 8)}, (_, i) => i + 1).map(n =>
-                                                            `<option value="seed_highest_${n}" ${t1Value === `seed_highest_${n}` ? 'selected' : ''}>📈 ${n}. nejvyšší seed</option>`
-                                                        ).join('');
-                                                        options += Array.from({length: Math.min(prevRoundTeamCount, 8)}, (_, i) => i + 1).map(n =>
-                                                            `<option value="seed_lowest_${n}" ${t1Value === `seed_lowest_${n}` ? 'selected' : ''}>📉 ${n}. nejnižší seed</option>`
-                                                        ).join('');
-                                                    } else {
-                                                        options += '<option value="" disabled>(žádné dokončené zápasy)</option>';
-                                                    }
-                                                    // Clinch-seed výběr (seed z předchozí fáze + matematická jistota)
-                                                    options += `<option value="" disabled>── Clinch-seed (seed z předchozí fáze, jen pokud jistý) ──</option>`;
-                                                    if (prevRoundTeamCount > 0) {
-                                                        options += Array.from({length: prevRoundTeamCount}, (_, i) => i + 1).map(n =>
-                                                            `<option value="clinch_seed_${n}" ${t1Value === `clinch_seed_${n}` ? 'selected' : ''}>🔒 ${n}. seed (jen pokud jistý)</option>`
-                                                        ).join('');
-                                                    } else {
-                                                        options += '<option value="" disabled>(první fáze - žádné předchozí kolo)</option>';
-                                                    }
-                                                    return options;
-                                                })()}
-                                            </select>
-                                            ${hasMultipleGroups ? `
-                                                <select name="${t1Key}_group" class="league-select" style="width: 60px; background: #000; color: orangered; border: 1px solid #444; padding: 5px;">
-                                                    <option value="">-</option>
-                                                    ${groups.map(g =>
-                    `<option value="${g}" ${t1Value.includes(`_${g}`) ? 'selected' : ''}>${g}</option>`
-                ).join('')}
-                                                </select>
-                                            ` : ''}
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label style="display: block; color: #aaa; margin-bottom: 5px; font-size: 0.9em;">Tým 2 (hosté)</label>
-                                        <div style="display: flex; gap: 5px;">
-                                            <select name="${t2Key}_pos" class="league-select" style="flex: 1; background: #000; color: orangered; border: 1px solid #444; padding: 5px;">
-                                                <option value="">--</option>
-                                                ${Array.from({length: positionCount}, (_, i) => i + 1).map(n =>
-                    `<option value="${n}" ${t2Value.includes(`${n}_`) ? 'selected' : ''}>${n}. místo</option>`
-                ).join('')}
-                                                <option value="" disabled>── Inteligentní výběr ──</option>
-                                                ${(() => {
-                                                    let options = '';
-                                                    // Slot-based výběr (vítěz konkrétního slotu)
-                                                    for (const col of currentTemplate.columns) {
-                                                        for (const slot of col.slots) {
-                                                            if (slot !== slotId) { // Neukazovat aktuální slot
-                                                                options += `<option value="winner_${slot}" ${t2Value === `winner_${slot}` ? 'selected' : ''}>🏆 Vítěz ${slot.toUpperCase()}</option>`;
-                                                            }
-                                                        }
-                                                    }
-                                                    // Seed-based výběr (podle seedu z předchozí fáze playoff)
-                                                    options += `<option value="" disabled>── Seed-based (${prevRoundTeamCount} týmů z předchozí fáze) ──</option>`;
-                                                    if (prevRoundTeamCount > 0) {
-                                                        options += Array.from({length: Math.min(prevRoundTeamCount, 8)}, (_, i) => i + 1).map(n =>
-                                                            `<option value="seed_highest_${n}" ${t2Value === `seed_highest_${n}` ? 'selected' : ''}>📈 ${n}. nejvyšší seed</option>`
-                                                        ).join('');
-                                                        options += Array.from({length: Math.min(prevRoundTeamCount, 8)}, (_, i) => i + 1).map(n =>
-                                                            `<option value="seed_lowest_${n}" ${t2Value === `seed_lowest_${n}` ? 'selected' : ''}>📉 ${n}. nejnižší seed</option>`
-                                                        ).join('');
-                                                    } else {
-                                                        options += '<option value="" disabled>(žádné dokončené zápasy)</option>';
-                                                    }
-                                                    // Clinch-seed výběr (seed z předchozí fáze + matematická jistota)
-                                                    options += `<option value="" disabled>── Clinch-seed (seed z předchozí fáze, jen pokud jistý) ──</option>`;
-                                                    if (prevRoundTeamCount > 0) {
-                                                        options += Array.from({length: prevRoundTeamCount}, (_, i) => i + 1).map(n =>
-                                                            `<option value="clinch_seed_${n}" ${t2Value === `clinch_seed_${n}` ? 'selected' : ''}>🔒 ${n}. seed (jen pokud jistý)</option>`
-                                                        ).join('');
-                                                    } else {
-                                                        options += '<option value="" disabled>(první fáze - žádné předchozí kolo)</option>';
-                                                    }
-                                                    return options;
-                                                })()}
-                                            </select>
-                                            ${hasMultipleGroups ? `
-                                                <select name="${t2Key}_group" class="league-select" style="width: 60px; background: #000; color: orangered; border: 1px solid #444; padding: 5px;">
-                                                    <option value="">-</option>
-                                                    ${groups.map(g =>
-                    `<option value="${g}" ${t2Value.includes(`_${g}`) ? 'selected' : ''}>${g}</option>`
-                ).join('')}
-                                                </select>
-                                            ` : ''}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        `;
-            }
-        }
-
-        return formHTML;
-    })()}
-
-            <div style="background: #222; padding: 10px; border-left: 3px solid #2196F3; margin-bottom: 15px; font-size: 0.85em; color: #aaa;">
-                <strong style="color: #2196F3;">Jak to funguje:</strong><br>
-                • Vyberte pozice (číslo) a případně skupinu (písmeno) pro každý tým<br>
-                • Když se jeden tým lockne → doplní se jako čekající tým<br>
-                • Když se oba týmy locknou → automaticky se vytvoří zápas<br>
-                • Datum, čas a BO série zůstávají prázdné (doplníte později)
-            </div>
-
-            <button type="submit" class="action-btn edit-btn" style="width: 100%; padding: 15px; font-size: 1.1em; background: #2196F3; border-color: #2196F3;">💾 Uložit konfiguraci pozic</button>
-        </form>
-    </div>` : ''}
-
-    <a href="/admin" style="color: orangered;">Zpět na administraci</a>
+<main style="padding: 20px; max-width: 1200px; margin: 0 auto;">
+    ${pageBody}
 </main>
 </body>
 </html>`;
 
     res.send(html);
+});
+
+router.post('/playoff/editor', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    if (rejectBadCsrf(req, res)) return;
+    const season = req.body.season;
+    const league = req.body.league;
+    const action = String(req.body.action || '');
+    if (!season || !league) return renderErrorHtml(res, 'Chybí sezóna nebo liga.', 400);
+
+    try {
+        const bundle = await loadLeaguePlayoffBundle(season, league);
+        const fail = (message) => redirectPlayoff(res, league, { ok: message, slot: req.body.slotId || req.query.slot });
+        const saveTemplate = async (formatKey, template) => {
+            bundle.templates[formatKey] = template;
+            await PlayoffTemplates.replaceAll(bundle.templates);
+        };
+
+        if (action === 'preset') {
+            const presetId = String(req.body.preset || 'final');
+            const catalog = presetCatalog().find(item => item.id === presetId);
+            const nice = catalog?.label || (presetId === 'relegation-groups' ? 'Baráž skupin' : 'Playoff');
+            const next = presetTemplate(presetId, bundle.template?.label || `${league} · ${nice}`);
+            let formatKey = bundle.formatKey;
+            if (!formatKey) {
+                formatKey = nextFormatKey(bundle.templates, league, presetId);
+                next.label = `${league} · ${nice}`;
+                await saveTemplate(formatKey, next);
+                await assignLeagueFormat(season, league, formatKey);
+            } else {
+                next.label = bundle.template?.label || next.label;
+                await saveTemplate(formatKey, next);
+            }
+            await logAdminAction(req.session.user, 'PLAYOFF_PREDLOHA', `Předloha ${presetId} pro ${league} (${season})`, 'playoff', league, req);
+            return redirectPlayoff(res, league, { ok: `Vložena předloha ${nice}.` });
+        }
+
+        if (action === 'duplicate') {
+            if (!bundle.template || !bundle.formatKey) return fail('Není co duplikovat.');
+            const formatKey = nextFormatKey(bundle.templates, league, 'kopie');
+            const copy = prepareTemplate(bundle.template, bundle.positionConfig);
+            copy.label = `${bundle.template.label || bundle.formatKey} · ${league}`;
+            await saveTemplate(formatKey, copy);
+            await assignLeagueFormat(season, league, formatKey);
+            await logAdminAction(req.session.user, 'PLAYOFF_KOPIE', `Formát ${bundle.formatKey} zkopírován na ${formatKey} pro ${league}`, 'playoff', league, req);
+            return redirectPlayoff(res, league, { ok: 'Formát je teď jen pro tuhle ligu.' });
+        }
+
+        if (action === 'import') {
+            let imported;
+            try {
+                imported = importTemplate(req.body.structure, bundle.template?.label || league);
+            } catch (error) {
+                return fail(error.message || 'JSON se nepodařilo přečíst.');
+            }
+            let formatKey = bundle.formatKey;
+            if (!formatKey) {
+                formatKey = nextFormatKey(bundle.templates, league, 'import');
+                await assignLeagueFormat(season, league, formatKey);
+            }
+            await saveTemplate(formatKey, imported);
+            await logAdminAction(req.session.user, 'PLAYOFF_IMPORT', `Import JSON formátu pro ${league} (${season})`, 'playoff', league, req);
+            return redirectPlayoff(res, league, { ok: 'JSON formátu je uložený.' });
+        }
+
+        if (!bundle.template || !bundle.formatKey) return fail('Tahle liga ještě nemá formát pavouka.');
+
+        if (action === 'add-round') {
+            const next = addRound(bundle.template, req.body.title);
+            await saveTemplate(bundle.formatKey, next);
+            return redirectPlayoff(res, league, { ok: 'Kolo je přidané.' });
+        }
+        if (action === 'add-slot') {
+            const before = new Set(listSlots(bundle.template).map(slot => slot.id));
+            const next = addSlot(bundle.template, req.body.roundIndex);
+            const created = listSlots(next).find(slot => !before.has(slot.id));
+            await saveTemplate(bundle.formatKey, next);
+            return redirectPlayoff(res, league, { ok: 'Zápas je přidaný.', slot: created?.id || '' });
+        }
+        if (action === 'density') {
+            await saveTemplate(bundle.formatKey, setDensity(bundle.template, req.body.density));
+            return redirectPlayoff(res, league, { ok: 'Hustota je uložená.', slot: req.body.slotId || '' });
+        }
+        if (action === 'delete-slot') {
+            const slotId = String(req.body.slotId || '');
+            await saveTemplate(bundle.formatKey, deleteSlot(bundle.template, slotId));
+            const slots = { ...bundle.savedSlots };
+            ['', '_t1', '_t2', '_t1id', '_t2id', '_t1league', '_t2league'].forEach(suffix => { delete slots[`${slotId}${suffix}`]; });
+            await writePlayoffSlots(bundle.playoffData, season, league, slots);
+            await logAdminAction(req.session.user, 'PLAYOFF_SLOT', `Odebrán slot ${slotId} z pavouka ${league}`, 'playoff', league, req);
+            return redirectPlayoff(res, league, { ok: 'Zápas je z pavouka pryč. Série v zápasech zůstala.' });
+        }
+        if (action === 'save-slot' || action === 'create-series') {
+            const slotId = String(req.body.slotId || '');
+            const updated = updateSlot(bundle.template, {
+                ...req.body,
+                homeTeamName: teamNameById(bundle.teams, req.body.homeTeam),
+                awayTeamName: teamNameById(bundle.teams, req.body.awayTeam)
+            });
+            await saveTemplate(bundle.formatKey, updated.template);
+            const slots = mergeSlotPatch(bundle.savedSlots, updated.patch);
+            await writePlayoffSlots(bundle.playoffData, season, league, slots);
+            if (action === 'create-series') {
+                const outcome = await applyPlayoffRules(season, league, { dryRun: false, ignoreLock: true, onlySlot: slotId });
+                const line = (outcome.lines || []).find(item => item.slotId === slotId);
+                await logAdminAction(req.session.user, 'PLAYOFF_SERIE', line?.message || `Série pro ${slotId} v ${league}`, 'playoff', league, req);
+                return redirectPlayoff(res, league, { ok: line?.message || 'Série se nezaložila.', slot: slotId });
+            }
+            await logAdminAction(req.session.user, 'PLAYOFF_SLOT', `Uložen zápas ${slotId} v pavoukovi ${league}`, 'playoff', league, req);
+            return redirectPlayoff(res, league, { ok: 'Zápas je uložený.', slot: slotId });
+        }
+
+        return fail('Neznámá akce.');
+    } catch (error) {
+        console.error('Chyba editoru playoff:', error);
+        return renderErrorHtml(res, 'Pavouka se nepodařilo uložit: ' + error.message, 500);
+    }
+});
+
+router.post('/playoff/fill', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    if (rejectBadCsrf(req, res)) return;
+    const season = req.body.season;
+    const league = req.body.league;
+    if (!season || !league) return renderErrorHtml(res, 'Chybí sezóna nebo liga.', 400);
+    try {
+        const bundle = await loadLeaguePlayoffBundle(season, league);
+        if (!bundle.template || !bundle.formatKey) {
+            return redirectPlayoff(res, league, { ok: 'Nejdřív vyber formát pavouka.' });
+        }
+        const prepared = prepareTemplate(bundle.template, bundle.positionConfig);
+        bundle.templates[bundle.formatKey] = prepared;
+        await PlayoffTemplates.replaceAll(bundle.templates);
+        const outcome = await applyPlayoffRules(season, league, { dryRun: false });
+        const created = outcome.created || 0;
+        const filled = outcome.filled || 0;
+        await logAdminAction(req.session.user, 'PLAYOFF_DOPLNENI', `Doplnění playoff ${league} (${season}): sérií ${created}, stran ${filled}`, 'playoff', league, req);
+        return redirectPlayoff(res, league, { ok: `Doplněno. Nových nebo připojených sérií: ${created}. Doplněných stran: ${filled}.` });
+    } catch (error) {
+        console.error('Chyba při doplnění playoff:', error);
+        return renderErrorHtml(res, 'Doplnění se nepodařilo: ' + error.message, 500);
+    }
 });
 
 router.post('/playoff/save', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
@@ -4008,11 +3851,269 @@ router.post('/playoff/save-position-config', express.urlencoded({ extended: true
     }
 });
 
+function playoffFormatKey(leagueObj) {
+    const key = leagueObj?.playoffFormat;
+    return key && key !== 'none' ? key : '';
+}
+
+function nextFormatKey(templates, league, suffix) {
+    const base = String(league || 'liga')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_|_$/g, '')
+        .slice(0, 24) || 'liga';
+    const tail = String(suffix || 'playoff').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'playoff';
+    let key = `${base}_${tail}`;
+    let number = 2;
+    while (templates[key]) {
+        key = `${base}_${tail}_${number}`;
+        number += 1;
+    }
+    return key;
+}
+
+function templateReferencesLeague(template, leagueName) {
+    return Object.values(template?.rules || {}).some(sides =>
+        ['home', 'away'].some(side => sides?.[side]?.league === leagueName)
+    );
+}
+
+function standingsForLeague(teams, leagueObj, season, matches, leagueName, calculateClinchStatusesForGroup, clinchMode) {
+    return buildLeagueTable(teams, leagueObj, season, matches, leagueName, calculateClinchStatusesForGroup, clinchMode);
+}
+
+function teamNameById(teams, id) {
+    const team = (teams || []).find(item => String(item.id) === String(id));
+    return team ? team.name : '';
+}
+
+function redirectPlayoff(res, league, query) {
+    const params = new URLSearchParams();
+    params.set('league', league);
+    Object.entries(query || {}).forEach(([key, value]) => {
+        if (value) params.set(key, String(value));
+    });
+    res.redirect(`/admin/playoff?${params.toString()}`);
+}
+
+function rejectBadCsrf(req, res) {
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        res.status(403).send('Neplatný CSRF token');
+        return true;
+    }
+    return false;
+}
+
+async function loadLeaguePlayoffBundle(season, league) {
+    const [allSeasonData, allTemplates, allMatches, allTeams, playoffData, statusData] = await Promise.all([
+        Leagues.findAll(),
+        PlayoffTemplates.findAll(),
+        Matches.findAll(),
+        Teams.findAll(),
+        Playoff.findAll(),
+        LeagueStatus.findAll()
+    ]);
+    const leagues = allSeasonData?.[season]?.leagues || [];
+    const leagueObj = leagues.find(item => item.name === league) || null;
+    const formatKey = playoffFormatKey(leagueObj);
+    const templates = allTemplates || {};
+    return {
+        allSeasonData: allSeasonData || {},
+        templates,
+        template: formatKey ? (templates[formatKey] || null) : null,
+        formatKey,
+        leagueObj,
+        matches: allMatches || [],
+        teams: (allTeams || []).filter(team => team.active === true && team.season === season && team.liga === league),
+        seasonTeams: (allTeams || []).filter(team => team.active === true && team.season === season),
+        leagues,
+        playoffData: playoffData || {},
+        savedSlots: playoffData?.[season]?.[league] || {},
+        positionConfig: statusData?.[season]?.[league]?.playoffPositionConfig || ''
+    };
+}
+
+async function assignLeagueFormat(season, league, formatKey) {
+    const allSeasonData = await Leagues.findAll();
+    const leagueObj = (allSeasonData?.[season]?.leagues || []).find(item => item.name === league);
+    if (!leagueObj) return false;
+    leagueObj.playoffFormat = formatKey;
+    await Leagues.replaceAll(allSeasonData);
+    return true;
+}
+
+async function writePlayoffSlots(playoffData, season, league, slots) {
+    if (!playoffData[season]) playoffData[season] = {};
+    playoffData[season][league] = slots;
+    await Playoff.replaceAll(playoffData);
+}
+
+function mergeSlotPatch(slots, patch) {
+    const next = { ...slots };
+    Object.entries(patch || {}).forEach(([key, value]) => {
+        if (value === '' || value === undefined || value === null) delete next[key];
+        else next[key] = value;
+    });
+    return next;
+}
+
+async function applyPlayoffRules(season, league, options = {}) {
+    const bundle = await loadLeaguePlayoffBundle(season, league);
+    const hasRules = bundle.template && bundle.template.rules && Object.keys(bundle.template.rules).length > 0;
+    if (!hasRules) return { handled: false, lines: [], created: 0, filled: 0 };
+
+    const { calculateClinchStatusesForGroup } = require('../utils/fileUtils');
+    const standing = standingsForLeague(
+        bundle.teams,
+        bundle.leagueObj,
+        season,
+        bundle.matches,
+        league,
+        calculateClinchStatusesForGroup
+    );
+    const teamsByGroup = standing.teamsByGroup;
+    const lockedIds = [...standing.lockedIds];
+    const needed = new Set([league]);
+    Object.values(bundle.template.rules || {}).forEach(sides => {
+        ['home', 'away'].forEach(side => {
+            const rule = sides?.[side];
+            if (!rule) return;
+            if (rule.league) needed.add(rule.league);
+            if (rule.phase === 'playoff') needed.add(rule.league || league);
+        });
+    });
+    const tables = {};
+    const playoffRanks = {};
+    needed.forEach(name => {
+        if (name === league) {
+            tables[name] = standing;
+            playoffRanks[name] = playoffRanking(bundle.template, bundle.savedSlots, bundle.matches, bundle.teams);
+            return;
+        }
+        const leagueObj = (bundle.leagues || []).find(item => item.name === name) || null;
+        const foreignTeams = (bundle.seasonTeams || []).filter(team => team.liga === name);
+        tables[name] = standingsForLeague(
+            foreignTeams,
+            leagueObj,
+            season,
+            bundle.matches,
+            name,
+            calculateClinchStatusesForGroup
+        );
+        const format = leagueObj?.playoffFormat;
+        const foreignTemplate = format && bundle.templates ? bundle.templates[format] : null;
+        playoffRanks[name] = playoffRanking(
+            foreignTemplate,
+            bundle.playoffData?.[season]?.[name] || {},
+            bundle.matches,
+            foreignTeams
+        );
+    });
+
+    const savedSlots = { ...bundle.savedSlots };
+    const lines = planPlayoffFill({
+        template: bundle.template,
+        positionConfig: bundle.positionConfig,
+        savedSlots,
+        teams: bundle.teams,
+        teamsByGroup,
+        tables,
+        playoffRanks,
+        leagueName: league,
+        lockedIds,
+        matches: bundle.matches,
+        onlySlot: options.onlySlot || '',
+        ignoreLock: Boolean(options.ignoreLock)
+    });
+    if (options.dryRun) return { handled: true, lines, created: 0, filled: 0 };
+
+    const allMatches = bundle.matches;
+    let maxId = allMatches.reduce((max, match) => Math.max(max, Number(match.id) || 0), 0);
+    let matchesChanged = false;
+    let slotsChanged = false;
+    let created = 0;
+    let filled = 0;
+    const writeSide = (slotId, suffix, id, name, teamLeague) => {
+        savedSlots[`${slotId}_${suffix}id`] = String(id);
+        savedSlots[`${slotId}_${suffix}`] = name || '';
+        if (teamLeague) savedSlots[`${slotId}_${suffix}league`] = teamLeague;
+        slotsChanged = true;
+    };
+
+    lines.forEach(line => {
+        if (line.action === 'fill' && Array.isArray(line.fills)) {
+            line.fills.forEach(side => writeSide(line.slotId, side.side === 'home' ? 't1' : 't2', side.id, side.name, side.league));
+            if (line.fills.length) filled += 1;
+            return;
+        }
+        if (line.action !== 'create') return;
+        const homeId = Number(line.homeId);
+        const awayId = Number(line.awayId);
+        if (!homeId || !awayId || homeId === awayId) return;
+        const existing = allMatches.find(match =>
+            match.season === season &&
+            match.liga === league &&
+            match.isPlayoff &&
+            ((Number(match.homeTeamId) === homeId && Number(match.awayTeamId) === awayId) ||
+                (Number(match.homeTeamId) === awayId && Number(match.awayTeamId) === homeId))
+        );
+        let matchId = existing ? existing.id : null;
+        if (!existing) {
+            maxId += 1;
+            matchId = maxId;
+            const foreignTeam = (line.homeLeague && line.homeLeague !== league) || (line.awayLeague && line.awayLeague !== league);
+            allMatches.push({
+                id: matchId,
+                homeTeamId: homeId,
+                awayTeamId: awayId,
+                datetime: '',
+                season,
+                liga: league,
+                isPlayoff: true,
+                isBaraz: Boolean(foreignTeam),
+                bo: null,
+                locked: false,
+                postponed: false,
+                result: null
+            });
+            matchesChanged = true;
+        }
+        savedSlots[line.slotId] = `series-${matchId}`;
+        writeSide(line.slotId, 't1', homeId, line.homeName, line.homeLeague);
+        writeSide(line.slotId, 't2', awayId, line.awayName, line.awayLeague);
+        created += 1;
+    });
+
+    if (matchesChanged) await Matches.replaceAll(allMatches);
+    if (slotsChanged) await writePlayoffSlots(bundle.playoffData, season, league, savedSlots);
+    return { handled: true, lines, created, filled };
+}
+
 // ==========================================
 // AUTOMATICKÁ KONTROLA A VYTVOŘENÍ PLAYOFF ZÁPASŮ
 // ==========================================
+async function refreshDependentPlayoffs(season, sourceLeague) {
+    const [allSeasonData, templates] = await Promise.all([
+        Leagues.findAll(),
+        PlayoffTemplates.findAll()
+    ]);
+    const leagues = allSeasonData?.[season]?.leagues || [];
+    for (const leagueObj of leagues) {
+        if (!leagueObj?.name || leagueObj.name === sourceLeague) continue;
+        const template = templates?.[leagueObj.playoffFormat];
+        if (!templateReferencesLeague(template, sourceLeague)) continue;
+        await applyPlayoffRules(season, leagueObj.name, { dryRun: false });
+    }
+}
+
 async function checkAndCreatePlayoffMatches(season, league) {
     try {
+        const ruled = await applyPlayoffRules(season, league, { dryRun: false });
+        await refreshDependentPlayoffs(season, league);
+        if (ruled.handled) return;
+
         // Načtení konfigurace pozic
         const statusData = await LeagueStatus.findAll();
         const positionConfig = statusData?.[season]?.[league]?.playoffPositionConfig;
@@ -4403,9 +4504,9 @@ async function checkAndCreatePlayoffMatches(season, league) {
 // ==========================================
 async function checkAndPropagateWinners(season, league) {
     try {
-        // Načtení konfigurace ligy
-        const allLeagues = await Leagues.findAll();
-        const leagueObj = allLeagues[league];
+        // Načtení konfigurace ligy v dané sezóně
+        const allSeasonData = await Leagues.findAll();
+        const leagueObj = (allSeasonData?.[season]?.leagues || []).find(item => item.name === league);
         if (!leagueObj) return;
 
         const playoffFormat = leagueObj.playoffFormat || 'none';
@@ -4415,6 +4516,7 @@ async function checkAndPropagateWinners(season, league) {
         const allTemplates = await PlayoffTemplates.findAll() || {};
         const template = allTemplates[playoffFormat];
         if (!template || !template.slotParents) return;
+        if (template.rules && Object.keys(template.rules).length) return;
 
         // Načtení všech zápasů
         const allMatches = await Matches.findAll();

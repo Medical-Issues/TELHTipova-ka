@@ -2,6 +2,7 @@ require('fs');
 require("path");
 require("fs");
 const { Teams, Users, Matches, Leagues, AllowedLeagues, ChosenSeason, Settings, TeamBonuses, LeagueStatus, TableTips, Playoff, PlayoffTemplates, Transfers, TransferLeagues} = require('./mongoDataAccess');
+const { renderPlayoffBracket } = require('./playoffBracket');
 const { drawBrandedBackground } = require('./imageBranding');
 
 async function requireLogin(req, res, next) {
@@ -1942,6 +1943,29 @@ async function prepareDashboardData(req, isHistory = false, isImageExporter = fa
     } catch (e) {}
 
     const tableMode = await getTableMode(req, isRegularSeasonFinished, leagueObj, playoffData, isHistory);
+    const referencedSeriesIds = new Set(
+        Object.entries(playoffData || {})
+            .filter(([key, value]) => !key.includes('_') && String(value).startsWith('series-'))
+            .map(([, value]) => Number(String(value).replace('series-', '')))
+            .filter(id => Number.isFinite(id))
+    );
+    const bracketMatches = allMatches.filter(match =>
+        (match.season === selectedSeason && match.liga === selectedLiga) || referencedSeriesIds.has(Number(match.id))
+    );
+    const knownTeamIds = new Set(teams.map(team => Number(team.id)));
+    const bracketNameTeams = [];
+    const seenNameIds = new Set();
+    bracketMatches.forEach(match => {
+        [match.homeTeamId, match.awayTeamId].forEach(rawId => {
+            const id = Number(rawId);
+            if (!Number.isFinite(id) || knownTeamIds.has(id) || seenNameIds.has(id)) return;
+            seenNameIds.add(id);
+            const preferred = allTeams.find(team =>
+                Number(team.id) === id && team.liga === selectedLiga && team.name
+            );
+            if (preferred) bracketNameTeams.push(preferred);
+        });
+    });
 
     // --- PŘIDÁNO: Načtení dat pro PŘESTUPY ---
     let activeTransferLeagues = [];
@@ -1957,8 +1981,8 @@ async function prepareDashboardData(req, isHistory = false, isImageExporter = fa
         clinchMode, tableMode, isRegularSeasonFinished, isTipsLocked,
         leagueObj, sortedGroups, teamsByGroup, sortedGroupKeys, groupedTeams,
         globalRealRankMap, userStats, currentUserStats,
-        userTipData, currentUserMatchTips, playoffData, scores, allUsers, teams,
-        activeTransferLeagues, currentTransfers, tableTips // <-- TOTO JSME PŘIDALI NA KONEC
+        userTipData, currentUserMatchTips, playoffData, bracketMatches, bracketNameTeams, scores, allUsers, teams,
+        activeTransferLeagues, currentTransfers, tableTips, leagues // <-- TOTO JSME PŘIDALI NA KONEC
     };
 }
 
@@ -2224,10 +2248,12 @@ async function generateStatsHtml(username, currentUserStats, userStats) {
 async function generateLeftPanel(data, isHistory = false) {
     const {
         username, selectedSeason, selectedLiga, teamsInSelectedLiga,
-        matches, clinchMode, tableMode, isRegularSeasonFinished,
+        matches, bracketMatches, bracketNameTeams, clinchMode, tableMode, isRegularSeasonFinished,
         leagueObj, sortedGroups, teamsByGroup, playoffData, scores,
-        currentUserStats, userStats, teams
+        currentUserStats, userStats, teams, globalRealRankMap, leagues: seasonLeagues
     } = data;
+
+    const lockedTeamIds = new Set();
 
     let html = `
     <section class="stats-container">
@@ -2525,6 +2551,16 @@ async function generateLeftPanel(data, isHistory = false) {
                 }
             }
 
+            team._clinchStatus = {
+                currentZone,
+                locked,
+                clinchedQF,
+                clinchedPlayin,
+                clinchedRelegation,
+                clinchedNeutral
+            };
+            if (locked) lockedTeamIds.add(Number(team.id));
+
             if (clinchedRelegation) rowClass = 'clinched-relegation';
             else if (clinchedNeutral) rowClass = 'clinched-neutral';
             else if (clinchedPlayin) rowClass = 'clinched-playin';
@@ -2791,352 +2827,47 @@ async function generateLeftPanel(data, isHistory = false) {
     // 3. PLAYOFF TABULKA (PAVOUK)
     // ==========================================
     const format = leagueObj?.playoffFormat || 'none';
-    const savedSlots = playoffData || {};
-
-    async function getSeriesInfo(slotKey) {
-        const seriesIdStr = savedSlots[slotKey];
-
-        if (!seriesIdStr) {
-            const t1 = savedSlots[`${slotKey}_t1`];
-            const t2 = savedSlots[`${slotKey}_t2`];
-            if (t1 || t2) {
-                return {
-                    isWaiting: true,
-                    home: t1 || 'TBD',
-                    away: t2 || 'TBD',
-                    scoreH: '-', scoreA: '-',
-                    hWinner: false, aWinner: false
-                };
-            }
-            return null;
-        }
-
-        const mId = parseInt(seriesIdStr.replace('series-', ''));
-        const match = matches.find(m => m.id === mId);
-        if (!match) return null;
-
-        const homeTeam = teams.find(t => t.id === match.homeTeamId) || {name: 'Neznámý'};
-        const awayTeam = teams.find(t => t.id === match.awayTeamId) || {name: 'Neznámý'};
-
-        let scoreH = 0;
-        let scoreA = 0;
-        if (match.result) {
-            scoreH = match.result.scoreHome;
-            scoreA = match.result.scoreAway;
-        } else if (match.playedMatches && match.playedMatches.length > 0) {
-            match.playedMatches.forEach(pm => {
-                if (pm.scoreHome > pm.scoreAway) scoreH++;
-                else if (pm.scoreAway > pm.scoreHome) scoreA++;
-            });
-        }
-
-        const winsNeeded = match.bo > 1 ? Math.ceil(match.bo / 2) : 1;
-
-        let homeWins = false;
-        let awayWins = false;
-
-        if (Number(match.bo) === 1) {
-            if (scoreH > scoreA) homeWins = true;
-            else if (scoreA > scoreH) awayWins = true;
-        } else {
-            homeWins = scoreH >= winsNeeded;
-            awayWins = scoreA >= winsNeeded;
-        }
-
-        const isFinished = homeWins || awayWins;
-        const isOngoing = !isFinished && (scoreH > 0 || scoreA > 0);
-
-        const getTeamSeed = (teamId) => {
-            const currentTeam = teams.find(t => t.id === teamId);
-            if (!currentTeam) return null;
-
-            const allTeamsInGroup = teams.filter(t => t.liga === selectedLiga && t.group === currentTeam.group);
-
-            const sortedTeams = allTeamsInGroup.sort((a, b) => {
-                const aStats = a.stats?.[selectedSeason] || {};
-                const bStats = b.stats?.[selectedSeason] || {};
-                const pA = aStats.points || 0;
-                const pB = bStats.points || 0;
-                if (pB !== pA) return pB - pA;
-
-                const tieA = aStats.tiebreaker || 0;
-                const tieB = bStats.tiebreaker || 0;
-                if (tieB !== tieA) return tieA - tieB;
-
-                if (leagueObj?.tiebreakerPriority === 'goalDiff') {
-                    const sA = scores[a.id] || {gf: 0, ga: 0};
-                    const sB = scores[b.id] || {gf: 0, ga: 0};
-                    const diffA = sA.gf - sA.ga;
-                    const diffB = sB.gf - sB.ga;
-                    if (diffA !== diffB) return diffB - diffA;
-                    if (sA.gf !== sB.gf) return sB.gf - sA.gf;
-
-                    const directMatch = matches.find(m =>
-                        m.season === selectedSeason && m.liga === selectedLiga && m.result && !m.isPlayoff &&
-                        ((Number(m.homeTeamId) === Number(a.id) && Number(m.awayTeamId) === Number(b.id)) ||
-                            (Number(m.homeTeamId) === Number(b.id) && Number(m.awayTeamId) === Number(a.id)))
-                    );
-                    if (directMatch) {
-                        const isAHome = Number(directMatch.homeTeamId) === Number(a.id);
-                        let sH = directMatch.result?.scoreHome ?? directMatch.scoreHome ?? 0;
-                        let sA = directMatch.result?.scoreAway ?? directMatch.scoreAway ?? 0;
-                        if (isAHome) {
-                            if (sH > sA) return -1;
-                            if (sA > sH) return 1;
-                        } else {
-                            if (sA > sH) return -1;
-                            if (sH > sA) return 1;
-                        }
-                    }
-                } else {
-                    const sA = scores[a.id] || {gf: 0, ga: 0};
-                    const sB = scores[b.id] || {gf: 0, ga: 0};
-                    const diffA = sA.gf - sA.ga;
-                    const diffB = sB.gf - sB.ga;
-                    if (diffA !== diffB) return diffB - diffA;
-                    if (sA.gf !== sB.gf) return sB.gf - sA.gf;
-
-                    const directMatch = matches.find(m =>
-                        m.season === selectedSeason && m.liga === selectedLiga && m.result && !m.isPlayoff &&
-                        ((Number(m.homeTeamId) === Number(a.id) && Number(m.awayTeamId) === Number(b.id)) ||
-                            (Number(m.homeTeamId) === Number(b.id) && Number(m.awayTeamId) === Number(a.id)))
-                    );
-                    if (directMatch) {
-                        const isAHome = Number(directMatch.homeTeamId) === Number(a.id);
-                        let sH = directMatch.result?.scoreHome ?? directMatch.scoreHome ?? 0;
-                        let sA = directMatch.result?.scoreAway ?? directMatch.scoreAway ?? 0;
-                        if (isAHome) {
-                            if (sH > sA) return -1;
-                            if (sA > sH) return 1;
-                        } else {
-                            if (sA > sH) return -1;
-                            if (sH > sA) return 1;
-                        }
-                    }
-                }
-                return 0;
-            });
-            const index = sortedTeams.findIndex(t => t.id === teamId);
-            return index >= 0 ? index + 1 : null;
-        };
-
-        const homeSeed = getTeamSeed(match.homeTeamId);
-        const awaySeed = getTeamSeed(match.awayTeamId);
-
-        return {
-            isWaiting: false,
-            isFinished,
-            isOngoing,
-            home: homeTeam.name, away: awayTeam.name,
-            scoreH, scoreA,
-            homeWins,
-            awayWins,
-            bo: Number(match.bo) || 1,
-            winsNeeded,
-            homeSeed, awaySeed
-        };
-    }
-
-    async function renderBox(slotKey, extraStyle = '') {
-        const info = await getSeriesInfo(slotKey);
-        const seriesId = `series-${slotKey}`;
-
-        if (!info) {
-            return `
-            <div class="playoff-series waiting" ${extraStyle}>
-                <div class="playoff-series-header">
-                    <div class="playoff-series-info">
-                        <div class="playoff-status-icon waiting">⏸️</div>
-                        <span>Čekání na týmy</span>
-                    </div>
-                    <div class="playoff-series-score">-</div>
-                </div>
-                <div class="playoff-series-teams">
-                    <div class="playoff-team">
-                        <span class="playoff-team-name">TBD</span>
-                    </div>
-                    <div class="playoff-team">
-                        <span class="playoff-team-name">TBD</span>
-                    </div>
-                </div>
-                <div class="playoff-dropdown" id="${seriesId}-dropdown">
-                    <div class="playoff-match">
-                        <span style="color: #888;">Žádné zápasy</span>
-                    </div>
-                </div>
-            </div>`;
-        }
-
-        if (info.isWaiting) {
-            return `
-            <div class="playoff-series waiting" onclick="togglePlayoffDropdown('${seriesId}')" ${extraStyle}>
-                <div class="playoff-series-header">
-                    <div class="playoff-series-info">
-                        <div class="playoff-status-icon waiting">⏸️</div>
-                        <span>Čeká se</span>
-                    </div>
-                    <div class="playoff-series-score">-</div>
-                </div>
-                <div class="playoff-series-teams">
-                    <div class="playoff-team">
-                        <span class="playoff-team-name">${info.home}</span>
-                    </div>
-                    <div class="playoff-team">
-                        <span class="playoff-team-name">${info.away}</span>
-                    </div>
-                </div>
-                <div class="playoff-progress-bar">
-                    <div class="playoff-progress-fill" style="width: 0"></div>
-                </div>
-                <div class="playoff-dropdown" id="${seriesId}-dropdown">
-                    <div class="playoff-match">
-                        <div class="playoff-match-teams">
-                            <span class="playoff-match-team">${info.home}</span>
-                            <span>vs</span>
-                            <span class="playoff-match-team">${info.away}</span>
-                        </div>
-                    </div>
-                </div>
-            </div>`;
-        }
-
-        const isCompleted = info.isFinished;
-        const isInProgress = info.isOngoing;
-        const statusClass = isCompleted ? 'completed' : (isInProgress ? 'in-progress' : 'waiting');
-        const statusIcon = isCompleted ? '🔥' : (isInProgress ? '⏳' : '⏸️');
-
-        const showProgressBar = info.bo > 1;
-        const currentWins = Math.max(info.scoreH, info.scoreA);
-        const progressPercent = info.winsNeeded > 0 ? (currentWins / info.winsNeeded) * 100 : 0;
-
-        return `
-        <div class="playoff-series ${statusClass}" onclick="togglePlayoffDropdown('${seriesId}')" ${extraStyle}>
-            <div class="playoff-series-header">
-                <div class="playoff-series-info">
-                    <div class="playoff-status-icon ${statusClass}">${statusIcon}</div>
-                    <span>${isCompleted ? 'Hotovo' : (isInProgress ? 'Probíhá' : 'Čeká')}</span>
-                </div>
-                <div class="playoff-series-score">${info.scoreH}:${info.scoreA}</div>
-            </div>
-            <div class="playoff-series-teams">
-                <div class="playoff-team ${info.homeWins ? 'winner' : 'loser'}">
-                    <span class="playoff-seed">${info.homeSeed ? '#' + info.homeSeed : ''}</span>
-                    <span class="playoff-team-name">${info.home}</span>
-                </div>
-            <div class="playoff-team ${info.awayWins ? 'winner' : 'loser'}">
-                <span class="playoff-seed">${info.awaySeed ? '#' + info.awaySeed : ''}</span>
-                <span class="playoff-team-name">${info.away}</span>
-            </div>
-            </div>
-            ${showProgressBar ? `
-            <div class="playoff-progress-bar">
-                <div class="playoff-progress-fill" style="width: ${progressPercent}%"></div>
-            </div>` : ''}
-            <div class="playoff-dropdown" id="${seriesId}-dropdown">
-                ${await renderPlayoffMatches(slotKey)}
-            </div>
-        </div>`;
-    }
-
-    async function renderPlayoffMatches(slotKey) {
-        const seriesIdStr = savedSlots[slotKey];
-        if (!seriesIdStr) return '<div class="playoff-match"><span style="color: #888;">Žádné zápasy</span></div>';
-
-        const mId = parseInt(seriesIdStr.replace('series-', ''));
-        const match = matches.find(m => m.id === mId);
-        if (!match) return '<div class="playoff-match"><span style="color: #888;">Zápas nenalezen</span></div>';
-
-        const homeTeam = teams.find(t => t.id === match.homeTeamId) || { name: 'Neznámý' };
-        const awayTeam = teams.find(t => t.id === match.awayTeamId) || { name: 'Neznámý' };
-
-        let matchesHtml;
-
-        if (match.bo === 1) {
-            const result = match.result;
-            const winnerId = result ? (result.scoreHome > result.scoreAway ? match.homeTeamId : (result.scoreAway > result.scoreHome ? match.awayTeamId : null)) : null;
-
-            matchesHtml = `
-                <div class="playoff-bo1-special">
-                    <span class="playoff-match-team ${winnerId === homeTeam.id ? 'winner' : ''}">${homeTeam.name}</span>
-                    <span class="playoff-match-score">${result ? `${result.scoreHome}:${result.scoreAway}` : 'Čeká se'}</span>
-                    <span class="playoff-match-team ${winnerId === awayTeam.id ? 'winner' : ''}">${awayTeam.name}</span>
-                </div>`;
-        }
-        else if (match.playedMatches && match.playedMatches.length > 0) {
-            matchesHtml = match.playedMatches.map((pm) => {
-                const displayHome = pm.sideSwap ? awayTeam.name : homeTeam.name;
-                const displayAway = pm.sideSwap ? homeTeam.name : awayTeam.name;
-                const displayScoreH = pm.sideSwap ? pm.scoreAway : pm.scoreHome;
-                const displayScoreA = pm.sideSwap ? pm.scoreHome : pm.scoreAway;
-                const hWinner = (pm.scoreHome > pm.scoreAway && !pm.sideSwap) || (pm.scoreAway > pm.scoreHome && pm.sideSwap);
-                const aWinner = (pm.scoreAway > pm.scoreHome && !pm.sideSwap) || (pm.scoreHome > pm.scoreAway && pm.sideSwap);
-
-                let otIndicator = '';
-                if (pm.ot) {
-                    otIndicator = ' <span style="color: #ff9800; font-size: 0.65em;">p</span>';
-                }
-
-                return `
-                <div class="playoff-match">
-                    <div class="playoff-match-teams">
-                        <span class="playoff-match-team ${hWinner ? 'winner' : ''}">${displayHome}</span>
-                        <span class="playoff-match-score">${displayScoreH}:${displayScoreA}${otIndicator}</span>
-                        <span class="playoff-match-team ${aWinner ? 'winner' : ''}">${displayAway}</span>
-                    </div>
-                </div>`;
-            }).join('');
-        }
-        else {
-            matchesHtml = `
-            <div class="playoff-match">
-                <div class="playoff-match-teams">
-                    <span class="playoff-match-team">${homeTeam.name}</span>
-                    <span>vs</span>
-                    <span class="playoff-match-team">${awayTeam.name}</span>
-                </div>
-            </div>`;
-        }
-
-        return matchesHtml;
-    }
-
-    html += `<div class="playoff-bracket" id="playoffTablePreview" style="display:${tableMode === 'playoff' ? 'block' : 'none'};">`;
-
     const allTemplates = await PlayoffTemplates.findAll();
-    const currentTemplate = allTemplates?.[format] || {};
-
-    if (currentTemplate && currentTemplate.columns) {
-        html += `<h2 style="text-align:center; color:white; margin-bottom: 30px;">Playoff - ${selectedLiga} ${selectedSeason}</h2>`;
-
-        html += `<div style="display: flex; gap: 15px; justify-content: flex-start; align-items: center; overflow-x: auto; padding-bottom: 10px; scrollbar-width: thin; scrollbar-color: orangered #1a1a1a;">`;
-
-        for (const col of currentTemplate.columns) {
-            const hasTitle2 = col.title2 && col.slots.length === 2;
-            const normalGap = col.gap || '20px';
-
-            const boxes = await Promise.all(col.slots.map((slotId, index) => {
-                if (hasTitle2 && index === 1) {
-                    return renderBox(slotId, 'style="margin-top: 70px;"');
-                }
-                return renderBox(slotId, '');
-            }));
-
-            const dataAttr = hasTitle2 ? 'data-title2="true"' : '';
-
-            html += `
-            <div class="playoff-column" style="gap: ${normalGap};" ${dataAttr}>
-                <div class="playoff-column-title">${col.title}</div>
-                ${boxes.join('')}
-                ${hasTitle2 ? `<div class="playoff-column-title" style="margin-top: auto;">${col.title2}</div>` : `<div class="playoff-column-title">${col.title}</div>`}
-            </div>`;
+    const currentTemplate = format !== 'none' ? (allTemplates?.[format] || null) : null;
+    let zoneFaces = null;
+    if (currentTemplate && currentTemplate.rules && Object.keys(currentTemplate.rules).length > 0) {
+        try {
+            const { collectZonePreview } = require('./playoffEditor');
+            zoneFaces = collectZonePreview({
+                season: selectedSeason,
+                league: selectedLiga,
+                template: currentTemplate,
+                positionConfig: '',
+                savedSlots: playoffData || {},
+                teamsInLeague: teamsInSelectedLiga,
+                teamsByGroup,
+                lockedIds: lockedTeamIds,
+                seasonTeams: teams,
+                leagues: (seasonLeagues || []),
+                templates: allTemplates,
+                playoffData: playoffData || {},
+                matches: bracketMatches || matches,
+                calculateClinchStatusesForGroup,
+                clinchMode
+            });
+        } catch (e) {
+            console.error('Chyba při výpočtu zónového náhledu playoff pro uživatele:', e);
         }
-
-        html += `</div>`;
-    } else {
-        html += `<h2 style="text-align:center; color:gray; margin-bottom: 30px;">Pro ligu ${selectedLiga} není nastaven formát pavouka.</h2>`;
     }
 
-    html += `</div>`;
+    html += renderPlayoffBracket({
+        template: currentTemplate,
+        savedSlots: playoffData || {},
+        matches: bracketMatches || matches,
+        teams,
+        nameTeams: bracketNameTeams || [],
+        scores,
+        zoneFaces,
+        ranks: globalRealRankMap || null,
+        selectedSeason,
+        selectedLiga,
+        visible: tableMode === 'playoff'
+    });
 
     // ==========================================
     // 4. PROGRESS BAR
@@ -3171,8 +2902,6 @@ async function generateLeftPanel(data, isHistory = false) {
 
     html += `
     </div> </section> `;
-
-    html += addPlayoffScript();
 
     return html;
 }
@@ -4665,69 +4394,6 @@ async function createPlayoffBracketImage(data, withWatermark = true, customSetti
     return canvas.toBuffer('image/png');
 }
 
-function addPlayoffScript() {
-    return `
-    <script>
-    // Automatický výpočet offsetu pro title2 sloupce
-    (function() {
-        function calculateTitle2Offset() {
-            const allColumns = document.querySelectorAll('.playoff-column');
-            const title2Columns = document.querySelectorAll('.playoff-column[data-title2="true"]');
-            
-            if (title2Columns.length === 0) return;
-            
-            // Najít nejvyšší normální sloupec (s nejvíce boxy)
-            let maxColumnHeight = 0;
-            allColumns.forEach(col => {
-                if (!col.dataset.title2 && col.offsetHeight > maxColumnHeight) {
-                    maxColumnHeight = col.offsetHeight;
-                }
-            });
-            
-            // Pro každý title2 sloupec vypočítat offset
-            // (aby se první box zarovnal s druhým boxem v jiných sloupcích)
-            title2Columns.forEach(col => {
-                const colHeight = col.offsetHeight;
-                const offset = (maxColumnHeight - colHeight) / 2;
-                if (offset > 0) {
-                    col.style.transform = 'translateY(' + offset + 'px)';
-                }
-            });
-        }
-        
-        // Spustit po načtení všeho včetně obrázků
-        window.addEventListener('load', function() {
-            setTimeout(calculateTitle2Offset, 100);
-        });
-        
-        // Přepočítat při změně velikosti okna
-        window.addEventListener('resize', calculateTitle2Offset);
-    })();
-
-    function togglePlayoffDropdown(seriesId) {
-        const dropdown = document.getElementById(seriesId + '-dropdown');
-        if (dropdown) {
-            dropdown.classList.toggle('open');
-            
-            // Zavřeme ostatní dropdowny
-            const allDropdowns = document.querySelectorAll('.playoff-dropdown');
-            allDropdowns.forEach(d => {
-                if (d.id !== seriesId + '-dropdown') {
-                    d.classList.remove('open');
-                }
-            });
-        }
-    }
-
-    // Kliknutí mimo dropdown ho zavře
-    document.addEventListener('click', function(event) {
-        if (!event.target.closest('.playoff-series')) {
-            const allDropdowns = document.querySelectorAll('.playoff-dropdown.open');
-            allDropdowns.forEach(d => d.classList.remove('open'));
-        }
-    });
-    </script>`;
-}
 function getAvailableImages() {
     const fs = require('fs');
     const path = require('path');
