@@ -622,10 +622,6 @@ function planPlayoffFill(input) {
     listSlots(template).forEach(slot => {
         if (input.onlySlot && input.onlySlot !== slot.id) return;
         const seriesKey = savedSlots[slot.id];
-        if (seriesKey && String(seriesKey).startsWith('series-')) {
-            lines.push({ slotId: slot.id, action: 'keep', message: `${slot.id.toUpperCase()}: série už je připojená.` });
-            return;
-        }
         const context = {
             template,
             slot,
@@ -638,6 +634,8 @@ function planPlayoffFill(input) {
             savedSlots,
             lockedIds
         };
+        const homeRule = template.rules[slot.id]?.home;
+        const awayRule = template.rules[slot.id]?.away;
         const home = resolveRule(template.rules[slot.id]?.home, {
             ...context,
             manualId: savedSlots[`${slot.id}_t1id`]
@@ -646,6 +644,67 @@ function planPlayoffFill(input) {
             ...context,
             manualId: savedSlots[`${slot.id}_t2id`]
         });
+
+        if (seriesKey && String(seriesKey).startsWith('series-')) {
+            const usesRankedPositions = [homeRule, awayRule].some(rule =>
+                ['place', 'fromEnd'].includes(rule?.type)
+            );
+            if (!usesRankedPositions) {
+                lines.push({ slotId: slot.id, action: 'keep', message: `${slot.id.toUpperCase()}: série už je připojená.` });
+                return;
+            }
+
+            const matchId = Number(String(seriesKey).replace(/^series-/, ''));
+            const linkedMatch = (input.matches || []).find(match => Number(match.id) === matchId);
+            const teamIds = linkedMatch
+                ? new Set([Number(linkedMatch.homeTeamId), Number(linkedMatch.awayTeamId)])
+                : new Set();
+            const expectedRankedIds = [
+                { rule: homeRule, resolved: home },
+                { rule: awayRule, resolved: away }
+            ]
+                .filter(({ rule }) => ['place', 'fromEnd'].includes(rule?.type))
+                .map(({ resolved }) => resolved.state === 'ready' ? Number(resolved.team.id) : 0);
+            const rulesMatchCurrentTeams = [
+                { rule: homeRule, resolved: home },
+                { rule: awayRule, resolved: away }
+            ].every(({ rule, resolved }) => {
+                if (!['place', 'fromEnd'].includes(rule?.type)) return true;
+                return resolved.state === 'ready' && teamIds.has(Number(resolved.team.id));
+            });
+
+            if (linkedMatch &&
+                rulesMatchCurrentTeams &&
+                expectedRankedIds.length > 0 &&
+                expectedRankedIds.every(id => id > 0) &&
+                new Set(expectedRankedIds).size === expectedRankedIds.length &&
+                expectedRankedIds.every(id => teamIds.has(id))) {
+                lines.push({ slotId: slot.id, action: 'keep', message: `${slot.id.toUpperCase()}: série už odpovídá uzamčeným pozicím.` });
+                return;
+            }
+
+            if (home.state === 'ready' && away.state === 'ready' && Number(home.team.id) !== Number(away.team.id)) {
+                lines.push({
+                    slotId: slot.id,
+                    action: 'create',
+                    homeId: home.team.id,
+                    awayId: away.team.id,
+                    homeName: home.team.name,
+                    awayName: away.team.name,
+                    homeLeague: home.team.liga || '',
+                    awayLeague: away.team.liga || '',
+                    replaceStale: true,
+                    message: `${slot.id.toUpperCase()}: stará série neodpovídá uzamčeným pozicím; přiřadí se ${home.team.name} proti ${away.team.name}.`
+                });
+            } else {
+                lines.push({
+                    slotId: slot.id,
+                    action: 'clear-stale',
+                    message: `${slot.id.toUpperCase()}: staré přiřazení se odpojí; série čeká na uzamčení přesných pozic.`
+                });
+            }
+            return;
+        }
 
         if (home.state === 'ready' && away.state === 'ready') {
             if (Number(home.team.id) === Number(away.team.id)) {
@@ -703,15 +762,49 @@ function planPlayoffFill(input) {
     return lines;
 }
 
-function sortGroupForZone(teams, season, matches, leagueName) {
-    const standingsScore = team => {
-        const stats = team.stats?.[season] || {};
-        return {
-            goalsFor: stats.gf || 0,
-            goalsAgainst: stats.ga || 0
-        };
-    };
-    const headToHead = (teamA, teamB) => {
+function sortGroupForZone(teams, leagueObj, season, matches, leagueName) {
+    const list = (teams || []).slice();
+    const miniStats = new Map();
+    const pointsGroups = new Map();
+    list.forEach(team => {
+        const points = Number(team.stats?.[season]?.points) || 0;
+        if (!pointsGroups.has(points)) pointsGroups.set(points, []);
+        pointsGroups.get(points).push(Number(team.id));
+    });
+
+    pointsGroups.forEach(teamIds => {
+        const tiedIds = new Set(teamIds);
+        const groupStats = new Map(teamIds.map(id => [id, { points: 0, diff: 0, gf: 0 }]));
+        (matches || []).forEach(match => {
+            if (match.season !== season || match.liga !== leagueName || !match.result || match.isPlayoff) return;
+            const homeId = Number(match.homeTeamId);
+            const awayId = Number(match.awayTeamId);
+            if (!tiedIds.has(homeId) || !tiedIds.has(awayId)) return;
+            const homeGoals = Number(match.result?.scoreHome ?? match.scoreHome ?? 0);
+            const awayGoals = Number(match.result?.scoreAway ?? match.scoreAway ?? 0);
+            const overtime = Boolean(match.result?.ot || match.ot);
+            let homePoints = 1;
+            let awayPoints = 1;
+            if (homeGoals > awayGoals) {
+                homePoints = overtime ? 2 : 3;
+                awayPoints = overtime ? 1 : 0;
+            } else if (awayGoals > homeGoals) {
+                awayPoints = overtime ? 2 : 3;
+                homePoints = overtime ? 1 : 0;
+            }
+            const home = groupStats.get(homeId);
+            const away = groupStats.get(awayId);
+            home.points += homePoints;
+            home.diff += homeGoals - awayGoals;
+            home.gf += homeGoals;
+            away.points += awayPoints;
+            away.diff += awayGoals - homeGoals;
+            away.gf += awayGoals;
+        });
+        groupStats.forEach((value, id) => miniStats.set(id, value));
+    });
+
+    const directMatchResult = (teamA, teamB) => {
         const match = (matches || []).find(item =>
             item.season === season &&
             item.liga === leagueName &&
@@ -723,13 +816,12 @@ function sortGroupForZone(teams, season, matches, leagueName) {
         if (!match) return 0;
         const homeScore = Number(match.result?.scoreHome ?? match.scoreHome ?? 0);
         const awayScore = Number(match.result?.scoreAway ?? match.scoreAway ?? 0);
-        const teamAIsHome = Number(match.homeTeamId) === Number(teamA.id);
-        const teamAScore = teamAIsHome ? homeScore : awayScore;
-        const teamBScore = teamAIsHome ? awayScore : homeScore;
+        const teamAScore = Number(match.homeTeamId) === Number(teamA.id) ? homeScore : awayScore;
+        const teamBScore = Number(match.homeTeamId) === Number(teamA.id) ? awayScore : homeScore;
         return teamAScore === teamBScore ? 0 : (teamAScore > teamBScore ? -1 : 1);
     };
 
-    return (teams || []).slice().sort((a, b) => {
+    return list.sort((a, b) => {
         const aStats = a.stats?.[season] || {};
         const bStats = b.stats?.[season] || {};
         const pointsA = aStats.points || 0;
@@ -739,13 +831,20 @@ function sortGroupForZone(teams, season, matches, leagueName) {
         const tieB = bStats.tiebreaker || 0;
         if (tieA !== tieB) return tieA - tieB;
 
-        const scoreA = standingsScore(a);
-        const scoreB = standingsScore(b);
-        const goalDiffA = scoreA.goalsFor - scoreA.goalsAgainst;
-        const goalDiffB = scoreB.goalsFor - scoreB.goalsAgainst;
-        if (goalDiffA !== goalDiffB) return goalDiffB - goalDiffA;
-        if (scoreA.goalsFor !== scoreB.goalsFor) return scoreB.goalsFor - scoreA.goalsFor;
-        return headToHead(a, b);
+        const miniA = miniStats.get(Number(a.id)) || { points: 0, diff: 0, gf: 0 };
+        const miniB = miniStats.get(Number(b.id)) || { points: 0, diff: 0, gf: 0 };
+        if (miniB.points !== miniA.points) return miniB.points - miniA.points;
+
+        const overallDiffA = (Number(aStats.gf) || 0) - (Number(aStats.ga) || 0);
+        const overallDiffB = (Number(bStats.gf) || 0) - (Number(bStats.ga) || 0);
+        const goalDiffFirst = leagueObj?.tiebreakerPriority === 'goalDiff';
+        if (goalDiffFirst && overallDiffA !== overallDiffB) return overallDiffB - overallDiffA;
+        if (miniB.diff !== miniA.diff) return miniB.diff - miniA.diff;
+        if (miniB.gf !== miniA.gf) return miniB.gf - miniA.gf;
+
+        const headToHead = directMatchResult(a, b);
+        if (headToHead) return headToHead;
+        return goalDiffFirst ? 0 : overallDiffB - overallDiffA;
     });
 }
 
@@ -772,7 +871,7 @@ function buildLeagueTable(teams, leagueObj, season, matches, leagueName, calcula
     const lockedIds = new Set();
     Object.keys(teamsByGroup).forEach(group => {
         teamsByGroup[group] = calculateClinchStatusesForGroup(
-            sortGroupForZone(teamsByGroup[group], season, matches, leagueName),
+            sortGroupForZone(teamsByGroup[group], leagueObj, season, matches, leagueName),
             leagueObj,
             season,
             mode,
@@ -818,15 +917,14 @@ function zoneFacesForBracket(input) {
             });
             if (savedSlots[`${slot.id}_${suffix}id`]) return null;
             if (!resolved.team) return null;
-            if (resolved.state === 'zone' || resolved.state === 'ready') {
+            if (resolved.state === 'ready') {
                 const team = resolved.team;
                 return {
                     id: team.id,
                     name: team.name,
                     league: team.liga || '',
                     logo: team.logo ? `/logoteamu/${team.logo}` : '',
-                    zone: resolved.state === 'zone' ? (resolved.zone || 'zatím') : '',
-                    locked: resolved.state === 'ready'
+                    locked: true
                 };
             }
             return null;
@@ -1235,7 +1333,7 @@ function renderPlayoffAdminPage(data) {
 
     return `
     <section class="pb-admin-preview">
-        <p class="pb-admin-note">Klikni na zápas a nastav, odkud bere týmy. Místo může být i z jiné ligy, ze základní části nebo z jejího playoff. Tým jistý v oblasti, ale ne na přesném místě, se ukáže kurzívou a série se nezaloží. Doplnění zapíše tým a vytvoří sérii, až je místo zamčené. Seed se zapíše, až je dohrané celé předchozí kolo. Samo při otevření stránky se nic nezakládá.</p>
+        <p class="pb-admin-note">Klikni na zápas a nastav, odkud bere týmy. Místo může být i z jiné ligy, ze základní části nebo z jejího playoff. Týmy se v pavouku zobrazí až po uzamčení přesné pozice; pouhé jisté umístění v oblasti nestačí. Série vznikne jen tehdy, když jsou uzamčení oba různí soupeři. Seed se zapíše, až je dohrané celé předchozí kolo. Samo při otevření stránky se nic nezakládá.</p>
         ${data.notice ? `<p class="pb-notice">${escapeHtml(data.notice)}</p>` : ''}
         ${shared}
         ${unresolvedNote}

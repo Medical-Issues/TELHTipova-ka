@@ -2413,6 +2413,31 @@ router.get('/playoff', requireAdmin, async (req, res) => {
 
     const allTemplates = await PlayoffTemplates.findAll() || {};
     const currentTemplate = playoffFormat !== 'none' ? (allTemplates[playoffFormat] || null) : null;
+    const storedPlayoffSlots = playoffData[selectedSeason]?.[selectedLeague] || {};
+    const hasRankedAssignedSeries = currentTemplate &&
+        Object.entries(currentTemplate.rules || {}).some(([slotId, sides]) =>
+            String(storedPlayoffSlots[slotId] || '').startsWith('series-') &&
+            ['home', 'away'].some(side => ['place', 'fromEnd'].includes(sides?.[side]?.type))
+        );
+    if (hasRankedAssignedSeries) {
+        try {
+            const preview = await applyPlayoffRules(selectedSeason, selectedLeague, { dryRun: true });
+            const staleSlots = (preview.lines || []).filter(line =>
+                line.action === 'clear-stale' || line.replaceStale
+            );
+            if (staleSlots.length) {
+                for (const line of staleSlots) {
+                    await applyPlayoffRules(selectedSeason, selectedLeague, {
+                        dryRun: false,
+                        onlySlot: line.slotId
+                    });
+                }
+                return res.redirect(`/admin/playoff?league=${encodeURIComponent(selectedLeague)}&ok=${encodeURIComponent('Opraveno zastaralé přiřazení playoff; uvidíš jen přesné uzamčené pozice.')}`);
+            }
+        } catch (error) {
+            console.error('Chyba při kontrole starých přiřazení playoff:', error);
+        }
+    }
     let positionConfig = '';
     try {
         const statusData = await LeagueStatus.findAll();
@@ -4084,6 +4109,13 @@ async function applyPlayoffRules(season, league, options = {}) {
     };
 
     lines.forEach(line => {
+        if (line.action === 'clear-stale') {
+            ['', '_t1', '_t2', '_t1id', '_t2id', '_t1league', '_t2league'].forEach(suffix => {
+                delete savedSlots[`${line.slotId}${suffix}`];
+            });
+            slotsChanged = true;
+            return;
+        }
         if (line.action === 'fill' && Array.isArray(line.fills)) {
             line.fills.forEach(side => writeSide(line.slotId, side.side === 'home' ? 't1' : 't2', side.id, side.name, side.league));
             if (line.fills.length) filled += 1;

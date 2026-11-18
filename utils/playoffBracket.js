@@ -518,12 +518,28 @@ function hydratePlayoffModel(model, context) {
     const matches = context.matches || [];
     const savedSlots = context.savedSlots || {};
 
+    const usesRankedPositions = (slotId, side) => {
+        const slot = findSlot(slotId);
+        const rule = slot?.rules?.[side];
+        return ['place', 'fromEnd'].includes(rule?.type);
+    };
+
+    const linkedSeriesMatchesRankedPositions = (slotId, match) => {
+        const rankedSides = ['home', 'away'].filter(side => usesRankedPositions(slotId, side));
+        if (!rankedSides.length) return true;
+        const expected = rankedSides.map(side => Number(context.zoneFaces?.[slotId]?.[side]?.id) || 0);
+        const actual = new Set([Number(match.homeTeamId), Number(match.awayTeamId)]);
+        return expected.every(id => id > 0) &&
+            new Set(expected).size === expected.length &&
+            expected.every(id => actual.has(id));
+    };
+
     const viewFor = slotId => {
         const seriesId = savedSlots[slotId];
         if (seriesId) {
             const matchId = parseInt(String(seriesId).replace('series-', ''), 10);
             const match = matches.find(item => Number(item.id) === matchId);
-            if (match) {
+            if (match && linkedSeriesMatchesRankedPositions(slotId, match)) {
                 const view = resolveSeries(match, teamsById, seeds);
                 const homeLeague = savedSlots[`${slotId}_t1league`];
                 const awayLeague = savedSlots[`${slotId}_t2league`];
@@ -537,7 +553,7 @@ function hydratePlayoffModel(model, context) {
                 }
                 return view;
             }
-            return {
+            if (!match) return {
                 state: 'missing',
                 home: teamFace(null),
                 away: teamFace(null),
@@ -548,8 +564,8 @@ function hydratePlayoffModel(model, context) {
             };
         }
 
-        const waitingHome = savedFace(slotId, 'home');
-        const waitingAway = savedFace(slotId, 'away');
+        const waitingHome = usesRankedPositions(slotId, 'home') ? null : savedFace(slotId, 'home');
+        const waitingAway = usesRankedPositions(slotId, 'away') ? null : savedFace(slotId, 'away');
         const hinted = emptyView(slotId);
         const home = waitingHome || zoneFace(slotId, 'home') || hinted.home;
         const away = waitingAway || zoneFace(slotId, 'away') || hinted.away;
