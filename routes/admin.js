@@ -39,7 +39,8 @@ const {
     collectZonePreview,
     renderPlayoffAdminPage,
     listSlots,
-    resolveNameIds
+    resolveNameIds,
+    refreshStandingsStats
 } = require('../utils/playoffEditor');
 const { createLocalSnapshot, listAvailableSnapshots, restoreFromLocalSnapshot, backupToGitHub } = require('../utils/backupService');
 const { 
@@ -2378,13 +2379,19 @@ router.get('/playoff', requireAdmin, async (req, res) => {
     const leagueObj = leagues.find(l => l.name === selectedLeague);
     const playoffFormat = leagueObj?.playoffFormat || 'none';
 
-    const [matches, teams] = await Promise.all([
+    const [matches, teams, teamBonusData] = await Promise.all([
         Matches.findAll(),
-        Teams.findAll()
+        Teams.findAll(),
+        TeamBonuses.findAll()
     ]);
 
     // Filter teams by selectedSeason - admin should only see active teams from current season
-    const teamsFromCurrentSeason = teams.filter(t => t.active === true && t.season === selectedSeason);
+    const teamsFromCurrentSeason = refreshStandingsStats(
+        teams.filter(t => t.active === true && t.season === selectedSeason),
+        matches,
+        selectedSeason,
+        teamBonusData || {}
+    );
 
     const playoffMatches = matches.filter(m => m.season === selectedSeason && m.liga === selectedLeague && m.isPlayoff);
 
@@ -2414,16 +2421,20 @@ router.get('/playoff', requireAdmin, async (req, res) => {
     const allTemplates = await PlayoffTemplates.findAll() || {};
     const currentTemplate = playoffFormat !== 'none' ? (allTemplates[playoffFormat] || null) : null;
     const storedPlayoffSlots = playoffData[selectedSeason]?.[selectedLeague] || {};
-    const hasRankedAssignedSeries = currentTemplate &&
+    const hasRankedAssignments = currentTemplate &&
         Object.entries(currentTemplate.rules || {}).some(([slotId, sides]) =>
-            String(storedPlayoffSlots[slotId] || '').startsWith('series-') &&
-            ['home', 'away'].some(side => ['place', 'fromEnd'].includes(sides?.[side]?.type))
+            ['home', 'away'].some(side => {
+                if (!['place', 'fromEnd'].includes(sides?.[side]?.type)) return false;
+                const suffix = side === 'home' ? 't1' : 't2';
+                return String(storedPlayoffSlots[slotId] || '').startsWith('series-') ||
+                    Boolean(storedPlayoffSlots[`${slotId}_${suffix}id`] || storedPlayoffSlots[`${slotId}_${suffix}`]);
+            })
         );
-    if (hasRankedAssignedSeries) {
+    if (hasRankedAssignments) {
         try {
             const preview = await applyPlayoffRules(selectedSeason, selectedLeague, { dryRun: true });
             const staleSlots = (preview.lines || []).filter(line =>
-                line.action === 'clear-stale' || line.replaceStale
+                line.action === 'clear-stale' || line.replaceStale || (line.clearSides || []).length
             );
             if (staleSlots.length) {
                 for (const line of staleSlots) {
@@ -2458,6 +2469,20 @@ router.get('/playoff', requireAdmin, async (req, res) => {
     const groups = leagueObj?.isMultigroup
         ? [...new Set(teamsInLeague.map(team => team.group ? String.fromCharCode(Number(team.group) + 64) : '').filter(letter => /^[A-Z]$/.test(letter)))].sort()
         : [];
+    const standing = buildLeagueTable(
+        teamsInLeague,
+        leagueObj,
+        selectedSeason,
+        matches,
+        selectedLeague,
+        calculateClinchStatusesForGroup
+    );
+    const ranks = {};
+    Object.values(standing.teamsByGroup).forEach(groupTeams => {
+        groupTeams.forEach((team, index) => {
+            ranks[team.id] = index + 1;
+        });
+    });
     const scores = {};
     teamsInLeague.forEach(team => {
         const stats = team.stats?.[selectedSeason] || {};
@@ -2495,7 +2520,9 @@ router.get('/playoff', requireAdmin, async (req, res) => {
                 templates: allTemplates,
                 playoffData,
                 matches,
-                calculateClinchStatusesForGroup
+                calculateClinchStatusesForGroup,
+                teamsByGroup: standing.teamsByGroup,
+                lockedIds: standing.lockedIds
             });
         } catch (e) {
             console.error('Chyba při výpočtu zónového náhledu playoff:', e);
@@ -2513,6 +2540,7 @@ router.get('/playoff', requireAdmin, async (req, res) => {
         savedSlots,
         matches,
         teams: teamsFromCurrentSeason,
+        ranks,
         scores,
         groups,
         plan,
@@ -3974,18 +4002,25 @@ function rejectBadCsrf(req, res) {
 }
 
 async function loadLeaguePlayoffBundle(season, league) {
-    const [allSeasonData, allTemplates, allMatches, allTeams, playoffData, statusData] = await Promise.all([
+    const [allSeasonData, allTemplates, allMatches, allTeams, playoffData, statusData, teamBonusData] = await Promise.all([
         Leagues.findAll(),
         PlayoffTemplates.findAll(),
         Matches.findAll(),
         Teams.findAll(),
         Playoff.findAll(),
-        LeagueStatus.findAll()
+        LeagueStatus.findAll(),
+        TeamBonuses.findAll()
     ]);
     const leagues = allSeasonData?.[season]?.leagues || [];
     const leagueObj = leagues.find(item => item.name === league) || null;
     const formatKey = playoffFormatKey(leagueObj);
     const templates = allTemplates || {};
+    const seasonTeams = refreshStandingsStats(
+        (allTeams || []).filter(team => team.active === true && team.season === season),
+        allMatches || [],
+        season,
+        teamBonusData || {}
+    );
     return {
         allSeasonData: allSeasonData || {},
         templates,
@@ -3993,8 +4028,8 @@ async function loadLeaguePlayoffBundle(season, league) {
         formatKey,
         leagueObj,
         matches: allMatches || [],
-        teams: (allTeams || []).filter(team => team.active === true && team.season === season && team.liga === league),
-        seasonTeams: (allTeams || []).filter(team => team.active === true && team.season === season),
+        teams: seasonTeams.filter(team => team.liga === league),
+        seasonTeams,
         leagues,
         playoffData: playoffData || {},
         savedSlots: playoffData?.[season]?.[league] || {},
@@ -4109,10 +4144,15 @@ async function applyPlayoffRules(season, league, options = {}) {
     };
 
     lines.forEach(line => {
-        if (line.action === 'clear-stale') {
-            ['', '_t1', '_t2', '_t1id', '_t2id', '_t1league', '_t2league'].forEach(suffix => {
-                delete savedSlots[`${line.slotId}${suffix}`];
+        (line.clearSides || []).forEach(side => {
+            const suffix = side === 'home' ? 't1' : 't2';
+            [suffix, `${suffix}id`, `${suffix}league`].forEach(part => {
+                delete savedSlots[`${line.slotId}_${part}`];
             });
+            slotsChanged = true;
+        });
+        if (line.action === 'clear-stale') {
+            delete savedSlots[line.slotId];
             slotsChanged = true;
             return;
         }

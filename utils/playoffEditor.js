@@ -644,6 +644,23 @@ function planPlayoffFill(input) {
             ...context,
             manualId: savedSlots[`${slot.id}_t2id`]
         });
+        const clearSides = [
+            { side: 'home', rule: homeRule, resolved: home, suffix: 't1' },
+            { side: 'away', rule: awayRule, resolved: away, suffix: 't2' }
+        ]
+            .filter(({ rule, resolved, suffix }) => {
+                if (!['place', 'fromEnd'].includes(rule?.type)) return false;
+                const storedId = savedSlots[`${slot.id}_${suffix}id`];
+                const storedName = savedSlots[`${slot.id}_${suffix}`];
+                if ((storedId === undefined || storedId === null || storedId === '') && !storedName) return false;
+                if (resolved.state !== 'ready') return true;
+                if (storedId !== undefined && storedId !== null && storedId !== '') {
+                    return Number(storedId) !== Number(resolved.team.id) ||
+                        (storedName && String(storedName) !== String(resolved.team.name));
+                }
+                return String(storedName) !== String(resolved.team.name);
+            })
+            .map(({ side }) => side);
 
         if (seriesKey && String(seriesKey).startsWith('series-')) {
             const usesRankedPositions = [homeRule, awayRule].some(rule =>
@@ -694,12 +711,14 @@ function planPlayoffFill(input) {
                     homeLeague: home.team.liga || '',
                     awayLeague: away.team.liga || '',
                     replaceStale: true,
+                    clearSides,
                     message: `${slot.id.toUpperCase()}: stará série neodpovídá uzamčeným pozicím; přiřadí se ${home.team.name} proti ${away.team.name}.`
                 });
             } else {
                 lines.push({
                     slotId: slot.id,
                     action: 'clear-stale',
+                    clearSides,
                     message: `${slot.id.toUpperCase()}: staré přiřazení se odpojí; série čeká na uzamčení přesných pozic.`
                 });
             }
@@ -720,6 +739,7 @@ function planPlayoffFill(input) {
                 awayName: away.team.name,
                 homeLeague: home.team.liga || '',
                 awayLeague: away.team.liga || '',
+                clearSides,
                 message: seriesKey
                     ? `${slot.id.toUpperCase()}: ${home.team.name} proti ${away.team.name}. Série už existuje.`
                     : `${slot.id.toUpperCase()}: ${home.team.name} proti ${away.team.name}. Vytvoří se série.`
@@ -728,10 +748,10 @@ function planPlayoffFill(input) {
         }
 
         const fills = [];
-        if (home.state === 'ready' && !savedSlots[`${slot.id}_t1id`]) {
+        if (home.state === 'ready' && (!savedSlots[`${slot.id}_t1id`] || clearSides.includes('home'))) {
             fills.push({ side: 'home', id: home.team.id, name: home.team.name, league: home.team.liga || '' });
         }
-        if (away.state === 'ready' && !savedSlots[`${slot.id}_t2id`]) {
+        if (away.state === 'ready' && (!savedSlots[`${slot.id}_t2id`] || clearSides.includes('away'))) {
             fills.push({ side: 'away', id: away.team.id, name: away.team.name, league: away.team.liga || '' });
         }
         const zoneNotes = [home, away]
@@ -743,6 +763,7 @@ function planPlayoffFill(input) {
             lines.push({
                 slotId: slot.id,
                 action: 'fill',
+                clearSides,
                 fills,
                 message: `${slot.id.toUpperCase()}: doplní se ${fills.map(side => side.name).join(' a ')}.${waitText ? ` Čeká se na ${waitText}.` : ''}${zoneText}`
             });
@@ -751,7 +772,8 @@ function planPlayoffFill(input) {
         if (waitText || zoneNotes.length) {
             lines.push({
                 slotId: slot.id,
-                action: 'none',
+                action: clearSides.length ? 'clear-stale' : 'none',
+                clearSides,
                 message: `${slot.id.toUpperCase()}: ${waitText ? `čeká se na ${waitText}.` : 'místo ještě není zamčené.'}${zoneText}`
             });
             return;
@@ -845,6 +867,82 @@ function sortGroupForZone(teams, leagueObj, season, matches, leagueName) {
         const headToHead = directMatchResult(a, b);
         if (headToHead) return headToHead;
         return goalDiffFirst ? 0 : overallDiffB - overallDiffA;
+    });
+}
+
+function refreshStandingsStats(teams, matches, season, bonusData) {
+    const statsByTeam = new Map();
+    const leagueByTeam = new Map();
+    (teams || []).forEach(team => {
+        statsByTeam.set(Number(team.id), { points: 0, wins: 0, otWins: 0, otLosses: 0, losses: 0, gf: 0, ga: 0 });
+        leagueByTeam.set(Number(team.id), team.liga);
+    });
+
+    (matches || []).forEach(match => {
+        if (match.season !== season || match.isPlayoff || !match.result) return;
+        const homeId = Number(match.homeTeamId);
+        const awayId = Number(match.awayTeamId);
+        const home = statsByTeam.get(homeId);
+        const away = statsByTeam.get(awayId);
+        if (!home || !away || match.liga !== leagueByTeam.get(homeId) || match.liga !== leagueByTeam.get(awayId)) return;
+        const homeGoals = parseInt(match.result.scoreHome, 10);
+        const awayGoals = parseInt(match.result.scoreAway, 10);
+        if (!Number.isFinite(homeGoals) || !Number.isFinite(awayGoals)) return;
+
+        home.gf += homeGoals;
+        home.ga += awayGoals;
+        away.gf += awayGoals;
+        away.ga += homeGoals;
+
+        const overtime = Boolean(match.result.ot);
+        if (homeGoals === awayGoals) {
+            if (overtime && (match.result.overtimeWinner === 'home' || match.result.overtimeWinner === 'away')) {
+                const winner = match.result.overtimeWinner === 'home' ? home : away;
+                const loser = winner === home ? away : home;
+                winner.points += 2;
+                winner.otWins += 1;
+                loser.points += 1;
+                loser.otLosses += 1;
+            } else {
+                home.points += 1;
+                away.points += 1;
+            }
+        } else {
+            const winner = homeGoals > awayGoals ? home : away;
+            const loser = winner === home ? away : home;
+            if (overtime) {
+                winner.points += 2;
+                winner.otWins += 1;
+                loser.points += 1;
+                loser.otLosses += 1;
+            } else {
+                winner.points += 3;
+                winner.wins += 1;
+                loser.losses += 1;
+            }
+        }
+    });
+
+    return (teams || []).map(team => {
+        const stats = statsByTeam.get(Number(team.id));
+        let bonus = bonusData?.[season]?.[team.liga]?.[team.id] || {};
+        if (typeof bonus === 'number') bonus = { points: bonus };
+        const seasonStats = {
+            ...(team.stats?.[season] || {}),
+            ...stats,
+            points: stats.points + (Number(bonus.points) || 0),
+            gf: stats.gf + (Number(bonus.gf) || 0),
+            ga: stats.ga + (Number(bonus.ga) || 0),
+            manualGames: Number(bonus.games) || 0,
+            tiebreaker: Number(bonus.tiebreaker) || 0
+        };
+        return {
+            ...team,
+            stats: {
+                ...(team.stats || {}),
+                [season]: seasonStats
+            }
+        };
     });
 }
 
@@ -1175,6 +1273,7 @@ function renderPlayoffAdminPage(data) {
             teams: data.teams || [],
             scores: data.scores || {},
             zoneFaces: data.zoneFaces || null,
+            ranks: data.ranks || null,
             selectedSeason: data.season,
             selectedLiga: data.league,
             visible: true,
@@ -1358,6 +1457,7 @@ module.exports = {
     presetCatalog,
     planPlayoffFill,
     playoffRanking,
+    refreshStandingsStats,
     buildLeagueTable,
     zoneFacesForBracket,
     collectZonePreview,
