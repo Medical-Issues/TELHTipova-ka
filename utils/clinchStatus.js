@@ -101,7 +101,7 @@ function getPossibleRankBounds(teams, season, remainingByTeam) {
     return rankBounds;
 }
 
-function getMatchPointOutcomes(match) {
+function getMatchPointOutcomes() {
     return [
         { home: 3, away: 0 },
         { home: 2, away: 1 },
@@ -298,7 +298,6 @@ function calculateScenarioRankBounds(
             scenarios: 0
         };
     }
-    const pointOutcomes = futureMatches.map(match => getMatchPointOutcomes(match));
     const completedGoalTotals = new Map(teamIds.map(id => [id, { gf: 0, ga: 0 }]));
     completedMatches.forEach(match => {
         const homeId = Number(match.homeTeamId);
@@ -509,7 +508,7 @@ function calculateScenarioRankBounds(
             const awayId = Number(match.awayTeamId);
             const homeActive = activeIdSet.has(homeId);
             const awayActive = activeIdSet.has(awayId);
-            if (homeActive && awayActive) return getMatchPointOutcomes(match);
+            if (homeActive && awayActive) return getMatchPointOutcomes();
 
             const activeId = homeActive ? homeId : awayId;
             const activeIsTarget = activeId === targetId;
@@ -539,7 +538,6 @@ function calculateScenarioRankBounds(
             ]))
         ]));
         const bestRank = { value: isWorstCase ? -Infinity : Infinity };
-        const theoreticalRank = bestRank.value;
         const visited = new Set();
         let exceeded = false;
 

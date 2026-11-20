@@ -134,10 +134,19 @@ function buildModelLeague() {
         awayStats.gf += outcome.scoreAway;
         awayStats.ga += outcome.scoreHome;
 
-        if (outcome.homePoints === 3) homeStats.wins++, awayStats.losses++;
-        else if (outcome.homePoints === 2) homeStats.otWins++, awayStats.otLosses++;
-        else if (outcome.homePoints === 1) homeStats.otLosses++, awayStats.otWins++;
-        else homeStats.losses++, awayStats.wins++;
+        if (outcome.homePoints === 3) {
+            homeStats.wins++;
+            awayStats.losses++;
+        } else if (outcome.homePoints === 2) {
+            homeStats.otWins++;
+            awayStats.otLosses++;
+        } else if (outcome.homePoints === 1) {
+            homeStats.otLosses++;
+            awayStats.otWins++;
+        } else {
+            homeStats.losses++;
+            awayStats.wins++;
+        }
     });
 
     return { season, leagueName, league, teams, matches: fixtures };

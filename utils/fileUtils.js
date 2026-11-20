@@ -430,15 +430,6 @@ async function calculateTeamScores(matches, selectedSeason, selectedLiga) {
 
     return scores;
 }
-function getLeagueZones(leagueObj) {
-    if (!leagueObj) return { quarterfinal: 0, playin: 0, relegation: 0 };
-    return {
-        quarterfinal: Number(leagueObj.quarterfinal || 0),
-        playin: Number(leagueObj.playin || 0),
-        relegation: Number(leagueObj.relegation || 0)
-    };
-}
-
 async function renameLeagueGlobal(oldName, newName) {
     // 1. ALLOWEDLEAGUES (MongoDB)
     try {
@@ -753,8 +744,6 @@ async function evaluateRegularSeasonTable(season, liga, groupKey = null, isForLe
     const allSeasonData = await Leagues.findAll();
     const leagueObj = allSeasonData[season]?.leagues.find(l => l.name === liga) || {};
     const isMultigroup = leagueObj.isMultigroup || false;
-    const tiebreakerPriority = leagueObj.tiebreakerPriority || 'h2h';
-
     let tableTips = {};
     try { tableTips = await TableTips.findAll(); } catch (e) {}
 
@@ -1274,7 +1263,7 @@ async function prepareDashboardData(req, isHistory = false, isImageExporter = fa
         // ŽÁDNÁ PODMÍNKA - vždy seřadíme
         
         // OPRAVA: Vytvoříme kopii týmů před sortováním pro konzistentní minitabulku
-        const teamsToSort = rankTeams(teamsByGroup[group], {
+        teamsByGroup[group] = rankTeams(teamsByGroup[group], {
             season: selectedSeason,
             matches,
             liga: selectedLiga,
@@ -1284,8 +1273,6 @@ async function prepareDashboardData(req, isHistory = false, isImageExporter = fa
                 isRegularSeasonFinished ? 'group' : 'groupInProgress'
             )
         });
-
-        teamsByGroup[group] = teamsToSort;
 
         // Uložení pořadí pro křížové tabulky
         teamsByGroup[group].forEach((t, i) => globalRealRankMap[t.id] = i + 1);
@@ -1787,7 +1774,6 @@ async function generateLeftPanel(data, isHistory = false) {
     `;
 
     const crossGroupTeams = [];
-    const zoneConfig = getLeagueZones(leagueObj);
     const escapeHtmlAttribute = value => String(value).replace(/[&<>"']/g, character => ({
         '&': '&amp;',
         '<': '&lt;',

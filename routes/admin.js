@@ -4652,38 +4652,39 @@ router.post('/standings', express.urlencoded({ extended: true }), requireAdmin, 
     const submittedSeeding = getSubmittedTeamValues(req.body, 'seeding');
     const submittedPenaltyMinutes = getSubmittedTeamValues(req.body, 'penaltyMinutes');
     const submittedPriorities = req.body.priority || {};
-    let standingsRules;
-    try {
-        standingsRules = { ...(seasonData.leagues[leagueIndex].standingsRules || {}) };
-        for (const [phase, criteria] of [
-            ['group', STANDINGS_CRITERIA.filter(item => item.key !== 'groupRank')],
-            ['groupInProgress', STANDINGS_CRITERIA.filter(item => item.key !== 'groupRank')],
-            ['crossGroup', STANDINGS_CRITERIA]
-        ]) {
-            const positions = [];
-            for (const { key } of criteria) {
-                const rawPosition = submittedPriorities?.[phase]?.[key];
-                if (rawPosition === undefined || rawPosition === '') continue;
-                if (typeof rawPosition !== 'string' || !/^\d+$/.test(rawPosition)) {
-                    throw new Error('Priorita kritéria musí být kladné celé číslo.');
-                }
-                const position = Number(rawPosition);
-                if (position < 1 || position > criteria.length) {
-                    throw new Error(`Priorita kritéria pro ${phase} musí být mezi 1 a ${criteria.length}.`);
-                }
-                positions.push({ criterion: key, position });
+    const standingsRules = { ...(seasonData.leagues[leagueIndex].standingsRules || {}) };
+    for (const [phase, criteria] of [
+        ['group', STANDINGS_CRITERIA.filter(item => item.key !== 'groupRank')],
+        ['groupInProgress', STANDINGS_CRITERIA.filter(item => item.key !== 'groupRank')],
+        ['crossGroup', STANDINGS_CRITERIA]
+    ]) {
+        const positions = [];
+        for (const { key } of criteria) {
+            const rawPosition = submittedPriorities?.[phase]?.[key];
+            if (rawPosition === undefined || rawPosition === '') continue;
+            if (typeof rawPosition !== 'string' || !/^\d+$/.test(rawPosition)) {
+                return res.status(400).send('Priorita kritéria musí být kladné celé číslo.');
             }
-            if (new Set(positions.map(item => item.position)).size !== positions.length) {
-                throw new Error(`V pořadí ${phase} jsou duplicitní priority.`);
+            const position = Number(rawPosition);
+            if (position < 1 || position > criteria.length) {
+                return res.status(400).send(
+                    `Priorita kritéria pro ${phase} musí být mezi 1 a ${criteria.length}.`
+                );
             }
-            positions.sort((first, second) => first.position - second.position);
+            positions.push({ criterion: key, position });
+        }
+        if (new Set(positions.map(item => item.position)).size !== positions.length) {
+            return res.status(400).send(`V pořadí ${phase} jsou duplicitní priority.`);
+        }
+        positions.sort((first, second) => first.position - second.position);
+        try {
             standingsRules[phase] = normalizeStandingsCriteria(
                 positions.map(item => item.criterion),
                 phase
             );
+        } catch (error) {
+            return res.status(400).send(escapeStandingsAdminHtml(error.message));
         }
-    } catch (error) {
-        return res.status(400).send(escapeStandingsAdminHtml(error.message));
     }
 
     const usesSeeding = ['group', 'groupInProgress', 'crossGroup'].some(phase =>
@@ -9345,10 +9346,13 @@ router.post('/transfer-data', express.urlencoded({ extended: true }), requireAdm
                     }
                 });
                 const saved = await Leagues.replaceAll(allSeasonData);
-                if (!saved) throw new Error('Uložení pravidel do databáze selhalo.');
-                transferResults.push(
-                    `✅ Přenesena pravidla pořadí pro ${selectedSourceLeagues.length} lig`
-                );
+                if (!saved) {
+                    transferResults.push('❌ Chyba při převodu pravidel pořadí: Uložení do databáze selhalo.');
+                } else {
+                    transferResults.push(
+                        `✅ Přenesena pravidla pořadí pro ${selectedSourceLeagues.length} lig`
+                    );
+                }
             } catch (error) {
                 transferResults.push(`❌ Chyba při převodu pravidel pořadí: ${error.message}`);
             }
