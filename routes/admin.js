@@ -11358,7 +11358,11 @@ document.getElementById('generateGallery').addEventListener('click', async () =>
       body: JSON.stringify({_csrf:csrfToken})
     });
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Generování selhalo');
+    if (!response.ok) {
+      document.getElementById('galleryGrid').innerHTML =
+        '<div class="gallery-card"><h3>Chyba</h3><div class="gallery-error">' + String(data.error || 'Generování selhalo').replace(/[<>]/g, '') + '</div></div>';
+      return;
+    }
     const grid = document.getElementById('galleryGrid');
     grid.innerHTML = data.images.map(image => {
       const title = String(image.title).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
