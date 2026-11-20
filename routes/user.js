@@ -11,6 +11,21 @@ const { Users, Matches, TableTips, ChosenSeason, Players, Settings, Teams} = req
 const { buildStatisticsBoard } = require('../utils/statisticsBoard');
 const { getStandingsCriteria, rankTeams } = require('../utils/standings');
 
+function isTransferEnabledForSeason(transferLeagues, season, leagueName) {
+    if (Array.isArray(transferLeagues)) {
+        return transferLeagues.includes(leagueName);
+    }
+
+    const seasonLeagues = transferLeagues?.[season];
+    if (Array.isArray(seasonLeagues)) {
+        return seasonLeagues.includes(leagueName);
+    }
+    if (seasonLeagues && typeof seasonLeagues === 'object') {
+        return seasonLeagues[leagueName] === true;
+    }
+    return false;
+}
+
 function toPragueDateTime(value) {
     if (!value) return null;
     const rawValue = value instanceof Date ? value.toISOString() : String(value);
@@ -1524,29 +1539,16 @@ document.addEventListener('DOMContentLoaded', () => {
 // =========================================================
 router.get('/history', requireLogin, async (req, res) => {
     try {
-        const { Transfers, TransferLeagues, Leagues, Matches } = require('../utils/mongoDataAccess');
+        const { TransferLeagues, Leagues, Matches } = require('../utils/mongoDataAccess');
 
-        const [allSeasonData, matches, transfersData, transferLeaguesData] = await Promise.all([
+        const [allSeasonData, matches, transferLeaguesData] = await Promise.all([
             Leagues.findAll().catch(err => { console.error('Chyba načtení Leagues:', err); return {}; }),
             Matches.findAll().catch(err => { console.error('Chyba načtení Matches:', err); return []; }),
-            Transfers.findAll().catch(err => { console.error('Chyba načtení Transfers:', err); return {}; }),
             TransferLeagues.findAll().catch(err => { console.error('Chyba načtení TransferLeagues:', err); return {}; })
         ]);
 
         const isTransferEnabled = (season, leagueName) => {
-            const hasData = transfersData?.[season]?.[leagueName] && Object.keys(transfersData[season][leagueName]).length > 0;
-            if (hasData) return true;
-
-            if (Array.isArray(transferLeaguesData)) {
-                return transferLeaguesData.includes(leagueName);
-            }
-            if (transferLeaguesData?.[season]) {
-                if (Array.isArray(transferLeaguesData[season])) {
-                    return transferLeaguesData[season].includes(leagueName);
-                }
-                return !!transferLeaguesData[season][leagueName];
-            }
-            return false;
+            return isTransferEnabledForSeason(transferLeaguesData, season, leagueName);
         };
 
         const historyMap = new Map();
@@ -1724,8 +1726,9 @@ router.get('/history', requireLogin, async (req, res) => {
 // =========================================================
 router.get('/history/prestupy', requireLogin, async (req, res) => {
     try {
-        const { Transfers, Teams, Leagues } = require('../utils/mongoDataAccess');
+        const { Transfers, TransferLeagues, Teams, Leagues } = require('../utils/mongoDataAccess');
         const transfersData = await Transfers.findAll();
+        const transferLeaguesData = await TransferLeagues.findAll();
         const allTeams = await Teams.findAll();
         const leaguesData = await Leagues.findAll();
 
@@ -1734,6 +1737,9 @@ router.get('/history/prestupy', requireLogin, async (req, res) => {
         const selectedGroup = req.query.group ? parseInt(req.query.group) : null;
 
         if (!selectedLiga || !selectedSeason) {
+            return res.redirect('/history');
+        }
+        if (!isTransferEnabledForSeason(transferLeaguesData, selectedSeason, selectedLiga)) {
             return res.redirect('/history');
         }
 
@@ -1937,9 +1943,7 @@ router.get('/history/a', requireLogin, async (req, res) => {
 
         const { TransferLeagues } = require('../utils/mongoDataAccess');
         const transferLeaguesData = await TransferLeagues.findAll().catch(() => ({}));
-        const hasTransferLeagues = Array.isArray(transferLeaguesData)
-            ? transferLeaguesData.includes(selectedLiga)
-            : (transferLeaguesData?.[selectedSeason]?.includes(selectedLiga) || false);
+        const hasTransferLeagues = isTransferEnabledForSeason(transferLeaguesData, selectedSeason, selectedLiga);
 
         const usersWithTips = allUsers.filter(u => u.tips?.[selectedSeason]?.[selectedLiga]?.length > 0).sort((a, b) => a.username.localeCompare(b.username));
         const initialUser = usersWithTips.find(u => u.username === username) ? username : (usersWithTips[0]?.username || "");
@@ -2347,9 +2351,7 @@ router.get('/history/table', requireLogin, async (req, res) => {
 
         const { TransferLeagues } = require('../utils/mongoDataAccess');
         const transferLeaguesData = await TransferLeagues.findAll().catch(() => ({}));
-        const hasTransferLeagues = Array.isArray(transferLeaguesData)
-            ? transferLeaguesData.includes(selectedLiga)
-            : (transferLeaguesData?.[selectedSeason]?.includes(selectedLiga) || false);
+        const hasTransferLeagues = isTransferEnabledForSeason(transferLeaguesData, selectedSeason, selectedLiga);
 
         const usersWithTableTips = allUsers.filter(u => tableTips?.[selectedSeason]?.[selectedLiga]?.[u.username]).sort((a, b) => a.username.localeCompare(b.username));
         const initialUser = usersWithTableTips.find(u => u.username === username) ? username : (usersWithTableTips[0]?.username || "");
@@ -2533,12 +2535,20 @@ router.get('/history/roster', requireLogin, async (req, res) => {
         const { username, selectedSeason, selectedLiga, teamsInSelectedLiga } = data;
 
         // Check if league is multigroup
-        const { Leagues } = require('../utils/mongoDataAccess');
-        const leaguesData = await Leagues.findAll();
+        const { Leagues, TransferLeagues } = require('../utils/mongoDataAccess');
+        const [leaguesData, transferLeaguesData] = await Promise.all([
+            Leagues.findAll(),
+            TransferLeagues.findAll()
+        ]);
         const leaguesForSeasonData = leaguesData[selectedSeason]?.leagues || [];
         const leagueObj = leaguesForSeasonData.find(l => l.name === selectedLiga);
         const isMultigroup = leagueObj?.isMultigroup || false;
         const groupCount = leagueObj?.groupCount || 1;
+        const hasTransferLeagues = isTransferEnabledForSeason(
+            transferLeaguesData,
+            selectedSeason,
+            selectedLiga
+        );
 
         // Filter teams by group if selected
         const filteredTeams = selectedGroup ? teamsInSelectedLiga.filter(t => t.group === selectedGroup) : teamsInSelectedLiga;
@@ -2576,7 +2586,10 @@ ${await renderUserHeader({
             <a class="segmented-btn" href="/history">← Zpět na výběr</a>
             <a class="segmented-btn" href="/history/a/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy zápasů</a>
             <a class="segmented-btn" href="/history/table/?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">Tipy tabulky</a>
-            <a class="segmented-btn" href="/history/prestupy?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">📜 Přestupy</a>
+            ${hasTransferLeagues
+                ? `<a class="segmented-btn" href="/history/prestupy?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">📜 Přestupy</a>`
+                : ''
+            }
             <a class="segmented-btn active" href="/history/roster?liga=${encodeURIComponent(selectedLiga)}&season=${encodeURIComponent(selectedSeason)}">👥 Soupisky</a>
         </div>
     </div>
@@ -2842,9 +2855,7 @@ html += await generateLeftPanel(data);
 
     html += `<section class="matches-container" style="flex: 1; padding: 10px;">`;
         // KONTROLA: Má tato liga zapnuté přestupy? (podpora obou formátů)
-        const hasTransferLeagues = Array.isArray(activeTransferLeagues) 
-            ? activeTransferLeagues.includes(selectedLiga) 
-            : (activeTransferLeagues?.[selectedSeason]?.includes(selectedLiga) || false);
+        const hasTransferLeagues = isTransferEnabledForSeason(activeTransferLeagues, selectedSeason, selectedLiga);
         
         if (!hasTransferLeagues) {
             // Pokud nejsou přestupy, zobrazit všechny soupisky
