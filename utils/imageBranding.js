@@ -326,23 +326,44 @@ function drawBadge(ctx, cx, cy, radius, theme, label = 'VS') {
     drawText(ctx, label, cx, cy + 1, { size: radius * 0.56, color: theme.textColor, align: 'center' });
 }
 
-/** Malá medaile/pohár kreslená cestou (emoji se v canvasu nevykreslí spolehlivě). */
-function drawMedal(ctx, cx, cy, color, innerColor = '#ffffff') {
+/** Malý pohár kreslený cestou (emoji se v canvasu nevykreslí spolehlivě). */
+function drawTrophy(ctx, cx, cy, color, innerColor = '#ffffff') {
     resetShadow(ctx);
-    ctx.fillStyle = color;
+
+    // Miska poháru
     ctx.beginPath();
-    ctx.moveTo(cx - 6, cy + 6);
-    ctx.lineTo(cx - 2, cy + 18);
-    ctx.lineTo(cx + 2, cy + 18);
-    ctx.lineTo(cx + 6, cy + 6);
+    ctx.moveTo(cx - 11, cy - 10);
+    ctx.lineTo(cx + 11, cy - 10);
+    ctx.quadraticCurveTo(cx + 9, cy + 7, cx, cy + 10);
+    ctx.quadraticCurveTo(cx - 9, cy + 7, cx - 11, cy - 10);
     ctx.closePath();
+    ctx.fillStyle = color;
     ctx.fill();
+
+    // Levé a pravé ouško
     ctx.beginPath();
-    ctx.arc(cx, cy, 10, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.arc(cx - 12, cy - 4, 5, Math.PI * 0.5, Math.PI * 1.5);
+    ctx.arc(cx + 12, cy - 4, 5, Math.PI * 1.5, Math.PI * 0.5);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Lesklý střed
     ctx.fillStyle = innerColor;
     ctx.beginPath();
-    ctx.arc(cx, cy, 3.5, 0, Math.PI * 2);
+    ctx.moveTo(cx - 3, cy - 7);
+    ctx.lineTo(cx + 1, cy - 7);
+    ctx.lineTo(cx - 1, cy + 5);
+    ctx.lineTo(cx - 4, cy + 5);
+    ctx.closePath();
+    ctx.fill();
+
+    // Stopka a podstava
+    ctx.fillStyle = color;
+    ctx.fillRect(cx - 3, cy + 8, 6, 7);
+    ctx.beginPath();
+    ctx.roundRect(cx - 9, cy + 14, 18, 4, 2);
+    ctx.fillStyle = innerColor;
     ctx.fill();
 }
 
@@ -460,7 +481,14 @@ async function drawMatchupLayout(ctx, width, height, homeTeam, awayTeam, theme, 
         drawText(ctx, (center.label || 'SKÓRE').toLocaleUpperCase('cs-CZ'), width / 2, py + 26, { size: 11, color: theme.muted, align: 'center', maxWidth: panelW - 20 });
         drawText(ctx, `${center.scoreHome}:${center.scoreAway}`, width / 2, py + 78, { size: 64, minSize: 36, color: theme.textColor, align: 'center', maxWidth: panelW - 24 });
         if (center.note) {
-            drawText(ctx, center.note, width / 2, py + panelH - 22, { size: 14, color: theme.accentColor, align: 'center', maxWidth: panelW - 20 });
+            drawText(ctx, center.note, width / 2, py + panelH - 22, {
+                size: 11,
+                minSize: 9,
+                weight: 'bold',
+                color: theme.accentColor,
+                align: 'center',
+                maxWidth: panelW - 16
+            });
         }
     } else {
         drawBadge(ctx, width / 2, midY, 39, theme, 'VS');
@@ -507,8 +535,8 @@ async function drawWinnerLayout(ctx, width, height, team, theme, { title = 'VÍT
     const label = drawText(ctx, title.toLocaleUpperCase('cs-CZ'), width / 2, titleY, { size: 22, minSize: 14, color: theme.textColor, align: 'center', maxWidth: cardW - 80 });
     if (showTrophy) {
         const labelW = ctx.measureText(label).width;
-        drawMedal(ctx, width / 2 - labelW / 2 - 20, titleY - 4, color, theme.textColor);
-        drawMedal(ctx, width / 2 + labelW / 2 + 20, titleY - 4, color, theme.textColor);
+        drawTrophy(ctx, width / 2 - labelW / 2 - 28, titleY - 2, color, theme.textColor);
+        drawTrophy(ctx, width / 2 + labelW / 2 + 28, titleY - 2, color, theme.textColor);
     }
 
     const nameY = cardY + cardH - 34;
@@ -537,7 +565,7 @@ module.exports = {
     teamInitials,
     drawTeamLogo,
     drawBadge,
-    drawMedal,
+    drawTrophy,
     drawTableHeaderRow,
     drawTableRow,
     drawWatermark,
