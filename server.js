@@ -27,11 +27,26 @@ const app = express();
 // Nastavit debug mód pro všechny routy
 app.locals.debugNoImages = DEBUG_NO_IMAGES;
 
+// Injektovat PWA manifest do všech HTML stránek
+app.use((req, res, next) => {
+    const originalSend = res.send;
+    res.send = function (body) {
+        if (typeof body === 'string' && body.includes('<!DOCTYPE html>')) {
+            // Přidat manifest odkaz do head (pokud tam už není)
+            if (!body.includes('rel="manifest"')) {
+                body = body.replace(/(<head[^>]*>)/i, `$1\n    <link rel="manifest" href="/manifest.json">`);
+            }
+        }
+        return originalSend.call(this, body);
+    };
+    next();
+});
+
 // Debug mód bez stahování obrázků (DEBUG_NO_IMAGES=true v .env)
 if (DEBUG_NO_IMAGES) {
     console.log('⚡ [DEBUG] DEBUG_NO_IMAGES je aktivní - stahování obrázků z GitHubu je vypnuté (použijí se již stažené lokální obrázky)');
 
-    // Injektovat pouze fixní plovoucí odznak
+    // Injektovat debug odznak
     app.use((req, res, next) => {
         const originalSend = res.send;
         res.send = function (body) {
