@@ -285,6 +285,8 @@ function buildConnectors(rounds, parentsOf) {
     return connectors;
 }
 
+const { getStandingsCriteria, rankTeams } = require('./standings');
+
 function matchStandingOverlay(teams, matches, season, liga) {
     const overlay = new Map();
     teams.forEach(team => overlay.set(Number(team.id), { points: 0, gf: 0, ga: 0 }));
@@ -337,46 +339,8 @@ function matchStandingOverlay(teams, matches, season, liga) {
     return overlay;
 }
 
-function compareTeams(a, b, season, scores, matches, liga, overlay) {
-    const aOver = overlay?.get(Number(a.id));
-    const bOver = overlay?.get(Number(b.id));
-    const aStats = a.stats?.[season] || {};
-    const bStats = b.stats?.[season] || {};
-    const pointsA = aOver ? aOver.points : (aStats.points || 0);
-    const pointsB = bOver ? bOver.points : (bStats.points || 0);
-    if (pointsB !== pointsA) return pointsB - pointsA;
-
-    const tieA = aStats.tiebreaker || 0;
-    const tieB = bStats.tiebreaker || 0;
-    if (tieB !== tieA) return tieA - tieB;
-
-    const scoreA = aOver || scores?.[a.id] || { gf: 0, ga: 0 };
-    const scoreB = bOver || scores?.[b.id] || { gf: 0, ga: 0 };
-    const diffA = (scoreA.gf || 0) - (scoreA.ga || 0);
-    const diffB = (scoreB.gf || 0) - (scoreB.ga || 0);
-    if (diffA !== diffB) return diffB - diffA;
-    if ((scoreA.gf || 0) !== (scoreB.gf || 0)) return (scoreB.gf || 0) - (scoreA.gf || 0);
-
-    const direct = (matches || []).find(match =>
-        match.liga === liga &&
-        match.result &&
-        !match.isPlayoff &&
-        ((Number(match.homeTeamId) === Number(a.id) && Number(match.awayTeamId) === Number(b.id)) ||
-            (Number(match.homeTeamId) === Number(b.id) && Number(match.awayTeamId) === Number(a.id)))
-    );
-    if (!direct) return 0;
-
-    const aIsHome = Number(direct.homeTeamId) === Number(a.id);
-    const homeGoals = Number(direct.result.scoreHome ?? direct.scoreHome ?? 0);
-    const awayGoals = Number(direct.result.scoreAway ?? direct.scoreAway ?? 0);
-    if (homeGoals === awayGoals) return 0;
-    const homeWon = homeGoals > awayGoals;
-    if (aIsHome) return homeWon ? -1 : 1;
-    return homeWon ? 1 : -1;
-}
-
 function buildSeedMap(teams, context) {
-    const { selectedSeason, selectedLiga, scores, matches, ranks } = context;
+    const { selectedSeason, selectedLiga, scores, matches, ranks, leagueObj } = context;
     const leagueTeams = (teams || []).filter(team => team.liga === selectedLiga);
     if (ranks && leagueTeams.some(team => Number(ranks[team.id]) > 0)) {
         const seeds = new Map();
@@ -397,15 +361,33 @@ function buildSeedMap(teams, context) {
     const seeds = new Map();
     groups.forEach(groupTeams => {
         const overlay = matchStandingOverlay(groupTeams, matches, selectedSeason, selectedLiga);
-        const sorted = groupTeams.slice().sort((a, b) => compareTeams(
-            a,
-            b,
-            selectedSeason,
-            scores,
+        const overlayScores = { ...(scores || {}) };
+        const rankingTeams = groupTeams.map(team => {
+            const standings = team.stats?.[selectedSeason] || {};
+            const overlayStats = overlay?.get(Number(team.id));
+            const gf = overlayStats?.gf ?? standings.gf ?? scores?.[team.id]?.gf ?? 0;
+            const ga = overlayStats?.ga ?? standings.ga ?? scores?.[team.id]?.ga ?? 0;
+            overlayScores[team.id] = { gf, ga };
+            return {
+                ...team,
+                stats: {
+                    ...(team.stats || {}),
+                    [selectedSeason]: {
+                        ...standings,
+                        points: overlayStats?.points ?? standings.points ?? 0,
+                        gf,
+                        ga
+                    }
+                }
+            };
+        });
+        const sorted = rankTeams(rankingTeams, {
+            season: selectedSeason,
             matches,
-            selectedLiga,
-            overlay
-        ));
+            liga: selectedLiga,
+            scores: overlayScores,
+            criteria: getStandingsCriteria(leagueObj, 'group')
+        });
         sorted.forEach((team, index) => seeds.set(Number(team.id), index + 1));
     });
     return seeds;

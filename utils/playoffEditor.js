@@ -4,6 +4,7 @@
  */
 
 const { renderPlayoffBracket, ruleLabel } = require('./playoffBracket');
+const { getStandingsCriteria, rankTeams } = require('./standings');
 
 function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, character => ({
@@ -890,29 +891,12 @@ function buildLeagueTable(teams, leagueObj, season, matches, leagueName, calcula
     const lockedIds = new Set();
     Object.keys(teamsByGroup).forEach(group => {
         // Seřazení týmů stejným způsobem jako v user.js
-        teamsByGroup[group].sort((a, b) => {
-            const aStats = a.stats?.[season] || {};
-            const bStats = b.stats?.[season] || {};
-            const aPoints = aStats.points || 0;
-            const bPoints = bStats.points || 0;
-            if (bPoints !== aPoints) return bPoints - aPoints;
-            const aTiebreaker = aStats.tiebreaker || 0;
-            const bTiebreaker = bStats.tiebreaker || 0;
-            if (aTiebreaker !== bTiebreaker) {
-                if (aTiebreaker === 0) return 1;
-                if (bTiebreaker === 0) return -1;
-                return aTiebreaker - bTiebreaker;
-            }
-            const aScores = scores[a.id] || { gf: 0, ga: 0 };
-            const bScores = scores[b.id] || { gf: 0, ga: 0 };
-            const aTotalGF = aStats.gf || aScores.gf || 0;
-            const bTotalGF = bStats.gf || bScores.gf || 0;
-            const aTotalGA = aStats.ga || aScores.ga || 0;
-            const bTotalGA = bStats.ga || bScores.ga || 0;
-            const aDiff = aTotalGF - aTotalGA;
-            const bDiff = bTotalGF - bTotalGA;
-            if (bDiff !== aDiff) return bDiff - aDiff;
-            return bTotalGF - aTotalGF;
+        teamsByGroup[group] = rankTeams(teamsByGroup[group], {
+            season,
+            matches,
+            liga: leagueName,
+            scores,
+            criteria: getStandingsCriteria(leagueObj, 'group')
         });
         teamsByGroup[group] = calculateClinchStatusesForGroup(
             teamsByGroup[group],

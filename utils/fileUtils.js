@@ -5,6 +5,11 @@ const { Teams, Users, Matches, Leagues, AllowedLeagues, ChosenSeason, Settings, 
 const { renderPlayoffBracket } = require('./playoffBracket');
 const brand = require('./imageBranding');
 const { drawBrandedBackground } = brand;
+const {
+    calculateClinchStatusesForGroup,
+    calculateCrossGroupClinchStatuses
+} = require('./clinchStatus');
+const { getStandingsCriteria, rankTeams } = require('./standings');
 
 async function requireLogin(req, res, next) {
     if (!req.session.user) {
@@ -434,351 +439,6 @@ function getLeagueZones(leagueObj) {
     };
 }
 
-function getTeamZone(index, totalTeams, cfg) {
-    const pos = index + 1;
-    if (pos <= cfg.quarterfinal) return "quarterfinal";
-    if (pos <= cfg.playin) return "playin";
-    if (pos > totalTeams - cfg.relegation) return "relegation";
-    return "neutral";
-}
-
-function getMatchesPerTeam(leagueObj, teamsInGroup, matches, season, liga) {
-    const configured = Number(leagueObj?.maxMatches) || 0;
-    const estimate = leagueObj?.isMultigroup
-        ? Math.max(1, teamsInGroup.length - 1)
-        : (configured > 100
-            ? Math.ceil((configured * 2) / Math.max(1, teamsInGroup.length))
-            : configured);
-    const teamIds = new Set(teamsInGroup.map(team => Number(team.id)));
-    const scheduled = new Map([...teamIds].map(id => [id, 0]));
-    (matches || []).forEach(match => {
-        if (match.season !== season || match.liga !== liga || match.isPlayoff) return;
-        [match.homeTeamId, match.awayTeamId].forEach(rawId => {
-            const id = Number(rawId);
-            if (scheduled.has(id)) scheduled.set(id, scheduled.get(id) + 1);
-        });
-    });
-    return Math.max(estimate, ...scheduled.values());
-}
-
-/**
- * Calculate clinch statuses for teams in a group.
- * Returns teams with added clinch status properties.
- * This function contains the same logic as generateLeftPanel for consistency.
- */
-function calculateClinchStatusesForGroup(
-    teamsInGroup,
-    leagueObj,
-    selectedSeason,
-    clinchMode,
-    scores,
-    matches = null,
-    liga = null
-) {
-    if (!teamsInGroup || teamsInGroup.length === 0) return [];
-
-    const zoneConfig = { 
-        quarterfinal: Number(leagueObj?.quarterfinal || 0),
-        playin: Number(leagueObj?.playin || 0),
-        relegation: Number(leagueObj?.relegation || 0)
-    };
-
-    const sorted = [...teamsInGroup];
-    const matchesPerTeam = getMatchesPerTeam(leagueObj, teamsInGroup, matches, selectedSeason, liga);
-
-    const qfLimit = zoneConfig.quarterfinal;
-    const playinLimit = zoneConfig.playin;
-    const relegationLimit = zoneConfig.relegation;
-    const totalAdvancing = playinLimit;
-    const safeZoneIndex = sorted.length - relegationLimit - 1;
-
-    // Helper to get max potential of teams from a starting index
-    const getMaxPotentialOfZone = (fromIndex) => {
-        let globalMax = 0;
-        if (fromIndex >= sorted.length) return 0;
-        for (let i = fromIndex; i < sorted.length; i++) {
-            const s = sorted[i].stats?.[selectedSeason] || {};
-            const played = (s.wins || 0) + (s.otWins || 0) + (s.otLosses || 0) + (s.losses || 0) + (s.manualGames || 0);
-            const remaining = Math.max(0, matchesPerTeam - played);
-            const potential = (s.points || 0) + (remaining * 3);
-            if (potential > globalMax) globalMax = potential;
-        }
-        return globalMax;
-    };
-
-    const thresholdQF = getMaxPotentialOfZone(qfLimit);
-    const thresholdPlayin = getMaxPotentialOfZone(totalAdvancing);
-    const safetyPoints = (relegationLimit > 0 && safeZoneIndex >= 0 && sorted.length > safeZoneIndex) 
-        ? (sorted[safeZoneIndex].stats?.[selectedSeason]?.points || 0) 
-        : 0;
-
-    // Helper function to check head-to-head result between two teams
-    const getHeadToHeadResult = (teamId1, teamId2) => {
-        // Pokud je priority goalDiff, nepoužíváme H2H
-        if (leagueObj?.tiebreakerPriority === 'goalDiff') return null;
-        if (!matches || !liga) return null;
-        const directMatch = matches.find(m =>
-            m.season === selectedSeason && 
-            m.liga === liga && 
-            m.result && 
-            !m.isPlayoff &&
-            ((Number(m.homeTeamId) === Number(teamId1) && Number(m.awayTeamId) === Number(teamId2)) ||
-                (Number(m.homeTeamId) === Number(teamId2) && Number(m.awayTeamId) === Number(teamId1)))
-        );
-        if (!directMatch) return null;
-        
-        const isTeam1Home = Number(directMatch.homeTeamId) === Number(teamId1);
-        let sH = directMatch.result?.scoreHome ?? directMatch.scoreHome ?? 0;
-        let sA = directMatch.result?.scoreAway ?? directMatch.scoreAway ?? 0;
-        
-        if (isTeam1Home) {
-            if (sH > sA) return 1; // team1 won
-            if (sA > sH) return -1; // team1 lost
-            return 0; // draw
-        } else {
-            if (sA > sH) return 1; // team1 won (as away)
-            if (sH > sA) return -1; // team1 lost (as away)
-            return 0; // draw
-        }
-    };
-
-    return sorted.map((team, index) => {
-        const currentZone = getTeamZone(index, teamsInGroup.length, zoneConfig);
-        const stats = team.stats?.[selectedSeason] || {};
-        const myPoints = stats.points || 0;
-        const played = (stats.wins || 0) + (stats.otWins || 0) + (stats.otLosses || 0) + (stats.losses || 0) + (stats.manualGames || 0);
-        const remaining = Math.max(0, matchesPerTeam - played);
-        const myMaxPoints = myPoints + (remaining * 3);
-        const myTie = stats.tiebreaker || 0;
-
-        let canDrop = false, canRise = false;
-
-        // Check if team below can catch up
-        for (let i = index + 1; i < sorted.length; i++) {
-            const s = sorted[i].stats?.[selectedSeason] || {};
-            const p = (s.wins || 0) + (s.otWins || 0) + (s.otLosses || 0) + (s.losses || 0) + (s.manualGames || 0);
-            const rem = Math.max(0, matchesPerTeam - p);
-            const chaserMax = (s.points || 0) + (rem * 3);
-            const chaserTie = s.tiebreaker || 0;
-
-            // Může nás přeskočit na body – vzájemný zápas rozhoduje jen při rovnosti
-            if (chaserMax > myPoints) { canDrop = true; break; }
-            if (chaserMax === myPoints) {
-                if (myTie > 0 && chaserTie > 0 && myTie < chaserTie) continue;
-                if (rem > 0 || remaining > 0) {
-                    // Check head-to-head if points would be equal
-                    const h2hResult = getHeadToHeadResult(team.id, sorted[i].id);
-                    if (h2hResult === -1) {
-                        // Prohráli jsme head-to-head, takže nás mohou dohnat
-                        canDrop = true; break;
-                    }
-                }
-            }
-        }
-
-        // Check if team above can be caught
-        if (index > 0) {
-            const leaderStats = sorted[index - 1].stats?.[selectedSeason] || {};
-            const leaderPoints = leaderStats.points || 0;
-            const leadTie = leaderStats.tiebreaker || 0;
-
-            // Můžeme je přeskočit na body – vzájemný zápas rozhoduje jen při rovnosti
-            if (myMaxPoints > leaderPoints) canRise = true;
-            else if (myMaxPoints === leaderPoints) {
-                if (myTie > 0 && leadTie > 0 && myTie > leadTie) canRise = false;
-                else if (remaining > 0) {
-                    // Check head-to-head if points would be equal
-                    const h2hResult = getHeadToHeadResult(team.id, sorted[index - 1].id);
-                    canRise = h2hResult !== -1;
-                }
-            }
-        }
-
-        const locked = !canDrop && !canRise;
-        const thresholdRelegation = (relegationLimit > 0 && safeZoneIndex >= 0 && safeZoneIndex + 1 < sorted.length) 
-            ? getMaxPotentialOfZone(safeZoneIndex + 1) 
-            : 0;
-
-        let clinchedQF = false, clinchedPlayin = false, clinchedRelegation = false, clinchedNeutral = false;
-
-        if (clinchMode === 'strict') {
-            const ptsGatekeeperQF = (qfLimit > 0 && sorted[qfLimit - 1]) 
-                ? (sorted[qfLimit - 1].stats?.[selectedSeason]?.points || 0) 
-                : 0;
-            const ptsGatekeeperPlayin = (totalAdvancing > 0 && sorted[totalAdvancing - 1]) 
-                ? (sorted[totalAdvancing - 1].stats?.[selectedSeason]?.points || 0) 
-                : 0;
-            const ptsGatekeeperSafe = (safeZoneIndex >= 0 && sorted[safeZoneIndex]) 
-                ? (sorted[safeZoneIndex].stats?.[selectedSeason]?.points || 0) 
-                : 0;
-
-            if (locked) {
-                if (qfLimit > 0 && index < qfLimit) clinchedQF = true;
-                else if (totalAdvancing > 0 && index < totalAdvancing) clinchedPlayin = true;
-                else if (relegationLimit > 0 && index > safeZoneIndex) clinchedRelegation = true;
-                else clinchedNeutral = true;
-            } else {
-                if (qfLimit > 0 && myPoints > thresholdQF) clinchedQF = true;
-                // Pokud máme stejně bodů jako tým na QF hranici, ale vyhráli jsme head-to-head, máme jistotu QF
-                if (qfLimit > 0 && index >= qfLimit && myPoints === thresholdQF) {
-                    const qfGatekeeperTeam = sorted[qfLimit - 1];
-                    if (qfGatekeeperTeam) {
-                        const h2hResult = getHeadToHeadResult(team.id, qfGatekeeperTeam.id);
-                        if (h2hResult === 1) {
-                            // Vyhráli jsme head-to-head proti týmu na QF hranici
-                            clinchedQF = true;
-                        }
-                    }
-                }
-                if (totalAdvancing > 0 && (myPoints > thresholdPlayin || totalAdvancing >= sorted.length)) {
-                    if (qfLimit === 0 || myMaxPoints < ptsGatekeeperQF) clinchedPlayin = true;
-                }
-                // Pokud máme stejně bodů jako tým na playin hranici, ale vyhráli jsme head-to-head, máme jistotu playin
-                if (totalAdvancing > 0 && index >= totalAdvancing && myPoints === thresholdPlayin) {
-                    const playinGatekeeperTeam = sorted[totalAdvancing - 1];
-                    if (playinGatekeeperTeam) {
-                        const h2hResult = getHeadToHeadResult(team.id, playinGatekeeperTeam.id);
-                        if (h2hResult === 1) {
-                            // Vyhráli jsme head-to-head proti týmu na playin hranici
-                            clinchedPlayin = true;
-                        }
-                    }
-                }
-                if (relegationLimit === 0 || myPoints > thresholdRelegation) {
-                    if (totalAdvancing === 0 || myMaxPoints < ptsGatekeeperPlayin) clinchedNeutral = true;
-                }
-                // Pokud máme stejně bodů jako tým v relegation zóně, ale vyhráli jsme head-to-head, máme jistotu neutralu
-                if (relegationLimit > 0 && index <= safeZoneIndex && myPoints === thresholdRelegation) {
-                    const relegationZoneTeam = sorted[safeZoneIndex + 1];
-                    if (relegationZoneTeam) {
-                        const h2hResult = getHeadToHeadResult(team.id, relegationZoneTeam.id);
-                        if (h2hResult === 1) {
-                            // Vyhráli jsme head-to-head proti týmu v relegation zóně
-                            clinchedNeutral = true;
-                        }
-                    }
-                }
-                if (relegationLimit > 0 && myMaxPoints < ptsGatekeeperSafe) clinchedRelegation = true;
-                // Pokud máme stejně bodů jako tým na safe zone, ale prohráli jsme head-to-head, tak je sestup jistý
-                if (relegationLimit > 0 && index > safeZoneIndex && myMaxPoints === safetyPoints) {
-                    const safeZoneTeam = sorted[safeZoneIndex];
-                    if (safeZoneTeam) {
-                        const h2hResult = getHeadToHeadResult(team.id, safeZoneTeam.id);
-                        if (h2hResult === -1) {
-                            // Prohráli jsme head-to-head proti týmu na safe zone
-                            clinchedRelegation = true;
-                        }
-                    }
-                }
-            }
-        } else {
-            if (locked) {
-                if (qfLimit > 0 && index < qfLimit) clinchedQF = true;
-                else if (totalAdvancing > 0 && index < totalAdvancing) clinchedPlayin = true;
-                else if (relegationLimit > 0 && index > safeZoneIndex) clinchedRelegation = true;
-                else clinchedNeutral = true;
-            } else {
-                if (qfLimit > 0 && myPoints > thresholdQF) clinchedQF = true;
-                // Pokud máme stejně bodů jako tým na QF hranici, ale vyhráli jsme head-to-head, máme jistotu QF
-                if (qfLimit > 0 && index >= qfLimit && myPoints === thresholdQF) {
-                    const qfGatekeeperTeam = sorted[qfLimit - 1];
-                    if (qfGatekeeperTeam) {
-                        const h2hResult = getHeadToHeadResult(team.id, qfGatekeeperTeam.id);
-                        if (h2hResult === 1) {
-                            // Vyhráli jsme head-to-head proti týmu na QF hranici
-                            clinchedQF = true;
-                        }
-                    }
-                }
-                // Kaskádový mód: playin POUZE pokud není již clinched QF
-                if (!clinchedQF && totalAdvancing > 0 && (myPoints > thresholdPlayin || totalAdvancing >= sorted.length)) {
-                    clinchedPlayin = true;
-                }
-                // Pokud máme stejně bodů jako tým na playin hranici, ale vyhráli jsme head-to-head, máme jistotu playin
-                if (totalAdvancing > 0 && index >= totalAdvancing && myPoints === thresholdPlayin) {
-                    const playinGatekeeperTeam = sorted[totalAdvancing - 1];
-                    if (playinGatekeeperTeam) {
-                        const h2hResult = getHeadToHeadResult(team.id, playinGatekeeperTeam.id);
-                        if (h2hResult === 1) {
-                            // Vyhráli jsme head-to-head proti týmu na playin hranici
-                            clinchedPlayin = true;
-                        }
-                    }
-                }
-                // Kaskádový mód: obarví neutral POUZE pokud už není clinched QF nebo playin
-                if (!clinchedQF && !clinchedPlayin) {
-                    if (relegationLimit > 0 && myPoints > thresholdRelegation) clinchedNeutral = true;
-                    else if (relegationLimit === 0) clinchedNeutral = true;
-                    // Pokud máme stejně bodů jako tým v relegation zóně, ale vyhráli jsme head-to-head, máme jistotu neutralu
-                    if (relegationLimit > 0 && index <= safeZoneIndex && myPoints === thresholdRelegation) {
-                        const relegationZoneTeam = sorted[safeZoneIndex + 1];
-                        if (relegationZoneTeam) {
-                            const h2hResult = getHeadToHeadResult(team.id, relegationZoneTeam.id);
-                            if (h2hResult === 1) {
-                                // Vyhráli jsme head-to-head proti týmu v relegation zóně
-                                clinchedNeutral = true;
-                            }
-                        }
-                    }
-                }
-                if (relegationLimit > 0 && index > safeZoneIndex && myMaxPoints < safetyPoints) clinchedRelegation = true;
-                // Pokud máme stejně bodů jako tým na safe zone, ale prohráli jsme head-to-head, tak je sestup jistý
-                if (relegationLimit > 0 && index > safeZoneIndex && myMaxPoints === safetyPoints) {
-                    const safeZoneTeam = sorted[safeZoneIndex];
-                    if (safeZoneTeam) {
-                        const h2hResult = getHeadToHeadResult(team.id, safeZoneTeam.id);
-                        if (h2hResult === -1) {
-                            // Prohráli jsme head-to-head proti týmu na safe zone
-                            clinchedRelegation = true;
-                        }
-                    }
-                }
-                // Pokud máme stejně bodů jako tým na QF hranici, ale prohráli jsme head-to-head, nemůžeme postoupit do QF
-                if (qfLimit > 0 && index >= qfLimit && myMaxPoints === thresholdQF) {
-                    const qfGatekeeperTeam = sorted[qfLimit - 1];
-                    if (qfGatekeeperTeam) {
-                        const h2hResult = getHeadToHeadResult(team.id, qfGatekeeperTeam.id);
-                        if (h2hResult === -1) {
-                            // Prohráli jsme head-to-head proti týmu na QF hranici
-                            clinchedQF = false;
-                        }
-                    }
-                }
-                // Pokud máme stejně bodů jako tým na playin hranici, ale prohráli jsme head-to-head, nemůžeme postoupit do playin
-                if (totalAdvancing > 0 && index >= totalAdvancing && myMaxPoints === thresholdPlayin) {
-                    const playinGatekeeperTeam = sorted[totalAdvancing - 1];
-                    if (playinGatekeeperTeam) {
-                        const h2hResult = getHeadToHeadResult(team.id, playinGatekeeperTeam.id);
-                        if (h2hResult === -1) {
-                            // Prohráli jsme head-to-head proti týmu na playin hranici
-                            clinchedPlayin = false;
-                        }
-                    }
-                }
-            }
-        }
-
-        const teamStats = scores[team.id] || { gf: 0, ga: 0 };
-        const goalDiff = teamStats.gf - teamStats.ga;
-
-        return {
-            ...team,
-            _clinchStatus: {
-                currentZone,
-                locked,
-                clinchedQF,
-                clinchedPlayin,
-                clinchedRelegation,
-                clinchedNeutral,
-                matchesPlayed: played,
-                goalDiff,
-                gf: teamStats.gf,
-                ga: teamStats.ga
-            }
-        };
-    });
-}
-
 async function renameLeagueGlobal(oldName, newName) {
     // 1. ALLOWEDLEAGUES (MongoDB)
     try {
@@ -1171,125 +831,18 @@ async function evaluateRegularSeasonTable(season, liga, groupKey = null, isForLe
     const globalRealRankMap = {};
 
     Object.keys(groupedTeamsReal).forEach(gKey => {
-        const teamsInGroup = groupedTeamsReal[gKey];
-
-        teamsInGroup.sort((a, b) => {
-            const aStats = a.stats?.[season] || {};
-            const bStats = b.stats?.[season] || {};
-            const pA = aStats.points || 0;
-            const pB = bStats.points || 0;
-
-            if (pB !== pA) return pB - pA; // 1. Body
-
-            const tieA = aStats.tiebreaker || 0;
-            const tieB = bStats.tiebreaker || 0;
-            if (tieB !== tieA) return tieA - tieB; // Manuální Tiebreaker
-
-            const tiedTeamIds = teamsInGroup
-                .filter(t => (t.stats?.[season]?.points || 0) === pA)
-                .map(t => Number(t.id));
-
-            const getMiniStats = (teamId) => {
-                let mPts = 0, mDiff = 0, mGF = 0;
-                const groupMatches = matches.filter(m =>
-                    m.season === season &&
-                    m.liga === liga &&
-                    m.result &&
-                    !m.isPlayoff &&
-                    tiedTeamIds.includes(Number(m.homeTeamId)) &&
-                    tiedTeamIds.includes(Number(m.awayTeamId)) &&
-                    (Number(m.homeTeamId) === teamId || Number(m.awayTeamId) === teamId)
-                );
-
-                groupMatches.forEach(m => {
-                    const isHome = Number(m.homeTeamId) === teamId;
-                    let sH = m.result?.scoreHome !== undefined ? Number(m.result.scoreHome) : (m.scoreHome !== undefined ? Number(m.scoreHome) : 0);
-                    let sA = m.result?.scoreAway !== undefined ? Number(m.result.scoreAway) : (m.scoreAway !== undefined ? Number(m.scoreAway) : 0);
-                    const isOt = m.result?.ot || m.ot;
-
-                    let hPts, aPts;
-                    if (sH > sA) { hPts = isOt ? 2 : 3; aPts = isOt ? 1 : 0; }
-                    else if (sA > sH) { aPts = isOt ? 2 : 3; hPts = isOt ? 1 : 0; }
-                    else { hPts = 1; aPts = 1; }
-
-                    let pts, gf, ga;
-                    if (isHome) { pts = hPts; gf = sH; ga = sA; }
-                    else { pts = aPts; gf = sA; ga = sH; }
-
-                    mPts += pts; mDiff += (gf - ga); mGF += gf;
-                });
-                return {pts: mPts, diff: mDiff, gf: mGF};
-            };
-
-            const msA = getMiniStats(Number(a.id));
-            const msB = getMiniStats(Number(b.id));
-
-            if (msB.pts !== msA.pts) return msB.pts - msA.pts; // 2. Body v minitabulce
-
-            // Podle priority tiebreaker určíme pořadí kritérií
-            if (tiebreakerPriority === 'goalDiff') {
-                // Priorita: Celkové skóre před H2H
-                const sA_overall = scores[a.id] || {gf: 0, ga: 0};
-                const sB_overall = scores[b.id] || {gf: 0, ga: 0};
-                const diffA = sA_overall.gf - sA_overall.ga;
-                const diffB = sB_overall.gf - sB_overall.ga;
-                if (diffA !== diffB) return diffB - diffA; // 3. Celkové skóre
-
-                if (msB.diff !== msA.diff) return msB.diff - msA.diff; // 4. Rozdíl skóre minitab.
-                if (msB.gf !== msA.gf) return msB.gf - msA.gf; // 5. Vstřelené góly minitab.
-
-                const directMatch = matches.find(m =>
-                    m.season === season && m.liga === liga && m.result && !m.isPlayoff &&
-                    ((Number(m.homeTeamId) === Number(a.id) && Number(m.awayTeamId) === Number(b.id)) ||
-                        (Number(m.homeTeamId) === Number(b.id) && Number(m.awayTeamId) === Number(a.id)))
-                );
-
-                if (directMatch) {
-                    const isAHome = Number(directMatch.homeTeamId) === Number(a.id);
-                    let sH = directMatch.result?.scoreHome ?? directMatch.scoreHome ?? 0;
-                    let sA = directMatch.result?.scoreAway ?? directMatch.scoreAway ?? 0;
-
-                    if (isAHome) { if (sH > sA) return -1; if (sA > sH) return 1; }
-                    else { if (sA > sH) return -1; if (sH > sA) return 1; }
-                }
-            } else {
-                // Priorita: H2H před celkovým skórem (výchozí)
-                if (msB.diff !== msA.diff) return msB.diff - msA.diff; // 3. Rozdíl skóre minitab.
-                if (msB.gf !== msA.gf) return msB.gf - msA.gf; // 4. Vstřelené góly minitab.
-
-                const directMatch = matches.find(m =>
-                    m.season === season && m.liga === liga && m.result && !m.isPlayoff &&
-                    ((Number(m.homeTeamId) === Number(a.id) && Number(m.awayTeamId) === Number(b.id)) ||
-                        (Number(m.homeTeamId) === Number(b.id) && Number(m.awayTeamId) === Number(a.id)))
-                );
-
-                if (directMatch) {
-                    const isAHome = Number(directMatch.homeTeamId) === Number(a.id);
-                    let sH = directMatch.result?.scoreHome ?? directMatch.scoreHome ?? 0;
-                    let sA = directMatch.result?.scoreAway ?? directMatch.scoreAway ?? 0;
-
-                    if (isAHome) { if (sH > sA) return -1; if (sA > sH) return 1; }
-                    else { if (sA > sH) return -1; if (sH > sA) return 1; }
-                }
-
-                const sA_overall = scores[a.id] || {gf: 0, ga: 0};
-                const sB_overall = scores[b.id] || {gf: 0, ga: 0};
-                const diffA = sA_overall.gf - sA_overall.ga;
-                const diffB = sB_overall.gf - sB_overall.ga;
-                if (diffA !== diffB) return diffB - diffA; // 5. Celkové skóre
-            }
-
-            return 0;
+        const rankedTeams = rankTeams(groupedTeamsReal[gKey], {
+            season,
+            matches,
+            liga,
+            scores,
+            criteria: getStandingsCriteria(leagueObj, 'group')
         });
-
-        // Uložení reálného pořadí
-        teamsInGroup.forEach((t, i) => {
-            globalRealRankMap[t.id] = i + 1;
+        rankedTeams.forEach((team, index) => {
+            globalRealRankMap[team.id] = index + 1;
         });
     });
 
-    // 4. VYHODNOCENÍ UŽIVATELŮ VŮČI IIHF POŘADÍ
-    // 4. VYHODNOCENÍ UŽIVATELŮ VŮČI IIHF POŘADÍ
     users.forEach(user => {
         if (!user.stats) user.stats = {};
         if (!user.stats[season]) user.stats[season] = {};
@@ -1721,104 +1274,17 @@ async function prepareDashboardData(req, isHistory = false, isImageExporter = fa
         // ŽÁDNÁ PODMÍNKA - vždy seřadíme
         
         // OPRAVA: Vytvoříme kopii týmů před sortováním pro konzistentní minitabulku
-        const teamsToSort = [...teamsByGroup[group]];
-        
-        teamsToSort.sort((a, b) => {
-            const aStats = a.stats?.[selectedSeason] || {};
-            const bStats = b.stats?.[selectedSeason] || {};
-            const pA = aStats.points || 0;
-            const pB = bStats.points || 0;
-
-            if (pB !== pA) return pB - pA;
-            const tieA = aStats.tiebreaker || 0;
-            const tieB = bStats.tiebreaker || 0;
-            if (tieB !== tieA) return tieA - tieB;
-
-            // OPRAVA: Používáme teamsToSort (kopie) místo teamsByGroup[group] pro konzistentní filter
-            const tiedTeamIds = teamsToSort.filter(t => (t.stats?.[selectedSeason]?.points || 0) === pA).map(t => Number(t.id));
-
-            const getMiniStats = (teamId) => {
-                let mPts = 0, mDiff = 0, mGF = 0;
-                const groupMatches = matches.filter(m =>
-                    m.season === selectedSeason && m.result && !m.isPlayoff &&
-                    tiedTeamIds.includes(Number(m.homeTeamId)) && tiedTeamIds.includes(Number(m.awayTeamId)) &&
-                    (Number(m.homeTeamId) === teamId || Number(m.awayTeamId) === teamId)
-                );
-                groupMatches.forEach(m => {
-                    const isHome = Number(m.homeTeamId) === teamId;
-                    let sH = m.result?.scoreHome !== undefined ? Number(m.result.scoreHome) : (m.scoreHome !== undefined ? Number(m.scoreHome) : 0);
-                    let sA = m.result?.scoreAway !== undefined ? Number(m.result.scoreAway) : (m.scoreAway !== undefined ? Number(m.scoreAway) : 0);
-                    const isOt = m.result?.ot || m.ot;
-                    let hPts, aPts;
-                    if (sH > sA) { hPts = isOt ? 2 : 3; aPts = isOt ? 1 : 0; }
-                    else if (sA > sH) { aPts = isOt ? 2 : 3; hPts = isOt ? 1 : 0; }
-                    else { hPts=1; aPts=1; }
-                    if (isHome) { mPts += hPts; mDiff += (sH - sA); mGF += sH; }
-                    else { mPts += aPts; mDiff += (sA - sH); mGF += sA; }
-                });
-                return { pts: mPts, diff: mDiff, gf: mGF };
-            };
-
-            const msA = getMiniStats(Number(a.id));
-            const msB = getMiniStats(Number(b.id));
-
-            if (msB.pts !== msA.pts) return msB.pts - msA.pts;
-
-            // Podle priority tiebreaker určíme pořadí kritérií
-            if (leagueObj?.tiebreakerPriority === 'goalDiff') {
-                // Priorita: Celkové skóre před H2H
-                const sA_overall = scores[a.id] || {gf:0, ga:0};
-                const sB_overall = scores[b.id] || {gf:0, ga:0};
-                const diffA = sA_overall.gf - sA_overall.ga;
-                const diffB = sB_overall.gf - sB_overall.ga;
-                if (diffA !== diffB) return diffB - diffA;
-
-                if (msB.diff !== msA.diff) return msB.diff - msA.diff;
-                if (msB.gf !== msA.gf) return msB.gf - msA.gf;
-
-                const directMatch = matches.find(m =>
-                    m.season === selectedSeason && m.result && !m.isPlayoff &&
-                    ((Number(m.homeTeamId) === Number(a.id) && Number(m.awayTeamId) === Number(b.id)) ||
-                        (Number(m.homeTeamId) === Number(b.id) && Number(m.awayTeamId) === Number(a.id)))
-                );
-
-                if (directMatch) {
-                    const isAHome = Number(directMatch.homeTeamId) === Number(a.id);
-                    let sH = directMatch.result?.scoreHome ?? directMatch.scoreHome ?? 0;
-                    let sA = directMatch.result?.scoreAway ?? directMatch.scoreAway ?? 0;
-                    if (isAHome) { if (sH > sA) return -1; if (sA > sH) return 1; }
-                    else { if (sA > sH) return -1; if (sH > sA) return 1; }
-                }
-            } else {
-                // Priorita: H2H před celkovým skórem (výchozí)
-                if (msB.diff !== msA.diff) return msB.diff - msA.diff;
-                if (msB.gf !== msA.gf) return msB.gf - msA.gf;
-
-                const directMatch = matches.find(m =>
-                    m.season === selectedSeason && m.result && !m.isPlayoff &&
-                    ((Number(m.homeTeamId) === Number(a.id) && Number(m.awayTeamId) === Number(b.id)) ||
-                        (Number(m.homeTeamId) === Number(b.id) && Number(m.awayTeamId) === Number(a.id)))
-                );
-
-                if (directMatch) {
-                    const isAHome = Number(directMatch.homeTeamId) === Number(a.id);
-                    let sH = directMatch.result?.scoreHome ?? directMatch.scoreHome ?? 0;
-                    let sA = directMatch.result?.scoreAway ?? directMatch.scoreAway ?? 0;
-                    if (isAHome) { if (sH > sA) return -1; if (sA > sH) return 1; }
-                    else { if (sA > sH) return -1; if (sH > sA) return 1; }
-                }
-
-                const sA = scores[a.id] || {gf:0, ga:0};
-                const sB = scores[b.id] || {gf:0, ga:0};
-                const diffA = sA.gf - sA.ga;
-                const diffB = sB.gf - sB.ga;
-                if (diffA !== diffB) return diffB - diffA;
-            }
-
-            return 0;
+        const teamsToSort = rankTeams(teamsByGroup[group], {
+            season: selectedSeason,
+            matches,
+            liga: selectedLiga,
+            scores,
+            criteria: getStandingsCriteria(
+                leagueObj,
+                isRegularSeasonFinished ? 'group' : 'groupInProgress'
+            )
         });
 
-        // OPRAVA: Nahradíme původní pole seřazenou kopií
         teamsByGroup[group] = teamsToSort;
 
         // Uložení pořadí pro křížové tabulky
@@ -2383,7 +1849,12 @@ async function generateLeftPanel(data, isHistory = false) {
 
         if (leagueObj.crossGroupTable && leagueObj.crossGroupPosition > 0) {
             const targetIndex = leagueObj.crossGroupPosition - 1;
-            if (teamsInGroup[targetIndex]) crossGroupTeams.push(teamsInGroup[targetIndex]);
+            if (teamsInGroup[targetIndex]) {
+                crossGroupTeams.push({
+                    ...teamsInGroup[targetIndex],
+                    groupRank: targetIndex + 1
+                });
+            }
         }
 
         html += `
@@ -2406,197 +1877,31 @@ async function generateLeftPanel(data, isHistory = false) {
         </thead>
         <tbody>`;
 
-        const sorted = teamsInGroup;
-        const matchesPerTeam = getMatchesPerTeam(leagueObj, teamsInGroup, matches, selectedSeason, selectedLiga);
+        const teamsWithStatuses = calculateClinchStatusesForGroup(
+            teamsInGroup,
+            leagueObj,
+            selectedSeason,
+            clinchMode,
+            scores,
+            matches,
+            selectedLiga
+        );
 
-        const qfLimit = leagueObj.quarterfinal || 0;
-        const playinLimit = leagueObj.playin || 0;
-        const relegationLimit = leagueObj.relegation || 0;
-        const totalAdvancing = playinLimit;
-        const safeZoneIndex = sorted.length - relegationLimit - 1;
-
-        const getMaxPotentialOfZone = (fromIndex) => {
-            let globalMax = 0;
-            if (fromIndex >= sorted.length) return 0;
-            for (let i = fromIndex; i < sorted.length; i++) {
-                const s = sorted[i].stats?.[selectedSeason] || {};
-                const played = (s.wins || 0) + (s.otWins || 0) + (s.otLosses || 0) + (s.losses || 0) + (s.manualGames || 0);
-                const remaining = Math.max(0, matchesPerTeam - played);
-                const potential = (s.points || 0) + (remaining * 3);
-                if (potential > globalMax) globalMax = potential;
-            }
-            return globalMax;
-        };
-
-        const thresholdQF = getMaxPotentialOfZone(qfLimit);
-        const thresholdPlayin = getMaxPotentialOfZone(totalAdvancing);
-        let safetyPoints = (relegationLimit > 0 && safeZoneIndex >= 0 && sorted.length > safeZoneIndex) ? (sorted[safeZoneIndex].stats?.[selectedSeason]?.points || 0) : 0;
-
-        const getHeadToHeadResult = (teamId1, teamId2) => {
-            if (leagueObj?.tiebreakerPriority === 'goalDiff') return null;
-            if (!matches || !selectedLiga) return null;
-            const directMatch = matches.find(m =>
-                m.season === selectedSeason &&
-                m.liga === selectedLiga &&
-                m.result &&
-                !m.isPlayoff &&
-                ((Number(m.homeTeamId) === Number(teamId1) && Number(m.awayTeamId) === Number(teamId2)) ||
-                    (Number(m.homeTeamId) === Number(teamId2) && Number(m.awayTeamId) === Number(teamId1)))
-            );
-            if (!directMatch) return null;
-
-            const isTeam1Home = Number(directMatch.homeTeamId) === Number(teamId1);
-            let sH = directMatch.result?.scoreHome ?? directMatch.scoreHome ?? 0;
-            let sA = directMatch.result?.scoreAway ?? directMatch.scoreAway ?? 0;
-
-            if (isTeam1Home) {
-                if (sH > sA) return 1;
-                if (sA > sH) return -1;
-                return 0;
-            } else {
-                if (sA > sH) return 1;
-                if (sH > sA) return -1;
-                return 0;
-            }
-        };
-
-        teamsInGroup.forEach((team, index) => {
-            const currentZone = getTeamZone(index, teamsInGroup.length, zoneConfig);
+        teamsWithStatuses.forEach((team, index) => {
             const stats = team.stats?.[selectedSeason] || {};
             const myPoints = stats.points || 0;
             const played = (stats.wins || 0) + (stats.otWins || 0) + (stats.otLosses || 0) + (stats.losses || 0) + (stats.manualGames || 0);
-            const remaining = Math.max(0, matchesPerTeam - played);
-            const myMaxPoints = myPoints + (remaining * 3);
-            const myTie = stats.tiebreaker || 0;
-
-            let canDrop = false, canRise = false;
-
-            for (let i = index + 1; i < sorted.length; i++) {
-                const s = sorted[i].stats?.[selectedSeason] || {};
-                const p = (s.wins || 0) + (s.otWins || 0) + (s.otLosses || 0) + (s.losses || 0) + (s.manualGames || 0);
-                const rem = Math.max(0, matchesPerTeam - p);
-                const chaserMax = (s.points || 0) + (rem * 3);
-                const chaserTie = s.tiebreaker || 0;
-
-                if (chaserMax > myPoints) { canDrop = true; break; }
-                if (chaserMax === myPoints) {
-                    if (myTie > 0 && chaserTie > 0 && myTie < chaserTie) continue;
-                    if (rem > 0 || remaining > 0) { canDrop = true; break; }
-                }
-            }
-
-            if (index > 0) {
-                const leaderStats = sorted[index - 1].stats?.[selectedSeason] || {};
-                const leaderPoints = leaderStats.points || 0;
-                const leadTie = leaderStats.tiebreaker || 0;
-
-                if (myMaxPoints > leaderPoints) canRise = true;
-                else if (myMaxPoints === leaderPoints) {
-                    if (myTie > 0 && leadTie > 0 && myTie > leadTie) canRise = false;
-                    else if (remaining > 0) {
-                        const h2hResult = getHeadToHeadResult(team.id, sorted[index - 1].id);
-                        canRise = h2hResult !== -1;
-                    }
-                }
-            }
-
-            const locked = !canDrop && !canRise;
-            let thresholdRelegation = (relegationLimit > 0 && safeZoneIndex >= 0 && safeZoneIndex + 1 < sorted.length) ? getMaxPotentialOfZone(safeZoneIndex + 1) : 0;
-
-            let clinchedQF = false, clinchedPlayin = false, clinchedRelegation = false, clinchedNeutral = false;
-            let rowClass = currentZone;
-
-            if (clinchMode === 'strict') {
-                const ptsGatekeeperQF = (qfLimit > 0 && sorted[qfLimit - 1]) ? (sorted[qfLimit - 1].stats?.[selectedSeason]?.points || 0) : 0;
-                const ptsGatekeeperPlayin = (totalAdvancing > 0 && sorted[totalAdvancing - 1]) ? (sorted[totalAdvancing - 1].stats?.[selectedSeason]?.points || 0) : 0;
-                const ptsGatekeeperSafe = (safeZoneIndex >= 0 && sorted[safeZoneIndex]) ? (sorted[safeZoneIndex].stats?.[selectedSeason]?.points || 0) : 0;
-
-                if (locked) {
-                    if (qfLimit > 0 && index < qfLimit) clinchedQF = true;
-                    else if (totalAdvancing > 0 && index < totalAdvancing) clinchedPlayin = true;
-                    else if (relegationLimit > 0 && index > safeZoneIndex) clinchedRelegation = true;
-                    else clinchedNeutral = true;
-                } else {
-                    if (qfLimit > 0 && myPoints > thresholdQF) clinchedQF = true;
-                    if (totalAdvancing > 0 && (myPoints > thresholdPlayin || totalAdvancing >= sorted.length)) {
-                        if (qfLimit === 0 || myMaxPoints < ptsGatekeeperQF) clinchedPlayin = true;
-                    }
-                    if (relegationLimit === 0 || myPoints > thresholdRelegation) {
-                        if (totalAdvancing === 0 || myMaxPoints < ptsGatekeeperPlayin) clinchedNeutral = true;
-                    }
-                    if (relegationLimit > 0 && myMaxPoints < ptsGatekeeperSafe) clinchedRelegation = true;
-                }
-            } else {
-                if (locked) {
-                    if (qfLimit > 0 && index < qfLimit) clinchedQF = true;
-                    else if (totalAdvancing > 0 && index < totalAdvancing) clinchedPlayin = true;
-                    else if (relegationLimit > 0 && index > safeZoneIndex) clinchedRelegation = true;
-                    else clinchedNeutral = true;
-                } else {
-                    if (qfLimit > 0 && myPoints > thresholdQF) clinchedQF = true;
-                    if (qfLimit > 0 && index >= qfLimit && myPoints === thresholdQF) {
-                        const qfGatekeeperTeam = sorted[qfLimit - 1];
-                        if (qfGatekeeperTeam) {
-                            const h2hResult = getHeadToHeadResult(team.id, qfGatekeeperTeam.id);
-                            if (h2hResult === 1) clinchedQF = true;
-                        }
-                    }
-                    if (!clinchedQF && totalAdvancing > 0 && (myPoints > thresholdPlayin || totalAdvancing >= sorted.length)) {
-                        clinchedPlayin = true;
-                    }
-                    if (totalAdvancing > 0 && index >= totalAdvancing && myPoints === thresholdPlayin) {
-                        const playinGatekeeperTeam = sorted[totalAdvancing - 1];
-                        if (playinGatekeeperTeam) {
-                            const h2hResult = getHeadToHeadResult(team.id, playinGatekeeperTeam.id);
-                            if (h2hResult === 1) clinchedPlayin = true;
-                        }
-                    }
-                    if (!clinchedQF && !clinchedPlayin) {
-                        if (relegationLimit > 0 && myPoints > thresholdRelegation) clinchedNeutral = true;
-                        else if (relegationLimit === 0) clinchedNeutral = true;
-                        if (relegationLimit > 0 && index <= safeZoneIndex && myPoints === thresholdRelegation) {
-                            const relegationZoneTeam = sorted[safeZoneIndex + 1];
-                            if (relegationZoneTeam) {
-                                const h2hResult = getHeadToHeadResult(team.id, relegationZoneTeam.id);
-                                if (h2hResult === 1) clinchedNeutral = true;
-                            }
-                        }
-                    }
-                    if (relegationLimit > 0 && index > safeZoneIndex && myMaxPoints < safetyPoints) clinchedRelegation = true;
-                    if (relegationLimit > 0 && index > safeZoneIndex && myMaxPoints === safetyPoints) {
-                        const safeZoneTeam = sorted[safeZoneIndex];
-                        if (safeZoneTeam) {
-                            const h2hResult = getHeadToHeadResult(team.id, safeZoneTeam.id);
-                            if (h2hResult === -1) clinchedRelegation = true;
-                        }
-                    }
-                    if (qfLimit > 0 && index >= qfLimit && myMaxPoints === thresholdQF) {
-                        const qfGatekeeperTeam = sorted[qfLimit - 1];
-                        if (qfGatekeeperTeam) {
-                            const h2hResult = getHeadToHeadResult(team.id, qfGatekeeperTeam.id);
-                            if (h2hResult === -1) clinchedQF = false;
-                        }
-                    }
-                    if (totalAdvancing > 0 && index >= totalAdvancing && myMaxPoints === thresholdPlayin) {
-                        const playinGatekeeperTeam = sorted[totalAdvancing - 1];
-                        if (playinGatekeeperTeam) {
-                            const h2hResult = getHeadToHeadResult(team.id, playinGatekeeperTeam.id);
-                            if (h2hResult === -1) clinchedPlayin = false;
-                        }
-                    }
-                }
-            }
-
-            team._clinchStatus = {
+            const {
                 currentZone,
                 locked,
                 clinchedQF,
                 clinchedPlayin,
                 clinchedRelegation,
                 clinchedNeutral
-            };
-            if (locked) lockedTeamIds.add(Number(team.id));
+            } = team._clinchStatus;
+            let rowClass = currentZone;
 
+            if (locked) lockedTeamIds.add(Number(team.id));
             if (clinchedRelegation) rowClass = 'clinched-relegation';
             else if (clinchedNeutral) rowClass = 'clinched-neutral';
             else if (clinchedPlayin) rowClass = 'clinched-playin';
@@ -2611,6 +1916,7 @@ async function generateLeftPanel(data, isHistory = false) {
             const teamStats = scores[team.id] || { gf: 0, ga: 0 };
             const goalDiff = teamStats.gf - teamStats.ga;
             const teamLogoUrl = team.logo ? `/logoteamu/${team.logo}` : '';
+
             const recentForm = getRecentTeamForm(team);
 
             html += `<tr class="${rowClass}">
@@ -2651,60 +1957,14 @@ async function generateLeftPanel(data, isHistory = false) {
         const crossConfig = leagueObj.crossGroupConfig || { quarterfinal: 0, playin: 0, relegation: 0 };
         html += `<h2 style="text-align: center; margin-top: 30px; border-top: 2px solid #444; padding-top: 20px;">Tabulka týmů na ${leagueObj.crossGroupPosition}. místě</h2>`;
 
-        crossGroupTeams.sort((a, b) => {
-            const aStats = a.stats?.[selectedSeason] || {};
-            const bStats = b.stats?.[selectedSeason] || {};
-            const pA = aStats.points || 0;
-            const pB = bStats.points || 0;
-            if (pB !== pA) return pB - pA;
-
-            const tieA = aStats.tiebreaker || 0;
-            const tieB = bStats.tiebreaker || 0;
-            if (tieB !== tieA) return tieA - tieB;
-
-            if (leagueObj?.tiebreakerPriority === 'goalDiff') {
-                const sA = scores[a.id] || {gf:0, ga:0};
-                const sB = scores[b.id] || {gf:0, ga:0};
-                const diffA = sA.gf - sA.ga;
-                const diffB = sB.gf - sB.ga;
-                if (diffA !== diffB) return diffB - diffA;
-                if (sA.gf !== sB.gf) return sB.gf - sA.gf;
-
-                const directMatch = matches.find(m =>
-                    m.season === selectedSeason && m.liga === selectedLiga && m.result && !m.isPlayoff &&
-                    ((Number(m.homeTeamId) === Number(a.id) && Number(m.awayTeamId) === Number(b.id)) ||
-                        (Number(m.homeTeamId) === Number(b.id) && Number(m.awayTeamId) === Number(a.id)))
-                );
-                if (directMatch) {
-                    const isAHome = Number(directMatch.homeTeamId) === Number(a.id);
-                    let sH = directMatch.result?.scoreHome ?? directMatch.scoreHome ?? 0;
-                    let sA = directMatch.result?.scoreAway ?? directMatch.scoreAway ?? 0;
-                    if (isAHome) { if (sH > sA) return -1; if (sA > sH) return 1; }
-                    else { if (sA > sH) return -1; if (sH > sA) return 1; }
-                }
-            } else {
-                const sA = scores[a.id] || {gf:0, ga:0};
-                const sB = scores[b.id] || {gf:0, ga:0};
-                const diffA = sA.gf - sA.ga;
-                const diffB = sB.gf - sB.ga;
-                if (diffA !== diffB) return diffB - diffA;
-                if (sA.gf !== sB.gf) return sB.gf - sA.gf;
-
-                const directMatch = matches.find(m =>
-                    m.season === selectedSeason && m.liga === selectedLiga && m.result && !m.isPlayoff &&
-                    ((Number(m.homeTeamId) === Number(a.id) && Number(m.awayTeamId) === Number(b.id)) ||
-                        (Number(m.homeTeamId) === Number(b.id) && Number(m.awayTeamId) === Number(a.id)))
-                );
-                if (directMatch) {
-                    const isAHome = Number(directMatch.homeTeamId) === Number(a.id);
-                    let sH = directMatch.result?.scoreHome ?? directMatch.scoreHome ?? 0;
-                    let sA = directMatch.result?.scoreAway ?? directMatch.scoreAway ?? 0;
-                    if (isAHome) { if (sH > sA) return -1; if (sA > sH) return 1; }
-                    else { if (sA > sH) return -1; if (sH > sA) return 1; }
-                }
-            }
-            return 0;
+        const rankedCrossGroupTeams = rankTeams(crossGroupTeams, {
+            season: selectedSeason,
+            matches,
+            liga: selectedLiga,
+            scores,
+            criteria: getStandingsCriteria(leagueObj, 'crossGroup')
         });
+        crossGroupTeams.splice(0, crossGroupTeams.length, ...rankedCrossGroupTeams);
 
         html += `
         <table class="points-table">
@@ -2718,122 +1978,47 @@ async function generateLeftPanel(data, isHistory = false) {
         const cRelLimit = crossConfig.relegation || 0;
         let cTotalAdvancing = cPlayinLimit > 0 ? cPlayinLimit : cQfLimit;
         cTotalAdvancing = Math.min(cTotalAdvancing, crossGroupTeams.length);
-        const cSafeZoneIndex = crossGroupTeams.length - cRelLimit - 1;
 
-        let cMatchesPerTeam = 52;
-        if (leagueObj.isMultigroup) {
-            const estimatedGroupSize = teamsInSelectedLiga.length / (leagueObj.groupCount || 1);
-            cMatchesPerTeam = Math.max(1, Math.ceil(estimatedGroupSize) - 1);
-        } else if (leagueObj.maxMatches) {
-            cMatchesPerTeam = leagueObj.maxMatches > 100 ? Math.ceil((leagueObj.maxMatches * 2) / teamsInSelectedLiga.length) : leagueObj.maxMatches;
-        }
+        const crossGroupStatuses = calculateCrossGroupClinchStatuses(crossGroupTeams, {
+            season: selectedSeason,
+            leagueObj,
+            matches,
+            liga: selectedLiga,
+            quarterfinal: cQfLimit,
+            advancing: cTotalAdvancing,
+            relegation: cRelLimit,
+            clinchMode,
+            isRegularSeasonFinished,
+            estimateTeamCount: leagueObj.isMultigroup
+                ? teamsInSelectedLiga.length / (leagueObj.groupCount || 1)
+                : teamsInSelectedLiga.length,
+            scores
+        });
 
-        const getCrossTeamPotential = (idx) => {
-            if (idx >= crossGroupTeams.length) return 0;
-            const t = crossGroupTeams[idx];
-            const s = t.stats?.[selectedSeason] || {};
-            const played = (s.wins||0) + (s.otWins||0) + (s.otLosses||0) + (s.losses||0) + (s.manualGames || 0);
-            if (isRegularSeasonFinished) return s.points || 0;
-            return (s.points || 0) + (Math.max(0, cMatchesPerTeam - played) * 3);
-        };
-
-        const getCrossMaxPotentialOfZone = (fromIndex) => {
-            let globalMax = 0;
-            if (fromIndex >= crossGroupTeams.length) return 0;
-            for (let i = fromIndex; i < crossGroupTeams.length; i++) {
-                globalMax = Math.max(globalMax, getCrossTeamPotential(i));
-            }
-            return globalMax;
-        };
-
-        let cThresholdQF = (cQfLimit > 0 && cQfLimit < crossGroupTeams.length) ? getCrossMaxPotentialOfZone(cQfLimit) : 0;
-        let cThresholdPlayin = (cTotalAdvancing > 0 && cTotalAdvancing < crossGroupTeams.length) ? getCrossMaxPotentialOfZone(cTotalAdvancing) : 0;
-
-        crossGroupTeams.forEach((team, index) => {
+        crossGroupStatuses.forEach((team, index) => {
             const stats = team.stats?.[selectedSeason] || {};
             const myPoints = stats.points || 0;
-            const played = (stats.wins||0) + (stats.otWins||0) + (stats.otLosses||0) + (stats.losses||0) + (stats.manualGames || 0);
-            const remaining = Math.max(0, cMatchesPerTeam - played);
-            const myMaxPoints = myPoints + (remaining * 3);
+            const played = (stats.wins || 0) + (stats.otWins || 0) + (stats.otLosses || 0) + (stats.losses || 0) + (stats.manualGames || 0);
             const teamStats = scores[team.id] || {gf:0, ga:0};
             const goalDiff = teamStats.gf - teamStats.ga;
+            const {
+                currentZone,
+                locked: cLocked,
+                clinchedQF: cSafeQF,
+                clinchedPlayin: cSafePlayin,
+                clinchedRelegation: cRelegated,
+                clinchedNeutral: cNeutralLocked
+            } = team._clinchStatus;
 
-            let currentZone = "neutral";
-            if (cRelLimit > 0 && index > cSafeZoneIndex) currentZone = "relegation";
-            else if (cQfLimit > 0 && index < cQfLimit) currentZone = "quarterfinal";
-            else if (cTotalAdvancing > 0 && index < cTotalAdvancing) currentZone = "playin";
-
-            let canDrop = false;
-            for (let i = index + 1; i < crossGroupTeams.length; i++) {
-                const chaserMax = getCrossTeamPotential(i);
-                if (chaserMax > myPoints) { canDrop = true; break; }
-                const chaserPlayed = (crossGroupTeams[i].stats?.[selectedSeason]?.wins||0) + (crossGroupTeams[i].stats?.[selectedSeason]?.losses||0);
-                if (chaserMax === myPoints && !isRegularSeasonFinished && (remaining > 0 || chaserPlayed < cMatchesPerTeam)) { canDrop = true; break; }
-            }
-
-            let canRise = false;
-            if (index > 0) {
-                const prevTeamCurrentPoints = crossGroupTeams[index - 1].stats?.[selectedSeason]?.points || 0;
-                if (myMaxPoints > prevTeamCurrentPoints) canRise = true;
-                if (myMaxPoints === prevTeamCurrentPoints && !isRegularSeasonFinished && remaining > 0) canRise = true;
-            }
-
-            const cLocked = !canDrop && !canRise;
-            let cThresholdRelegation = (cRelLimit > 0 && cSafeZoneIndex >= 0 && cSafeZoneIndex + 1 < crossGroupTeams.length) ? getCrossMaxPotentialOfZone(cSafeZoneIndex + 1) : 0;
-
-            let cSafeQF = false, cSafePlayin = false, cRelegated = false, cNeutralLocked = false;
             let rowClass = currentZone;
-
-            if (clinchMode === 'strict') {
-                const cPtsGatekeeperQF = (cQfLimit > 0 && crossGroupTeams[cQfLimit - 1]) ? (crossGroupTeams[cQfLimit - 1].stats?.[selectedSeason]?.points || 0) : 0;
-                const cPtsGatekeeperPlayin = (cTotalAdvancing > 0 && crossGroupTeams[cTotalAdvancing - 1]) ? (crossGroupTeams[cTotalAdvancing - 1].stats?.[selectedSeason]?.points || 0) : 0;
-                const cPtsGatekeeperSafe = (cSafeZoneIndex >= 0 && crossGroupTeams[cSafeZoneIndex]) ? (crossGroupTeams[cSafeZoneIndex].stats?.[selectedSeason]?.points || 0) : 0;
-
-                if (cLocked) {
-                    if (cQfLimit > 0 && index < cQfLimit) cSafeQF = true;
-                    else if (cTotalAdvancing > 0 && index < cTotalAdvancing) cSafePlayin = true;
-                    else if (cRelLimit > 0 && index > cSafeZoneIndex) cRelegated = true;
-                    else cNeutralLocked = true;
-                } else {
-                    if (cQfLimit > 0 && myPoints > cThresholdQF) cSafeQF = true;
-                    if (cTotalAdvancing > 0 && (myPoints > cThresholdPlayin || cTotalAdvancing >= crossGroupTeams.length)) {
-                        if (cQfLimit === 0 || myMaxPoints < cPtsGatekeeperQF) cSafePlayin = true;
-                    }
-                    if (cRelLimit === 0 || myPoints > cThresholdRelegation) {
-                        if (cTotalAdvancing === 0 || myMaxPoints < cPtsGatekeeperPlayin) cNeutralLocked = true;
-                    }
-                    if (cRelLimit > 0 && myMaxPoints < cPtsGatekeeperSafe) cRelegated = true;
-                }
-            } else {
-                if (cLocked) {
-                    if (cQfLimit > 0 && index < cQfLimit) cSafeQF = true;
-                    else if (cTotalAdvancing > 0 && index < cTotalAdvancing) cSafePlayin = true;
-                    else if (cRelLimit > 0 && index > cSafeZoneIndex) cRelegated = true;
-                    else cNeutralLocked = true;
-                } else {
-                    if (cQfLimit > 0 && myPoints > cThresholdQF) cSafeQF = true;
-                    if (!cSafeQF && cTotalAdvancing > 0 && (myPoints > cThresholdPlayin || cTotalAdvancing >= crossGroupTeams.length)) {
-                        cSafePlayin = true;
-                    }
-                    if (!cSafeQF && !cSafePlayin) {
-                        if (cRelLimit > 0 && myPoints > cThresholdRelegation) cNeutralLocked = true;
-                        else if (cRelLimit === 0) cNeutralLocked = true;
-                    }
-                    if (cRelLimit > 0 && index > cSafeZoneIndex) {
-                        const safetyTarget = crossGroupTeams[cSafeZoneIndex]?.stats?.[selectedSeason]?.points || 0;
-                        if (myMaxPoints < safetyTarget) cRelegated = true;
-                    }
-                }
-            }
-
-            if (cRelegated) rowClass = "clinched-relegation";
-            else if (cNeutralLocked) rowClass = "clinched-neutral";
-            else if (cSafePlayin) rowClass = "clinched-playin";
-            else if (cSafeQF) rowClass = "clinched-quarterfinal";
-
-            if (cLocked) rowClass += " locked";
+            if (cRelegated) rowClass = 'clinched-relegation';
+            else if (cNeutralLocked) rowClass = 'clinched-neutral';
+            else if (cSafePlayin) rowClass = 'clinched-playin';
+            else if (cSafeQF) rowClass = 'clinched-quarterfinal';
+            if (cLocked) rowClass += ' locked';
 
             const teamLogoUrl = team.logo ? `/logoteamu/${team.logo}` : '';
+
 
             html += `<tr class="${rowClass}">
                 <td class="rank-cell ${currentZone}"><span class="rank-badge">${index + 1}</span></td>
@@ -2903,6 +2088,7 @@ async function generateLeftPanel(data, isHistory = false) {
         historical: isHistory,
         selectedSeason,
         selectedLiga,
+        leagueObj,
         visible: tableMode === 'playoff'
     });
 

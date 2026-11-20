@@ -9,6 +9,7 @@ const {
 } = require("../utils/fileUtils");
 const { Users, Matches, TableTips, ChosenSeason, Players, Settings, Teams} = require('../utils/mongoDataAccess');
 const { buildStatisticsBoard } = require('../utils/statisticsBoard');
+const { getStandingsCriteria, rankTeams } = require('../utils/standings');
 
 function toPragueDateTime(value) {
     if (!value) return null;
@@ -3707,78 +3708,15 @@ router.post("/image-exporter/generate", requireLogin, express.json({ limit: '50m
                         if (!teamsInGroup.length) continue;
                         
                         // Seřadíme stejně jako pro základní část
-                        teamsInGroup.sort((a, b) => {
-                            const aStats = a.stats?.[selectedSeason] || {};
-                            const bStats = b.stats?.[selectedSeason] || {};
-                            const aPoints = aStats.points || 0;
-                            const bPoints = bStats.points || 0;
-                            if (bPoints !== aPoints) return bPoints - aPoints;
-                            
-                            const aTiebreaker = aStats.tiebreaker || 0;
-                            const bTiebreaker = bStats.tiebreaker || 0;
-                            if (aTiebreaker !== bTiebreaker) {
-                                if (aTiebreaker === 0) return 1;
-                                if (bTiebreaker === 0) return -1;
-                                return aTiebreaker - bTiebreaker;
-                            }
-                            
-                            // Podle priority tiebreaker určíme pořadí kritérií
-                            if (leagueObj?.tiebreakerPriority === 'goalDiff') {
-                                // Priorita: Celkové skóre před H2H
-                                const aScores = scores[a.id] || { gf: 0, ga: 0 };
-                                const bScores = scores[b.id] || { gf: 0, ga: 0 };
-                                const aTotalGF = aStats.gf || aScores.gf || 0;
-                                const bTotalGF = bStats.gf || bScores.gf || 0;
-                                const aTotalGA = aStats.ga || aScores.ga || 0;
-                                const bTotalGA = bStats.ga || bScores.ga || 0;
-                                const aDiff = aTotalGF - aTotalGA;
-                                const bDiff = bTotalGF - bTotalGA;
-                                if (bDiff !== aDiff) return bDiff - aDiff;
-                                if (bTotalGF !== aTotalGF) return bTotalGF - aTotalGF;
-
-                                // H2H kontrola (jen pokud není goalDiff priority)
-                                const directMatch = matches.find(m =>
-                                    m.season === selectedSeason && m.liga === selectedLiga && m.result && !m.isPlayoff &&
-                                    ((Number(m.homeTeamId) === Number(a.id) && Number(m.awayTeamId) === Number(b.id)) ||
-                                        (Number(m.homeTeamId) === Number(b.id) && Number(m.awayTeamId) === Number(a.id)))
-                                );
-                                if (directMatch) {
-                                    const isAHome = Number(directMatch.homeTeamId) === Number(a.id);
-                                    let sH = directMatch.result?.scoreHome ?? directMatch.scoreHome ?? 0;
-                                    let sA = directMatch.result?.scoreAway ?? directMatch.scoreAway ?? 0;
-                                    if (isAHome) { if (sH > sA) return -1; if (sA > sH) return 1; }
-                                    else { if (sA > sH) return -1; if (sH > sA) return 1; }
-                                }
-                            } else {
-                                // Priorita: H2H před celkovým skórem (výchozí)
-                                const aScores = scores[a.id] || { gf: 0, ga: 0 };
-                                const bScores = scores[b.id] || { gf: 0, ga: 0 };
-                                const aTotalGF = aStats.gf || aScores.gf || 0;
-                                const bTotalGF = bStats.gf || bScores.gf || 0;
-                                const aTotalGA = aStats.ga || aScores.ga || 0;
-                                const bTotalGA = bStats.ga || bScores.ga || 0;
-                                const aDiff = aTotalGF - aTotalGA;
-                                const bDiff = bTotalGF - bTotalGA;
-                                if (bDiff !== aDiff) return bDiff - aDiff;
-                                if (bTotalGF !== aTotalGF) return bTotalGF - aTotalGF;
-
-                                const directMatch = matches.find(m =>
-                                    m.season === selectedSeason && m.liga === selectedLiga && m.result && !m.isPlayoff &&
-                                    ((Number(m.homeTeamId) === Number(a.id) && Number(m.awayTeamId) === Number(b.id)) ||
-                                        (Number(m.homeTeamId) === Number(b.id) && Number(m.awayTeamId) === Number(a.id)))
-                                );
-                                if (directMatch) {
-                                    const isAHome = Number(directMatch.homeTeamId) === Number(a.id);
-                                    let sH = directMatch.result?.scoreHome ?? directMatch.scoreHome ?? 0;
-                                    let sA = directMatch.result?.scoreAway ?? directMatch.scoreAway ?? 0;
-                                    if (isAHome) { if (sH > sA) return -1; if (sA > sH) return 1; }
-                                    else { if (sA > sH) return -1; if (sH > sA) return 1; }
-                                }
-                            }
-                            return 0;
-                        });
+                        teamsInGroup.splice(0, teamsInGroup.length, ...rankTeams(teamsInGroup, {
+                            season: selectedSeason,
+                            matches,
+                            liga: selectedLiga,
+                            scores,
+                            criteria: getStandingsCriteria(leagueObj, 'group')
+                        }));
                         
-                        teamsInGroup.forEach((team, index) => {
+teamsInGroup.forEach((team, index) => {
                             playoffStandings.push({
                                 teamId: team.id,
                                 teamName: team.name,
@@ -3815,41 +3753,14 @@ router.post("/image-exporter/generate", requireLogin, express.json({ limit: '50m
                         if (!teamsInGroup.length) continue;
                         
                         // Seřadíme týmy podle bodů, tiebreakerů, skóre atd.
-                        teamsInGroup.sort((a, b) => {
-                            const aStats = a.stats?.[selectedSeason] || {};
-                            const bStats = b.stats?.[selectedSeason] || {};
-                            
-                            // POZOR: prepareDashboardData už přičetla manuální body k stats.points
-                            // Nepřičítáme znovu - používáme body přímo z stats
-                            const aPoints = aStats.points || 0;
-                            const bPoints = bStats.points || 0;
-                            if (bPoints !== aPoints) return bPoints - aPoints;
-                            
-                            // Tiebreaker (decider) - menší číslo = lepší pozice
-                            const aTiebreaker = aStats.tiebreaker || 0;
-                            const bTiebreaker = bStats.tiebreaker || 0;
-                            if (aTiebreaker !== bTiebreaker) {
-                                if (aTiebreaker === 0) return 1;  // A bez tiebreakeru padá dolů
-                                if (bTiebreaker === 0) return -1; // B bez tiebreakeru padá dolů
-                                return aTiebreaker - bTiebreaker; // Menší číslo vyhrává
-                            }
-                            
-                            // Skóre z bonusů + zápasové - manuální skóre už je v stats.gf/ga díky prepareDashboardData
-                            const aScores = scores[a.id] || { gf: 0, ga: 0 };
-                            const bScores = scores[b.id] || { gf: 0, ga: 0 };
-                            
-                            const aTotalGF = aStats.gf || aScores.gf || 0;
-                            const bTotalGF = bStats.gf || bScores.gf || 0;
-                            const aTotalGA = aStats.ga || aScores.ga || 0;
-                            const bTotalGA = bStats.ga || bScores.ga || 0;
-                            
-                            const aDiff = aTotalGF - aTotalGA;
-                            const bDiff = bTotalGF - bTotalGA;
-                            if (bDiff !== aDiff) return bDiff - aDiff;
-                            return bTotalGF - aTotalGF;
-                        });
+                        teamsInGroup.splice(0, teamsInGroup.length, ...rankTeams(teamsInGroup, {
+                            season: selectedSeason,
+                            matches,
+                            liga: selectedLiga,
+                            scores,
+                            criteria: getStandingsCriteria(leagueObj, 'group')
+                        }));
                         
-                        // Použijeme calculateClinchStatusesForGroup pro výpočet jistot (stejné jako left panel)
                         const teamsWithClinch = calculateClinchStatusesForGroup(
                             teamsInGroup,
                             leagueObj,
