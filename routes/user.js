@@ -1856,7 +1856,7 @@ ${await renderUserHeader({
         if (teamsInSelectedLiga.length === 0) {
             html += `<div class="dashboard-section" style="text-align: center; padding: 40px; color: var(--text-dim);">Žádné týmy v lize ${selectedLiga} pro sezónu ${selectedSeason}</div>`;
         } else {
-            filteredTeams.sort((a, b) => (a.group - b.group) || a.name.localeCompare(b.name, 'cs', { sensitivity: 'base' })).forEach(team => {
+            teamsInSelectedLiga.sort((a, b) => (a.group - b.group) || a.name.localeCompare(b.name, 'cs', { sensitivity: 'base' })).forEach(team => {
                 const tId = String(team.id);
                 const tData = currentTransfers[tId] || { specIn: [], specOut: [], confIn: [], confOut: [] };
                 const logoUrl = team.logo ? `/logoteamu/${team.logo}` : '/images/logo.png';
