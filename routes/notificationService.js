@@ -582,33 +582,55 @@ const notifyLeagueEnd = async (liga, winnerTeam = null) => {
 };
 
 // --- AUTOMATICKÉ NOTIFIKACE (CRON) ---
-// Změna: přidali jsme 'async' před callback funkci
-cron.schedule('0 * * * *', async () => {
+function getPragueDateParts(date) {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Europe/Prague',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23'
+    }).formatToParts(date);
+    return Object.fromEntries(parts.filter(part => part.type !== 'literal').map(part => [part.type, part.value]));
+}
+
+function matchesPragueMinute(datetime, targetParts) {
+    if (!datetime) return false;
+
+    const value = String(datetime);
+    const localDateTime = value.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::\d{2})?$/);
+    let matchParts;
+    if (localDateTime) {
+        matchParts = { year: localDateTime[1], month: localDateTime[2], day: localDateTime[3], hour: localDateTime[4], minute: localDateTime[5] };
+    } else {
+        const matchDate = new Date(value);
+        if (Number.isNaN(matchDate.getTime())) return false;
+        matchParts = getPragueDateParts(matchDate);
+    }
+
+    return ['year', 'month', 'day', 'hour', 'minute']
+        .every(part => matchParts[part] === targetParts[part]);
+}
+
+cron.schedule('* * * * *', async () => {
     const now = new Date();
-    // Použijeme českou časovou zónu pro konzistenci se zbytkem aplikace
-    const currentPragueTime = new Date(now.toLocaleString('sv-SE', {timeZone: 'Europe/Prague'}));
     const matches = await getMatches();
     const users = await getUsers();
 
     if (!users || users.length === 0) return;
 
     const targetTimes = [
-        { diffMs: 4 * 60 * 60 * 1000, type: "4h" },
-        { diffMs: 60 * 60 * 1000, type: "1h" }
+        { minutes: 240, type: "4h" },
+        { minutes: 60, type: "1h" }
     ];
 
-    for (const { diffMs, type } of targetTimes) {
-        const targetTime = new Date(currentPragueTime.getTime() + diffMs);
+    for (const { minutes, type } of targetTimes) {
+        const targetParts = getPragueDateParts(new Date(now.getTime() + minutes * 60 * 1000));
 
         const upcomingMatches = matches.filter(m => {
             if (m.result || m.postponed || m.locked) return false;
-            const matchDate = new Date(m.datetime);
-            return (
-                matchDate.getFullYear() === targetTime.getFullYear() &&
-                matchDate.getMonth() === targetTime.getMonth() &&
-                matchDate.getDate() === targetTime.getDate() &&
-                matchDate.getHours() === targetTime.getHours()
-            );
+            return matchesPragueMinute(m.datetime, targetParts);
         });
 
         if (upcomingMatches.length === 0) continue;
@@ -674,7 +696,7 @@ cron.schedule('0 * * * *', async () => {
                         ]
                     });
                 }
-            });
+            }, { timezone: 'Europe/Prague' });
         }
     }
 });
