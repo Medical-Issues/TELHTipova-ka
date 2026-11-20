@@ -3130,11 +3130,6 @@ async function createWinnerImage(winnerTeam, title, withWatermark = true, option
 }
 
 // Helper function to convert hex to rgba
-function hexToRgba(hex, alpha) {
-    return brand.withAlpha(hex, alpha);
-}
-
-
 async function createStandingsImage(teamsData, title, withWatermark = true, options = {}, customSettings = {}) {
     const { createCanvas } = require('canvas');
     const width = 950;

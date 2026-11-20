@@ -11433,7 +11433,10 @@ router.post('/image-gallery/generate', requireAdmin, express.json({ limit: '10mb
         const addBuffer = async (title, generator) => {
             try {
                 const buffer = await generator();
-                if (!buffer) throw new Error('Generátor nevrátil obrázek');
+                if (!buffer) {
+                    images.push({ title, error: 'Generátor nevrátil obrázek' });
+                    return;
+                }
                 images.push({ title, dataBase64: buffer.toString('base64') });
             } catch (error) {
                 images.push({ title, error: error.message });
@@ -11446,8 +11449,11 @@ router.post('/image-gallery/generate', requireAdmin, express.json({ limit: '10mb
             notificationService.createVersusImage(homeTeam, awayTeam, null, 4, 2, null, true));
         try {
             const winnerUrl = await notificationService.createLeagueWinnerImage(homeTeam, sampleLiga, branding);
-            if (!winnerUrl) throw new Error('Generátor nevrátil soubor');
-            images.push({ title: 'Notifikace · vítěz ligy', url: winnerUrl });
+            if (!winnerUrl) {
+                images.push({ title: 'Notifikace · vítěz ligy', error: 'Generátor nevrátil soubor' });
+            } else {
+                images.push({ title: 'Notifikace · vítěz ligy', url: winnerUrl });
+            }
         } catch (error) {
             images.push({ title: 'Notifikace · vítěz ligy', error: error.message });
         }

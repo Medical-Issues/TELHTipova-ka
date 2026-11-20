@@ -112,7 +112,7 @@ async function drawBrandedBackground(ctx, width, height, settings = {}) {
     if (settings.bgImage && typeof settings.bgImage === 'string' && settings.bgImage.startsWith('data:image/')) {
         try {
             const imageData = settings.bgImage.split(',')[1];
-            if (!imageData) throw new Error('Neplatný formát obrázku na pozadí.');
+            if (!imageData) return;
             const image = await loadImage(Buffer.from(imageData, 'base64'));
             const scale = Math.max(width / image.width, height / image.height);
             const imageWidth = image.width * scale;
