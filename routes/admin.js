@@ -394,6 +394,7 @@ router.get('/', requireAdmin, async (req, res) => {
             ${criticalCount > 0 ? `<span style="position: absolute; top: -8px; right: -8px; background: #dc3545; color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 0.75em; font-weight: bold;">${criticalCount}</span>` : ''}
           </a>
           <a href="/admin/images/manage" class="btn btn-secondary">🖼️ Správce obrázků</a>
+          <a href="/admin/image-gallery" class="btn btn-secondary">🎨 Galerie všech obrázků</a>
           <a href="/admin/transfers/manage" class="btn btn-secondary">💰 Správa přestupů</a>
         </div>
       </div>
@@ -11313,6 +11314,209 @@ router.post('/audit-log/:id/resolve', requireAdmin, async (req, res) => {
     } catch (error) {
         console.error('Chyba při označování logu jako vyřešený:', error);
         res.status(500).json({ success: false, message: 'Chyba při označování logu' });
+    }
+});
+
+router.get('/image-gallery', requireAdmin, (req, res) => {
+    res.send(`<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Galerie generovaných obrázků - Admin</title>
+  <link rel="stylesheet" href="/css/styles.css">
+  <style>
+    .gallery-page { max-width: 1500px; margin: 0 auto; padding: 24px; }
+    .gallery-toolbar { display:flex; align-items:center; gap:12px; margin-bottom:20px; }
+    .gallery-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:18px; }
+    .gallery-card { background:#111827; border:1px solid rgba(255,255,255,.12); border-radius:12px; overflow:hidden; }
+    .gallery-card h3 { margin:0; padding:12px 14px; font-size:16px; border-bottom:1px solid rgba(255,255,255,.08); }
+    .gallery-card img { display:block; width:100%; min-height:220px; object-fit:contain; background:#080a0d; }
+    .gallery-error { padding:30px 14px; color:#ff7777; min-height:220px; }
+  </style>
+</head>
+<body class="usersite">
+<main class="gallery-page">
+  <div class="gallery-toolbar">
+    <a href="/admin" class="btn btn-secondary">← Zpět do adminu</a>
+    <button id="generateGallery" class="btn btn-primary">🎨 Vygenerovat všechny obrázky</button>
+  </div>
+  <div id="galleryGrid" class="gallery-grid">
+    <div class="gallery-card"><h3>Přehled není vygenerovaný</h3><div class="gallery-error">Klikni na tlačítko pro vytvoření všech ukázkových obrázků.</div></div>
+  </div>
+</main>
+<script>
+const csrfToken = ${JSON.stringify(req.session.csrfToken || '')};
+document.getElementById('generateGallery').addEventListener('click', async () => {
+  const button = document.getElementById('generateGallery');
+  button.disabled = true;
+  button.textContent = 'Generuji...';
+  try {
+    const response = await fetch('/admin/image-gallery/generate', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','X-CSRF-Token':csrfToken},
+      body: JSON.stringify({_csrf:csrfToken})
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Generování selhalo');
+    const grid = document.getElementById('galleryGrid');
+    grid.innerHTML = data.images.map(image => {
+      const title = String(image.title).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      const content = image.error
+        ? '<div class="gallery-error">' + String(image.error).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) + '</div>'
+        : '<img src="' + (image.url || ('data:image/png;base64,' + image.dataBase64)) + '" alt="' + title + '">';
+      return '<article class="gallery-card"><h3>' + title + '</h3>' + content + '</article>';
+    }).join('');
+  } catch (error) {
+    document.getElementById('galleryGrid').innerHTML =
+      '<div class="gallery-card"><h3>Chyba</h3><div class="gallery-error">' + String(error.message).replace(/[<>]/g, '') + '</div></div>';
+  } finally {
+    button.disabled = false;
+    button.textContent = '🎨 Vygenerovat všechny obrázky';
+  }
+});
+</script>
+</body>
+</html>`);
+});
+
+router.post('/image-gallery/generate', requireAdmin, express.json({ limit: '10mb' }), async (req, res) => {
+    try {
+        const csrfToken = req.headers['x-csrf-token'] || req.body._csrf;
+        if (!csrfToken || csrfToken !== req.session.csrfToken) {
+            return res.status(403).json({ error: 'Neplatný CSRF token' });
+        }
+
+        const fileUtils = require('../utils/fileUtils');
+        const notificationService = require('./notificationService');
+        const teams = await Teams.findAll();
+        const seasonTeams = teams
+            .filter(team => team.season === '25/26')
+            .sort((a, b) => Number(a.id) - Number(b.id));
+        const allMatches = await Matches.findAll();
+        const realPlayoffMatches = (allMatches || [])
+            .filter(match => match.season === '25/26' && match.liga === 'TELH' && match.isPlayoff);
+        const allPlayoffData = await Playoff.findAll();
+        const realPlayoffSlots = allPlayoffData?.['25/26']?.TELH || {};
+
+        const homeTeam = seasonTeams[0] || { id: 1, name: 'Ukázkový tým A', liga: 'TELH', isCustom: true };
+        const awayTeam = seasonTeams[1] || { id: 2, name: 'Ukázkový tým B', liga: 'TELH', isCustom: true };
+        const sampleLiga = homeTeam.liga || awayTeam.liga || 'TELH';
+        const allPlayers = await Players.findAll();
+        const playersArray = Array.isArray(allPlayers)
+            ? allPlayers
+            : (allPlayers?.players && Array.isArray(allPlayers.players) ? allPlayers.players : []);
+        const samplePlayer = playersArray
+            .filter(player => player.season === '25/26' && Number(player.teamId) === Number(homeTeam.id))
+            .sort((a, b) => (Number(a.number) || 999) - (Number(b.number) || 999))[0];
+        const samplePlayerName = samplePlayer?.name || 'Ukázkový hráč';
+        const transferData = await Transfers.findAll();
+        const realTransferName = transferData?.['26/27']?.TELH?.['1']?.confIn?.[0] || samplePlayerName;
+        const imageDirectory = path.join(__dirname, '../data/images');
+        const galleryFiles = fs.existsSync(imageDirectory)
+            ? fs.readdirSync(imageDirectory).filter(file => /\.(jpg|jpeg|png|gif|webp)$/i.test(file))
+            : [];
+        const samplePlayerPhotoPath = galleryFiles.length
+            ? path.join(imageDirectory, galleryFiles[0])
+            : null;
+        const branding = {
+            bgColor: '#1a1a1a',
+            bgImage: null,
+            textColor: '#ffffff',
+            accentColor: '#ff4500',
+            watermarkColor: '#888888',
+            watermarkText: 'Tipovačka',
+            withWatermark: true
+        };
+
+        const images = [];
+        const addBuffer = async (title, generator) => {
+            try {
+                const buffer = await generator();
+                if (!buffer) throw new Error('Generátor nevrátil obrázek');
+                images.push({ title, dataBase64: buffer.toString('base64') });
+            } catch (error) {
+                images.push({ title, error: error.message });
+            }
+        };
+
+        await addBuffer('Notifikace · zápas / versus', () =>
+            notificationService.createVersusImage(homeTeam, awayTeam, null));
+        await addBuffer('Notifikace · výsledek zápasu', () =>
+            notificationService.createVersusImage(homeTeam, awayTeam, null, 4, 2, null, true));
+        try {
+            const winnerUrl = await notificationService.createLeagueWinnerImage(homeTeam, sampleLiga, branding);
+            if (!winnerUrl) throw new Error('Generátor nevrátil soubor');
+            images.push({ title: 'Notifikace · vítěz ligy', url: winnerUrl });
+        } catch (error) {
+            images.push({ title: 'Notifikace · vítěz ligy', error: error.message });
+        }
+        await addBuffer('Export · zápas / versus', () =>
+            notificationService.createVersusImageForExport(homeTeam, awayTeam, branding));
+        await addBuffer('Export · výsledek', () =>
+            fileUtils.createMatchImage(homeTeam, awayTeam, 4, 2, 'KONEČNÝ VÝSLEDEK', true, {
+                homeWins: 3,
+                awayWins: 1
+            }, branding));
+        await addBuffer('Export · přestup', () =>
+            fileUtils.createTransferImage(homeTeam, awayTeam, realTransferName, true, samplePlayerPhotoPath, null, null, branding));
+        await addBuffer('Export · vítěz', () =>
+            fileUtils.createWinnerImage(homeTeam, 'VÍTĚZ LIGY', true, { showTrophy: true }, branding));
+
+        const standingsData = [homeTeam, awayTeam].map((team, index) => {
+            const stats = team.stats?.['25/26'] || {};
+            return {
+                name: team.name,
+                group: team.group || 'A',
+                wins: stats.wins || 0,
+                otWins: stats.otWins || 0,
+                otLosses: stats.otLosses || 0,
+                losses: stats.losses || 0,
+                gf: stats.gf || 0,
+                ga: stats.ga || 0,
+                points: stats.points || (index === 0 ? 29 : 25)
+            };
+        });
+        await addBuffer('Export · tabulka', () =>
+            fileUtils.createStandingsImage(standingsData, `Tabulka ${sampleLiga}`, true, {
+                isPlayoff: false,
+                quarterfinal: 4,
+                playin: 2,
+                relegation: 2
+            }, branding));
+
+        const statistics = [
+            { username: 'Tipující A', correct: 42, total: 50, totalRegular: 34, totalPlayoff: 16, tableCorrect: 8, tableDeviation: 2 },
+            { username: 'Tipující B', correct: 38, total: 50, totalRegular: 34, totalPlayoff: 16, tableCorrect: 7, tableDeviation: 4 }
+        ];
+        await addBuffer('Export · statistiky', () =>
+            fileUtils.createStatisticsImage(statistics, 'Ukázkové statistiky', true, branding));
+
+        await addBuffer('Export · playoff', () =>
+            fileUtils.createPlayoffBracketImage({
+                playoffData: Object.keys(realPlayoffSlots).length
+                    ? realPlayoffSlots
+                    : { fin: `series-${realPlayoffMatches[0]?.id || 538}` },
+                matches: realPlayoffMatches,
+                teams: seasonTeams,
+                selectedLiga: sampleLiga,
+                title: `Playoff · ${sampleLiga}`,
+                standings: []
+            }, true, branding));
+
+        if (homeTeam.logo) {
+            try {
+                const customUrl = await notificationService.processCustomImageForNotification(`/logoteamu/${homeTeam.logo}`);
+                images.push({ title: 'Notifikace · vlastní obrázek', url: customUrl });
+            } catch (error) {
+                images.push({ title: 'Notifikace · vlastní obrázek', error: error.message });
+            }
+        }
+
+        res.json({ images });
+    } catch (error) {
+        console.error('[image-gallery] Chyba:', error);
+        res.status(500).json({ error: 'Galerii obrázků se nepodařilo vygenerovat.' });
     }
 });
 
