@@ -1906,7 +1906,7 @@ async function generateLeftPanel(data, isHistory = false) {
         </colgroup>
         <thead>
         <tr><th scope="col" id="points-table-header" colspan="10"><h2>Týmy - ${selectedLiga} ${selectedSeason} Základní část ${leagueObj?.isMultigroup ? `(Skupina ${group})` : ''}</h2></th></tr>
-        <tr id="points-table-second-header"><th class="position">Místo</th><th style="text-align: left; padding-left: 25px">Tým</th><th class="points">Body</th><th>Skóre</th><th>Rozdíl</th><th>Z</th><th>V</th><th>Vpp</th><th>Ppp</th><th>P</th></tr>
+        <tr id="points-table-second-header"><th class="position">Místo</th><th style="text-align: left; padding-left: 25px">Tým ${!isRegularSeasonFinished && ((leagueObj?.quarterfinal > 0) || (leagueObj?.playin > 0)) ? '<span class="prob-info-icon" title="Procenta = šance na postup (Monte Carlo simulace 10 000 iterací)">ℹ️</span>' : ''}</th><th class="points">Body</th><th>Skóre</th><th>Rozdíl</th><th>Z</th><th>V</th><th>Vpp</th><th>Ppp</th><th>P</th></tr>
         </thead>
         <tbody>`;
 
@@ -1952,7 +1952,7 @@ async function generateLeftPanel(data, isHistory = false) {
 
             const recentForm = getRecentTeamForm(team);
 
-            // Pravděpodobnosti zón - zobrazujeme Top 4 a Top 12 s ohledem na clinch
+            // Pravděpodobnosti zón - zobrazujeme Top X a Top Y s ohledem na clinch
             const zoneProb = zoneProbabilities?.[group]?.[Number(team.id)];
             const clinchStatus = team._clinchStatus;
             const hasPlayin = leagueObj?.playin > leagueObj?.quarterfinal;
@@ -1962,19 +1962,29 @@ async function generateLeftPanel(data, isHistory = false) {
             let zoneProbHtml = '';
             let rowStyle = '';
             if (zoneProb && hasPlayoffZones && !isRegularSeasonFinished && (qfProb > 0 || top12Prob > 0)) {
+                const qfName = `Top ${leagueObj?.quarterfinal || 4}`;
+                const piName = `Top ${leagueObj?.playin || 12}`;
+                
+                // Bezpečný součet bez float chyb (např. 98.23000000000002)
+                const rawTop12 = Math.min(100, Math.round((zoneProb.quarterfinal + zoneProb.playin) * 100) / 100);
+                // Pokud už má jisté Top 12 (clinchedPlayin nebo clinchedQF), ukaž 100 %
+                const displayTop12 = (clinchStatus?.clinchedPlayin || clinchStatus?.clinchedQF) ? 100 : rawTop12;
+                const displayQf = clinchStatus?.clinchedQF ? 100 : zoneProb.quarterfinal;
+
                 const probTitle = hasPlayin 
-                    ? `Top 4: ${zoneProb.quarterfinal}% | Top 12: ${zoneProb.quarterfinal + zoneProb.playin}% | Neutral: ${zoneProb.neutral}% | Sestup: ${zoneProb.relegation}%\n\nVypočítáno pomocí Monte Carlo simulace (10 000 iterací). Pravděpodobnost, že tým skončí v dané zóně na základě zbývajících zápasů.`
-                    : `Top 4: ${zoneProb.quarterfinal}% | Neutral: ${zoneProb.neutral}% | Sestup: ${zoneProb.relegation}%\n\nVypočítáno pomocí Monte Carlo simulace (10 000 iterací). Pravděpodobnost, že tým skončí v dané zóně na základě zbývajících zápasů.`;
+                    ? `${qfName}: ${displayQf}% | ${piName}: ${displayTop12}% | Mimo PO: ${zoneProb.neutral}% | Sestup/Baráž: ${zoneProb.relegation}%\n\nMonte Carlo simulace (10 000 dohrání zbytku sezóny).` 
+                    : `${qfName}: ${displayQf}% | Mimo PO: ${zoneProb.neutral}% | Sestup/Baráž: ${zoneProb.relegation}%\n\nMonte Carlo simulace (10 000 dohrání zbytku sezóny).`;
+
                 const pills = [];
-                if (qfProb > 0) pills.push(`<span class="zone-prob-pill zone-prob-qf" data-tooltip="${escapeHtmlAttribute(probTitle)}" tabindex="0">${qfProb}%</span>`);
-                if (hasPlayin && top12Prob > 0) pills.push(`<span class="zone-prob-pill zone-prob-top12" data-tooltip="${escapeHtmlAttribute(probTitle)}" tabindex="0">${top12Prob}%</span>`);
+                if (qfProb > 0) pills.push(`<span class="zone-prob-pill zone-prob-qf" title="${escapeHtmlAttribute(probTitle)}">${qfProb}%</span>`);
+                if (hasPlayin && top12Prob > 0) pills.push(`<span class="zone-prob-pill zone-prob-top12" title="${escapeHtmlAttribute(probTitle)}">${top12Prob}%</span>`);
                 zoneProbHtml = `<span class="zone-prob-badge">${pills.join('')}</span>`;
-                // Dvojitý gradient: žlutá pro Top 4, zelená pro Top 12
+
                 const isClinched = rowClass.includes('clinched-') || rowClass.includes('locked');
                 const qfColor = isClinched ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 193, 7, 0.25)';
                 const top12Color = isClinched ? 'rgba(255, 255, 255, 0.08)' : 'rgba(76, 175, 80, 0.15)';
                 rowStyle = hasPlayin 
-                    ? `style="background: linear-gradient(to right, ${qfColor} ${qfProb}%, ${top12Color} ${qfProb}%, ${top12Color} ${top12Prob}%, transparent ${top12Prob}%);"`
+                    ? `style="background: linear-gradient(to right, ${qfColor} ${qfProb}%, ${top12Color} ${qfProb}%, ${top12Color} ${top12Prob}%, transparent ${top12Prob}%);"` 
                     : `style="background: linear-gradient(to right, ${qfColor} ${qfProb}%, transparent ${qfProb}%);"`;
             }
 
@@ -2007,6 +2017,14 @@ async function generateLeftPanel(data, isHistory = false) {
             </tr>`;
         });
         html += `</tbody></table><br>`;
+        if (!isRegularSeasonFinished && ((leagueObj?.quarterfinal > 0) || (leagueObj?.playin > 0))) {
+            const qfLabel = `Top ${leagueObj.quarterfinal}`;
+            const piLabel = leagueObj.playin > leagueObj.quarterfinal ? ` / Top ${leagueObj.playin}` : '';
+            html += `<div style="font-size: 12px; color: var(--text-dim); margin: 8px 4px 20px; display: flex; align-items: center; gap: 8px; opacity: 0.9; background: rgba(255, 255, 255, 0.03); padding: 8px 12px; border-radius: 6px; border-left: 3px solid var(--primary, #ff5500);">
+                <span style="font-size: 14px;">📊</span>
+                <span><strong>Procenta</strong> u týmů = šance na postup (${qfLabel}${piLabel}) • Monte Carlo simulace (10 000 iterací zbývajících zápasů)</span>
+            </div>`;
+        }
     }
 
     // ==========================================

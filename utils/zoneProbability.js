@@ -464,14 +464,38 @@ function calculateZoneProbabilities(teams, leagueObj, matches, season, liga, sco
             }
             // 5. Zatím bez matematické jistoty -> zastropuj 100 % na 99.99 % a 0 % na 0.01 %
             else {
+                const totalTeams = teamIds.length;
+                const advancingSpots = Math.max(zoneConfig.quarterfinal, zoneConfig.playin);
+                const hasNeutralZone = (totalTeams - advancingSpots - zoneConfig.relegation) > 0;
+                const hasRelegationZone = zoneConfig.relegation > 0;
+
+                // Horní hranice - pokud qf + pi >= 100, ale není clinched, nechte 0.01 % pro neu/rel
                 if (qf + pi >= 100) {
-                    if (qf >= 100) qf = 99.99;
-                    else pi = Math.max(0, Math.round((99.99 - qf) * 100) / 100);
+                    if (qf >= 100) {
+                        qf = 99.99;
+                        pi = 0;
+                    } else {
+                        pi = Math.max(0, Math.round((99.99 - qf) * 100) / 100);
+                    }
+                    // Zajisti, že neu + rel má aspoň 0.01 % (pokud existují)
+                    if (neu === 0 && rel === 0) {
+                        if (hasNeutralZone) neu = 0.01;
+                        else if (hasRelegationZone) rel = 0.01;
+                    }
                 }
                 // Spodní hranice - pokud tým ještě není eliminated, min 0.01 %
                 if (qf + pi <= 0 && !status.clinchedRelegation && !status.clinchedNeutral) {
                     // Tým může stále dosáhnout Top 12, ale je to extrémně nepravděpodobné
-                    pi = 0.01;
+                    if (zoneConfig.playin > zoneConfig.quarterfinal) pi = 0.01;
+                    else if (zoneConfig.quarterfinal > 0) qf = 0.01;
+
+                    // Zajisti, že součet je 100 %
+                    const remaining = Math.round((100 - qf - pi - neu - rel) * 100) / 100;
+                    if (remaining !== 0) {
+                        // Přidej/odečti zbývající procenta do největší zóny
+                        if (neu >= rel && neu + remaining >= 0) neu = Math.round((neu + remaining) * 100) / 100;
+                        else if (rel + remaining >= 0) rel = Math.round((rel + remaining) * 100) / 100;
+                    }
                 }
             }
         }
