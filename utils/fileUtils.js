@@ -1479,7 +1479,7 @@ async function prepareDashboardData(req, isHistory = false, isImageExporter = fa
                     selectedSeason,
                     selectedLiga,
                     scores,
-                    { simulations: 10000 }
+                    { simulations: 5000 }
                 );
                 zoneProbabilities[group] = {};
                 probs.forEach((prob, teamId) => {
