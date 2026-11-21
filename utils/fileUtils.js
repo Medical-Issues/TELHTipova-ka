@@ -1910,15 +1910,17 @@ async function generateLeftPanel(data, isHistory = false) {
         </thead>
         <tbody>`;
 
-        const teamsWithStatuses = calculateClinchStatusesForGroup(
-            teamsInGroup,
-            leagueObj,
-            selectedSeason,
-            clinchMode,
-            scores,
-            matches,
-            selectedLiga
-        );
+        const teamsWithStatuses = (clinchMode === 'strict' && teamsInGroup.every(t => t._clinchStatus))
+            ? teamsInGroup
+            : calculateClinchStatusesForGroup(
+                teamsInGroup,
+                leagueObj,
+                selectedSeason,
+                clinchMode,
+                scores,
+                matches,
+                selectedLiga
+            );
 
         teamsWithStatuses.forEach((team, index) => {
             const stats = team.stats?.[selectedSeason] || {};
@@ -1988,8 +1990,8 @@ async function generateLeftPanel(data, isHistory = false) {
                 const relStr = fmtTooltip(zoneProb.relegation, relLimit <= 0 || maxR <= safeRank);
 
                 const probTitle = hasPlayin 
-                    ? `${qfName}: ${qfStr} | ${piName}: ${top12Str} | Mimo PO: ${neuStr} | Sestup/Baráž: ${relStr}\n\nMonte Carlo simulace (2 500 dohrání zbytku sezóny).` 
-                    : `${qfName}: ${qfStr} | Mimo PO: ${neuStr} | Sestup/Baráž: ${relStr}\n\nMonte Carlo simulace (2 500 dohrání zbytku sezóny).`;
+                    ? `${qfName}: ${qfStr} | ${piName}: ${top12Str} | Mimo PO: ${neuStr} | Sestup/Baráž: ${relStr}\n\nMonte Carlo simulace (10 000 dohrání zbytku sezóny).` 
+                    : `${qfName}: ${qfStr} | Mimo PO: ${neuStr} | Sestup/Baráž: ${relStr}\n\nMonte Carlo simulace (10 000 dohrání zbytku sezóny).`;
 
                 const pills = [];
                 if (qfProb > 0) pills.push(`<span class="zone-prob-pill zone-prob-qf" title="${escapeHtmlAttribute(probTitle)}">${qfProb}%</span>`);
@@ -2038,7 +2040,7 @@ async function generateLeftPanel(data, isHistory = false) {
             const piLabel = leagueObj.playin > leagueObj.quarterfinal ? ` / Top ${leagueObj.playin}` : '';
             html += `<div style="font-size: 12px; color: var(--text-dim); margin: 8px 4px 20px; display: flex; align-items: center; gap: 8px; opacity: 0.9; background: rgba(255, 255, 255, 0.03); padding: 8px 12px; border-radius: 6px; border-left: 3px solid var(--primary, #ff5500);">
                 <span style="font-size: 14px;">📊</span>
-                <span><strong>Procenta</strong> u týmů = šance na postup (${qfLabel}${piLabel}) • Monte Carlo simulace (2 500 iterací zbývajících zápasů)</span>
+                <span><strong>Procenta</strong> u týmů = šance na postup (${qfLabel}${piLabel}) • Monte Carlo simulace (10 000 iterací zbývajících zápasů)</span>
             </div>`;
         }
     }
