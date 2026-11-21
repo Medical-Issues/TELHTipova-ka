@@ -21,7 +21,7 @@ const {
     getAvailableImages,
     calculateClinchStatusesForGroup,
 } = require("../utils/fileUtils");
-const { fetchMatchesFromLivesport } = require('../utils/livesportService');
+const { fetchMatchesFromLivesport, fetchStandingsFromLivesport } = require('../utils/livesportService');
 const {
     getStandingsCriteria,
     STANDINGS_CRITERIA,
@@ -5486,6 +5486,19 @@ router.get('/teams/points', requireAdmin, async (req, res) => {
             </select></label>
         </form>
 
+        <div style="background: #333; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid orangered;">
+            <h3 style="margin-top: 0; color: orangered;">📥 Import tabulky z Livesportu</h3>
+            <form method="POST" action="/admin/teams/points/import-standings" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
+                <input type="hidden" name="season" value="${selectedSeason}">
+                <input type="hidden" name="liga" value="${selectedLiga}">
+                <input type="url" name="url" placeholder="URL Livesport tabulky" required style="flex: 1; min-width: 300px; padding: 8px; background: #111; color: white; border: 1px solid #555; border-radius: 4px;">
+                <button type="submit" class="action-btn edit-btn" style="padding: 8px 16px;">Importovat</button>
+            </form>
+            <small style="color: #888;">Vložte URL stránky s tabulkou na Livesportu (např. https://www.livesport.cz/hokej/cesko/tipsport-extraliga/tabulka/)</small>
+            <div id="import-result" style="margin-top: 10px; display: none;"></div>
+        </div>
+
         <form method="POST" action="/admin/teams/points">
             <input type="hidden" name="_csrf" value="${req.session.csrfToken || ''}">
             <input type="hidden" name="season" value="${selectedSeason}">
@@ -5561,6 +5574,45 @@ router.get('/teams/points', requireAdmin, async (req, res) => {
         <br>
         <a href="/admin" style="color: orangered;">Zpět do admina</a>
     </body>
+    <script>
+        document.querySelector('form[action="/admin/teams/points/import-standings"]').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const resultDiv = document.getElementById('import-result');
+            const button = form.querySelector('button');
+            
+            button.disabled = true;
+            button.textContent = 'Importuji...';
+            resultDiv	style.display = 'block';
+            resultDiv.innerHTML = '<span style="color: yellow;">⏳ Stahuji data z Livesportu...</span>';
+            
+            try {
+                const formData = new FormData(form);
+                const data = Object.fromEntries(formData);
+                const response = await fetch('/admin/teams/points/import-standings', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    },
+                    body: new URLSearchParams(data).toString()
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    resultDiv.innerHTML = '<span style="color: #00ff00;">✅ ' + result.message + '</span>';
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    resultDiv.innerHTML = '<span style="color: #ff6b6b;">❌ ' + (result.error || 'Chyba importu') + '</span>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = '<span style="color: #ff6b6b;">❌ Chyba: ' + error.message + '</span>';
+            } finally {
+                button.disabled = false;
+                button.textContent = 'Importovat';
+            }
+        });
+    </script>
     </html>`;
     res.send(html);
 });
@@ -5611,6 +5663,69 @@ router.post('/teams/points', express.urlencoded({ extended: true }), requireAdmi
     
     await logAdminAction(req.session.user, "MANUÁLNÍ_BODY", `Upraveny extra body v lize: ${liga}, Sezóna: ${season}`, 'admin', null, req);
     res.redirect(`/admin/teams/points?liga=${encodeURIComponent(liga)}`);
+});
+
+router.post('/teams/points/import-standings', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    const { url, season, liga } = req.body;
+
+    if (!url) {
+        return res.status(400).json({ success: false, error: 'URL je povinná' });
+    }
+
+    try {
+        // Načtení týmů z DB
+        const allTeams = await Teams.findAll();
+        const filteredTeams = allTeams.filter(t => t.liga === liga && t.season === season);
+
+        // Stažení tabulky z Livesportu
+        const importResult = await fetchStandingsFromLivesport({
+            url,
+            liga,
+            dbTeams: filteredTeams
+        });
+
+        if (!importResult.success) {
+            await logAdminAction(req.session.user, "IMPORT_TABULKY_ERROR", `Chyba při importu tabulky z Livesportu pro ${liga}: ${importResult.error}`, 'admin', null, req, 'error', false);
+            return res.status(500).json({ success: false, error: importResult.error });
+        }
+
+        // Načtení existujících bonusů
+        let bonusData = await TeamBonuses.findAll();
+        if (!bonusData || Object.keys(bonusData).length === 0) bonusData = {};
+        if (!bonusData[season]) bonusData[season] = {};
+        if (!bonusData[season][liga]) bonusData[season][liga] = {};
+
+        // Aktualizace bonusů daty z Livesportu
+        let updatedCount = 0;
+        for (const standing of importResult.standings) {
+            const teamId = String(standing.teamId);
+            // Přepíšeme body, zápasy, góly z Livesportu
+            bonusData[season][liga][teamId] = {
+                points: standing.points,
+                games: standing.games,
+                gf: standing.gf,
+                ga: standing.ga,
+                tiebreaker: bonusData[season][liga][teamId]?.tiebreaker || 0 // Zachováme tiebreaker
+            };
+            updatedCount++;
+        }
+
+        // Uložení do MongoDB
+        await TeamBonuses.replaceAll(bonusData);
+
+        await logAdminAction(req.session.user, "IMPORT_TABULKY", `Importována tabulka z Livesportu pro ${liga} (${season}) - ${updatedCount} týmů`, 'admin', null, req);
+        
+        res.json({ 
+            success: true, 
+            message: `Importováno ${updatedCount} týmů z Livesportu`,
+            count: updatedCount
+        });
+
+    } catch (error) {
+        console.error('❌ Chyba při importu tabulky:', error);
+        await logAdminAction(req.session.user, "IMPORT_TABULKY_ERROR", `Chyba při importu tabulky: ${error.message}`, 'admin', null, req, 'error', false);
+        res.status(500).json({ success: false, error: error.message });
+    }
 });
 
 router.post('/settings/clinch', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
