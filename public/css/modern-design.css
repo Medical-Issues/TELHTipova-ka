@@ -6867,6 +6867,7 @@ td.vs {
 /* Pavouk na uživatelské stránce. Styly v styles.css sem nedosáhnou. */
 .pb {
     --pb-unit: 142px;
+    --pb-units: 1;
     --pb-card: 220px;
     --pb-line: rgba(255, 85, 0, 0.85);
     width: 100%;
@@ -6988,9 +6989,7 @@ td.vs {
 
 .pb-track {
     position: relative;
-    height: calc(var(--pb-units, 1) * var(--pb-unit, 20px));
-    --pb-units: 1;
-    --pb-unit: 20px;
+    height: calc(var(--pb-units, 1) * var(--pb-unit, 142px));
 }
 
 .pb-fork,
