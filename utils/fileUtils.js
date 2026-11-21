@@ -1963,8 +1963,8 @@ async function generateLeftPanel(data, isHistory = false) {
             let rowStyle = '';
             if (zoneProb && hasPlayoffZones && !isRegularSeasonFinished && (qfProb > 0 || top12Prob > 0)) {
                 const probTitle = hasPlayin 
-                    ? `Top 4: ${zoneProb.quarterfinal}% | Top 12: ${zoneProb.quarterfinal + zoneProb.playin}% | Neutral: ${zoneProb.neutral}% | Sestup: ${zoneProb.relegation}%`
-                    : `Top 4: ${zoneProb.quarterfinal}% | Neutral: ${zoneProb.neutral}% | Sestup: ${zoneProb.relegation}%`;
+                    ? `Top 4: ${zoneProb.quarterfinal}% | Top 12: ${zoneProb.quarterfinal + zoneProb.playin}% | Neutral: ${zoneProb.neutral}% | Sestup: ${zoneProb.relegation}%\n\nVypočítáno pomocí Monte Carlo simulace (10 000 iterací). Pravděpodobnost, že tým skončí v dané zóně na základě zbývajících zápasů.`
+                    : `Top 4: ${zoneProb.quarterfinal}% | Neutral: ${zoneProb.neutral}% | Sestup: ${zoneProb.relegation}%\n\nVypočítáno pomocí Monte Carlo simulace (10 000 iterací). Pravděpodobnost, že tým skončí v dané zóně na základě zbývajících zápasů.`;
                 const pills = [];
                 if (qfProb > 0) pills.push(`<span class="zone-prob-pill zone-prob-qf" data-tooltip="${escapeHtmlAttribute(probTitle)}" tabindex="0">${qfProb}%</span>`);
                 if (hasPlayin && top12Prob > 0) pills.push(`<span class="zone-prob-pill zone-prob-top12" data-tooltip="${escapeHtmlAttribute(probTitle)}" tabindex="0">${top12Prob}%</span>`);

@@ -923,7 +923,7 @@ function calculateZoneProbabilitiesExact(
     phase = 'group',
     maxNodes = 1000000
 ) {
-    const { remainingByTeam, scheduleCompleteByTeam } = scheduleData;
+    const { scheduleCompleteByTeam } = scheduleData;
     if (!teams.length) return new Map();
 
     const zoneConfig = {
@@ -943,13 +943,6 @@ function calculateZoneProbabilitiesExact(
     const headToHeadGoalsFor = new Map(teamIds.map(id => [id, new Map(teamIds.map(opponentId => [opponentId, 0]))]));
     const totalGoalDiff = new Map();
     const totalGoalsFor = new Map();
-    const teamStatsById = new Map(teams.map(team => {
-        const stats = team.stats?.[season] || {};
-        return [
-            Number(team.id),
-            { ...stats, groupRank: team.groupRank ?? stats.groupRank }
-        ];
-    }));
 
     const completedMatches = (matches || []).filter(match =>
         match.season === season &&
@@ -1030,11 +1023,6 @@ function calculateZoneProbabilitiesExact(
         addHeadToHeadGoals(homeId, awayId, homeGoals, awayGoals);
     });
 
-    const manualTiebreaker = new Map(teams.map(team => [
-        Number(team.id),
-        Number(team.stats?.[season]?.tiebreaker) || 0
-    ]));
-
     // Zone counters for each team
     const zoneCounts = new Map(teamIds.map(id => [id, { quarterfinal: 0, playin: 0, neutral: 0, relegation: 0 }]));
     let totalScenarios = 0;
@@ -1059,8 +1047,6 @@ function calculateZoneProbabilitiesExact(
         const bGap = Math.abs(points.get(Number(b.homeTeamId)) - points.get(Number(b.awayTeamId)));
         return aGap - bGap;
     });
-
-    const outcomesByMatch = sortedMatches.map(match => getMatchPointOutcomes());
 
     const visit = (matchIndex) => {
         if (nodesVisited >= maxNodes) return;
@@ -1147,7 +1133,7 @@ function calculateZoneProbabilitiesExact(
 }
 
 // Helper function for ranking teams in scenarios (simplified version of rankTeams)
-function rankTeamsForScenarios(teams, { season, matches, liga, scores, criteria }) {
+function rankTeamsForScenarios(teams, { season, scores }) {
     // This is a simplified version - in practice we'd use the full rankTeams
     // For now, use points + goal difference + goals for
     return [...teams].sort((a, b) => {
@@ -1168,10 +1154,6 @@ function rankTeamsForScenarios(teams, { season, matches, liga, scores, criteria 
 }
 
 module.exports = {
-    getTeamZone,
-    getEstimatedMatchesPerTeam,
-    getRemainingMatchesByTeam,
     calculateClinchStatusesForGroup,
-    calculateCrossGroupClinchStatuses,
-    calculateZoneProbabilitiesExact
+    calculateCrossGroupClinchStatuses
 };

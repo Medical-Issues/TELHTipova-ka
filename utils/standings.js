@@ -322,12 +322,11 @@ function rankTeams(teams, options = {}) {
     }
 
     // Použij stabilní řazení pouze pro týmy ve stejné tiedGroup
-    const rankedTeams = tiedGroups.flatMap(group => {
+    return tiedGroups.flatMap(group => {
         if (group.length === 1) return [group[0].team];
         // Pro skupiny se stejnými hodnotami použij abecední řazení
         return stableTeamSort(group.map(entry => entry.team));
     });
-    return rankedTeams;
 }
 
 // Stabilní fallback pro stejné hodnoty - abecední řazení podle názvu týmu
