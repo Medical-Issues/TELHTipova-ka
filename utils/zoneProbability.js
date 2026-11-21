@@ -2,13 +2,13 @@ const {calculateClinchStatusesForGroup } = require('./clinchStatus');
 const { rankTeams, getStandingsCriteria } = require('./standings');
 
 const ZONE_CACHE = new Map();
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minut
+const CACHE_TTL_MS = 60 * 60 * 1000; // 60 minut (klíč obsahuje stavy zápasů, takže při novém výsledku se přepočítá hned)
 
 function getCacheKey(teams, leagueObj, matches, season, liga) {
     const teamIds = teams.map(t => t.id).sort().join(',');
     const matchIds = matches
         .filter(m => m.season === season && m.liga === liga && !m.isPlayoff)
-        .map(m => `${m.id}:${m.result ? 'R' : 'S'}`)
+        .map(m => `${m.id}:${m.result ? `${m.result.scoreHome}-${m.result.scoreAway}-${m.result.ot ? 1 : 0}` : 'S'}`)
         .join(',');
     return `${season}|${liga}|${teamIds}|${matchIds}|${leagueObj?.quarterfinal}|${leagueObj?.playin}|${leagueObj?.relegation}`;
 }
@@ -235,7 +235,7 @@ function simulateMatchOutcome(match, teamStats) {
  * Simuluje skutečné zápasy mezi týmy.
  */
 function calculateZoneProbabilities(teams, leagueObj, matches, season, liga, scores, options = {}) {
-    const simulations = options.simulations || 5000;
+    const simulations = options.simulations || 2500;
     const cacheKey = getCacheKey(teams, leagueObj, matches, season, liga);
     const cached = getCached(cacheKey);
     if (cached) return cached;
@@ -327,87 +327,95 @@ function calculateZoneProbabilities(teams, leagueObj, matches, season, liga, sco
     });
 
     const criteria = getStandingsCriteria(leagueObj, 'group');
-    
-    // Monte Carlo simulace - simulujeme skutečné zápasy
-    
-    for (let sim = 0; sim < simulations; sim++) {
-        // Kopíruj základní statistiky
-        const teamStats = new Map();
-        baseStats.forEach((stats, id) => {
-            teamStats.set(id, { ...stats });
-        });
-        
-        // Simuluj všechny zbývající zápasy
-        const simulatedMatches = [];
-        const simScores = {};
-        
-        // Inicializuj scores z baseStats
-        teamIds.forEach(id => {
-            const stats = teamStats.get(id);
-            simScores[id] = { gf: stats.gf, ga: stats.ga };
-        });
-        
-        for (const match of remainingMatches) {
-            const homeId = Number(match.homeTeamId);
-            const awayId = Number(match.awayTeamId);
-            
-            // Simuluj výsledek zápasu (3:0, 2:1, 1:2, 0:3)
-            const outcome = simulateMatchOutcome(match, teamStats);
-            
-            // Aktualizuj simScores
-            simScores[homeId].gf += outcome.scoreHome;
-            simScores[homeId].ga += outcome.scoreAway;
-            simScores[awayId].gf += outcome.scoreAway;
-            simScores[awayId].ga += outcome.scoreHome;
-            
-            // Přidej do simulatedMatches pro H2H výpočty
-            simulatedMatches.push({
-                ...match,
-                result: {
-                    scoreHome: outcome.scoreHome,
-                    scoreAway: outcome.scoreAway,
-                    ot: outcome.ot
-                }
-            });
+    const playedMatchesForSim = (matches || []).filter(m =>
+        m.season === season && m.liga === liga && !m.isPlayoff && m.result &&
+        teamIds.includes(Number(m.homeTeamId)) && teamIds.includes(Number(m.awayTeamId))
+    );
+
+    // Předpřiprav objekty týmů a zápasů JEDNOU mimo smyčku (žádné .map() a spread operátory uvnitř)
+    const simTeams = teams.map(team => ({
+        ...team,
+        stats: {
+            ...team.stats,
+            [season]: { ...(team.stats?.[season] || {}) }
         }
-        
-        // Vytvoř kopii týmů pro aktualizaci stats
-        const simTeams = teams.map(team => {
-            const id = Number(team.id);
-            const stats = teamStats.get(id);
-            return {
-                ...team,
-                stats: {
-                    ...team.stats,
-                    [season]: {
-                        ...(team.stats?.[season] || {}),
-                        points: stats?.points || 0,
-                        wins: stats?.wins || 0,
-                        otWins: stats?.otWins || 0,
-                        otLosses: stats?.otLosses || 0,
-                        losses: stats?.losses || 0,
-                        gf: stats?.gf || 0,
-                        ga: stats?.ga || 0
-                    }
-                }
-            };
-        });
-        
-        // Seřaď týmy pomocí rankTeams s plnými pravidly
+    }));
+    const simTeamById = new Map(simTeams.map(t => [Number(t.id), t.stats[season]]));
+
+    const simRemainingTemplates = remainingMatches.map(m => ({
+        ...m,
+        homeId: Number(m.homeTeamId),
+        awayId: Number(m.awayTeamId),
+        result: { scoreHome: 0, scoreAway: 0, ot: false }
+    }));
+    const allSimMatches = [...playedMatchesForSim, ...simRemainingTemplates];
+    const simScores = {};
+    teamIds.forEach(id => { simScores[id] = { gf: 0, ga: 0 }; });
+
+    const outcomes = getMatchPointOutcomes();
+
+    for (let sim = 0; sim < simulations; sim++) {
+        // Reset statistik z baseStats
+        for (let i = 0; i < teamIds.length; i++) {
+            const id = teamIds[i];
+            const base = baseStats.get(id);
+            const target = simTeamById.get(id);
+            target.points = base.points;
+            target.wins = base.wins;
+            target.otWins = base.otWins;
+            target.otLosses = base.otLosses;
+            target.losses = base.losses;
+            target.gf = base.gf;
+            target.ga = base.ga;
+            simScores[id].gf = base.gf;
+            simScores[id].ga = base.ga;
+        }
+
+        // Simuluj zbývající zápasy přímo do předpřipravených objektů
+        for (let i = 0; i < simRemainingTemplates.length; i++) {
+            const m = simRemainingTemplates[i];
+            const o = outcomes[(Math.random() * 4) | 0];
+            const hStats = simTeamById.get(m.homeId);
+            const aStats = simTeamById.get(m.awayId);
+
+            hStats.points += o.home;
+            aStats.points += o.away;
+            hStats.gf += o.homeGoals;
+            hStats.ga += o.awayGoals;
+            aStats.gf += o.awayGoals;
+            aStats.ga += o.homeGoals;
+
+            simScores[m.homeId].gf += o.homeGoals;
+            simScores[m.homeId].ga += o.awayGoals;
+            simScores[m.awayId].gf += o.awayGoals;
+            simScores[m.awayId].ga += o.homeGoals;
+
+            const isOT = o.home === 2 || o.away === 2;
+            if (o.home > o.away) {
+                if (isOT) { hStats.otWins++; aStats.otLosses++; }
+                else { hStats.wins++; aStats.losses++; }
+            } else {
+                if (isOT) { aStats.otWins++; hStats.otLosses++; }
+                else { aStats.wins++; hStats.losses++; }
+            }
+
+            m.result.scoreHome = o.homeGoals;
+            m.result.scoreAway = o.awayGoals;
+            m.result.ot = isOT;
+        }
+
         const ranked = rankTeams(simTeams, {
             season,
-            matches: [...(matches || []).filter(m => m.result), ...simulatedMatches],
+            matches: allSimMatches,
             liga,
             scores: simScores,
             criteria
         });
-        
-        // Spočítej zóny
-        ranked.forEach((team, index) => {
-            const rank = index + 1;
-            const zone = getZoneForRank(rank, teamIds.length, zoneConfig);
-            zoneCounts.get(Number(team.id))[zone]++;
-        });
+
+        for (let idx = 0; idx < ranked.length; idx++) {
+            const zone = getZoneForRank(idx + 1, teamIds.length, zoneConfig);
+            zoneCounts.get(Number(ranked[idx].id))[zone]++;
+        }
     }
 
     // Získej clinch statusy pro tvrdé hranice (0 % / 100 %)
@@ -421,12 +429,17 @@ function calculateZoneProbabilities(teams, leagueObj, matches, season, liga, sco
                 if (t._clinchStatus) clinchMap.set(Number(t.id), t._clinchStatus);
             });
         } else {
-            // Spočítej nově
+            // Spočítej nově a ulož zpět na týmy (aby se nepočítalo dvakrát)
             const clinchTeams = calculateClinchStatusesForGroup(
                 teams, leagueObj, season, 'strict', scores, matches, liga
             );
             clinchTeams.forEach(t => {
-                if (t._clinchStatus) clinchMap.set(Number(t.id), t._clinchStatus);
+                if (t._clinchStatus) {
+                    clinchMap.set(Number(t.id), t._clinchStatus);
+                    // Ulož zpět na originální objekt týmu
+                    const originalTeam = teams.find(orig => Number(orig.id) === Number(t.id));
+                    if (originalTeam) originalTeam._clinchStatus = t._clinchStatus;
+                }
             });
         }
     } catch (e) {

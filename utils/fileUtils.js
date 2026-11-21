@@ -1479,7 +1479,7 @@ async function prepareDashboardData(req, isHistory = false, isImageExporter = fa
                     selectedSeason,
                     selectedLiga,
                     scores,
-                    { simulations: 5000 }
+                    { simulations: 10000 }
                 );
                 zoneProbabilities[group] = {};
                 probs.forEach((prob, teamId) => {
@@ -1971,9 +1971,25 @@ async function generateLeftPanel(data, isHistory = false) {
                 const displayTop12 = (clinchStatus?.clinchedPlayin || clinchStatus?.clinchedQF) ? 100 : rawTop12;
                 const displayQf = clinchStatus?.clinchedQF ? 100 : zoneProb.quarterfinal;
 
+                // Výpočet pro < 0.01% u matematicky nemožných zón
+                const totalTeams = teamsInGroup.length;
+                const qfLimit = leagueObj?.quarterfinal || 0;
+                const piLimit = leagueObj?.playin || 0;
+                const relLimit = leagueObj?.relegation || 0;
+                const safeRank = totalTeams - relLimit;
+                const minR = clinchStatus?.minRank ?? 1;
+                const maxR = clinchStatus?.maxRank ?? totalTeams;
+
+                const fmtTooltip = (val, impossible) => impossible ? '0%' : (val <= 0 ? '< 0.01%' : `${val}%`);
+
+                const qfStr = fmtTooltip(displayQf, qfLimit <= 0 || minR > qfLimit);
+                const top12Str = fmtTooltip(displayTop12, piLimit <= 0 || minR > piLimit);
+                const neuStr = fmtTooltip(zoneProb.neutral, maxR <= piLimit || minR > safeRank);
+                const relStr = fmtTooltip(zoneProb.relegation, relLimit <= 0 || maxR <= safeRank);
+
                 const probTitle = hasPlayin 
-                    ? `${qfName}: ${displayQf}% | ${piName}: ${displayTop12}% | Mimo PO: ${zoneProb.neutral}% | Sestup/Baráž: ${zoneProb.relegation}%\n\nMonte Carlo simulace (10 000 dohrání zbytku sezóny).` 
-                    : `${qfName}: ${displayQf}% | Mimo PO: ${zoneProb.neutral}% | Sestup/Baráž: ${zoneProb.relegation}%\n\nMonte Carlo simulace (10 000 dohrání zbytku sezóny).`;
+                    ? `${qfName}: ${qfStr} | ${piName}: ${top12Str} | Mimo PO: ${neuStr} | Sestup/Baráž: ${relStr}\n\nMonte Carlo simulace (2 500 dohrání zbytku sezóny).` 
+                    : `${qfName}: ${qfStr} | Mimo PO: ${neuStr} | Sestup/Baráž: ${relStr}\n\nMonte Carlo simulace (2 500 dohrání zbytku sezóny).`;
 
                 const pills = [];
                 if (qfProb > 0) pills.push(`<span class="zone-prob-pill zone-prob-qf" title="${escapeHtmlAttribute(probTitle)}">${qfProb}%</span>`);
@@ -2022,7 +2038,7 @@ async function generateLeftPanel(data, isHistory = false) {
             const piLabel = leagueObj.playin > leagueObj.quarterfinal ? ` / Top ${leagueObj.playin}` : '';
             html += `<div style="font-size: 12px; color: var(--text-dim); margin: 8px 4px 20px; display: flex; align-items: center; gap: 8px; opacity: 0.9; background: rgba(255, 255, 255, 0.03); padding: 8px 12px; border-radius: 6px; border-left: 3px solid var(--primary, #ff5500);">
                 <span style="font-size: 14px;">📊</span>
-                <span><strong>Procenta</strong> u týmů = šance na postup (${qfLabel}${piLabel}) • Monte Carlo simulace (10 000 iterací zbývajících zápasů)</span>
+                <span><strong>Procenta</strong> u týmů = šance na postup (${qfLabel}${piLabel}) • Monte Carlo simulace (2 500 iterací zbývajících zápasů)</span>
             </div>`;
         }
     }
