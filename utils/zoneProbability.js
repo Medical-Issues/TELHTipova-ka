@@ -192,44 +192,6 @@ function getMatchPointOutcomes() {
     ];
 }
 
-function simulateMatchOutcome(match, teamStats) {
-    const outcomes = getMatchPointOutcomes();
-    const homeId = Number(match.homeTeamId);
-    const awayId = Number(match.awayTeamId);
-    
-    // Čistá matematika - každý výsledek má stejnou pravděpodobnost 25%
-    const outcomeIndex = Math.floor(Math.random() * 4);
-    const outcome = outcomes[outcomeIndex];
-
-    teamStats.get(homeId).points += outcome.home;
-    teamStats.get(awayId).points += outcome.away;
-    teamStats.get(homeId).gf += outcome.homeGoals;
-    teamStats.get(homeId).ga += outcome.awayGoals;
-    teamStats.get(awayId).gf += outcome.awayGoals;
-    teamStats.get(awayId).ga += outcome.homeGoals;
-    
-    // Aktualizuj wins/otWins/otLosses/losses pro tiebreakery
-    const isOT = outcome.home !== outcome.away && (outcome.home === 2 || outcome.away === 2);
-    if (outcome.home > outcome.away) {
-        if (isOT) teamStats.get(homeId).otWins++;
-        else teamStats.get(homeId).wins++;
-        if (isOT) teamStats.get(awayId).otLosses++;
-        else teamStats.get(awayId).losses++;
-    } else if (outcome.away > outcome.home) {
-        if (isOT) teamStats.get(awayId).otWins++;
-        else teamStats.get(awayId).wins++;
-        if (isOT) teamStats.get(homeId).otLosses++;
-        else teamStats.get(homeId).losses++;
-    }
-
-    // Vrátí výsledek pro použití v rankTeams
-    return {
-        scoreHome: outcome.homeGoals,
-        scoreAway: outcome.awayGoals,
-        ot: isOT
-    };
-}
-
 /**
  * Monte Carlo simulace pravděpodobností zón.
  * Simuluje skutečné zápasy mezi týmy.
