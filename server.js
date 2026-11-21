@@ -27,14 +27,31 @@ const app = express();
 // Nastavit debug mód pro všechny routy
 app.locals.debugNoImages = DEBUG_NO_IMAGES;
 
-// Injektovat PWA manifest do všech HTML stránek
+// Injektovat PWA manifest a barvy lišt do všech HTML stránek
+// Každý tag se kontroluje zvlášť, aby stránky s již existujícím manifest odkazem
+// (např. login.html, register.html) dostaly i meta tagy
 app.use((req, res, next) => {
     const originalSend = res.send;
     res.send = function (body) {
         if (typeof body === 'string' && body.includes('<!DOCTYPE html>')) {
-            // Přidat manifest odkaz do head (pokud tam už není)
+            const pwaTags = [];
             if (!body.includes('rel="manifest"')) {
-                body = body.replace(/(<head[^>]*>)/i, `$1\n    <link rel="manifest" href="/manifest.json">`);
+                pwaTags.push('<link rel="manifest" href="/manifest.json">');
+            }
+            if (!body.includes('name="theme-color"')) {
+                pwaTags.push('<meta name="theme-color" content="#0f172a">');
+            }
+            if (!body.includes('apple-mobile-web-app-capable')) {
+                pwaTags.push('<meta name="apple-mobile-web-app-capable" content="yes">');
+            }
+            if (!body.includes('apple-mobile-web-app-status-bar-style')) {
+                pwaTags.push('<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">');
+            }
+            if (!body.includes('name="view-transition"')) {
+                pwaTags.push('<meta name="view-transition" content="same-origin">');
+            }
+            if (pwaTags.length > 0) {
+                body = body.replace(/(<head[^>]*>)/i, `$1\n    ${pwaTags.join('\n    ')}`);
             }
         }
         return originalSend.call(this, body);
@@ -186,7 +203,10 @@ function csrfMiddleware(req, res, next) {
 
 app.set('trust proxy', true);
 
-const isProductionServer = process.env.RENDER === 'true';
+// Secure cookie: true na Renderu, v produkci (NODE_ENV=production) nebo když SERVER_ORIGIN je HTTPS (mimo localhost)
+const serverOrigin = process.env.SERVER_ORIGIN || '';
+const isHttpsOrigin = serverOrigin.startsWith('https://') && !serverOrigin.includes('localhost');
+const isProductionServer = process.env.RENDER === 'true' || process.env.NODE_ENV === 'production' || isHttpsOrigin;
 
 const sessionStore = MongoStore.create({
     mongoUrl: process.env.MONGODB_URI || 'mongodb://localhost:27017/tipovacka',
@@ -538,6 +558,67 @@ app.post('/api/unsubscribe', async (req, res) => {
     res.json({ success: true });
 });
 
+// Počet neotipovaných zápasů pro Badging API (odznak na ikoně PWA)
+app.get('/api/unpredicted-count', async (req, res) => {
+    if (!req.session.user) {
+        return res.json({ count: 0 });
+    }
+    try {
+        const users = await Users.findAll();
+        const user = users.find(u => u.username === req.session.user);
+        if (!user) return res.json({ count: 0 });
+
+        const { getUnpredictedCountForUser } = require('./routes/notificationService');
+        const count = await getUnpredictedCountForUser(user);
+        res.json({ count });
+    } catch (e) {
+        console.error('Chyba /api/unpredicted-count:', e);
+        res.json({ count: 0 });
+    }
+});
+
+// Odložená připomínka (snooze) z push notifikace - za 15 minut znovu upozornit, pokud tip stále chybí
+app.post('/api/push/snooze', async (req, res) => {
+    if (!req.session.user) {
+        return res.status(401).json({ error: 'Pro odložení připomínky musíš být přihlášen.' });
+    }
+
+    const { matchId, matchIds } = req.body || {};
+    // Podporujeme pole matchIds (agregovaná notifikace na kolo) i jeden matchId
+    const ids = Array.isArray(matchIds) && matchIds.length > 0
+        ? matchIds
+        : (matchId !== undefined && matchId !== null ? [matchId] : []);
+    if (ids.length === 0) {
+        return res.status(400).json({ error: 'matchId/matchIds chybí.' });
+    }
+
+    try {
+        const users = await Users.findAll();
+        const userIndex = users.findIndex(u => u.username === req.session.user);
+        if (userIndex === -1) {
+            return res.status(404).json({ error: 'Uživatel nenalezen v databázi.' });
+        }
+
+        const user = users[userIndex];
+        const reminders = Array.isArray(user.snoozedReminders) ? user.snoozedReminders : [];
+        const idSet = new Set(ids.map(Number));
+
+        // Jedna připomínka na zápas - starší nahradíme novou
+        const filtered = reminders.filter(r => !idSet.has(Number(r.matchId)));
+        const remindAt = Date.now() + 15 * 60 * 1000;
+        ids.forEach(id => filtered.push({ matchId: Number(id), remindAt }));
+
+        users[userIndex].snoozedReminders = filtered;
+        await Users.updateAll(users);
+
+        console.log(`⏰ Snooze připomínky pro ${req.session.user}, matchIds=${ids.join(',')}`);
+        res.json({ success: true });
+    } catch (e) {
+        console.error('Chyba /api/push/snooze:', e);
+        res.status(500).json({ error: 'Chyba serveru.' });
+    }
+});
+
 // 404 Handler
 app.use((req, res) => {
     res.status(404).send(`
@@ -574,8 +655,8 @@ app.use((req, res) => {
 
 // JEDNOTNÝ KEEP-ALIVE SYSTÉM
 function startUnifiedKeepAlive() {
-    const WAKE_URL = process.env.WAKE_URL || 'https://telhtipova-ka.onrender.com/wake';
-    console.log(`💓 Starting unified keep-alive system (every 45s), WAKE_URL: ${WAKE_URL}`);
+    const WAKE_URL = process.env.WAKE_URL || 'https://telhtipovacka.duckdns.org/wake';
+    console.log(`💓 Starting unified keep-alive system (every 5 min), WAKE_URL: ${WAKE_URL}`);
 
     const axios = require('axios');
     let counter = 0;
@@ -609,7 +690,7 @@ function startUnifiedKeepAlive() {
                 console.error(`   Status: ${error.response.status}, URL: ${WAKE_URL}`);
             }
         }
-    }, 45 * 1000);
+    }, 5 * 60 * 1000);
 }
 
 async function startServer() {

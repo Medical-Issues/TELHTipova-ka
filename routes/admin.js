@@ -11619,6 +11619,31 @@ router.post('/image-gallery/generate', requireAdmin, express.json({ limit: '10mb
         await addBuffer('Notifikace · výsledek zápasu', () =>
             notificationService.createVersusImage(homeTeam, awayTeam, null, 4, 2, null, true));
         try {
+            // Ukázka "kola": preferujeme nadcházející zápasy, jinak jakékoli
+            const upcomingMatches = (allMatches || [])
+                .filter(m => !m.result && !m.postponed && !m.locked)
+                .slice(0, 6);
+            const roundMatches = upcomingMatches.length
+                ? upcomingMatches
+                : (allMatches || []).slice(0, 6);
+            const firstDt = roundMatches[0]?.datetime;
+            const roundTime = firstDt && String(firstDt).length >= 16
+                ? String(firstDt).slice(11, 16)
+                : '19:00';
+            const roundUrl = await notificationService.createRoundImage(roundMatches, teams, {
+                kicker: 'KOLO',
+                title: roundTime,
+                meta: 'Ukázkové kolo'
+            });
+            if (!roundUrl) {
+                images.push({ title: 'Notifikace · kolo', error: 'Generátor nevrátil soubor' });
+            } else {
+                images.push({ title: 'Notifikace · kolo', url: roundUrl });
+            }
+        } catch (error) {
+            images.push({ title: 'Notifikace · kolo', error: error.message });
+        }
+        try {
             const winnerUrl = await notificationService.createLeagueWinnerImage(homeTeam, sampleLiga, branding);
             if (!winnerUrl) {
                 images.push({ title: 'Notifikace · vítěz ligy', error: 'Generátor nevrátil soubor' });

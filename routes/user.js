@@ -394,7 +394,24 @@ async function checkSubscriptionStatus() {
     }
 }
 
+async function syncAppBadge() {
+    if (!('setAppBadge' in navigator)) return;
+    try {
+        const res = await fetch('/api/unpredicted-count');
+        if (!res.ok) return;
+        const { count } = await res.json();
+        if (count > 0) {
+            await navigator.setAppBadge(count);
+        } else {
+            await navigator.clearAppBadge();
+        }
+    } catch (e) {
+        // Badge sync je best-effort, chyby ignorujeme
+    }
+}
+
 document.addEventListener('DOMContentLoaded', checkSubscriptionStatus);
+document.addEventListener('DOMContentLoaded', syncAppBadge);
 </script>
 `;
 }
@@ -1458,6 +1475,8 @@ fetch('/tip', {
     if(homeBtn) { homeBtn.classList.toggle('selected', winner === 'home'); if(winner === 'home' && awayBtn) awayBtn.classList.remove('selected'); }
     if(awayBtn) { awayBtn.classList.toggle('selected', winner === 'away'); if(winner === 'away' && homeBtn) homeBtn.classList.remove('selected'); }
     if(loserRow) loserRow.style.display = 'table-row';
+    // Aktualizace odznaku na ikoně PWA po uložení tipu (AJAX, bez reloadu)
+    if (typeof syncAppBadge === 'function') syncAppBadge();
 })
 .catch(err => { console.error('Tip se nepodařilo uložit:', err); alert(err.message || 'Chyba připojení.'); });
 }
