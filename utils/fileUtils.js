@@ -9,6 +9,7 @@ const {
     calculateClinchStatusesForGroup,
     calculateCrossGroupClinchStatuses
 } = require('./clinchStatus');
+const { calculateZoneProbabilities } = require('./zoneProbability');
 const { getStandingsCriteria, rankTeams } = require('./standings');
 
 async function requireLogin(req, res, next) {
@@ -1036,9 +1037,9 @@ const getGroupDisplayLabel = (gKey) => {
 async function prepareDashboardData(req, isHistory = false, isImageExporter = false) {
     const username = req.session ? req.session.user : null;
 
-    // 1. Zjištění sezóny (pokud jsme v historii, bereme z URL, jinak globální)
+    // 1. Zjištění sezóny (pokud jsme v historii nebo exportéru, bereme z URL, jinak globální)
     let selectedSeason = await getChosenSeason();
-    if (isHistory && req.query.season) {
+    if ((isHistory || isImageExporter) && req.query.season) {
         selectedSeason = req.query.season;
     }
     
@@ -1464,6 +1465,32 @@ async function prepareDashboardData(req, isHistory = false, isImageExporter = fa
     try { transfersData = await getTransfersData(); } catch(e) {}
     const currentTransfers = transfersData[selectedSeason]?.[selectedLiga] || {};
 
+    // 8. Pravděpodobnosti zón (Monte Carlo simulace) - přeskočeno pro skončenou sezónu
+    const zoneProbabilities = {};
+    if (!isRegularSeasonFinished) {
+        try {
+            for (const group of sortedGroups) {
+                const teamsInGroup = teamsByGroup[group];
+                if (!teamsInGroup || teamsInGroup.length === 0) continue;
+                const probs = calculateZoneProbabilities(
+                    teamsInGroup,
+                    leagueObj,
+                    matches,
+                    selectedSeason,
+                    selectedLiga,
+                    scores,
+                    { simulations: 10000 }
+                );
+                zoneProbabilities[group] = {};
+                probs.forEach((prob, teamId) => {
+                    zoneProbabilities[group][teamId] = prob;
+                });
+            }
+        } catch (e) {
+            console.error('Chyba při výpočtu pravděpodobností zón:', e);
+        }
+    }
+
     // Všechna "vysátá" data pošleme zpět
     return {
         username, selectedSeason, selectedLiga, uniqueLeagues, teamsInSelectedLiga, matches,
@@ -1471,7 +1498,8 @@ async function prepareDashboardData(req, isHistory = false, isImageExporter = fa
         leagueObj, sortedGroups, teamsByGroup, sortedGroupKeys, groupedTeams,
         globalRealRankMap, userStats, currentUserStats,
         userTipData, currentUserMatchTips, playoffData, bracketMatches, bracketNameTeams, scores, allUsers, teams,
-        activeTransferLeagues, currentTransfers, tableTips, leagues // <-- TOTO JSME PŘIDALI NA KONEC
+        activeTransferLeagues, currentTransfers, tableTips, leagues, // <-- TOTO JSME PŘIDALI NA KONEC
+        zoneProbabilities
     };
 }
 
@@ -1734,12 +1762,31 @@ async function generateStatsHtml(username, currentUserStats, userStats) {
     return html;
 }
 
+function formatZoneProb(prob, isClinched, isLocked, isSeasonFinished = false) {
+    // Pokud je clinched - 100% (jen když sezóna není skončená)
+    if (!isSeasonFinished && (isClinched || isLocked)) return 100;
+    
+    // Pro skončenou sezónu - vrať reálná procenta bez capů
+    if (isSeasonFinished) {
+        return Math.round(prob);
+    }
+    
+    // Reálná procenta s 2 desetinnými místy pro krajní hodnoty
+    if (prob >= 99.99) return 99.99;
+    if (prob <= 0.01) return 0.01;
+    if (prob > 99 || prob < 1) return Math.round(prob * 100) / 100;
+    
+    // Normální rozsah - celé číslo
+    return Math.round(prob);
+}
+
 async function generateLeftPanel(data, isHistory = false) {
     const {
         username, selectedSeason, selectedLiga, teamsInSelectedLiga,
         matches, bracketMatches, bracketNameTeams, clinchMode, tableMode, isRegularSeasonFinished,
         leagueObj, sortedGroups, teamsByGroup, playoffData, scores,
-        currentUserStats, userStats, teams, globalRealRankMap, leagues: seasonLeagues
+        currentUserStats, userStats, teams, globalRealRankMap, leagues: seasonLeagues,
+        zoneProbabilities
     } = data;
 
     const lockedTeamIds = new Set();
@@ -1905,13 +1952,39 @@ async function generateLeftPanel(data, isHistory = false) {
 
             const recentForm = getRecentTeamForm(team);
 
-            html += `<tr class="${rowClass}">
+            // Pravděpodobnosti zón - zobrazujeme Top 4 a Top 12 s ohledem na clinch
+            const zoneProb = zoneProbabilities?.[group]?.[Number(team.id)];
+            const clinchStatus = team._clinchStatus;
+            const hasPlayin = leagueObj?.playin > leagueObj?.quarterfinal;
+            const hasPlayoffZones = (leagueObj?.quarterfinal > 0) || (leagueObj?.playin > 0);
+            const qfProb = zoneProb && hasPlayoffZones ? formatZoneProb(zoneProb.quarterfinal, clinchStatus?.clinchedQF, clinchStatus?.locked, isRegularSeasonFinished) : 0;
+            const top12Prob = zoneProb && hasPlayin && hasPlayoffZones ? formatZoneProb(zoneProb.quarterfinal + zoneProb.playin, clinchStatus?.clinchedPlayin || clinchStatus?.clinchedQF, clinchStatus?.locked, isRegularSeasonFinished) : 0;
+            let zoneProbHtml = '';
+            let rowStyle = '';
+            if (zoneProb && hasPlayoffZones && !isRegularSeasonFinished && (qfProb > 0 || top12Prob > 0)) {
+                const probTitle = hasPlayin 
+                    ? `Top 4: ${zoneProb.quarterfinal}% | Top 12: ${zoneProb.quarterfinal + zoneProb.playin}% | Neutral: ${zoneProb.neutral}% | Sestup: ${zoneProb.relegation}%`
+                    : `Top 4: ${zoneProb.quarterfinal}% | Neutral: ${zoneProb.neutral}% | Sestup: ${zoneProb.relegation}%`;
+                const pills = [];
+                if (qfProb > 0) pills.push(`<span class="zone-prob-pill zone-prob-qf" data-tooltip="${escapeHtmlAttribute(probTitle)}" tabindex="0">${qfProb}%</span>`);
+                if (hasPlayin && top12Prob > 0) pills.push(`<span class="zone-prob-pill zone-prob-top12" data-tooltip="${escapeHtmlAttribute(probTitle)}" tabindex="0">${top12Prob}%</span>`);
+                zoneProbHtml = `<span class="zone-prob-badge">${pills.join('')}</span>`;
+                // Dvojitý gradient: žlutá pro Top 4, zelená pro Top 12
+                const isClinched = rowClass.includes('clinched-') || rowClass.includes('locked');
+                const qfColor = isClinched ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 193, 7, 0.25)';
+                const top12Color = isClinched ? 'rgba(255, 255, 255, 0.08)' : 'rgba(76, 175, 80, 0.15)';
+                rowStyle = hasPlayin 
+                    ? `style="background: linear-gradient(to right, ${qfColor} ${qfProb}%, ${top12Color} ${qfProb}%, ${top12Color} ${top12Prob}%, transparent ${top12Prob}%);"`
+                    : `style="background: linear-gradient(to right, ${qfColor} ${qfProb}%, transparent ${qfProb}%);"`;
+            }
+
+            html += `<tr class="${rowClass} zone-prob-row" ${rowStyle}>
                 <td class="rank-cell ${rankClass}"><span class="rank-badge">${index + 1}.</span></td>
                 <td>
                     <div class="team-cell">
                         ${teamLogoUrl ? `<img src="${teamLogoUrl}" alt="" class="team-logo-small">` : ''}
                         <div class="team-cell-content">
-                            <div class="team-cell-main"><span>${team.name}</span></div>
+                            <div class="team-cell-main"><span>${team.name}</span>${zoneProbHtml}</div>
                             ${recentForm.length ? `
                                 <div class="team-recent-form" aria-label="Forma: posledních ${recentForm.length} zápasů">
                                     <div class="team-recent-form-results">
@@ -2482,6 +2555,16 @@ async function createStandingsImage(teamsData, title, withWatermark = true, opti
                 displayName = displayName.replace(` (${group})`, '');
             }
             brand.drawText(ctx, displayName, 75, y + 3, { size: 15, minSize: 12, color: textColor, maxWidth: 280 });
+
+            // Zone probability badge
+            if (team._zoneProb && team._zoneProb.quarterfinal > 0) {
+                const probText = team._zoneProb.quarterfinal + '%';
+                ctx.font = 'bold 11px Arial';
+                ctx.fillStyle = theme.gold;
+                ctx.textAlign = 'left';
+                const nameWidth = ctx.measureText(displayName).width;
+                ctx.fillText(probText, 75 + nameWidth + 8, y + 3);
+            }
 
             // Stats
             ctx.textAlign = 'center';

@@ -3687,13 +3687,13 @@ router.post("/image-exporter/generate", requireLogin, express.json({ limit: '50m
                 break;
             }
             case 'standings': {
-                const { selectedLiga, standingsType, standingsTitle, clinchMode } = req.body;
+                const { selectedLiga, selectedSeason: reqSeason, standingsType, standingsTitle, clinchMode } = req.body;
                 if (!selectedLiga) return res.status(400).json({ error: 'Chybí vybraná liga' });
 
                 // Použijeme prepareDashboardData pro získání stejných dat jako left panel
                 const dashboardData = await prepareDashboardData({
                     user: req.user,
-                    query: { liga: selectedLiga },
+                    query: { liga: selectedLiga, season: reqSeason },
                     session: req.session
                 }, false, true);
                 
@@ -3786,6 +3786,7 @@ teamsInGroup.forEach((team, index) => {
                         teamsWithClinch.forEach((team, index) => {
                             const stats = team.stats?.[selectedSeason] || {};
                             const clinchStatus = team._clinchStatus || {};
+                            const zoneProb = dashboardData.zoneProbabilities?.[group]?.[Number(team.id)];
                             
                             standingsData.push({
                                 id: team.id,
@@ -3801,7 +3802,8 @@ teamsInGroup.forEach((team, index) => {
                                 position: index + 1,
                                 tiebreaker: stats.tiebreaker || 0, // Tiebreaker je také už v stats
                                 // Přidáme jistoty pro createStandingsImage
-                                _clinchStatus: clinchStatus
+                                _clinchStatus: clinchStatus,
+                                _zoneProb: zoneProb
                             });
                         });
                     }
@@ -3827,13 +3829,13 @@ teamsInGroup.forEach((team, index) => {
                 break;
             }
             case 'statistics': {
-                const { selectedLiga, statisticsTitle } = req.body;
+                const { selectedLiga, selectedSeason: reqSeason, statisticsTitle } = req.body;
                 if (!selectedLiga) return res.status(400).json({ error: 'Chybí vybraná liga' });
 
                 // Použijeme prepareDashboardData pro získání stejných dat jako left panel
                 const dashboardData = await prepareDashboardData({
                     user: req.user,
-                    query: { liga: selectedLiga },
+                    query: { liga: selectedLiga, season: reqSeason },
                     session: req.session
                 }, false, true);
                 
@@ -5135,6 +5137,20 @@ html += `<section class="matches-container image-exporter-page">
         <div id="standings-section" class="form-section">
             <h3 style="color: #ff4500; margin-top: 0;">Export tabulky</h3>
             <form id="standings-form" onsubmit="event.preventDefault(); generateImage('standings');">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Liga</label>
+                        <select name="selectedLiga" required>
+                            ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected' : ''}>${l}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Sezóna</label>
+                        <select name="selectedSeason" required>
+                            ${seasonsFromTeams.map(s => `<option value="${s}" ${s === selectedSeason ? 'selected' : ''}>${s}</option>`).join('')}
+                        </select>
+                    </div>
+                </div>
                 <div class="form-group">
                     <label>Typ tabulky</label>
                     <select name="standingsType" id="standings-type" onchange="document.getElementById('clinch-mode-row').style.display = this.value === 'regular' ? 'block' : 'none'">
@@ -5154,7 +5170,6 @@ html += `<section class="matches-container image-exporter-page">
                     <label>Nadpis tabulky</label>
                     <input type="text" name="standingsTitle" placeholder="např. Tabulka TELH 2024/25">
                 </div>
-                <input type="hidden" name="selectedLiga" value="${selectedLiga}">
                 <div class="form-group watermark-option">
                     <input type="checkbox" name="watermark" id="standings-watermark" checked>
                     <label for="standings-watermark" style="margin: 0;">Přidat watermark</label>
@@ -5166,11 +5181,24 @@ html += `<section class="matches-container image-exporter-page">
         <div id="statistics-section" class="form-section">
             <h3 style="color: #ff4500; margin-top: 0;">Export statistik tipujících</h3>
             <form id="statistics-form" onsubmit="event.preventDefault(); generateImage('statistics');">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Liga</label>
+                        <select name="selectedLiga" required>
+                            ${uniqueLeagues.map(l => `<option value="${l}" ${l === selectedLiga ? 'selected' : ''}>${l}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Sezóna</label>
+                        <select name="selectedSeason" required>
+                            ${seasonsFromTeams.map(s => `<option value="${s}" ${s === selectedSeason ? 'selected' : ''}>${s}</option>`).join('')}
+                        </select>
+                    </div>
+                </div>
                 <div class="form-group">
                     <label>Nadpis statistik</label>
                     <input type="text" name="statisticsTitle" value="Statistiky tipujících" placeholder="např. Statistiky TELH 2024/25">
                 </div>
-                <input type="hidden" name="selectedLiga" value="${selectedLiga}">
                 <div class="form-group watermark-option">
                     <input type="checkbox" name="watermark" id="statistics-watermark" checked>
                     <label for="statistics-watermark" style="margin: 0;">Přidat watermark</label>

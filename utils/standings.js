@@ -295,14 +295,15 @@ function rankTeams(teams, options = {}) {
             }));
             values.sort((first, second) => {
                 if (criterion === 'manualTiebreaker') {
-                    return compareManualTiebreakers(first.value, second.value) ||
-                        first.index - second.index;
+                    const manualResult = compareManualTiebreakers(first.value, second.value);
+                    if (manualResult !== 0) return manualResult;
+                    return 0; // Stejné hodnoty - rozhodne další kritérium
                 }
                 if (first.value !== second.value) {
                     if (LOWER_IS_BETTER.has(criterion)) return first.value - second.value;
                     return second.value - first.value;
                 }
-                return first.index - second.index;
+                return 0; // Stejné hodnoty - rozhodne další kritérium
             });
 
             let currentGroup = [];
@@ -320,7 +321,22 @@ function rankTeams(teams, options = {}) {
         tiedGroups = nextGroups;
     }
 
-    return tiedGroups.flat().map(entry => entry.team);
+    // Použij stabilní řazení pouze pro týmy ve stejné tiedGroup
+    const rankedTeams = tiedGroups.flatMap(group => {
+        if (group.length === 1) return [group[0].team];
+        // Pro skupiny se stejnými hodnotami použij abecední řazení
+        return stableTeamSort(group.map(entry => entry.team));
+    });
+    return rankedTeams;
+}
+
+// Stabilní fallback pro stejné hodnoty - abecední řazení podle názvu týmu
+function stableTeamSort(teams) {
+    return [...teams].sort((a, b) => {
+        const nameA = a.name || '';
+        const nameB = b.name || '';
+        return nameA.localeCompare(nameB, 'cs');
+    });
 }
 
 module.exports = {
