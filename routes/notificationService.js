@@ -89,7 +89,23 @@ async function getMatchesCached() {
     return data;
 }
 
+// Vrátí "YYYY-MM-DD" v Praze pro datetime zápasu (podporuje lokální i ISO formát)
+function getMatchPragueDateKey(datetime) {
+    if (!datetime) return null;
+    const value = String(datetime);
+    const localDateTime = value.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::\d{2})?$/);
+    if (localDateTime) {
+        return `${localDateTime[1]}-${localDateTime[2]}-${localDateTime[3]}`;
+    }
+    const matchDate = new Date(value);
+    if (Number.isNaN(matchDate.getTime())) return null;
+    const parts = getPragueDateParts(matchDate);
+    return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
 // --- POČET NEOTIPOVANÝCH ZÁPASŮ (pro Badging API na ikoně PWA) ---
+// Počítá jen zápasy z dneška a zítřka (evropský čas), aby odznak znamenal
+// "dnes/zítra ti chybí tipy", ne "celá sezóna napříč všemi ligami".
 async function getUnpredictedCountForUser(user) {
     const matches = await getMatchesCached();
 
@@ -109,9 +125,20 @@ async function getUnpredictedCountForUser(user) {
         }
     }
 
-    return matches.filter(m =>
-        !m.result && !m.postponed && !m.locked && !tippedIds.has(Number(m.id))
-    ).length;
+    // Dnešní a zítřejší datum v Praze
+    const todayParts = getPragueDateParts(new Date());
+    const tomorrowParts = getPragueDateParts(new Date(Date.now() + 24 * 60 * 60 * 1000));
+    const dateKeys = new Set([
+        `${todayParts.year}-${todayParts.month}-${todayParts.day}`,
+        `${tomorrowParts.year}-${tomorrowParts.month}-${tomorrowParts.day}`
+    ]);
+
+    return matches.filter(m => {
+        if (m.result || m.postponed || m.locked) return false;
+        if (tippedIds.has(Number(m.id))) return false;
+        const dateKey = getMatchPragueDateKey(m.datetime);
+        return dateKey !== null && dateKeys.has(dateKey);
+    }).length;
 }
 
 // --- FUNKCE PRO ZPRACOVÁNÍ CUSTOM OBRÁZKŮ PRO NOTIFIKACE ---
