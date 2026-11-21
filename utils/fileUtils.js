@@ -1999,8 +1999,8 @@ async function generateLeftPanel(data, isHistory = false) {
                 zoneProbHtml = `<span class="zone-prob-badge">${pills.join('')}</span>`;
 
                 const isClinched = rowClass.includes('clinched-') || rowClass.includes('locked');
-                const qfColor = isClinched ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 193, 7, 0.25)';
-                const top12Color = isClinched ? 'rgba(255, 255, 255, 0.08)' : 'rgba(76, 175, 80, 0.15)';
+                const qfColor = isClinched ? 'rgba(255, 255, 255, 0.12)' : 'rgba(16, 185, 129, 0.25)';
+                const top12Color = isClinched ? 'rgba(255, 255, 255, 0.08)' : 'rgba(245, 158, 11, 0.15)';
                 rowStyle = hasPlayin 
                     ? `style="background: linear-gradient(to right, ${qfColor} ${qfProb}%, ${top12Color} ${qfProb}%, ${top12Color} ${top12Prob}%, transparent ${top12Prob}%);"` 
                     : `style="background: linear-gradient(to right, ${qfColor} ${qfProb}%, transparent ${qfProb}%);"`;
