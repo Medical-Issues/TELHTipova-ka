@@ -54,6 +54,10 @@ app.use((req, res, next) => {
             if (pwaTags.length > 0) {
                 body = body.replace(/(<head[^>]*>)/i, `$1\n    ${pwaTags.join('\n    ')}`);
             }
+            // Adminům přidat rychlý odkaz do admin panelu vedle zvonku
+            if (req.session && req.session.role === 'admin' && body.includes('bell-btn') && !body.includes('admin-nav-btn')) {
+                body = body.replace('<div class="user-avatar">', '<a href="/admin" class="admin-nav-btn" title="Admin panel">Admin</a>\n                <div class="user-avatar">');
+            }
         }
         return originalSend.call(this, body);
     };
