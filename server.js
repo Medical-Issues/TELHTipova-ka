@@ -36,6 +36,7 @@ app.use((req, res, next) => {
         if (typeof body === 'string' && body.includes('<!DOCTYPE html>')) {
             const pwaTags = [];
             if (!body.includes('rel="manifest"')) {
+                // noinspection HtmlUnknownTarget
                 pwaTags.push('<link rel="manifest" href="/manifest.json">');
             }
             if (!body.includes('name="theme-color"')) {
@@ -235,6 +236,53 @@ app.use(session({
 // Body parser middleware
 app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
 app.use(bodyParser.json({ limit: '50mb' }));
+
+// Dynamický PWA manifest - zkratku na /admin dostanou jen přihlášení admini
+app.get('/manifest.json', (req, res) => {
+    const shortcuts = [
+        {
+            name: 'Tabulka',
+            short_name: 'Tabulka',
+            url: '/history/table',
+            icons: [{ src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' }]
+        }
+    ];
+
+    if (req.session && req.session.role === 'admin') {
+        shortcuts.unshift({
+            name: 'Admin panel',
+            short_name: 'Admin',
+            url: '/admin',
+            icons: [{ src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' }]
+        });
+    }
+
+    res.setHeader('Content-Type', 'application/manifest+json');
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({
+        name: 'TELHTipovačka',
+        short_name: 'TELH Tip',
+        start_url: '/',
+        display: 'standalone',
+        background_color: '#0f172a',
+        theme_color: '#0f172a',
+        shortcuts,
+        icons: [
+            {
+                src: '/icons/icon-192.png',
+                sizes: '192x192',
+                type: 'image/png',
+                purpose: 'any maskable'
+            },
+            {
+                src: '/icons/icon-512.png',
+                sizes: '512x512',
+                type: 'image/png',
+                purpose: 'any maskable'
+            }
+        ]
+    });
+});
 
 app.get('/health', (req, res) => {
     const uptime = process.uptime();
