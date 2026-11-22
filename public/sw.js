@@ -187,9 +187,9 @@ self.addEventListener('fetch', event => {
                         </style>
                     </head>
                     <body>
-                        <h1>Jsi offline</h1>
-                        <p>Vypadá to, že vypadl internet. Zkontroluj připojení a zkus načíst tipovačku znovu.</p>
-                        <button onclick="location.reload()">Zkusit znovu</button>
+                        <h1>Jsi mimo led (Offline)</h1>
+                        <p>Vypadl ti internet, takže jsi momentálně na trestné lavici bez signálu. Až chytíš síť, naskoč zpátky do hry.</p>
+                        <button onclick="location.reload()">Naskočit zpátky na led</button>
                     </body>
                     </html>
                 `, {headers: {'Content-Type': 'text/html; charset=utf-8'}});

@@ -16,7 +16,7 @@ const healthRoutes = require('./routes/health');
 const { router: securityRoutes } = require('./routes/security');
 const versionRoutes = require('./routes/version');
 const { Users } = require('./utils/mongoDataAccess');
-const { checkAllTableTipsLockers } = require('./utils/fileUtils');
+const { checkAllTableTipsLockers, renderErrorHtml } = require('./utils/fileUtils');
 
 // MongoDB připojení a zálohování
 const { connectToDatabase } = require('./config/database');
@@ -98,7 +98,7 @@ app.get(/\/google.*\.html$/, (req, res) => {
     if (fs.existsSync(filePath)) {
         res.sendFile(filePath);
     } else {
-        res.status(404).send('Verification file not found');
+        res.status(404).send('Soubor pro ověření zmizel mimo mantinely');
     }
 });
 
@@ -124,7 +124,7 @@ app.get('/sw.js', (req, res) => {
         res.setHeader('Content-Type', 'application/javascript');
         res.sendFile(swPath);
     } else {
-        res.status(404).send('Service Worker not found');
+        res.status(404).send('Service Worker nenalezen na ledě');
     }
 });
 
@@ -134,7 +134,7 @@ app.get('/favicon.ico', (req, res) => {
     if (fs.existsSync(logoPath)) {
         res.sendFile(logoPath);
     } else {
-        res.status(404).send('Favicon not found');
+        res.status(404).send('Favicona se ztratila v rolbě');
     }
 });
 
@@ -429,7 +429,7 @@ app.post('/admin/restore-from-github', async (req, res) => {
     }
 
     if (!process.env.GITHUB_TOKEN) {
-        return res.status(400).json({ success: false, message: 'GITHUB_TOKEN není nastaven' });
+        return res.status(400).json({ success: false, message: 'Chybí GITHUB_TOKEN – bez klíče od kabiny zálohu nespustíš.' });
     }
 
     const { logAdminAction } = require('./utils/fileUtils');
@@ -456,7 +456,7 @@ app.post('/admin/full-restore-from-github', async (req, res) => {
     }
 
     if (!process.env.GITHUB_TOKEN) {
-        return res.status(400).json({ success: false, message: 'GITHUB_TOKEN není nastaven' });
+        return res.status(400).json({ success: false, message: 'Chybí GITHUB_TOKEN – bez klíče od kabiny zálohu nespustíš.' });
     }
 
     const { logAdminAction } = require('./utils/fileUtils');
@@ -544,10 +544,10 @@ app.post('/api/subscribe', async (req, res) => {
             res.status(201).json({ success: true });
         } catch (err) {
             console.error("Chyba při zápisu do MongoDB:", err);
-            res.status(500).json({ error: "Nepodařilo se uložit data na server." });
+            res.status(500).json({ error: "Server dostal bodyček a data se neuložila." });
         }
     } else {
-        res.status(404).json({ error: "Uživatel nenalezen v databázi." });
+        res.status(404).json({ error: "Tenhle hráč na soupisce v databázi vůbec není." });
     }
 });
 
@@ -648,7 +648,7 @@ app.post('/api/push/snooze', async (req, res) => {
         const users = await Users.findAll();
         const userIndex = users.findIndex(u => u.username === req.session.user);
         if (userIndex === -1) {
-            return res.status(404).json({ error: 'Uživatel nenalezen v databázi.' });
+            return res.status(404).json({ error: 'Tenhle hráč na soupisce v databázi vůbec není.' });
         }
 
         const user = users[userIndex];
@@ -667,7 +667,7 @@ app.post('/api/push/snooze', async (req, res) => {
         res.json({ success: true });
     } catch (e) {
         console.error('Chyba /api/push/snooze:', e);
-        res.status(500).json({ error: 'Chyba serveru.' });
+        res.status(500).json({ error: "V útrobách serveru něco prasklo (chyba 500)." });
     }
 });
 
@@ -683,7 +683,7 @@ app.use((req, res) => {
             <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-            <title>Stránka nenalezena</title>
+            <title>404 – Zakázané uvolnění</title>
             <link rel="icon" href="/images/logo.png">
             <style>
                 body { background-color: #121212; color: white; font-family: Arial, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; }
@@ -696,13 +696,55 @@ app.use((req, res) => {
         </head>
         <body>
             <img src="/images/logo.png" alt="Logo" class="logo">
-            <h1>404</h1>
-            <p>Jejda! Tuhle stránku jsme nenašli.</p>
-            <p>Asi jsi zabloudil mimo mantinely.</p>
-            <a href="/">Vrátit se na střídačku (Domů)</a>
+            <h1>404 – Zakázané uvolnění</h1>
+            <p>Jejda! Tuhle stránku jsme na ledě nenašli.</p>
+            <p>Zabloudil jsi úplně mimo mantinely, tady puk nehledej, ty blbe.</p>
+            <a href="/">Zpátky na střídačku (Domů)</a>
         </body>
         </html>
     `);
+});
+
+// Globální error handler - zachytí neošetřené chyby z rout a middleware
+// (Express 5 automaticky předává rejecty z async handlerů sem)
+app.use((err, req, res, next) => {
+    const status = err.status || err.statusCode || 500;
+    console.error(`❌ Neošetřená chyba [${status}] ${req.method} ${req.originalUrl}:`, err);
+
+    if (res.headersSent) {
+        return next(err);
+    }
+
+    let message;
+    if (status === 400) {
+        message = "To, co jsi poslal, je pro server nesrozumitelné. Buď jsi rozbil formulář, nebo zkoušíš server napálit. Posílej data, kterým se dá rozumět – bez faulu, ty zmrde.";
+    } else if (status === 401) {
+        message = "Nejsi přihlášený. Server tě nezná, netuší, kdo jsi, a na led tě bez dresu nepustí. Přihlas se, ty anonymní kryso.";
+    } else if (status === 403) {
+        message = "Sem nemáš přístup. Jsou tu dveře, ale ty na ně nemáš klíče ani mozek. Zkus se přihlásit jinak, nebo táhni zpátky na střídačku, ty zmrde.";
+    } else if (status === 404) {
+        message = "Tahle stránka neexistuje. Možná jsi ji smazal, možná nikdy nebyla – přesně jako tvoje šance na výhru, ta je taky mimo mantinely. Hledej jinde, ty blbe.";
+    } else if (status === 405) {
+        message = "Tahle adresa existuje, ale tohle zakončení ne. Takhle se do branky nestřílí, zkus to jinou metodou, ty trpaslíku.";
+    } else if (status === 408) {
+        message = "Server na tebe čekal tak dlouho, až odešel do šatny. Zkus to znovu a tentokrát pohni zadkem, ty lenochu.";
+    } else if (status === 413) {
+        message = "To, co jsi poslal, má větší váhu než rolba i s řidičem. Server to odpískal dřív, než mu praskla helma. Zmenši to a zkus to znovu, ty debílku.";
+    } else if (status === 429) {
+        message = "Příliš mnoho střel za krátkou dobu. Server je utahaný a tvoje spamování ho nebaví – 2 minuty za zdržování hry. Dej si pauzu a zkus to později, ty netrpělivý kreténe.";
+    } else if (status >= 502 && status <= 504) {
+        message = "Něco mezi serverem a zbytkem internetu vypadlo ze sestavy. Není to tvoje vina, ale ani naše radost. Zkus to za chvíli, ty chudáčku.";
+    } else {
+        message = "Někde v útrobách serveru prasklo plexisklo a ledaři to teď dávají dohromady. Zkus to za chvíli, nebo napiš adminovi, že jsi rozbil internet. Za tohle by ti rozhodčí napařil 5 + do konce a ještě tě poslal do prdele.";
+    }
+
+    const safeStatus = status >= 400 && status < 600 ? status : 500;
+    renderErrorHtml(res, message, safeStatus)
+        .catch(() => {
+            if (!res.headersSent) {
+                res.status(500).send('Nastala chyba serveru.');
+            }
+        });
 });
 
 // JEDNOTNÝ KEEP-ALIVE SYSTÉM

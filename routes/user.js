@@ -846,7 +846,7 @@ router.post("/table-tip", requireLogin, express.json(), async (req, res) => {
     } catch (err) {
         console.error("Chyba při ukládání tableTips do MongoDB:", err);
         await logUserAction(username, "TABLE_TIP", `Neúspěšné tipování tabulky pro ${liga} (${season}) - ${err.message}`, 'table_tip', null, req, 'error', false);
-        return res.status(500).send("Chyba při ukládání tipu tabulky.");
+        return res.status(500).send("Uložení tipu tabulky skončilo na tyčce. Zkus to znovu, než začne třetina.");
     }
 
     await logUserAction(username, "TABLE_TIP", `Tipování tabulky pro ${liga} (${season})`, 'table_tip', null, req, 'info', true);
@@ -878,7 +878,7 @@ router.post("/tip", requireLogin, async (req, res) => {
         matches = await Matches.findAll();
     } catch (err) {
         console.error("Chyba při čtení matches.json:", err);
-        return res.status(500).send("Nastala chyba při čtení dat zápasů.");
+        return res.status(500).send("Nepodařilo se načíst rozpis zápasů – ledaři ztratili papíry.");
     }
 
     const match = matches.find(m => Number(m.id) === matchId);
@@ -909,7 +909,7 @@ router.post("/tip", requireLogin, async (req, res) => {
         users = await Users.findAll();
     } catch (err) {
         console.error("Chyba při čtení users z MongoDB:", err);
-        return res.status(500).send("Nastala chyba při čtení dat uživatelů.");
+        return res.status(500).send("Nepodařilo se načíst soupisku tipérů.");
     }
 
     const user = users.find(u => u.username === username);
@@ -958,7 +958,7 @@ router.post("/tip", requireLogin, async (req, res) => {
     } catch (err) {
         console.error("Chyba při ukládání do MongoDB:", err);
         await logUserAction(username, "MATCH_TIP", `Neúspěšné tipování zápasu ID ${matchId} - ${err.message}`, 'match_tip', matchId, req, 'error', false);
-        return res.status(500).send("Chyba při ukládání tipu.");
+        return res.status(500).send("Tvůj tip se neuložil, puk přeskočil hokejku. Zkus to poslat ještě jednou!");
     }
 
     await logUserAction(username, "MATCH_TIP", `Tipování zápasu ID ${matchId} (${match.homeTeam} vs ${match.awayTeam})`, 'match_tip', matchId, req, 'info', true);
@@ -966,7 +966,7 @@ router.post("/tip", requireLogin, async (req, res) => {
     req.session.save(err => {
         if (err) {
             console.error("Chyba při ukládání session:", err);
-            return res.status(500).send("Chyba session.");
+            return res.status(500).send("Vypršela ti session – rozhodčí tě poslal znovu na buly (přihlas se znovu).");
         }
 
         if (req.headers['x-requested-with'] === 'fetch') {
@@ -1736,7 +1736,7 @@ router.get('/history', requireLogin, async (req, res) => {
 
     } catch (globalErr) {
         console.error('Kritická chyba při generování stránky historie:', globalErr);
-        res.status(500).send('Nastala chyba při načítání historie.');
+        res.status(500).send('Archiv svazu je momentálně zamčený – historie se nenačetla.');
     }
 });
 
@@ -1946,7 +1946,7 @@ ${await renderUserHeader({
         res.send(html);
     } catch (err) {
         console.error('Chyba v /history/prestupy:', err);
-        res.status(500).send('Nastala chyba při načítání historie přestupů.');
+        res.status(500).send('Archiv svazu je momentálně zamčený – historie přestupů se nenačetla.');
     }
 });
 
@@ -2354,7 +2354,7 @@ function toggleSeriesDetails(btn) {
         res.send(html);
     } catch (err) {
         console.error('Chyba v /history/a:', err);
-        res.status(500).send('Nastala chyba při načítání historie zápasů.');
+        res.status(500).send('Archiv svazu je momentálně zamčený – historie zápasů se nenačetla.');
     }
 });
 
@@ -2537,7 +2537,7 @@ ${await renderUserHeader({
         res.send(html);
     } catch (err) {
         console.error('Chyba v /history/table:', err);
-        res.status(500).send('Nastala chyba při načítání historie tabulky.');
+        res.status(500).send('Archiv svazu je momentálně zamčený – historie tabulky se nenačetla.');
     }
 });
 
@@ -2807,7 +2807,7 @@ document.addEventListener('DOMContentLoaded', () => {
         res.send(html);
     } catch (error) {
         console.error('Chyba v /history/roster route:', error);
-        res.status(500).send('Chyba při načítání historických soupisek.');
+        res.status(500).send('Historické soupisky se nepodařilo vytáhnout ze sklepa.');
     }
 });
 
@@ -5460,7 +5460,7 @@ ${header}
         res.send(html);
     } catch (error) {
         console.error('Chyba při načítání statistik:', error);
-        res.status(500).send('Došlo k chybě při načítání statistik.');
+        res.status(500).send('Statistiky se teď nechtějí spočítat, server dostal křeč do lýtka.');
     }
 });
 

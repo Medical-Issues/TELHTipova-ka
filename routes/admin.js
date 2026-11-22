@@ -945,7 +945,7 @@ router.post('/leagues', express.urlencoded({ extended: true }), requireAdmin, as
     }
     
     const ligaName = req.body.name?.trim();
-    if (!ligaName) return renderErrorHtml(res, "Název ligy je povinný.", 400);
+    if (!ligaName) return renderErrorHtml(res, "Bez názvu ligy soutěž nerozjedeš. Napiš tam něco, ty hlavo.", 400);
 
     // Načtení z MongoDB
     const [chosenSeason, allSeasonData] = await Promise.all([
@@ -959,7 +959,7 @@ router.post('/leagues', express.urlencoded({ extended: true }), requireAdmin, as
         : [];
 
     const exists = leagues.some(l => l.name.toLowerCase() === ligaName.toLowerCase());
-    if (exists) return renderErrorHtml(res, `Liga ${ligaName} už existuje.`, 400);
+    if (exists) return renderErrorHtml(res, `Liga ${ligaName} už v rozpisu dávno je, nevymýšlej duplicity.`, 400);
 
     const multiGroup = req.body.multiGroup === 'on';
     const groupCount = multiGroup ? parseInt(req.body.groupCount) || 1 : 1;
@@ -1030,7 +1030,7 @@ router.get('/teams/edit/:id', requireAdmin, async (req, res) => {
     
     // OPRAVA: Najdi tým s daným ID v rámci aktuální sezóny
     const team = teams.find(t => t.id === teamId && t.season === selectedSeason);
-    if (!team) return renderErrorHtml(res, "Tým s tímto ID nebyl nalezen v aktuální sezóně.", 404);
+    if (!team) return renderErrorHtml(res, "Tenhle tým v aktuální sezóně vůbec nehraje, asi sestoupil do pralesa.", 404);
     const leagues = (allSeasonData[selectedSeason] && allSeasonData[selectedSeason].leagues)
         ? allSeasonData[selectedSeason].leagues
         : [];
@@ -1172,7 +1172,7 @@ router.post('/edit/:id', express.urlencoded({ extended: true }), requireAdmin, a
 
 
     const matchIndex = matches.findIndex(m => m.id === matchId);
-    if (matchIndex === -1) return renderErrorHtml(res, "Zápas nebyl nalezen.", 404);
+    if (matchIndex === -1) return renderErrorHtml(res, "Tenhle zápas v rozpisu neexistuje – asi ho odpískali od stolu.", 404);
 
     const match = matches[matchIndex];
     const liga = match.liga;
@@ -1749,7 +1749,7 @@ router.post('/new/team', express.urlencoded({ extended: true }), requireAdmin, u
     );
 
     if (exists) {
-        return renderErrorHtml(res, `Tým <strong>${name}</strong> už v lize <strong>${liga}</strong> existuje.`, 400);
+        return renderErrorHtml(res, `Tým <strong>${name}</strong> už na soupisce ligy <strong>${liga}</strong> dávno je.`, 400);
     }
 
     // NOVÉ: Použij admin sezónu pokud je nastavena, jinak chosenSeason
@@ -1789,7 +1789,7 @@ router.get('/edit/:id', requireAdmin, async (req, res) => {
     const allTeams = (await Teams.findAll()).filter(t => t.active === true && t.season === chosenSeason);
 
     const match = matches.find(m => m.id === matchId);
-    if (!match) return renderErrorHtml(res, "Zápas nebyl nalezen.", 404);
+    if (!match) return renderErrorHtml(res, "Tenhle zápas v rozpisu neexistuje – asi ho odpískali od stolu.", 404);
 
     // Filtrujeme týmy podle ligy zápasu (pro baráž zobrazíme všechny)
     const teams = match.isBaraz ? allTeams : allTeams.filter(t => t.liga === match.liga);
@@ -2057,7 +2057,7 @@ router.post('/edit/:id', express.urlencoded({ extended: true }), requireAdmin, a
 
 
     const matchIndex = matches.findIndex(m => m.id === matchId);
-    if (matchIndex === -1) return renderErrorHtml(res, "Zápas nebyl nalezen.", 404);
+    if (matchIndex === -1) return renderErrorHtml(res, "Tenhle zápas v rozpisu neexistuje – asi ho odpískali od stolu.", 404);
 
     const match = matches[matchIndex];
     const liga = match.liga;
@@ -2171,7 +2171,7 @@ router.post('/edit/:id', express.urlencoded({ extended: true }), requireAdmin, a
         await checkAndPropagateWinners(match.season, match.liga);
     } catch (err) {
         console.error("Chyba při zápisu do MongoDB:", err);
-        return renderErrorHtml(res, "Chyba při ukládání.", 500);
+        return renderErrorHtml(res, "Zápis do tabulky se nepodařilo uložit, server dostal bodyček.", 500);
     }
 
     // 3. NOTIFIKAČNÍ DETEKTIV - Kontrola změn (Pokud NENÍ zadaný výsledek)
@@ -2228,7 +2228,7 @@ router.post('/teams/edit/:id', express.urlencoded({ extended: true }), requireAd
     
     // NOVÉ: Získej aktuální sezónu (admin nebo chosen)
     await ChosenSeason.findAll();
-    if (teamIndex === -1) return renderErrorHtml(res, "Tým s tímto ID nebyl nalezen v aktuální sezóně.", 404);
+    if (teamIndex === -1) return renderErrorHtml(res, "Tenhle tým v aktuální sezóně vůbec nehraje, asi sestoupil do pralesa.", 404);
     
     const team = teams[teamIndex];
     const { name, liga, active, aliases } = req.body;
@@ -2275,7 +2275,7 @@ router.post('/teams/delete/:id', express.urlencoded({ extended: true }), require
     // OPRAVA: Smaž pouze tým s daným ID z aktuální sezóny
     const teamToDelete = teams.find(t => t.id === teamsId && t.season === selectedSeason);
     if (!teamToDelete) {
-        return renderErrorHtml(res, "Tým s tímto ID nebyl nalezen v aktuální sezóně.", 404);
+        return renderErrorHtml(res, "Tenhle tým v aktuální sezóně vůbec nehraje, asi sestoupil do pralesa.", 404);
     }
     
     teams = teams.filter(t => !(t.id === teamsId && t.season === selectedSeason));
@@ -2610,7 +2610,7 @@ router.post('/playoff/editor', express.urlencoded({ extended: true }), requireAd
     const season = req.body.season;
     const league = req.body.league;
     const action = String(req.body.action || '');
-    if (!season || !league) return renderErrorHtml(res, 'Chybí sezóna nebo liga.', 400);
+    if (!season || !league) return renderErrorHtml(res, 'Chybí sezóna nebo liga – poslal jsi prázdný zápis o utkání.', 400);
 
     try {
         const bundle = await loadLeaguePlayoffBundle(season, league);
@@ -2756,10 +2756,10 @@ router.post('/playoff/editor', express.urlencoded({ extended: true }), requireAd
             return redirectPlayoff(res, league, { ok: 'Zápas je uložený.', slot: slotId });
         }
 
-        return fail('Neznámá akce.');
+        return fail('Neznámá akce – tohle pravidla ledního hokeje neznají.');
     } catch (error) {
         console.error('Chyba editoru playoff:', error);
-        return renderErrorHtml(res, 'Pavouka se nepodařilo uložit: ' + error.message, 500);
+        return renderErrorHtml(res, 'Pavouk play-off se rozpadl pod rukama: ' + error.message, 500);
     }
 });
 
@@ -2767,7 +2767,7 @@ router.post('/playoff/fill', express.urlencoded({ extended: true }), requireAdmi
     if (rejectBadCsrf(req, res)) return;
     const season = req.body.season;
     const league = req.body.league;
-    if (!season || !league) return renderErrorHtml(res, 'Chybí sezóna nebo liga.', 400);
+    if (!season || !league) return renderErrorHtml(res, 'Chybí sezóna nebo liga – poslal jsi prázdný zápis o utkání.', 400);
     try {
         const bundle = await loadLeaguePlayoffBundle(season, league);
         if (!bundle.template || !bundle.formatKey) {
@@ -2782,7 +2782,7 @@ router.post('/playoff/fill', express.urlencoded({ extended: true }), requireAdmi
         return redirectPlayoff(res, league, { ok: `Doplněno. Nových nebo připojených sérií: ${created}. Doplněných stran: ${filled}.` });
     } catch (error) {
         console.error('Chyba při doplnění playoff:', error);
-        return renderErrorHtml(res, 'Doplnění se nepodařilo: ' + error.message, 500);
+        return renderErrorHtml(res, 'Doplnění do tabulky selhalo: ' + error.message, 500);
     }
 });
 
@@ -2794,7 +2794,7 @@ router.post('/playoff/save', express.urlencoded({ extended: true }), requireAdmi
     
     const { league, season, ...slots } = req.body;
 
-    if (!league || !season) return renderErrorHtml(res, "Chybí data k uložení.", 400);
+    if (!league || !season) return renderErrorHtml(res, "Chybí data k uložení – poslal jsi prázdný zápis o utkání.", 400);
 
     // Načtení z MongoDB
     let playoffData = await Playoff.findAll();
@@ -4464,7 +4464,7 @@ router.get('/togglePostponed/:id', requireAdmin, async (req, res) => {
     const matchId = parseInt(req.params.id);
     const matches = await Matches.findAll();
     const match = matches.find(m => m.id === matchId);
-    if (!match) return renderErrorHtml(res, "Zápas nebyl nalezen.", 404);
+    if (!match) return renderErrorHtml(res, "Tenhle zápas v rozpisu neexistuje – asi ho odpískali od stolu.", 404);
 
     match.postponed = !match.postponed;
 
@@ -5258,7 +5258,7 @@ router.post("/toggle-regular-season", express.urlencoded({ extended: true }), re
         return res.status(403).send('Neplatný CSRF token');
     }
     
-    if (req.session.role !== "admin") return renderErrorHtml(res, "Nemáte oprávnění k této akci.", 403);
+    if (req.session.role !== "admin") return renderErrorHtml(res, "Na tohle nemáš trenérskou licenci ani práva, táhni od kormidla.", 403);
 
     const { season, liga } = req.body;
     const isFinishedNow = req.body.finished === 'true'; // Pokud je checkbox zaškrtnutý
@@ -8507,7 +8507,7 @@ router.get('/toggleLocked/:id', requireAdmin, async (req, res) => {
     const matchId = parseInt(req.params.id);
     const matches = await Matches.findAll();
     const match = matches.find(m => m.id === matchId);
-    if (!match) return renderErrorHtml(res, "Zápas nebyl nalezen.", 404);
+    if (!match) return renderErrorHtml(res, "Tenhle zápas v rozpisu neexistuje – asi ho odpískali od stolu.", 404);
 
     // Provede změnu stavu zámku (true na false a naopak)
     match.locked = !match.locked;
@@ -8533,11 +8533,11 @@ router.post('/matches/bulk-lock', express.urlencoded({ extended: true }), requir
     const { liga, season, action} = req.body;
     
     if (!liga || !season || !action) {
-        return renderErrorHtml(res, "Chybí povinné parametry (liga, sezóna nebo akce).", 400);
+        return renderErrorHtml(res, "Chybí povinné parametry (liga, sezóna nebo akce) – poslal jsi prázdný zápis o utkání.", 400);
     }
     
     if (action !== 'lock' && action !== 'unlock') {
-        return renderErrorHtml(res, "Neplatná akce. Povolené hodnoty: 'lock' nebo 'unlock'.", 400);
+        return renderErrorHtml(res, "Neplatná akce. Rozhodčí uznává jen 'lock' nebo 'unlock', nic jiného.", 400);
     }
     
     try {
@@ -8580,7 +8580,7 @@ router.post('/matches/bulk-lock', express.urlencoded({ extended: true }), requir
         
     } catch (error) {
         console.error('Chyba při hromadném zamknutí/odemknutí:', error);
-        return renderErrorHtml(res, `Chyba při zpracování: ${error.message}`, 500);
+        return renderErrorHtml(res, `Zpracování v kabině selhalo: ${error.message}`, 500);
     }
 });
 
@@ -8596,7 +8596,7 @@ router.post('/matches/bulk-delete', express.urlencoded({ extended: true }), requ
     const { liga, season} = req.body;
     
     if (!liga || !season) {
-        return renderErrorHtml(res, "Chybí povinné parametry (liga nebo sezóna).", 400);
+        return renderErrorHtml(res, "Chybí povinné parametry (liga nebo sezóna) – poslal jsi prázdný zápis o utkání.", 400);
     }
     
     try {
@@ -8635,7 +8635,7 @@ router.post('/matches/bulk-delete', express.urlencoded({ extended: true }), requ
         
     } catch (error) {
         console.error('Chyba při hromadném mazání:', error);
-        return renderErrorHtml(res, `Chyba při zpracování: ${error.message}`, 500);
+        return renderErrorHtml(res, `Zpracování v kabině selhalo: ${error.message}`, 500);
     }
 });
 
@@ -8851,7 +8851,7 @@ router.get('/matches/bulk-lock', requireAdmin, async (req, res) => {
     res.send(html);
     } catch (error) {
         console.error('Chyba při načítání bulk-lock stránky:', error);
-        return renderErrorHtml(res, `Chyba při načítání stránky: ${error.message}`, 500);
+        return renderErrorHtml(res, `Načtení stránky dostalo ránu pukem: ${error.message}`, 500);
     }
 });
 
@@ -11731,7 +11731,7 @@ router.use(async (err, req, res, _next) => {
     } catch (logErr) {
         console.error('Chyba při logování admin chyby:', logErr);
     }
-    renderErrorHtml(res, 'Došlo k chybě při zpracování požadavku. Chyba byla logována.', 500);
+    renderErrorHtml(res, 'V admin kabině něco ruplo při zpracování požadavku. Chyba je zapsaná v protokolu.', 500);
 });
 
 

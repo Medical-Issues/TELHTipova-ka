@@ -24,16 +24,16 @@ async function requireLogin(req, res, next) {
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Přihlášení vyžadováno – Tipovačka</title>
+                <title>Stopka na modré – Tipovačka</title>
                 <link rel="stylesheet" href="/css/modern-design.css" />
                 <link rel="icon" href="/images/logo.png">
             </head>
             <body class="login_body">
                 <div class="login-container">
                     <img src="/images/logo.png" alt="Logo" class="login-logo">
-                    <h1>Musíte se přihlásit</h1>
-                    <p class="login-subtitle">Pro zobrazení této stránky je nutné mít aktivní přihlášení.</p>
-                    <a href="/auth/login" class="login_button" style="text-align:center; text-decoration:none;">Přejít na přihlášení ➔</a>
+                    <h1>Stopka na modré – nejsi přihlášený</h1>
+                    <p class="login-subtitle">Bez dresu a platné registrace tě rozhodčí na led nepustí. Přihlas se, nebo zůstaň sedět v hledišti, ty anonymní kryso.</p>
+                    <a href="/auth/login" class="login_button" style="text-align:center; text-decoration:none;">Obléct dres a přihlásit se ➔</a>
                 </div>
             </body>
             </html>
@@ -932,16 +932,16 @@ async function renderErrorHtml(res, message, code = 500) {
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Chyba ${code} – Tipovačka</title>
+            <title>Vyloučení ${code} – TELHTipovačka</title>
             <link rel="stylesheet" href="/css/modern-design.css" />
             <link rel="icon" href="/images/logo.png">
         </head>
         <body class="login_body">
             <div class="login-container">
                 <img src="/images/logo.png" alt="Logo" class="login-logo">
-                <h1>Jejda, chyba ${code}</h1>
+                <h1>Pískáme chybu ${code}</h1>
                 <p class="login-subtitle">${message}</p>
-                <a href="javascript:history.back()" class="login_button" style="text-align:center; text-decoration:none;">➔ Zpět</a>
+                <a href="javascript:history.back()" class="login_button" style="text-align:center; text-decoration:none;">➔ Zpátky na střídačku</a>
             </div>
         </body>
         </html>

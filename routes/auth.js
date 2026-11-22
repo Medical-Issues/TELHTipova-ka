@@ -46,7 +46,7 @@ function checkBruteForce(req, res, next) {
     loginAttempts.set(ip, recentAttempts);
     
     if (recentAttempts.length >= 5) {
-        return res.status(429).send("Příliš mnoho pokusů o přihlášení. Zkus to znovu za 15 minut.");
+        return res.status(429).send("Příliš mnoho pokusů o přihlášení. Dostáváš 15 minut osobní trest na vychladnutí, ty netrpělivý kreténe.");
     }
     
     next();
@@ -71,7 +71,7 @@ router.post("/register", express.urlencoded({ extended: true }), async (req, res
     if (!isLocalhost) {
         // CSRF kontrola jen pro produkci
         if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
-            return res.status(403).send('Neplatný CSRF token');
+            return res.status(403).send('Neplatný CSRF token – nezkoušej na nás žádný levárny mimo pravidla, ty zmrde.');
         }
     }
     
@@ -79,20 +79,20 @@ router.post("/register", express.urlencoded({ extended: true }), async (req, res
     
     // Validace - username musí být string
     if (typeof username !== 'string' || typeof password !== 'string') {
-        return renderErrorHtml(res, "Neplatný formát dat.", 400);
+        return renderErrorHtml(res, "Poslal jsi úplnou hovadinu, tohle server nepřečte. Zkontroluj data, ty kopyto.", 400);
     }
     
     // Odstranit mezery
     username = username.trim();
     
     if (!username || !password) {
-        return renderErrorHtml(res, "Username a password jsou povinné.", 400);
+        return renderErrorHtml(res, "Bez jména a hesla se na soupisku nedostaneš. Vyplň obojí, ty lenochu.", 400);
     }
     
     // Kontrola, zda jsou registrace blokovány
     const settings = await Settings.findAll();
     if (settings && settings.registrationsBlocked) {
-        return renderErrorHtml(res, "Registrace jsou aktuálně blokovány administrátorem. Zkuste to prosím později.", 403);
+        return renderErrorHtml(res, "Přestupové okno je zavřené – admin teď nové registrace zablokoval. Zkus zaklepat na kabinu později.", 403);
     }
     
     // Kontrola existence uživatele v MongoDB
@@ -121,7 +121,7 @@ router.post("/register", express.urlencoded({ extended: true }), async (req, res
     } catch (err) {
         console.error(err);
         await logUserAction(username, "REGISTER", `Neúspěšná registrace: ${username} - ${err.message}`, 'user', null, req, 'error', false);
-        await renderErrorHtml(res, "Při registraci nastala chyba. Zkuste to prosím později.");
+        await renderErrorHtml(res, "Při zápisu na soupisku se zasekla tiskárna na svazu. Zkus se zaregistrovat za chvíli.");
     }
 });
 
@@ -147,7 +147,7 @@ router.post('/login', express.urlencoded({ extended: true }), checkBruteForce, a
         // CSRF kontrola jen pro produkci
         if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
             console.error('CSRF failed - User:', req.body.username, 'Token:', req.body._csrf, 'Session:', req.session.csrfToken);
-            return res.status(403).send('Neplatný CSRF token');
+            return res.status(403).send('Neplatný CSRF token – nezkoušej na nás žádný levárny mimo pravidla, ty zmrde.');
         }
     }
     
@@ -233,7 +233,7 @@ router.post('/login', express.urlencoded({ extended: true }), checkBruteForce, a
     req.session.save((err) => {
         if (err) {
             console.error('Chyba při ukládání session:', err);
-            return renderErrorHtml(res, "Nastala chyba při přihlášení.");
+            return renderErrorHtml(res, "Brankář serveru dostal jesle a přihlášení spadlo. Zkus to za chvíli znovu.");
         }
 
         res.redirect('/');
