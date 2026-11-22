@@ -240,7 +240,7 @@ async function createVersusImage(homeTeam, awayTeam, matchId, scoreHome = null, 
     const outPath = path.join(outDir, `match-${matchId}.png`);
     const publicUrl = `/images/notifications/match-${matchId}.png`;
 
-    const width = 800; const height = 500;
+    const width = 1200; const height = 600;
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext('2d');
     const branding = await getNotificationImageBranding();
@@ -269,29 +269,48 @@ async function createVersusImage(homeTeam, awayTeam, matchId, scoreHome = null, 
     return publicUrl;
 }
 
+// Formát času zápasu "HH:MM" (podporuje lokální i ISO formát datetime)
+function formatMatchTime(datetime) {
+    if (!datetime) return null;
+    const value = String(datetime);
+    const local = value.match(/\d{4}-\d{2}-\d{2}[T ](\d{2}):(\d{2})/);
+    if (local) return `${local[1]}:${local[2]}`;
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Prague' });
+}
+
 // --- KARTA JEDNOHO ZÁPASU V OBRÁZKU "KOLO" ---
 async function drawRoundMatchCard(ctx, x, y, w, h, match, teamMap, theme) {
-    brand.drawCard(ctx, x, y, w, h, { fill: theme.card, radius: 12, stripe: null });
+    brand.drawCard(ctx, x, y, w, h, { fill: theme.card, radius: 14, stripe: null });
 
     const homeTeam = teamMap.get(String(match.homeTeamId));
     const awayTeam = teamMap.get(String(match.awayTeamId));
 
-    const logoSize = 40;
-    const logoCy = y + 30;
-    const nameY = y + 62;
+    const pad = Math.min(20, w * 0.07);
+    const logoSize = Math.min(160, h * 0.6, (w - pad * 2) * 0.3);
+    const logoCy = y + h * 0.4;
+    const nameY = logoCy + logoSize / 2 + Math.max(14, h * 0.08);
+    const nameSize = Math.min(24, Math.max(15, h * 0.13));
 
     // Domácí tým (vlevo)
-    const homeCx = x + w * 0.25;
+    const homeCx = x + w * 0.27;
     await brand.drawTeamLogo(ctx, homeTeam, homeCx, logoCy, logoSize, { color: theme.accentColor, textColor: theme.textColor });
-    brand.drawText(ctx, homeTeam?.name || '???', homeCx, nameY, { size: 13, minSize: 10, color: theme.textColor, align: 'center', maxWidth: w * 0.42 });
+    brand.drawText(ctx, homeTeam?.name || '???', homeCx, nameY, { size: nameSize, minSize: 12, color: theme.textColor, align: 'center', maxWidth: w * 0.4 });
 
     // Hosté (vpravo)
-    const awayCx = x + w * 0.75;
+    const awayCx = x + w * 0.73;
     await brand.drawTeamLogo(ctx, awayTeam, awayCx, logoCy, logoSize, { color: theme.awayColor, textColor: theme.textColor });
-    brand.drawText(ctx, awayTeam?.name || '???', awayCx, nameY, { size: 13, minSize: 10, color: theme.textColor, align: 'center', maxWidth: w * 0.42 });
+    brand.drawText(ctx, awayTeam?.name || '???', awayCx, nameY, { size: nameSize, minSize: 12, color: theme.textColor, align: 'center', maxWidth: w * 0.4 });
 
     // VS uprostřed mezi logy
-    brand.drawText(ctx, 'VS', x + w / 2, logoCy, { size: 14, color: theme.muted, align: 'center' });
+    brand.drawBadge(ctx, x + w / 2, logoCy, Math.min(30, logoSize * 0.3), theme, 'VS');
+
+    // Čas zápasu dole uprostřed karty
+    const time = formatMatchTime(match.datetime);
+    if (time && h > 110) {
+        brand.drawText(ctx, time, x + w / 2, y + h - pad * 0.6, { size: 15, weight: 'normal', color: theme.muted, align: 'center' });
+    }
 }
 
 // --- FUNKCE PRO VYTVOŘENÍ OBRÁZKU "KOLO" (všechny zápasy najednou, stejný styl jako versus) ---
@@ -304,44 +323,52 @@ async function createRoundImage(matches, teams, { kicker = 'KOLO', title = null,
     const branding = await getNotificationImageBranding();
     const theme = brand.resolveTheme(branding);
 
-    const width = 800;
-    const margin = 24;
-    const gap = 14;
-    const headerH = 104;
-    const footerH = 42;
-    const cardH = 84;
-    const cols = matches.length > 12 ? 3 : 2;
-    const rows = Math.ceil(matches.length / cols);
+    // Plátno přesně 2:1 (1200x600) + bezpečná zóna 64 px od okrajů,
+    // aby Windows Action Center / Android notifikace nic neřízly
+    const width = 1200;
+    const height = 600;
+    const margin = 64;
+    const gap = 18;
+    const headerH = 92;
+    const footerH = 36;
+
+    // Mřížka: málo zápasů -> 2 sloupce, středně -> 3, hodně -> 4
+    const n = matches.length;
+    const cols = n <= 4 ? 2 : n <= 6 ? 3 : 4;
+    const rows = Math.ceil(n / cols);
+
     const gridW = width - margin * 2;
     const cardW = (gridW - gap * (cols - 1)) / cols;
-    const height = headerH + rows * cardH + (rows - 1) * gap + footerH;
+    const gridTop = margin + headerH;
+    const gridBottom = height - margin - footerH;
+    const gridH = gridBottom - gridTop;
+    const cardH = (gridH - (rows - 1) * gap) / rows;
 
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext('2d');
 
     await drawBrandedBackground(ctx, width, height, branding);
-    brand.drawFrame(ctx, width, height, theme, 14);
 
     brand.drawHeader(ctx, theme, {
-        x: margin + 8,
-        y: 26,
+        x: margin,
+        y: margin,
         kicker,
         title,
         align: 'left',
-        maxWidth: gridW - 16,
-        titleSize: 30,
+        maxWidth: gridW,
+        titleSize: 36,
         meta,
-        metaX: width - margin - 8
+        metaX: width - margin
     });
 
     const teamMap = new Map((teams || []).map(t => [String(t.id), t]));
 
-    for (let i = 0; i < matches.length; i++) {
+    for (let i = 0; i < n; i++) {
         const match = matches[i];
         const col = i % cols;
         const row = Math.floor(i / cols);
         const x = margin + col * (cardW + gap);
-        const y = headerH + row * (cardH + gap);
+        const y = gridTop + row * (cardH + gap);
         await drawRoundMatchCard(ctx, x, y, cardW, cardH, match, teamMap, theme);
     }
 
@@ -412,7 +439,7 @@ async function createLeagueWinnerImage(winnerTeam, liga, branding = {}) {
     const outPath = path.join(outDir, `winner-${liga}-${timestamp}.png`);
     const publicUrl = `/images/notifications/winner-${liga}-${timestamp}.png`;
 
-    const width = 800; const height = 400;
+    const width = 1200; const height = 600;
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext('2d');
     const imageBranding = { ...(await getNotificationImageBranding()), ...branding };

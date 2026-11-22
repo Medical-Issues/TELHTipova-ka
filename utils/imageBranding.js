@@ -11,10 +11,10 @@ const { loadImage } = require('canvas');
 const FONT_FAMILY = 'Arial, sans-serif';
 
 const THEME = {
-    bgColor: '#1a1a1a',
-    bgBottom: '#080a0d',
-    accentColor: '#ff4500',
-    awayColor: '#0064ff',
+    bgColor: '#0f172a',
+    bgBottom: '#070b12',
+    accentColor: '#f97316',
+    awayColor: '#e11d48',
     textColor: '#ffffff',
     watermarkColor: '#888888',
     muted: '#94a3b8',
@@ -436,10 +436,10 @@ async function drawMatchupLayout(ctx, width, height, homeTeam, awayTeam, theme, 
     const awayColor = theme.awayColor;
     const isScore = center.type === 'score';
 
-    const margin = Math.round(width * 0.045);
+    const margin = Math.round(width * 0.055);
     const cardW = Math.round(width * (isScore ? 0.3 : 0.355));
     const top = kicker ? 72 : 52;
-    const footerReserve = 50;
+    const footerReserve = 60;
     const hasSeries = Array.isArray(series) && series.length > 0;
     const bottomHeight = hasSeries ? 92 : bottomLines.length ? bottomLines.length * 26 + 18 : 0;
     const cardH = height - top - footerReserve - bottomHeight;

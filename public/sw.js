@@ -1,5 +1,5 @@
 console.log("[SW] Service Worker Loaded...");
-const SW_VERSION = '1.3.0';
+const SW_VERSION = '1.4.0';
 
 // Force update - okamžitá aktivace nové verze
 self.addEventListener('install', () => {
@@ -88,7 +88,7 @@ self.addEventListener('push', e => {
     const notificationOptions = {
         body: payload.body,
         icon: '/images/logo.png',
-        badge: payload.badge || '/icons/badge-72.png',
+        badge: payload.badge || '/icons/badge-96.png',
         image: payload.image || null,
         vibrate: isSilent ? undefined : (payload.vibrate || [100, 100, 250, 500, 100, 100, 250]),
         tag: payload.tag || 'obecne-upozorneni-' + Date.now(),
