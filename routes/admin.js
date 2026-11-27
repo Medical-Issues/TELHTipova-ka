@@ -1,4 +1,5 @@
 const fs = require("fs");
+const crypto = require("crypto");
 const { Users, Matches, Teams, Leagues, AllowedLeagues, ChosenSeason, Settings, TeamBonuses, LeagueStatus, TableTips, Playoff, PlayoffTemplates, TransferLeagues, Transfers, Tips, Players} = require('../utils/mongoDataAccess');
 const express = require("express");
 const router = express.Router();
@@ -397,6 +398,7 @@ router.get('/', requireAdmin, async (req, res) => {
         <h3>👤 Uživatelé a obsah</h3>
         <div class="nav-buttons">
           <a href="/admin/users" class="btn btn-primary">👥 Správa uživatelů</a>
+          <a href="/admin/tips" class="btn btn-warning">🔐 Správa tipů</a>
           <a href="/admin/audit-log" class="btn btn-secondary" style="position: relative;">
             📋 Audit Log
             ${criticalCount > 0 ? `<span style="position: absolute; top: -8px; right: -8px; background: #dc3545; color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 0.75em; font-weight: bold;">${criticalCount}</span>` : ''}
@@ -11919,6 +11921,1320 @@ router.post('/backups/restore', express.urlencoded({ extended: true }), requireA
         res.send('<h2>✅ Databáze byla úspěšně obnovena!</h2><p>Počty obnovených záznamů: ' + JSON.stringify(result.restoredCounts) + '</p><br><a href="/admin/backups">Zpět na správu záloh</a> | <a href="/admin">Zpět do administrace</a>');
     } catch (err) {
         res.status(500).send('Chyba při obnově databáze: ' + err.message);
+    }
+});
+
+// ============================================================================
+// 🔐 SPRÁVA TIPŮ (samostatně zaheslovaná sekce pro zpětné úpravy tipů)
+// ============================================================================
+const TIPS_MANAGER_UNLOCK_TTL_MS = 30 * 60 * 1000; // 30 minut neaktivity
+const TIPS_MANAGER_MAX_ATTEMPTS = 5;
+const TIPS_MANAGER_LOCK_DURATION_MS = 5 * 60 * 1000; // 5 minut při překročení pokusů
+
+function escapeTipsHtml(value = '') {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+async function verifyTipsManagerPassword(input) {
+    if (typeof input !== 'string' || input.length === 0) return false;
+    if (process.env.TIPS_ADMIN_PASSWORD_HASH) {
+        return bcrypt.compare(input, process.env.TIPS_ADMIN_PASSWORD_HASH);
+    }
+    if (process.env.TIPS_ADMIN_PASSWORD) {
+        const expectedDigest = crypto.createHash('sha256').update(process.env.TIPS_ADMIN_PASSWORD).digest();
+        const inputDigest = crypto.createHash('sha256').update(input).digest();
+        return crypto.timingSafeEqual(expectedDigest, inputDigest);
+    }
+    // Bez nakonfigurovaného hesla v env (.env) sekce zůstává uzamčená
+    console.warn('[admin/tips] TIPS_ADMIN_PASSWORD_HASH ani TIPS_ADMIN_PASSWORD není nastaveno — Správa tipů je zablokovaná.');
+    return false;
+}
+
+function isTipsManagerUnlocked(req) {
+    const unlockedAt = req.session?.tipsManagerUnlockedAt;
+    if (typeof unlockedAt === 'number' && (Date.now() - unlockedAt) < TIPS_MANAGER_UNLOCK_TTL_MS) {
+        req.session.tipsManagerUnlockedAt = Date.now();
+        return true;
+    }
+    if (req.session) {
+        delete req.session.tipsManagerUnlockedAt;
+    }
+    return false;
+}
+
+function buildTipsManagerRedirectUrl({ season = '', liga = '', user = '', tab = 'matches', msg = '', err = '', anchor = '' } = {}) {
+    const params = new URLSearchParams();
+    if (season) params.set('season', season);
+    if (liga) params.set('liga', liga);
+    if (user) params.set('user', user);
+    if (tab && tab !== 'matches') params.set('tab', tab);
+    if (msg) params.set('msg', msg);
+    if (err) params.set('err', err);
+    const qs = params.toString();
+    return `/admin/tips${qs ? `?${qs}` : ''}${anchor ? `#${anchor}` : ''}`;
+}
+
+function sortSeasonKeysDesc(seasons = []) {
+    return [...new Set(seasons.filter(Boolean))].sort((a, b) => {
+        const [a1 = 0, a2 = 0] = String(a).split('/').map(Number);
+        const [b1 = 0, b2 = 0] = String(b).split('/').map(Number);
+        if (Number.isFinite(a1) && Number.isFinite(b1) && (b1 !== a1 || b2 !== a2)) {
+            return b1 - a1 || b2 - a2;
+        }
+        return String(b).localeCompare(String(a), 'cs');
+    });
+}
+
+function computeMatchTipPoints(match, tip) {
+    if (!match?.result || !match.result.winner || !tip) return null;
+
+    if (match.isPlayoff && Number(match.bo) === 1) {
+        const realHome = Number(match.result.scoreHome ?? 0);
+        const realAway = Number(match.result.scoreAway ?? 0);
+        let tipHome = Number(tip.scoreHome ?? tip.scoreH ?? tip.homeGoals ?? 0);
+        let tipAway = Number(tip.scoreAway ?? tip.scoreA ?? tip.awayGoals ?? 0);
+
+        if (match.result?.sideSwap === true) {
+            const temp = tipHome;
+            tipHome = tipAway;
+            tipAway = temp;
+        }
+        if (Number.isNaN(tipHome) || Number.isNaN(tipAway)) return 0;
+
+        const realOutcome = Math.sign(realHome - realAway);
+        const tipOutcome = Math.sign(tipHome - tipAway);
+        if (realOutcome !== tipOutcome) return 0;
+
+        if (tipHome === realHome && tipAway === realAway) return 5;
+        const delta = Math.abs(tipHome - realHome) + Math.abs(tipAway - realAway);
+        if (delta === 1) return 4;
+        if (delta === 2) return 3;
+        return 1;
+    }
+
+    if (match.isPlayoff && Number(match.bo) > 1) {
+        if (tip.winner !== match.result.winner) return 0;
+        const realLoserWins = match.result.winner === 'home'
+            ? Number(match.result.scoreAway ?? 0)
+            : Number(match.result.scoreHome ?? 0);
+        const tipLoserWins = Number.isFinite(Number(tip.loserWins)) ? Number(tip.loserWins) : -1;
+        return tipLoserWins === realLoserWins ? 3 : 1;
+    }
+
+    if (!match.isPlayoff) {
+        let evaluatedWinner = tip.winner;
+        if (match.result?.sideSwap === true) {
+            evaluatedWinner = tip.winner === 'home' ? 'away' : 'home';
+        }
+        return evaluatedWinner === match.result.winner ? 1 : 0;
+    }
+
+    return null;
+}
+
+function renderTipsManagerUnlockPage(req, { errorMsg = '', season = '', liga = '', user = '', tab = 'matches' } = {}) {
+    const lockUntil = req.session?.tipsManagerLockUntil || 0;
+    const isRateLocked = lockUntil > Date.now();
+    const waitSeconds = isRateLocked ? Math.ceil((lockUntil - Date.now()) / 1000) : 0;
+
+    return `<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>🔐 Správa tipů – Ověření heslem</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="icon" href="/images/logo.png">
+    <style>
+        .tips-lock-card {
+            max-width: 480px;
+            margin: 60px auto;
+            background: rgba(15, 23, 42, 0.92);
+            border: 1px solid rgba(251, 146, 60, 0.35);
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+            color: #f1f5f9;
+        }
+        .tips-lock-card h1 {
+            margin: 0 0 8px 0;
+            font-size: 1.6rem;
+            color: #fb923c;
+        }
+        .tips-lock-card p {
+            color: #94a3b8;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            margin-bottom: 20px;
+        }
+        .tips-alert-err {
+            background: rgba(239, 68, 68, 0.16);
+            border: 1px solid rgba(239, 68, 68, 0.5);
+            color: #fecaca;
+            padding: 12px 14px;
+            border-radius: 10px;
+            margin-bottom: 16px;
+            font-size: 0.9rem;
+        }
+        .tips-input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 12px 14px;
+            border-radius: 10px;
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            background: rgba(2, 6, 23, 0.75);
+            color: #f8fafc;
+            font-size: 1rem;
+            margin-bottom: 16px;
+        }
+        .tips-input:focus {
+            outline: none;
+            border-color: #fb923c;
+        }
+    </style>
+</head>
+<body class="usersite">
+    <main class="admin_site">
+        <div class="tips-lock-card">
+            <h1>🔐 Správa tipů</h1>
+            <p>Tato sekce umožňuje zpětně přidávat, upravovat a mazat tipy uživatelů. Pro vstup zadejte samostatné heslo pro správu tipů.</p>
+            ${errorMsg ? `<div class="tips-alert-err">${escapeTipsHtml(errorMsg)}</div>` : ''}
+            ${isRateLocked ? `<div class="tips-alert-err">Příliš mnoho neúspěšných pokusů. Zkuste to znovu za ${waitSeconds} s.</div>` : ''}
+            <form method="POST" action="/admin/tips/unlock">
+                <input type="hidden" name="_csrf" value="${escapeTipsHtml(req.session.csrfToken || '')}">
+                <input type="hidden" name="season" value="${escapeTipsHtml(season)}">
+                <input type="hidden" name="liga" value="${escapeTipsHtml(liga)}">
+                <input type="hidden" name="user" value="${escapeTipsHtml(user)}">
+                <input type="hidden" name="tab" value="${escapeTipsHtml(tab)}">
+                <label for="tipsPassword" style="display:block; margin-bottom:8px; font-weight:600; color:#e2e8f0;">Heslo pro správu tipů</label>
+                <input type="password" id="tipsPassword" name="password" class="tips-input" placeholder="Zadejte heslo..." autofocus required ${isRateLocked ? 'disabled' : ''}>
+                <div style="display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap;">
+                    <button type="submit" class="btn btn-warning" ${isRateLocked ? 'disabled' : ''}>🔓 Odemknout správu tipů</button>
+                    <a href="/admin" class="btn btn-secondary">← Zpět do Adminu</a>
+                </div>
+            </form>
+        </div>
+    </main>
+</body>
+</html>`;
+}
+
+router.get('/tips', requireAdmin, async (req, res) => {
+    try {
+        const requestedSeason = typeof req.query.season === 'string' ? req.query.season : '';
+        const requestedLiga = typeof req.query.liga === 'string' ? req.query.liga : '';
+        const requestedUser = typeof req.query.user === 'string' ? req.query.user : '';
+        const requestedTab = req.query.tab === 'table' ? 'table' : 'matches';
+
+        if (!isTipsManagerUnlocked(req)) {
+            return res.send(renderTipsManagerUnlockPage(req, {
+                errorMsg: typeof req.query.err === 'string' ? req.query.err : '',
+                season: requestedSeason,
+                liga: requestedLiga,
+                user: requestedUser,
+                tab: requestedTab
+            }));
+        }
+
+        const [users, matches, teams, allSeasonData, chosenSeason, tableTipsData, leagueStatusData] = await Promise.all([
+            Users.findAll(),
+            Matches.findAll(),
+            Teams.findAll(),
+            Leagues.findAll(),
+            ChosenSeason.findAll(),
+            TableTips.findAll(),
+            LeagueStatus.findAll()
+        ]);
+
+        const seasonSet = new Set();
+        if (chosenSeason && chosenSeason !== 'Neurčeno') seasonSet.add(chosenSeason);
+        teams.forEach(t => { if (t.season) seasonSet.add(t.season); });
+        matches.forEach(m => { if (m.season) seasonSet.add(m.season); });
+        Object.keys(allSeasonData || {}).forEach(k => { if (k !== '_id') seasonSet.add(k); });
+        Object.keys(tableTipsData || {}).forEach(k => { if (k !== '_id') seasonSet.add(k); });
+        users.forEach(u => {
+            Object.keys(u.tips || {}).forEach(s => seasonSet.add(s));
+        });
+
+        const allSeasons = sortSeasonKeysDesc([...seasonSet]);
+        const selectedSeason = (requestedSeason && allSeasons.includes(requestedSeason))
+            ? requestedSeason
+            : (req.session.adminSeason && allSeasons.includes(req.session.adminSeason)
+                ? req.session.adminSeason
+                : (chosenSeason && allSeasons.includes(chosenSeason) ? chosenSeason : (allSeasons[0] || '')));
+
+        const definedLeagues = (allSeasonData?.[selectedSeason]?.leagues || []).map(l => l.name);
+        const leagueSet = new Set(definedLeagues);
+        teams.filter(t => t.season === selectedSeason && t.liga).forEach(t => leagueSet.add(t.liga));
+        matches.filter(m => m.season === selectedSeason && m.liga).forEach(m => leagueSet.add(m.liga));
+        Object.keys(tableTipsData?.[selectedSeason] || {}).forEach(l => leagueSet.add(l));
+        users.forEach(u => {
+            Object.keys(u.tips?.[selectedSeason] || {}).forEach(l => leagueSet.add(l));
+        });
+        const allLeagues = [...leagueSet];
+        const selectedLiga = (requestedLiga && allLeagues.includes(requestedLiga))
+            ? requestedLiga
+            : (allLeagues[0] || '');
+
+        const tipUsers = users
+            .filter(u => u.username && u.username.toLowerCase() !== 'admin')
+            .sort((a, b) => a.username.localeCompare(b.username, 'cs'));
+
+        const selectedUserObj = (requestedUser && tipUsers.find(u => u.username === requestedUser))
+            || tipUsers[0]
+            || null;
+        const selectedUsername = selectedUserObj ? selectedUserObj.username : '';
+
+        const teamById = new Map();
+        teams.forEach(t => {
+            if (t && typeof t.id !== 'undefined') {
+                teamById.set(Number(t.id), t);
+            }
+        });
+
+        const filteredMatches = matches
+            .filter(m => m.season === selectedSeason && m.liga === selectedLiga)
+            .sort((a, b) => {
+                const da = new Date(a.datetime || a.date || 0).getTime();
+                const db = new Date(b.datetime || b.date || 0).getTime();
+                if (Number.isFinite(da) && Number.isFinite(db) && da !== db) return da - db;
+                return Number(a.id) - Number(b.id);
+            });
+
+        const userMatchTips = selectedUserObj?.tips?.[selectedSeason]?.[selectedLiga] || [];
+        const userStats = selectedUserObj?.stats?.[selectedSeason]?.[selectedLiga] || {};
+
+        const leagueObj = (allSeasonData?.[selectedSeason]?.leagues || []).find(l => l.name === selectedLiga) || {
+            name: selectedLiga,
+            isMultigroup: false
+        };
+        const isMultigroup = !!leagueObj.isMultigroup;
+        let teamsInLiga = teams.filter(t => t.season === selectedSeason && t.liga === selectedLiga && t.active === true);
+        if (teamsInLiga.length === 0) {
+            teamsInLiga = teams.filter(t => t.season === selectedSeason && t.liga === selectedLiga);
+        }
+
+        const groupedTeams = {};
+        teamsInLiga.forEach(t => {
+            const gKey = isMultigroup ? String(t.group || 1) : 'default';
+            if (!groupedTeams[gKey]) groupedTeams[gKey] = [];
+            groupedTeams[gKey].push(t);
+        });
+        const sortedGroupKeys = Object.keys(groupedTeams).sort((a, b) => {
+            if (a === 'default') return -1;
+            if (b === 'default') return 1;
+            return Number(a) - Number(b);
+        });
+
+        const rawUserTableTip = selectedUsername ? (tableTipsData?.[selectedSeason]?.[selectedLiga]?.[selectedUsername] ?? null) : null;
+        const tableTipsLocked = leagueStatusData?.[selectedSeason]?.[selectedLiga]?.tableTipsLocked || false;
+
+        const msg = typeof req.query.msg === 'string' ? req.query.msg : '';
+        const err = typeof req.query.err === 'string' ? req.query.err : '';
+
+        const matchRowsHtml = filteredMatches.map(match => {
+            const matchId = Number(match.id);
+            const homeTeam = teamById.get(Number(match.homeTeamId));
+            const awayTeam = teamById.get(Number(match.awayTeamId));
+            const homeName = homeTeam?.name || match.homeTeam || 'Domácí';
+            const awayName = awayTeam?.name || match.awayTeam || 'Hosté';
+
+            const tip = userMatchTips.find(t => Number(t.matchId) === matchId) || null;
+            const tipPoints = computeMatchTipPoints(match, tip);
+
+            let dateStr = '-';
+            if (match.datetime || match.date) {
+                const d = new Date(match.datetime || match.date);
+                if (!Number.isNaN(d.getTime())) {
+                    dateStr = d.toLocaleString('cs-CZ', {
+                        timeZone: 'Europe/Prague',
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                }
+            }
+
+            const isPlayoff = !!match.isPlayoff;
+            const bo = Number(match.bo) || (isPlayoff ? 7 : 1);
+            const matchTypeLabel = !isPlayoff ? 'Základní část' : (bo === 1 ? 'Playoff BO1' : `Playoff Série BO${bo}`);
+
+            let statusHtml = '<span class="tip-badge tip-badge-wait">⏳ Bez výsledku</span>';
+            if (match.result && match.result.winner) {
+                const rScore = (match.result.scoreHome !== undefined && match.result.scoreAway !== undefined)
+                    ? `${match.result.scoreHome}:${match.result.scoreAway}${match.result.ot ? 'p' : ''}`
+                    : (match.result.winner === 'home' ? homeName : awayName);
+                statusHtml = `<span class="tip-badge tip-badge-done">✅ Výsledek: ${escapeTipsHtml(rScore)}</span>`;
+            } else if (match.postponed) {
+                statusHtml = '<span class="tip-badge tip-badge-warn">⏸️ Odloženo</span>';
+            } else if (match.locked) {
+                statusHtml = '<span class="tip-badge tip-badge-lock">🔒 Zamčeno</span>';
+            }
+
+            const sideSwapBadge = match.result?.sideSwap === true
+                ? `<span class="tip-badge tip-badge-warn" title="Zápas má prohozené strany (sideSwap). Tip je uložen z původního pohledu před prohozením.">⚠️ sideSwap</span>`
+                : '';
+
+            let currentTipSummary = '<span style="color:#94a3b8;">Netipováno</span>';
+            if (tip) {
+                if (isPlayoff && bo === 1) {
+                    const sH = tip.scoreHome ?? '?';
+                    const sA = tip.scoreAway ?? '?';
+                    const wLabel = tip.winner === 'home' ? homeName : (tip.winner === 'away' ? awayName : '?');
+                    currentTipSummary = `<strong style="color:#38bdf8;">${escapeTipsHtml(sH)}:${escapeTipsHtml(sA)}</strong> <small style="color:#cbd5e1;">(${escapeTipsHtml(wLabel)})</small>`;
+                } else if (isPlayoff && bo > 1) {
+                    const wLabel = tip.winner === 'home' ? homeName : (tip.winner === 'away' ? awayName : '?');
+                    const winsNeeded = Math.floor(bo / 2) + 1;
+                    const lw = tip.loserWins ?? 0;
+                    const seriesStr = tip.winner === 'home' ? `${winsNeeded}:${lw}` : `${lw}:${winsNeeded}`;
+                    currentTipSummary = `<strong style="color:#38bdf8;">${escapeTipsHtml(wLabel)} (${escapeTipsHtml(seriesStr)})</strong>`;
+                } else {
+                    const wLabel = tip.winner === 'home' ? homeName : (tip.winner === 'away' ? awayName : '?');
+                    currentTipSummary = `<strong style="color:#38bdf8;">${escapeTipsHtml(wLabel)}</strong>`;
+                }
+
+                if (tipPoints !== null) {
+                    currentTipSummary += ` <span class="tip-badge ${tipPoints > 0 ? 'tip-badge-done' : 'tip-badge-zero'}">${tipPoints} b.</span>`;
+                }
+            }
+
+            let formFieldsHtml = '';
+            if (isPlayoff && bo === 1) {
+                const valSH = tip && tip.scoreHome !== undefined && tip.scoreHome !== null ? String(tip.scoreHome) : '';
+                const valSA = tip && tip.scoreAway !== undefined && tip.scoreAway !== null ? String(tip.scoreAway) : '';
+                formFieldsHtml = `
+                    <div class="tip-inline-controls">
+                        <label>Skóre:
+                            <input type="number" name="scoreHome" min="0" max="99" value="${escapeTipsHtml(valSH)}" placeholder="D" class="tip-num-input" required>
+                            <span>:</span>
+                            <input type="number" name="scoreAway" min="0" max="99" value="${escapeTipsHtml(valSA)}" placeholder="H" class="tip-num-input" required>
+                        </label>
+                    </div>
+                `;
+            } else if (isPlayoff && bo > 1) {
+                const maxLoserWins = Math.floor(bo / 2);
+                const selectedWinner = tip?.winner || '';
+                const selectedLoserWins = Number.isFinite(Number(tip?.loserWins)) ? Number(tip.loserWins) : 0;
+                const loserWinsOptions = [];
+                for (let lw = 0; lw <= maxLoserWins; lw++) {
+                    loserWinsOptions.push(`<option value="${lw}" ${selectedLoserWins === lw ? 'selected' : ''}>${lw} prohraných</option>`);
+                }
+                formFieldsHtml = `
+                    <div class="tip-inline-controls">
+                        <select name="winner" class="tip-select" required>
+                            <option value="" disabled ${!selectedWinner ? 'selected' : ''}>-- Vybrat vítěze --</option>
+                            <option value="home" ${selectedWinner === 'home' ? 'selected' : ''}>${escapeTipsHtml(homeName)} (Domácí)</option>
+                            <option value="away" ${selectedWinner === 'away' ? 'selected' : ''}>${escapeTipsHtml(awayName)} (Hosté)</option>
+                        </select>
+                        <select name="loserWins" class="tip-select" required>
+                            ${loserWinsOptions.join('')}
+                        </select>
+                    </div>
+                `;
+            } else {
+                const selectedWinner = tip?.winner || '';
+                formFieldsHtml = `
+                    <div class="tip-inline-controls">
+                        <select name="winner" class="tip-select" required>
+                            <option value="" disabled ${!selectedWinner ? 'selected' : ''}>-- Vybrat vítěze --</option>
+                            <option value="home" ${selectedWinner === 'home' ? 'selected' : ''}>${escapeTipsHtml(homeName)} (Domácí)</option>
+                            <option value="away" ${selectedWinner === 'away' ? 'selected' : ''}>${escapeTipsHtml(awayName)} (Hosté)</option>
+                        </select>
+                    </div>
+                `;
+            }
+
+            const searchText = `${matchId} ${homeName} ${awayName} ${matchTypeLabel}`.toLowerCase();
+
+            return `
+            <tr id="match-${matchId}" class="match-tip-row" data-search="${escapeTipsHtml(searchText)}" data-tipped="${tip ? '1' : '0'}">
+                <td><code>#${matchId}</code><br><small style="color:#94a3b8;">${escapeTipsHtml(dateStr)}</small></td>
+                <td>
+                    <div style="font-weight:700; color:#f8fafc;">${escapeTipsHtml(homeName)} <span style="color:#94a3b8; font-weight:400;">vs</span> ${escapeTipsHtml(awayName)}</div>
+                    <div style="margin-top:4px; display:flex; gap:6px; flex-wrap:wrap;">
+                        <span class="tip-badge tip-badge-type">${escapeTipsHtml(matchTypeLabel)}</span>
+                        ${statusHtml}
+                        ${sideSwapBadge}
+                    </div>
+                </td>
+                <td>${currentTipSummary}</td>
+                <td>
+                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                        <form method="POST" action="/admin/tips/match/save" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:0;">
+                            <input type="hidden" name="_csrf" value="${escapeTipsHtml(req.session.csrfToken || '')}">
+                            <input type="hidden" name="season" value="${escapeTipsHtml(selectedSeason)}">
+                            <input type="hidden" name="liga" value="${escapeTipsHtml(selectedLiga)}">
+                            <input type="hidden" name="username" value="${escapeTipsHtml(selectedUsername)}">
+                            <input type="hidden" name="matchId" value="${matchId}">
+                            ${formFieldsHtml}
+                            <button type="submit" class="btn btn-primary" style="padding:6px 12px; font-size:0.85rem;">💾 Uložit</button>
+                        </form>
+                        ${tip ? `
+                        <form method="POST" action="/admin/tips/match/delete" style="margin:0;" onsubmit="return confirm('Opravdu smazat tip uživatele ${escapeTipsHtml(selectedUsername)} na zápas #${matchId}?');">
+                            <input type="hidden" name="_csrf" value="${escapeTipsHtml(req.session.csrfToken || '')}">
+                            <input type="hidden" name="season" value="${escapeTipsHtml(selectedSeason)}">
+                            <input type="hidden" name="liga" value="${escapeTipsHtml(selectedLiga)}">
+                            <input type="hidden" name="username" value="${escapeTipsHtml(selectedUsername)}">
+                            <input type="hidden" name="matchId" value="${matchId}">
+                            <button type="submit" class="btn btn-danger" style="padding:6px 10px; font-size:0.85rem;">🗑️</button>
+                        </form>` : ''}
+                    </div>
+                </td>
+            </tr>`;
+        }).join('');
+
+        // Sekce tabulky ZČ
+        let tableEditorHtml = '';
+        if (sortedGroupKeys.length === 0) {
+            tableEditorHtml = `<p style="color:#94a3b8; padding:16px 0;">Pro sezónu <strong>${escapeTipsHtml(selectedSeason)}</strong> a ligu <strong>${escapeTipsHtml(selectedLiga)}</strong> nebyly nalezeny žádné týmy.</p>`;
+        } else {
+            const groupBlocksHtml = sortedGroupKeys.map(gKey => {
+                const teamsInGroup = [...groupedTeams[gKey]];
+                let savedOrder = [];
+                if (Array.isArray(rawUserTableTip) && !isMultigroup) {
+                    savedOrder = rawUserTableTip.map(Number);
+                } else if (rawUserTableTip && typeof rawUserTableTip === 'object' && Array.isArray(rawUserTableTip[gKey])) {
+                    savedOrder = rawUserTableTip[gKey].map(Number);
+                }
+
+                teamsInGroup.sort((a, b) => {
+                    const idxA = savedOrder.indexOf(Number(a.id));
+                    const idxB = savedOrder.indexOf(Number(b.id));
+                    if (idxA === -1 && idxB === -1) return String(a.name).localeCompare(String(b.name), 'cs');
+                    if (idxA === -1) return 1;
+                    if (idxB === -1) return -1;
+                    return idxA - idxB;
+                });
+
+                const groupLabel = gKey === 'default' ? 'Celková tabulka' : `Skupina ${gKey}`;
+                const initialOrderStr = teamsInGroup.map(t => Number(t.id)).join(',');
+                const isGroupLocked = tableTipsLocked === true || (Array.isArray(tableTipsLocked) && tableTipsLocked.includes(gKey));
+
+                return `
+                <div class="table-group-card" data-group-container="${escapeTipsHtml(gKey)}">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+                        <h3 style="margin:0; color:#fb923c;">${escapeTipsHtml(groupLabel)}</h3>
+                        <span class="tip-badge ${isGroupLocked ? 'tip-badge-done' : 'tip-badge-wait'}">
+                            ${isGroupLocked ? '🔒 Zamčeno (vyhodnocuje se)' : '🔓 Odemčeno'}
+                        </span>
+                    </div>
+                    <input type="hidden" name="order[${escapeTipsHtml(gKey)}]" id="order-input-${escapeTipsHtml(gKey)}" value="${escapeTipsHtml(initialOrderStr)}">
+                    <ul class="admin-table-tip-list" id="group-list-${escapeTipsHtml(gKey)}" data-group="${escapeTipsHtml(gKey)}">
+                        ${teamsInGroup.map((t, idx) => `
+                            <li class="admin-table-tip-item" data-team-id="${Number(t.id)}">
+                                <span class="rank-pill">${idx + 1}.</span>
+                                <span style="font-weight:600; flex:1;">${escapeTipsHtml(t.name)}</span>
+                                <div style="display:flex; gap:6px; align-items:center;">
+                                    <label style="font-size:0.8rem; color:#94a3b8;">Pozice:
+                                        <select class="tip-select rank-select" style="min-width:64px; padding:4px 8px;">
+                                            ${teamsInGroup.map((_, posIdx) => `<option value="${posIdx}" ${posIdx === idx ? 'selected' : ''}>${posIdx + 1}.</option>`).join('')}
+                                        </select>
+                                    </label>
+                                    <button type="button" class="btn btn-secondary move-up-btn" style="padding:4px 9px; font-size:0.8rem;" title="Nahoru">▲</button>
+                                    <button type="button" class="btn btn-secondary move-down-btn" style="padding:4px 9px; font-size:0.8rem;" title="Dolů">▼</button>
+                                </div>
+                            </li>
+                        `).join('')}
+                    </ul>
+                </div>`;
+            }).join('');
+
+            tableEditorHtml = `
+                <div style="margin-bottom:14px; color:#cbd5e1; font-size:0.92rem;">
+                    Stav uloženého tipu tabulky: ${rawUserTableTip ? '<strong style="color:#4ade80;">✅ Uživatel má uložený tip tabulky</strong>' : '<strong style="color:#facc15;">⚠️ Uživatel zatím nemá uložený tip tabulky</strong>'}
+                    · Trefené pozice: <strong>${userStats.tableCorrect || 0}</strong> · Odchylka: <strong>${userStats.tableDeviation || 0}</strong>
+                </div>
+                <form method="POST" action="/admin/tips/table/save" id="adminTableTipForm">
+                    <input type="hidden" name="_csrf" value="${escapeTipsHtml(req.session.csrfToken || '')}">
+                    <input type="hidden" name="season" value="${escapeTipsHtml(selectedSeason)}">
+                    <input type="hidden" name="liga" value="${escapeTipsHtml(selectedLiga)}">
+                    <input type="hidden" name="username" value="${escapeTipsHtml(selectedUsername)}">
+                    <div style="display:grid; gap:16px;">
+                        ${groupBlocksHtml}
+                    </div>
+                    <div style="display:flex; gap:12px; margin-top:16px; flex-wrap:wrap;">
+                        <button type="submit" class="btn btn-primary">💾 Uložit tip tabulky</button>
+                    </div>
+                </form>
+                ${rawUserTableTip ? `
+                <form method="POST" action="/admin/tips/table/delete" style="margin-top:10px;" onsubmit="return confirm('Opravdu smazat tip tabulky uživatele ${escapeTipsHtml(selectedUsername)} pro ${escapeTipsHtml(selectedLiga)} (${escapeTipsHtml(selectedSeason)})?');">
+                    <input type="hidden" name="_csrf" value="${escapeTipsHtml(req.session.csrfToken || '')}">
+                    <input type="hidden" name="season" value="${escapeTipsHtml(selectedSeason)}">
+                    <input type="hidden" name="liga" value="${escapeTipsHtml(selectedLiga)}">
+                    <input type="hidden" name="username" value="${escapeTipsHtml(selectedUsername)}">
+                    <button type="submit" class="btn btn-danger">🗑️ Smazat tip tabulky</button>
+                </form>` : ''}
+            `;
+        }
+
+        const html = `<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>🔐 Správa tipů – Admin</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="icon" href="/images/logo.png">
+    <style>
+        .tips-container {
+            max-width: 1280px;
+            margin: 0 auto;
+            color: #f1f5f9;
+        }
+        .tips-topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 18px;
+            background: rgba(15, 23, 42, 0.85);
+            padding: 18px 22px;
+            border-radius: 14px;
+            border: 1px solid rgba(251, 146, 60, 0.35);
+        }
+        .tips-filter-card, .tips-panel-card {
+            background: rgba(15, 23, 42, 0.85);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            border-radius: 14px;
+            padding: 18px 22px;
+            margin-bottom: 18px;
+        }
+        .tips-filter-grid {
+            display: flex;
+            gap: 14px;
+            align-items: end;
+            flex-wrap: wrap;
+        }
+        .tips-field {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            min-width: 190px;
+        }
+        .tips-field label {
+            font-size: 0.82rem;
+            color: #94a3b8;
+            font-weight: 600;
+        }
+        .tip-select, .tip-search-input {
+            background: rgba(2, 6, 23, 0.85);
+            color: #f8fafc;
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 0.9rem;
+        }
+        .tip-num-input {
+            width: 58px;
+            background: rgba(2, 6, 23, 0.85);
+            color: #f8fafc;
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            border-radius: 8px;
+            padding: 6px 8px;
+            text-align: center;
+            font-weight: 700;
+        }
+        .tip-inline-controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .tips-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .tips-stats-strip {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            background: rgba(2, 6, 23, 0.55);
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            border-radius: 10px;
+            padding: 12px 16px;
+            margin-bottom: 16px;
+            font-size: 0.9rem;
+        }
+        .tips-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .tips-table th {
+            text-align: left;
+            padding: 10px 12px;
+            background: rgba(251, 146, 60, 0.15);
+            color: #fdba74;
+            font-size: 0.85rem;
+            border-bottom: 1px solid rgba(251, 146, 60, 0.3);
+        }
+        .tips-table td {
+            padding: 12px;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+            vertical-align: middle;
+        }
+        .tip-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 0.76rem;
+            font-weight: 700;
+        }
+        .tip-badge-type { background: rgba(56, 189, 248, 0.18); color: #7dd3fc; }
+        .tip-badge-done { background: rgba(34, 197, 94, 0.18); color: #86efac; }
+        .tip-badge-warn { background: rgba(245, 158, 11, 0.22); color: #fcd34d; }
+        .tip-badge-lock { background: rgba(239, 68, 68, 0.18); color: #fca5a5; }
+        .tip-badge-wait { background: rgba(148, 163, 184, 0.2); color: #cbd5e1; }
+        .tip-badge-zero { background: rgba(239, 68, 68, 0.16); color: #fda4af; }
+        .tips-alert-ok {
+            background: rgba(34, 197, 94, 0.16);
+            border: 1px solid rgba(34, 197, 94, 0.45);
+            color: #bbf7d0;
+            padding: 12px 16px;
+            border-radius: 10px;
+            margin-bottom: 16px;
+        }
+        .tips-alert-err {
+            background: rgba(239, 68, 68, 0.16);
+            border: 1px solid rgba(239, 68, 68, 0.45);
+            color: #fecaca;
+            padding: 12px 16px;
+            border-radius: 10px;
+            margin-bottom: 16px;
+        }
+        .table-group-card {
+            background: rgba(2, 6, 23, 0.5);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            border-radius: 12px;
+            padding: 14px 16px;
+        }
+        .admin-table-tip-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .admin-table-tip-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: rgba(15, 23, 42, 0.85);
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            border-radius: 8px;
+            padding: 8px 12px;
+        }
+        .rank-pill {
+            min-width: 28px;
+            font-weight: 800;
+            color: #fb923c;
+        }
+    </style>
+</head>
+<body class="usersite">
+    <main class="admin_site">
+        <div class="tips-container">
+            <div class="tips-topbar">
+                <div>
+                    <h1 style="margin:0; color:#fb923c;">🔐 Správa tipů</h1>
+                    <div style="font-size:0.85rem; color:#94a3b8; margin-top:4px;">Zpětné doplnění, úprava a mazání tipů uživatelů (automaticky přepočítává body).</div>
+                </div>
+                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                    <form method="POST" action="/admin/tips/lock" style="margin:0;">
+                        <input type="hidden" name="_csrf" value="${escapeTipsHtml(req.session.csrfToken || '')}">
+                        <button type="submit" class="btn btn-danger">🔒 Zamknout správu tipů</button>
+                    </form>
+                    <a href="/admin" class="btn btn-secondary">← Zpět do Adminu</a>
+                </div>
+            </div>
+
+            ${msg ? `<div class="tips-alert-ok">✅ ${escapeTipsHtml(msg)}</div>` : ''}
+            ${err ? `<div class="tips-alert-err">❌ ${escapeTipsHtml(err)}</div>` : ''}
+
+            <div class="tips-filter-card">
+                <form method="GET" action="/admin/tips" class="tips-filter-grid">
+                    <input type="hidden" name="tab" value="${escapeTipsHtml(requestedTab)}">
+                    <div class="tips-field">
+                        <label for="filterSeason">Sezóna</label>
+                        <select id="filterSeason" name="season" class="tip-select" onchange="this.form.submit()">
+                            ${allSeasons.map(s => `<option value="${escapeTipsHtml(s)}" ${s === selectedSeason ? 'selected' : ''}>${escapeTipsHtml(s)}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="tips-field">
+                        <label for="filterLiga">Liga</label>
+                        <select id="filterLiga" name="liga" class="tip-select" onchange="this.form.submit()">
+                            ${allLeagues.length > 0
+                                ? allLeagues.map(l => `<option value="${escapeTipsHtml(l)}" ${l === selectedLiga ? 'selected' : ''}>${escapeTipsHtml(l)}</option>`).join('')
+                                : '<option value="">Žádná liga</option>'}
+                        </select>
+                    </div>
+                    <div class="tips-field">
+                        <label for="filterUser">Uživatel</label>
+                        <select id="filterUser" name="user" class="tip-select" onchange="this.form.submit()">
+                            ${tipUsers.length > 0
+                                ? tipUsers.map(u => `<option value="${escapeTipsHtml(u.username)}" ${u.username === selectedUsername ? 'selected' : ''}>${escapeTipsHtml(u.username)}</option>`).join('')
+                                : '<option value="">Žádný uživatel</option>'}
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">🔍 Načíst</button>
+                </form>
+            </div>
+
+            <div class="tips-tabs">
+                <a href="${escapeTipsHtml(buildTipsManagerRedirectUrl({ season: selectedSeason, liga: selectedLiga, user: selectedUsername, tab: 'matches' }))}"
+                   class="btn ${requestedTab === 'matches' ? 'btn-warning' : 'btn-secondary'}">⚽ Tipy na zápasy (${filteredMatches.length})</a>
+                <a href="${escapeTipsHtml(buildTipsManagerRedirectUrl({ season: selectedSeason, liga: selectedLiga, user: selectedUsername, tab: 'table' }))}"
+                   class="btn ${requestedTab === 'table' ? 'btn-warning' : 'btn-secondary'}">📊 Tip tabulky ZČ</a>
+            </div>
+
+            ${!selectedUsername ? `
+                <div class="tips-panel-card"><p style="color:#94a3b8; margin:0;">Nebyl nalezen žádný tipující uživatel.</p></div>
+            ` : `
+                <div class="tips-panel-card">
+                    <div class="tips-stats-strip">
+                        <span>👤 Uživatel: <strong>${escapeTipsHtml(selectedUsername)}</strong></span>
+                        <span>🏆 Body ze zápasů: <strong>${userStats.correct || 0}</strong></span>
+                        <span>📅 ZČ: <strong>${userStats.correctRegular || 0}/${userStats.totalRegular || 0}</strong></span>
+                        <span>🎯 PO BO1: <strong>${userStats.playoffBO1Correct || 0}/${userStats.playoffBO1Tips || 0}</strong></span>
+                        <span>🏅 PO Série: <strong>${userStats.playoffBOSeriesCorrect || 0}/${userStats.playoffBOSeriesTips || 0}</strong></span>
+                        <span>📊 Tabulka: <strong>${userStats.tableCorrect || 0}</strong> přesně (odchylka ${userStats.tableDeviation || 0})</span>
+                    </div>
+
+                    ${requestedTab === 'matches' ? `
+                        <div style="display:flex; gap:12px; margin-bottom:14px; flex-wrap:wrap; align-items:center;">
+                            <input type="text" id="matchSearchInput" class="tip-search-input" placeholder="🔎 Filtrovat podle týmu nebo ID zápasu..." style="min-width:260px; flex:1;">
+                            <select id="matchTippedFilter" class="tip-select">
+                                <option value="all">Všechny zápasy</option>
+                                <option value="0">Jen netipované</option>
+                                <option value="1">Jen tipované</option>
+                            </select>
+                        </div>
+                        ${filteredMatches.length === 0 ? `<p style="color:#94a3b8; margin:0;">V této lize a sezóně nejsou žádné zápasy.</p>` : `
+                            <div style="overflow-x:auto;">
+                                <table class="tips-table">
+                                    <thead>
+                                        <tr>
+                                            <th>ID / Čas</th>
+                                            <th>Zápas & Stav</th>
+                                            <th>Aktuální tip</th>
+                                            <th>Upravit / Doplnit tip</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${matchRowsHtml}
+                                    </tbody>
+                                </table>
+                            </div>
+                        `}
+                    ` : tableEditorHtml}
+                </div>
+            `}
+        </div>
+    </main>
+    <script>
+        (function() {
+            const searchInput = document.getElementById('matchSearchInput');
+            const tippedSelect = document.getElementById('matchTippedFilter');
+            function filterMatchRows() {
+                const q = (searchInput ? searchInput.value : '').trim().toLowerCase();
+                const tf = tippedSelect ? tippedSelect.value : 'all';
+                document.querySelectorAll('.match-tip-row').forEach(row => {
+                    const text = row.getAttribute('data-search') || '';
+                    const isTipped = row.getAttribute('data-tipped') || '0';
+                    const matchesText = !q || text.includes(q);
+                    const matchesTipped = tf === 'all' || isTipped === tf;
+                    row.style.display = (matchesText && matchesTipped) ? '' : 'none';
+                });
+            }
+            if (searchInput) searchInput.addEventListener('input', filterMatchRows);
+            if (tippedSelect) tippedSelect.addEventListener('change', filterMatchRows);
+
+            function syncGroupList(list) {
+                const gKey = list.getAttribute('data-group');
+                const items = Array.from(list.querySelectorAll('.admin-table-tip-item'));
+                const ids = [];
+                items.forEach((item, idx) => {
+                    ids.push(item.getAttribute('data-team-id'));
+                    const pill = item.querySelector('.rank-pill');
+                    if (pill) pill.textContent = (idx + 1) + '.';
+                    const sel = item.querySelector('.rank-select');
+                    if (sel) sel.value = String(idx);
+                });
+                const hiddenInput = document.getElementById('order-input-' + gKey);
+                if (hiddenInput) hiddenInput.value = ids.join(',');
+            }
+
+            document.querySelectorAll('.admin-table-tip-list').forEach(list => {
+                list.addEventListener('click', (e) => {
+                    const upBtn = e.target.closest('.move-up-btn');
+                    const downBtn = e.target.closest('.move-down-btn');
+                    if (!upBtn && !downBtn) return;
+                    const item = e.target.closest('.admin-table-tip-item');
+                    if (!item) return;
+                    if (upBtn && item.previousElementSibling) {
+                        list.insertBefore(item, item.previousElementSibling);
+                    } else if (downBtn && item.nextElementSibling) {
+                        list.insertBefore(item.nextElementSibling, item);
+                    }
+                    syncGroupList(list);
+                });
+
+                list.addEventListener('change', (e) => {
+                    const sel = e.target.closest('.rank-select');
+                    if (!sel) return;
+                    const item = sel.closest('.admin-table-tip-item');
+                    const targetIndex = parseInt(sel.value, 10);
+                    const items = Array.from(list.querySelectorAll('.admin-table-tip-item'));
+                    const currentIndex = items.indexOf(item);
+                    if (isNaN(targetIndex) || targetIndex === currentIndex) return;
+                    if (targetIndex < currentIndex) {
+                        list.insertBefore(item, items[targetIndex]);
+                    } else {
+                        const refNode = items[targetIndex].nextElementSibling;
+                        if (refNode) list.insertBefore(item, refNode);
+                        else list.appendChild(item);
+                    }
+                    syncGroupList(list);
+                });
+            });
+        })();
+    </script>
+</body>
+</html>`;
+
+        res.send(html);
+    } catch (err) {
+        console.error('Chyba při načítání /admin/tips:', err);
+        res.status(500).send('Chyba při načítání správy tipů: ' + err.message);
+    }
+});
+
+router.post('/tips/unlock', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+
+    const season = typeof req.body.season === 'string' ? req.body.season : '';
+    const liga = typeof req.body.liga === 'string' ? req.body.liga : '';
+    const user = typeof req.body.user === 'string' ? req.body.user : '';
+    const tab = req.body.tab === 'table' ? 'table' : 'matches';
+
+    const lockUntil = req.session?.tipsManagerLockUntil || 0;
+    if (lockUntil > Date.now()) {
+        return res.redirect(buildTipsManagerRedirectUrl({
+            season, liga, user, tab, err: 'Příliš mnoho neúspěšných pokusů. Počkejte prosím.'
+        }));
+    }
+
+    const password = typeof req.body.password === 'string' ? req.body.password : '';
+    const isValid = await verifyTipsManagerPassword(password);
+
+    if (!isValid) {
+        req.session.tipsManagerFailedAttempts = (req.session.tipsManagerFailedAttempts || 0) + 1;
+        if (req.session.tipsManagerFailedAttempts >= TIPS_MANAGER_MAX_ATTEMPTS) {
+            req.session.tipsManagerLockUntil = Date.now() + TIPS_MANAGER_LOCK_DURATION_MS;
+            req.session.tipsManagerFailedAttempts = 0;
+            await logAdminAction(
+                req.session.user,
+                'TIPS_MANAGER_LOCKED',
+                'Překročen počet neúspěšných pokusů o odemčení správy tipů',
+                'admin',
+                null,
+                req,
+                'critical',
+                false
+            );
+        } else {
+            await logAdminAction(
+                req.session.user,
+                'TIPS_MANAGER_UNLOCK_FAILED',
+                `Neplatné heslo pro správu tipů (pokus ${req.session.tipsManagerFailedAttempts}/${TIPS_MANAGER_MAX_ATTEMPTS})`,
+                'admin',
+                null,
+                req,
+                'warning',
+                false
+            );
+        }
+        return res.redirect(buildTipsManagerRedirectUrl({
+            season, liga, user, tab, err: 'Nesprávné heslo pro správu tipů.'
+        }));
+    }
+
+    req.session.tipsManagerFailedAttempts = 0;
+    delete req.session.tipsManagerLockUntil;
+    req.session.tipsManagerUnlockedAt = Date.now();
+    await logAdminAction(req.session.user, 'TIPS_MANAGER_UNLOCK', 'Odemčena sekce Správa tipů', 'admin', null, req);
+
+    return res.redirect(buildTipsManagerRedirectUrl({ season, liga, user, tab }));
+});
+
+router.post('/tips/lock', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    delete req.session.tipsManagerUnlockedAt;
+    await logAdminAction(req.session.user, 'TIPS_MANAGER_LOCK', 'Uzamčena sekce Správa tipů', 'admin', null, req);
+    return res.redirect('/admin/tips');
+});
+
+router.post('/tips/match/save', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    if (!isTipsManagerUnlocked(req)) {
+        return res.redirect('/admin/tips?err=' + encodeURIComponent('Relace správy tipů vypršela, zadejte heslo znovu.'));
+    }
+
+    const username = typeof req.body.username === 'string' ? req.body.username.trim() : '';
+    const seasonParam = typeof req.body.season === 'string' ? req.body.season : '';
+    const ligaParam = typeof req.body.liga === 'string' ? req.body.liga : '';
+    const matchId = Number.parseInt(req.body.matchId, 10);
+
+    if (!username || username.toLowerCase() === 'admin' || !Number.isSafeInteger(matchId)) {
+        return res.redirect(buildTipsManagerRedirectUrl({
+            season: seasonParam, liga: ligaParam, user: username, err: 'Neplatný uživatel nebo ID zápasu.'
+        }));
+    }
+
+    try {
+        const [matches, users] = await Promise.all([Matches.findAll(), Users.findAll()]);
+        const match = matches.find(m => Number(m.id) === matchId);
+        if (!match) {
+            return res.redirect(buildTipsManagerRedirectUrl({
+                season: seasonParam, liga: ligaParam, user: username, err: `Zápas #${matchId} nebyl nalezen.`
+            }));
+        }
+
+        const user = users.find(u => u.username === username);
+        if (!user) {
+            return res.redirect(buildTipsManagerRedirectUrl({
+                season: match.season || seasonParam, liga: match.liga || ligaParam, user: username, err: `Uživatel ${username} nebyl nalezen.`
+            }));
+        }
+
+        const season = match.season || seasonParam;
+        const liga = match.liga || ligaParam;
+        const storedMatchId = Number(match.id);
+        const isPlayoff = !!match.isPlayoff;
+        const bo = Number(match.bo) || (isPlayoff ? 7 : 1);
+
+        let updatedTipFields;
+        let tipSummaryText = '';
+
+        if (isPlayoff && bo === 1) {
+            const scoreHome = Number.parseInt(req.body.scoreHome, 10);
+            const scoreAway = Number.parseInt(req.body.scoreAway, 10);
+            if (!Number.isInteger(scoreHome) || !Number.isInteger(scoreAway) || scoreHome < 0 || scoreAway < 0) {
+                return res.redirect(buildTipsManagerRedirectUrl({
+                    season, liga, user: username, anchor: `match-${storedMatchId}`, err: 'Zadejte platné nezáporné skóre pro Playoff BO1.'
+                }));
+            }
+            if (scoreHome === scoreAway) {
+                return res.redirect(buildTipsManagerRedirectUrl({
+                    season, liga, user: username, anchor: `match-${storedMatchId}`, err: 'V Playoff BO1 nemůže tip skončit remízou (rozdílné skóre určí vítěze).'
+                }));
+            }
+            const winner = scoreHome > scoreAway ? 'home' : 'away';
+            updatedTipFields = { matchId: storedMatchId, winner, scoreHome, scoreAway };
+            tipSummaryText = `${scoreHome}:${scoreAway} (${winner})`;
+        } else if (isPlayoff && bo > 1) {
+            const winner = req.body.winner;
+            const loserWins = Number.parseInt(req.body.loserWins, 10);
+            const maxLoserWins = Math.floor(bo / 2);
+            if (winner !== 'home' && winner !== 'away') {
+                return res.redirect(buildTipsManagerRedirectUrl({
+                    season, liga, user: username, anchor: `match-${storedMatchId}`, err: 'Vyberte platného vítěze série.'
+                }));
+            }
+            if (!Number.isInteger(loserWins) || loserWins < 0 || loserWins > maxLoserWins) {
+                return res.redirect(buildTipsManagerRedirectUrl({
+                    season, liga, user: username, anchor: `match-${storedMatchId}`, err: `Počet prohraných zápasů v sérii BO${bo} musí být mezi 0 a ${maxLoserWins}.`
+                }));
+            }
+            updatedTipFields = { matchId: storedMatchId, winner, loserWins };
+            tipSummaryText = `${winner}, poražený ${loserWins}`;
+        } else {
+            const winner = req.body.winner;
+            if (winner !== 'home' && winner !== 'away') {
+                return res.redirect(buildTipsManagerRedirectUrl({
+                    season, liga, user: username, anchor: `match-${storedMatchId}`, err: 'Vyberte platného vítěze zápasu.'
+                }));
+            }
+            updatedTipFields = { matchId: storedMatchId, winner };
+            tipSummaryText = winner;
+        }
+
+        if (!user.tips) user.tips = {};
+        if (!user.tips[season]) user.tips[season] = {};
+        if (!Array.isArray(user.tips[season][liga])) user.tips[season][liga] = [];
+
+        const existingIndex = user.tips[season][liga].findIndex(t => Number(t.matchId) === storedMatchId);
+        if (existingIndex !== -1) {
+            user.tips[season][liga][existingIndex] = updatedTipFields;
+        } else {
+            user.tips[season][liga].push(updatedTipFields);
+        }
+
+        await Users.updateOne({ username }, user);
+        await evaluateAndAssignPoints(liga, season);
+        await logAdminAction(
+            req.session.user,
+            'ADMIN_TIP_EDIT',
+            `Upraven tip uživatele ${username} na zápas #${storedMatchId} (${match.homeTeam || ''} vs ${match.awayTeam || ''}, ${liga} ${season}): ${tipSummaryText}`,
+            'match_tip',
+            storedMatchId,
+            req
+        );
+
+        return res.redirect(buildTipsManagerRedirectUrl({
+            season,
+            liga,
+            user: username,
+            anchor: `match-${storedMatchId}`,
+            msg: `Tip uživatele ${username} na zápas #${storedMatchId} byl uložen a body přepočítány.`
+        }));
+    } catch (err) {
+        console.error('Chyba při ukládání tipu v /admin/tips/match/save:', err);
+        return res.redirect(buildTipsManagerRedirectUrl({
+            season: seasonParam, liga: ligaParam, user: username, err: `Chyba při ukládání tipu: ${err.message}`
+        }));
+    }
+});
+
+router.post('/tips/match/delete', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    if (!isTipsManagerUnlocked(req)) {
+        return res.redirect('/admin/tips?err=' + encodeURIComponent('Relace správy tipů vypršela, zadejte heslo znovu.'));
+    }
+
+    const username = typeof req.body.username === 'string' ? req.body.username.trim() : '';
+    const seasonParam = typeof req.body.season === 'string' ? req.body.season : '';
+    const ligaParam = typeof req.body.liga === 'string' ? req.body.liga : '';
+    const matchId = Number.parseInt(req.body.matchId, 10);
+
+    if (!username || username.toLowerCase() === 'admin' || !Number.isSafeInteger(matchId)) {
+        return res.redirect(buildTipsManagerRedirectUrl({
+            season: seasonParam, liga: ligaParam, user: username, err: 'Neplatný uživatel nebo ID zápasu.'
+        }));
+    }
+
+    try {
+        const [matches, users] = await Promise.all([Matches.findAll(), Users.findAll()]);
+        const match = matches.find(m => Number(m.id) === matchId);
+        const season = match?.season || seasonParam;
+        const liga = match?.liga || ligaParam;
+        const user = users.find(u => u.username === username);
+
+        if (!user) {
+            return res.redirect(buildTipsManagerRedirectUrl({
+                season, liga, user: username, err: `Uživatel ${username} nebyl nalezen.`
+            }));
+        }
+
+        const existingList = user.tips?.[season]?.[liga];
+        if (Array.isArray(existingList)) {
+            user.tips[season][liga] = existingList.filter(t => Number(t.matchId) !== matchId);
+            await Users.updateOne({ username }, user);
+            await evaluateAndAssignPoints(liga, season);
+        }
+
+        await logAdminAction(
+            req.session.user,
+            'ADMIN_TIP_DELETE',
+            `Smazán tip uživatele ${username} na zápas #${matchId} (${liga} ${season})`,
+            'match_tip',
+            matchId,
+            req
+        );
+
+        return res.redirect(buildTipsManagerRedirectUrl({
+            season,
+            liga,
+            user: username,
+            anchor: `match-${matchId}`,
+            msg: `Tip uživatele ${username} na zápas #${matchId} byl smazán a body přepočítány.`
+        }));
+    } catch (err) {
+        console.error('Chyba při mazání tipu v /admin/tips/match/delete:', err);
+        return res.redirect(buildTipsManagerRedirectUrl({
+            season: seasonParam, liga: ligaParam, user: username, err: `Chyba při mazání tipu: ${err.message}`
+        }));
+    }
+});
+
+router.post('/tips/table/save', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    if (!isTipsManagerUnlocked(req)) {
+        return res.redirect('/admin/tips?err=' + encodeURIComponent('Relace správy tipů vypršela, zadejte heslo znovu.'));
+    }
+
+    const username = typeof req.body.username === 'string' ? req.body.username.trim() : '';
+    const season = typeof req.body.season === 'string' ? req.body.season : '';
+    const liga = typeof req.body.liga === 'string' ? req.body.liga : '';
+    const orderMap = req.body.order;
+
+    if (!username || username.toLowerCase() === 'admin' || !season || !liga || !orderMap || typeof orderMap !== 'object') {
+        return res.redirect(buildTipsManagerRedirectUrl({
+            season, liga, user: username, tab: 'table', err: 'Chybí povinná data pro uložení tipu tabulky.'
+        }));
+    }
+
+    try {
+        const [users, teams, allSeasonData, tableTipsData] = await Promise.all([
+            Users.findAll(),
+            Teams.findAll(),
+            Leagues.findAll(),
+            TableTips.findAll()
+        ]);
+
+        const user = users.find(u => u.username === username);
+        if (!user) {
+            return res.redirect(buildTipsManagerRedirectUrl({
+                season, liga, user: username, tab: 'table', err: `Uživatel ${username} nebyl nalezen.`
+            }));
+        }
+
+        const leagueObj = (allSeasonData?.[season]?.leagues || []).find(l => l.name === liga) || { isMultigroup: false };
+        const isMultigroup = !!leagueObj.isMultigroup;
+        let teamsInLiga = teams.filter(t => t.season === season && t.liga === liga && t.active === true);
+        if (teamsInLiga.length === 0) {
+            teamsInLiga = teams.filter(t => t.season === season && t.liga === liga);
+        }
+
+        const groupedTeams = {};
+        teamsInLiga.forEach(t => {
+            const gKey = isMultigroup ? String(t.group || 1) : 'default';
+            if (!groupedTeams[gKey]) groupedTeams[gKey] = [];
+            groupedTeams[gKey].push(t);
+        });
+
+        const groupKeys = Object.keys(groupedTeams);
+        if (groupKeys.length === 0) {
+            return res.redirect(buildTipsManagerRedirectUrl({
+                season, liga, user: username, tab: 'table', err: 'Pro tuto ligu nejsou evidovány žádné týmy.'
+            }));
+        }
+
+        const sanitizedOrder = {};
+        for (const gKey of groupKeys) {
+            const expectedIds = groupedTeams[gKey].map(t => Number(t.id)).sort((a, b) => a - b);
+            const rawVal = orderMap[gKey];
+            const parsedIds = String(rawVal || '')
+                .split(',')
+                .map(s => Number.parseInt(s.trim(), 10))
+                .filter(n => Number.isFinite(n));
+
+            const sortedParsed = [...new Set(parsedIds)].sort((a, b) => a - b);
+            if (parsedIds.length !== expectedIds.length || sortedParsed.length !== expectedIds.length ||
+                !expectedIds.every((id, idx) => id === sortedParsed[idx])) {
+                return res.redirect(buildTipsManagerRedirectUrl({
+                    season, liga, user: username, tab: 'table', err: `Neplatné pořadí týmů pro skupinu "${gKey}".`
+                }));
+            }
+            sanitizedOrder[gKey] = parsedIds;
+        }
+
+        if (!tableTipsData[season]) tableTipsData[season] = {};
+        if (!tableTipsData[season][liga]) tableTipsData[season][liga] = {};
+        tableTipsData[season][liga][username] = sanitizedOrder;
+
+        await TableTips.replaceAll(tableTipsData);
+        await evaluateRegularSeasonTable(season, liga);
+
+        await logAdminAction(
+            req.session.user,
+            'ADMIN_TABLE_TIP_EDIT',
+            `Upraven tip tabulky uživatele ${username} pro ${liga} (${season})`,
+            'table_tip',
+            null,
+            req
+        );
+
+        return res.redirect(buildTipsManagerRedirectUrl({
+            season,
+            liga,
+            user: username,
+            tab: 'table',
+            msg: `Tip tabulky uživatele ${username} pro ${liga} (${season}) byl uložen.`
+        }));
+    } catch (err) {
+        console.error('Chyba při ukládání tipu tabulky v /admin/tips/table/save:', err);
+        return res.redirect(buildTipsManagerRedirectUrl({
+            season, liga, user: username, tab: 'table', err: `Chyba při ukládání tipu tabulky: ${err.message}`
+        }));
+    }
+});
+
+router.post('/tips/table/delete', express.urlencoded({ extended: true }), requireAdmin, async (req, res) => {
+    if (!req.body._csrf || req.body._csrf !== req.session.csrfToken) {
+        return res.status(403).send('Neplatný CSRF token');
+    }
+    if (!isTipsManagerUnlocked(req)) {
+        return res.redirect('/admin/tips?err=' + encodeURIComponent('Relace správy tipů vypršela, zadejte heslo znovu.'));
+    }
+
+    const username = typeof req.body.username === 'string' ? req.body.username.trim() : '';
+    const season = typeof req.body.season === 'string' ? req.body.season : '';
+    const liga = typeof req.body.liga === 'string' ? req.body.liga : '';
+
+    if (!username || username.toLowerCase() === 'admin' || !season || !liga) {
+        return res.redirect(buildTipsManagerRedirectUrl({
+            season, liga, user: username, tab: 'table', err: 'Chybí povinná data pro smazání tipu tabulky.'
+        }));
+    }
+
+    try {
+        const tableTipsData = await TableTips.findAll();
+        if (tableTipsData?.[season]?.[liga] && Object.prototype.hasOwnProperty.call(tableTipsData[season][liga], username)) {
+            delete tableTipsData[season][liga][username];
+            await TableTips.replaceAll(tableTipsData);
+        }
+
+        await evaluateRegularSeasonTable(season, liga);
+
+        const user = await Users.findOne({ username });
+        if (user?.stats?.[season]?.[liga]) {
+            user.stats[season][liga].tableCorrect = 0;
+            user.stats[season][liga].tableDeviation = 0;
+            await Users.updateOne({ username }, user);
+        }
+
+        await logAdminAction(
+            req.session.user,
+            'ADMIN_TABLE_TIP_DELETE',
+            `Smazán tip tabulky uživatele ${username} pro ${liga} (${season})`,
+            'table_tip',
+            null,
+            req
+        );
+
+        return res.redirect(buildTipsManagerRedirectUrl({
+            season,
+            liga,
+            user: username,
+            tab: 'table',
+            msg: `Tip tabulky uživatele ${username} pro ${liga} (${season}) byl smazán.`
+        }));
+    } catch (err) {
+        console.error('Chyba při mazání tipu tabulky v /admin/tips/table/delete:', err);
+        return res.redirect(buildTipsManagerRedirectUrl({
+            season, liga, user: username, tab: 'table', err: `Chyba při mazání tipu tabulky: ${err.message}`
+        }));
     }
 });
 
