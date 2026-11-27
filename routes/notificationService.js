@@ -248,6 +248,8 @@ async function createVersusImage(homeTeam, awayTeam, matchId, scoreHome = null, 
     await drawBrandedBackground(ctx, width, height, branding);
     const theme = brand.resolveTheme(branding);
     const isResult = scoreHome !== null && scoreAway !== null;
+    const homeWon = isResult && Number(scoreHome) > Number(scoreAway);
+    const awayWon = isResult && Number(scoreAway) > Number(scoreHome);
     const bottomLines = [];
     if (seriesMatches && Array.isArray(seriesMatches) && seriesMatches.length > 0) {
         const seriesWinsH = seriesMatches.filter(m => m.sideSwap ? m.scoreAway > m.scoreHome : m.scoreHome > m.scoreAway).length;
@@ -257,7 +259,8 @@ async function createVersusImage(homeTeam, awayTeam, matchId, scoreHome = null, 
     await brand.drawMatchupLayout(ctx, width, height, homeTeam, awayTeam, theme, {
         kicker: isResult ? 'KONEČNÝ VÝSLEDEK' : 'ZÁPAS',
         center: isResult ? { type: 'score', scoreHome, scoreAway, label: 'SKÓRE ZÁPASU', note: ot ? 'PO PRODLOUŽENÍ / NÁJEZDECH' : null } : { type: 'vs' },
-        bottomLines
+        bottomLines,
+        highlight: homeWon ? 'home' : awayWon ? 'away' : null
     });
     await drawNotificationBranding(ctx, width, height, branding);
 

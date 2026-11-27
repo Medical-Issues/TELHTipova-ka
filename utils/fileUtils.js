@@ -2297,7 +2297,7 @@ async function createMatchImage(homeTeam, awayTeam, scoreHome = null, scoreAway 
         const awayWon = Number(scoreAway) > Number(scoreHome);
         const bottomLines = [{
             text: homeWon ? `VÍTĚZ  ·  ${homeName}` : awayWon ? `VÍTĚZ  ·  ${awayName}` : 'REMÍZA',
-            color: homeWon ? theme.accentColor : awayWon ? theme.awayColor : theme.textColor
+            color: (homeWon || awayWon) ? theme.accentColor : theme.textColor
         }];
         if (seriesData) {
             bottomLines.push({ text: `STAV SÉRIE  ${seriesData.homeWins} : ${seriesData.awayWins}`, color: theme.gold, size: 15 });

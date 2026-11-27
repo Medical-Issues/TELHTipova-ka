@@ -432,9 +432,22 @@ async function drawWatermark(ctx, width, height, settings = {}) {
  */
 async function drawMatchupLayout(ctx, width, height, homeTeam, awayTeam, theme, opts = {}) {
     const { center = { type: 'vs' }, kicker = null, series = null, seriesLabel = null, bottomLines = [], customHomeLogo = null, customAwayLogo = null, highlight = null } = opts;
-    const homeColor = theme.accentColor;
-    const awayColor = theme.awayColor;
     const isScore = center.type === 'score';
+    let homeColor = theme.accentColor;
+    let awayColor = theme.awayColor;
+    if (isScore) {
+        const scoreH = Number(center.scoreHome);
+        const scoreA = Number(center.scoreAway);
+        if (Number.isFinite(scoreH) && Number.isFinite(scoreA)) {
+            if (scoreA > scoreH) {
+                homeColor = theme.awayColor;
+                awayColor = theme.accentColor;
+            } else if (scoreH === scoreA) {
+                homeColor = theme.accentColor;
+                awayColor = theme.accentColor;
+            }
+        }
+    }
 
     const margin = Math.round(width * 0.055);
     const cardW = Math.round(width * (isScore ? 0.3 : 0.355));
@@ -505,7 +518,7 @@ async function drawMatchupLayout(ctx, width, height, homeTeam, awayTeam, theme, 
         const startX = width / 2 - totalW / 2;
         series.forEach((match, idx) => {
             const bx = startX + idx * (boxW + boxGap);
-            const winnerColor = Number(match.scoreHome) > Number(match.scoreAway) ? homeColor : awayColor;
+            const winnerColor = Number(match.scoreHome) > Number(match.scoreAway) ? theme.accentColor : theme.awayColor;
             drawCard(ctx, bx, y + 20, boxW, boxH, { fill: withAlpha(winnerColor, 0.18), radius: 8, stripe: null, border: withAlpha(winnerColor, 0.8) });
             const label = `${match.scoreHome}:${match.scoreAway}${match.ot ? 'p' : ''}`;
             drawText(ctx, label, bx + boxW / 2, y + 20 + boxH / 2 + 1, { size: 15, color: theme.textColor, align: 'center', maxWidth: boxW - 6, minSize: 11 });
