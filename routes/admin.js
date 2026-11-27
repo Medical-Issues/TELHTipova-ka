@@ -12305,7 +12305,7 @@ router.get('/tips', requireAdmin, async (req, res) => {
                 }
             }
 
-            let formFieldsHtml = '';
+            let formFieldsHtml;
             if (isPlayoff && bo === 1) {
                 const valSH = tip && tip.scoreHome !== undefined && tip.scoreHome !== null ? String(tip.scoreHome) : '';
                 const valSA = tip && tip.scoreAway !== undefined && tip.scoreAway !== null ? String(tip.scoreAway) : '';
@@ -12391,7 +12391,7 @@ router.get('/tips', requireAdmin, async (req, res) => {
         }).join('');
 
         // Sekce tabulky ZČ
-        let tableEditorHtml = '';
+        let tableEditorHtml;
         if (sortedGroupKeys.length === 0) {
             tableEditorHtml = `<p style="color:#94a3b8; padding:16px 0;">Pro sezónu <strong>${escapeTipsHtml(selectedSeason)}</strong> a ligu <strong>${escapeTipsHtml(selectedLiga)}</strong> nebyly nalezeny žádné týmy.</p>`;
         } else {
