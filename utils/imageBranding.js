@@ -10,11 +10,17 @@ const { loadImage } = require('canvas');
 
 const FONT_FAMILY = 'Arial, sans-serif';
 
+// Jednotné rozlišení všech generovaných obrázků (notifikace i exporty).
+// Poměr 2:1 = 1200×600, aby Windows 11 / Android notifikace obrázek neřízly.
+const IMAGE_WIDTH = 1200;
+const IMAGE_HEIGHT = 600;
+
 const THEME = {
     bgColor: '#0f172a',
     bgBottom: '#070b12',
     accentColor: '#f97316',
     awayColor: '#e11d48',
+    vsAwayColor: '#4300ff',
     textColor: '#ffffff',
     watermarkColor: '#888888',
     muted: '#94a3b8',
@@ -42,6 +48,8 @@ function resolveTheme(settings = {}) {
         ...THEME,
         bgColor: settings.bgColor || THEME.bgColor,
         accentColor: settings.accentColor || THEME.accentColor,
+        awayColor: settings.awayColor || THEME.awayColor,
+        vsAwayColor: settings.vsAwayColor || THEME.vsAwayColor,
         textColor: settings.textColor || THEME.textColor,
         watermarkColor: settings.watermarkColor || THEME.watermarkColor
     };
@@ -434,7 +442,8 @@ async function drawMatchupLayout(ctx, width, height, homeTeam, awayTeam, theme, 
     const { center = { type: 'vs' }, kicker = null, series = null, seriesLabel = null, bottomLines = [], customHomeLogo = null, customAwayLogo = null, highlight = null } = opts;
     const isScore = center.type === 'score';
     let homeColor = theme.accentColor;
-    let awayColor = theme.awayColor;
+    // Versus: hosté v tmavě modré/fialové; výsledek: prohrávající zůstává červený
+    let awayColor = isScore ? theme.awayColor : (theme.vsAwayColor || theme.awayColor);
     if (isScore) {
         const scoreH = Number(center.scoreHome);
         const scoreA = Number(center.scoreAway);
@@ -563,6 +572,8 @@ async function drawWinnerLayout(ctx, width, height, team, theme, { title = 'VÍT
 module.exports = {
     THEME,
     FONT_FAMILY,
+    IMAGE_WIDTH,
+    IMAGE_HEIGHT,
     resolveTheme,
     withAlpha,
     font,

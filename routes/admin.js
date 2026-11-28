@@ -11620,6 +11620,8 @@ router.post('/image-gallery/generate', requireAdmin, express.json({ limit: '10mb
             notificationService.createVersusImage(homeTeam, awayTeam, null));
         await addBuffer('Notifikace · výsledek zápasu', () =>
             notificationService.createVersusImage(homeTeam, awayTeam, null, 4, 2, null, true));
+        await addBuffer('Notifikace · výsledek zápasu (hosté)', () =>
+            notificationService.createVersusImage(homeTeam, awayTeam, null, 2, 4, null, true));
         try {
             // Ukázka "kola": preferujeme nadcházející zápasy, jinak jakékoli
             const upcomingMatches = (allMatches || [])
@@ -11661,6 +11663,11 @@ router.post('/image-gallery/generate', requireAdmin, express.json({ limit: '10mb
             fileUtils.createMatchImage(homeTeam, awayTeam, 4, 2, 'KONEČNÝ VÝSLEDEK', true, {
                 homeWins: 3,
                 awayWins: 1
+            }, branding));
+        await addBuffer('Export · výsledek (hosté)', () =>
+            fileUtils.createMatchImage(homeTeam, awayTeam, 2, 4, 'KONEČNÝ VÝSLEDEK', true, {
+                homeWins: 1,
+                awayWins: 3
             }, branding));
         await addBuffer('Export · přestup', () =>
             fileUtils.createTransferImage(homeTeam, awayTeam, realTransferName, true, samplePlayerPhotoPath, null, null, branding));

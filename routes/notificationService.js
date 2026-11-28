@@ -174,28 +174,18 @@ async function processCustomImageForNotification(imageUrl) {
         const imgWidth = img.width;
         const imgHeight = img.height;
         
-        // Cílový poměr 2:1 (800x400) pro notifikace
-        const targetRatio = 2;
-        const currentRatio = imgWidth / imgHeight;
-        
-        let canvasWidth, canvasHeight, drawX, drawY;
-        
-        if (currentRatio > targetRatio) {
-            // Obrázek je širší než 2:1 -> přidáme padding nahoře a dole
-            canvasWidth = imgWidth;
-            canvasHeight = imgWidth / targetRatio;
-            drawX = 0;
-            drawY = (canvasHeight - imgHeight) / 2;
-        } else if (currentRatio < targetRatio) {
-            // Obrázek je užší než 2:1 -> přidáme padding po stranách
-            canvasHeight = imgHeight;
-            canvasWidth = imgHeight * targetRatio;
-            drawX = (canvasWidth - imgWidth) / 2;
-            drawY = 0;
-        } else {
-            // Obrázek už má správný poměr 2:1
-            return imageUrl;
-        }
+        // Cílové rozlišení 1200×600 (2:1) - stejné jako všechny ostatní generované
+        // obrázky, aby notifikace (Windows 11 / Android) obrázek neřízly
+        const canvasWidth = brand.IMAGE_WIDTH;
+        const canvasHeight = brand.IMAGE_HEIGHT;
+        const padding = 48;
+        const maxWidth = canvasWidth - padding * 2;
+        const maxHeight = canvasHeight - padding * 2;
+        const scale = Math.min(maxWidth / imgWidth, maxHeight / imgHeight, 1);
+        const drawWidth = imgWidth * scale;
+        const drawHeight = imgHeight * scale;
+        const drawX = (canvasWidth - drawWidth) / 2;
+        const drawY = (canvasHeight - drawHeight) / 2;
         
         // Vytvořit canvas s paddingem
         const canvas = createCanvas(canvasWidth, canvasHeight);
@@ -204,7 +194,7 @@ async function processCustomImageForNotification(imageUrl) {
         await drawBrandedBackground(ctx, canvasWidth, canvasHeight, branding);
         
         // Vykreslit obrázek uprostřed
-        ctx.drawImage(img, drawX, drawY, imgWidth, imgHeight);
+        ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
         await drawNotificationBranding(ctx, canvasWidth, canvasHeight, branding);
         
         // Uložit výsledek
@@ -240,7 +230,7 @@ async function createVersusImage(homeTeam, awayTeam, matchId, scoreHome = null, 
     const outPath = path.join(outDir, `match-${matchId}.png`);
     const publicUrl = `/images/notifications/match-${matchId}.png`;
 
-    const width = 1200; const height = 600;
+    const width = brand.IMAGE_WIDTH; const height = brand.IMAGE_HEIGHT;
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext('2d');
     const branding = await getNotificationImageBranding();
@@ -303,7 +293,7 @@ async function drawRoundMatchCard(ctx, x, y, w, h, match, teamMap, theme) {
 
     // Hosté (vpravo)
     const awayCx = x + w * 0.73;
-    await brand.drawTeamLogo(ctx, awayTeam, awayCx, logoCy, logoSize, { color: theme.awayColor, textColor: theme.textColor });
+    await brand.drawTeamLogo(ctx, awayTeam, awayCx, logoCy, logoSize, { color: theme.vsAwayColor || theme.awayColor, textColor: theme.textColor });
     brand.drawText(ctx, awayTeam?.name || '???', awayCx, nameY, { size: nameSize, minSize: 12, color: theme.textColor, align: 'center', maxWidth: w * 0.4 });
 
     // VS uprostřed mezi logy
@@ -328,8 +318,8 @@ async function createRoundImage(matches, teams, { kicker = 'KOLO', title = null,
 
     // Plátno přesně 2:1 (1200x600) + bezpečná zóna 64 px od okrajů,
     // aby Windows Action Center / Android notifikace nic neřízly
-    const width = 1200;
-    const height = 600;
+    const width = brand.IMAGE_WIDTH;
+    const height = brand.IMAGE_HEIGHT;
     const margin = 64;
     const gap = 18;
     const headerH = 92;
@@ -397,8 +387,8 @@ async function createVersusImageForExport(homeTeam, awayTeam, customSettings = {
         return null;
     }
 
-    const width = 800;
-    const height = 500;
+    const width = brand.IMAGE_WIDTH;
+    const height = brand.IMAGE_HEIGHT;
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext('2d');
     const theme = brand.resolveTheme(customSettings);
@@ -442,7 +432,7 @@ async function createLeagueWinnerImage(winnerTeam, liga, branding = {}) {
     const outPath = path.join(outDir, `winner-${liga}-${timestamp}.png`);
     const publicUrl = `/images/notifications/winner-${liga}-${timestamp}.png`;
 
-    const width = 1200; const height = 600;
+    const width = brand.IMAGE_WIDTH; const height = brand.IMAGE_HEIGHT;
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext('2d');
     const imageBranding = { ...(await getNotificationImageBranding()), ...branding };

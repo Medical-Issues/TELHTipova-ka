@@ -2280,8 +2280,8 @@ async function drawWatermark(ctx, width, height, settings = {}) {
 async function createMatchImage(homeTeam, awayTeam, scoreHome = null, scoreAway = null, title = null, withWatermark = true, seriesData = null, customSettings = {}) {
     const { createCanvas } = require('canvas');
     const isResult = scoreHome !== null && scoreAway !== null;
-    const width = isResult ? 1000 : 800;
-    const height = isResult ? 600 : 500;
+    const width = brand.IMAGE_WIDTH;
+    const height = brand.IMAGE_HEIGHT;
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext('2d');
     const theme = brand.resolveTheme(customSettings);
@@ -2319,6 +2319,8 @@ async function createMatchImage(homeTeam, awayTeam, scoreHome = null, scoreAway 
 
 async function createTransferImage(team1, team2, playerName = null, withWatermark = true, playerPhotoPath = null, customFromLogoBase64 = null, customToLogoBase64 = null, customSettings = {}) {
     const { createCanvas } = require('canvas');
+    // Layout se kreslí v souřadnicích 800×400 a výsledek se na závěr zvětší na 1200×600
+    // (přímé škálování ctx by rozbilo stíny)
     const width = 800;
     const height = 400;
     const canvas = createCanvas(width, height);
@@ -2387,14 +2389,19 @@ async function createTransferImage(team1, team2, playerName = null, withWatermar
         await drawWatermark(ctx, width, height, customSettings);
     }
 
-    return canvas.toBuffer('image/png');
+    const out = createCanvas(brand.IMAGE_WIDTH, brand.IMAGE_HEIGHT);
+    const outCtx = out.getContext('2d');
+    outCtx.imageSmoothingEnabled = true;
+    outCtx.imageSmoothingQuality = 'high';
+    outCtx.drawImage(canvas, 0, 0, brand.IMAGE_WIDTH, brand.IMAGE_HEIGHT);
+    return out.toBuffer('image/png');
 }
 
 
 async function createWinnerImage(winnerTeam, title, withWatermark = true, options = {}, customSettings = {}) {
     const { createCanvas } = require('canvas');
-    const width = 800;
-    const height = 400;
+    const width = brand.IMAGE_WIDTH;
+    const height = brand.IMAGE_HEIGHT;
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext('2d');
     const theme = brand.resolveTheme(customSettings);
@@ -2676,7 +2683,13 @@ async function createStandingsImage(teamsData, title, withWatermark = true, opti
         await drawWatermark(ctx, width, height, customSettings);
     }
 
-    return canvas.toBuffer('image/png');
+    const outHeight = Math.round(height * (brand.IMAGE_WIDTH / width));
+    const out = createCanvas(brand.IMAGE_WIDTH, outHeight);
+    const outCtx = out.getContext('2d');
+    outCtx.imageSmoothingEnabled = true;
+    outCtx.imageSmoothingQuality = 'high';
+    outCtx.drawImage(canvas, 0, 0, brand.IMAGE_WIDTH, outHeight);
+    return out.toBuffer('image/png');
 }
 
 async function createStatisticsImage(usersStats, title, withWatermark = true, customSettings = {}) {
@@ -2761,7 +2774,13 @@ async function createStatisticsImage(usersStats, title, withWatermark = true, cu
         await drawWatermark(ctx, width, height, customSettings);
     }
 
-    return canvas.toBuffer('image/png');
+    const outHeight = Math.round(height * (brand.IMAGE_WIDTH / width));
+    const out = createCanvas(brand.IMAGE_WIDTH, outHeight);
+    const outCtx = out.getContext('2d');
+    outCtx.imageSmoothingEnabled = true;
+    outCtx.imageSmoothingQuality = 'high';
+    outCtx.drawImage(canvas, 0, 0, brand.IMAGE_WIDTH, outHeight);
+    return out.toBuffer('image/png');
 }
 
 async function createPlayoffBracketImage(data, withWatermark = true, customSettings = {}) {
@@ -3215,7 +3234,13 @@ async function createPlayoffBracketImage(data, withWatermark = true, customSetti
         await drawWatermark(ctx, width, height, customSettings);
     }
     
-    return canvas.toBuffer('image/png');
+    const outHeight = Math.round(height * (brand.IMAGE_WIDTH / width));
+    const out = createCanvas(brand.IMAGE_WIDTH, outHeight);
+    const outCtx = out.getContext('2d');
+    outCtx.imageSmoothingEnabled = true;
+    outCtx.imageSmoothingQuality = 'high';
+    outCtx.drawImage(canvas, 0, 0, brand.IMAGE_WIDTH, outHeight);
+    return out.toBuffer('image/png');
 }
 
 function getAvailableImages() {
